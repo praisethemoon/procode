@@ -1,0 +1,8 @@
+# lap ignore patterns (gitignore-like subset; see lap help)
+# .lap/, .git/, .hg/, .svn/ and .DS_Store are always ignored.
+node_modules/
+out/
+*.vsix
+package-lock.json
+*.o
+*.tmp

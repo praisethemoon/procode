@@ -1,0 +1,476 @@
+#!/bin/sh
+# End-to-end tests: drive the real lap binary through full workflows in a
+# throwaway directory. Requires LAP=<absolute path to the lap binary>.
+set -u
+LAP="${LAP:?set LAP to the lap binary path}"
+
+TESTS=0
+FAILED=0
+CUR=""
+
+t() { CUR="$1"; TESTS=$((TESTS + 1)); }
+fail() { FAILED=$((FAILED + 1)); echo "FAIL [$CUR] $1"; }
+
+expect_ok() {
+    if ! "$@" >/dev/null 2>&1; then fail "expected success: $*"; fi
+}
+expect_fail() {
+    if "$@" >/dev/null 2>&1; then fail "expected failure: $*"; fi
+}
+# expect_grep <pattern> <cmd...>: command output (stdout+stderr) must match
+expect_grep() {
+    pat="$1"; shift
+    out=$("$@" 2>&1)
+    if ! printf '%s\n' "$out" | grep -q "$pat"; then
+        fail "expected /$pat/ in: $*
+--- output ---
+$out
+--------------"
+    fi
+}
+expect_not_grep() {
+    pat="$1"; shift
+    out=$("$@" 2>&1)
+    if printf '%s\n' "$out" | grep -q "$pat"; then
+        fail "expected NO /$pat/ in: $*
+--- output ---
+$out
+--------------"
+    fi
+}
+
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/lap-e2e.XXXXXX")
+trap 'rm -rf "$WORK"' EXIT
+cd "$WORK" || exit 1
+
+# ---------------------------------------------------------------- init
+t "init creates the repository"
+expect_ok "$LAP" init
+[ -d .lap ] || fail ".lap directory missing"
+[ -f .lap/log.jsonl ] || fail "log.jsonl missing"
+[ -f .lap/state.json ] || fail "state.json missing"
+[ -f .lapignore ] || fail "starter .lapignore missing"
+
+t "second init fails"
+expect_fail "$LAP" init
+
+t "verify passes on a fresh repository"
+expect_grep "chain ok" "$LAP" verify
+
+# ------------------------------------------------------- session gating
+t "commit without a session is rejected"
+printf 'alpha\nbeta\ngamma\n' > notes.txt
+expect_fail "$LAP" commit notes.txt -m "should be rejected"
+expect_grep "no_session" "$LAP" commit notes.txt -m "x" --json
+
+t "commit with --no-session works without a session"
+printf 'standalone\n' > solo.txt
+expect_ok "$LAP" commit solo.txt -m "standalone note, deliberately outside sessions" --no-session
+expect_grep '"session":null' "$LAP" log --json
+expect_ok "$LAP" commit .lapignore -m "starter ignore list from lap init" --no-session
+
+t "session start/current/end lifecycle"
+expect_ok "$LAP" session start "capture the notes file"
+expect_grep "S1" "$LAP" session current
+expect_fail "$LAP" session start "second session while one is active"
+expect_ok "$LAP" session end
+expect_fail "$LAP" session end
+expect_ok "$LAP" session start "capture the notes file, take two"
+
+t "session needs a message"
+"$LAP" session end >/dev/null 2>&1
+expect_fail "$LAP" session start
+expect_ok "$LAP" session start "real work"
+
+# --------------------------------------------------------- create commit
+t "new file commits whole content as one edit"
+expect_ok "$LAP" commit notes.txt -m "seed notes: alpha/beta/gamma baseline"
+expect_grep "create" "$LAP" log
+expect_grep "no changes" "$LAP" commit notes.txt -m "nothing changed"
+
+# ------------------------------------------------- single edit commit
+t "single-region change commits without a selector"
+printf 'alpha\nBETA\ngamma\n' > notes.txt
+expect_ok "$LAP" commit notes.txt -m "shout beta: it is the important one"
+expect_grep "clean" "$LAP" status
+
+# -------------------------------------------------- multi edit workflow
+t "two separated edits are rejected and listed"
+printf 'ALPHA\nBETA\nGAMMA\n' > notes.txt
+expect_fail "$LAP" commit notes.txt -m "two edits at once"
+expect_grep "2 separate edits" "$LAP" commit notes.txt -m "two edits"
+expect_grep "multiple_edits" "$LAP" commit notes.txt -m "x" --json
+
+t "--edit selects one region; the rest stays pending"
+expect_ok "$LAP" commit notes.txt -m "uppercase alpha" --edit 1
+expect_grep "1 edit" "$LAP" status
+expect_ok "$LAP" commit notes.txt -m "uppercase gamma" --edit 1
+expect_grep "clean" "$LAP" status
+
+t "--lines must match a detected region exactly"
+printf 'ALPHA\nbeta2\nGAMMA\ndelta\n' > notes.txt
+expect_fail "$LAP" commit notes.txt -m "bad range" --lines 1-4
+expect_ok "$LAP" commit notes.txt -m "lower beta again" --lines 2-2
+expect_ok "$LAP" commit notes.txt -m "append delta" --lines 4-4
+expect_grep "clean" "$LAP" status
+
+t "--edit out of range is a clean error"
+printf 'ALPHA\nbeta3\nGAMMA\ndelta\n' > notes.txt
+expect_fail "$LAP" commit notes.txt -m "x" --edit 7
+expect_ok "$LAP" commit notes.txt -m "beta version 3"
+
+# ------------------------------------------------------------- status
+t "status reports states and numbered edits"
+printf 'one\ntwo\n' > fresh.txt
+printf 'ALPHA\nbeta4\nGAMMA\nDELTA\n' > notes.txt
+expect_grep "new       fresh.txt" "$LAP" status
+expect_grep "modified  notes.txt" "$LAP" status
+expect_grep "\[2\]" "$LAP" status
+expect_grep '"state":"new"' "$LAP" status --json
+rm fresh.txt
+expect_ok "$LAP" commit notes.txt -m "beta version 4" --edit 1
+expect_ok "$LAP" commit notes.txt -m "uppercase delta" --edit 1
+
+# --------------------------------------------------------------- log
+t "log filters by file and session"
+expect_grep "notes.txt" "$LAP" log --file notes.txt
+expect_not_grep "solo.txt" "$LAP" log --file notes.txt
+expect_grep '"commits"' "$LAP" log --json
+expect_grep "uppercase delta" "$LAP" log -n 1
+expect_not_grep "seed notes" "$LAP" log -n 1
+
+# --------------------------------------------------------------- show
+t "show renders a commit and reconstructs the file"
+ID=$("$LAP" log --file notes.txt --json | sed 's/.*"commits":\[{"id":"\([^"]*\)".*/\1/')
+[ -n "$ID" ] || fail "could not extract a commit id"
+expect_grep "commit $ID" "$LAP" show "$ID"
+expect_grep "@@" "$LAP" show "$ID"
+expect_grep "file after this commit" "$LAP" show "$ID" --full-file
+expect_grep '"file_content"' "$LAP" show "$ID" --full-file --json
+expect_fail "$LAP" show L9999
+
+# ------------------------------------------------------------- search
+t "search --line traces a committed line"
+expect_grep "last touched by" "$LAP" search --file notes.txt --line 2
+expect_grep '"pending":false' "$LAP" search --file notes.txt --line 2 --json
+
+t "search --line flags pending edits"
+printf 'ALPHA\nbeta4\nGAMMA\nDELTA\nnew tail\n' > notes.txt
+expect_grep "pending" "$LAP" search --file notes.txt --line 5
+expect_ok "$LAP" commit notes.txt -m "tail marker for search tests"
+
+t "search --text finds added content"
+expect_grep "tail marker" "$LAP" search --text "new tail"
+expect_grep "added line" "$LAP" search --text "new tail"
+expect_grep "no matching commits" "$LAP" search --text "never-written-string"
+
+t "search --msg and --session filters"
+expect_grep "seed notes" "$LAP" search --msg "baseline"
+expect_grep "standalone" "$LAP" search --msg "standalone"
+expect_not_grep "standalone" "$LAP" search --session S3
+expect_grep "no matching commits" "$LAP" search --msg baseline --session S1
+
+# ------------------------------------------------------------- delete
+t "deleting a file is a commit"
+rm notes.txt
+expect_grep "deleted   notes.txt" "$LAP" status
+expect_ok "$LAP" commit notes.txt -m "notes.txt retired after the tests"
+expect_grep "clean" "$LAP" status
+expect_grep "delete" "$LAP" log -n 1
+
+# ------------------------------------------------------------ ignore
+t ".lapignore hides files and blocks commits"
+printf '*.log\n' >> .lapignore
+printf 'noise\n' > debug.log
+expect_not_grep "debug.log" "$LAP" status
+expect_fail "$LAP" commit debug.log -m "should be refused"
+expect_ok "$LAP" commit .lapignore -m "ignore build noise: *.log"
+
+# ------------------------------------------------------ subdirectories
+t "files in subdirectories work from repo root and from inside"
+mkdir -p src/deep
+printf 'content\n' > src/deep/mod.c
+expect_ok "$LAP" commit src/deep/mod.c -m "deep module placeholder"
+( cd src/deep && "$LAP" status >/dev/null 2>&1 ) || fail "status from subdir"
+( cd src/deep && "$LAP" commit mod.c -m "no change expected" ) \
+    >/dev/null 2>&1 && fail "expected no-changes failure from subdir"
+
+t "paths outside the repository are rejected"
+expect_fail "$LAP" commit /etc/hosts -m "outside"
+
+# ------------------------------------------- trailing-newline handling
+t "trailing-newline-only change is one committable edit"
+printf 'x\ny' > tail.txt
+expect_ok "$LAP" commit tail.txt -m "tail file without trailing newline"
+printf 'x\ny\n' > tail.txt
+expect_grep "1 edit" "$LAP" status
+expect_ok "$LAP" commit tail.txt -m "add trailing newline for POSIX tools"
+expect_grep "clean" "$LAP" status
+
+# ------------------------------------------------------------- verify
+t "verify --deep passes on a healthy repository"
+expect_grep "0 mismatch" "$LAP" verify --deep
+expect_grep '"chain_ok":true' "$LAP" verify --json
+
+t "state.json loss self-heals (readers in memory, writers persist)"
+NEXT_BEFORE=$(sed 's/.*"next_commit":\([0-9]*\).*/\1/' .lap/state.json)
+rm .lap/state.json
+expect_grep "clean" "$LAP" status
+[ -f .lap/state.json ] && fail "a read-only command must not write state"
+printf 'healed\n' > heal0.txt
+expect_ok "$LAP" commit heal0.txt -m "the first writer after state loss persists the healed state"
+NEXT_AFTER=$(sed 's/.*"next_commit":\([0-9]*\).*/\1/' .lap/state.json)
+[ "$((NEXT_BEFORE + 1))" = "$NEXT_AFTER" ] || \
+    fail "healed next_commit $NEXT_AFTER != $NEXT_BEFORE + 1"
+
+t "log tampering is detected"
+cp .lap/log.jsonl .lap/log.jsonl.bak
+sed 's/retired after the tests/RETIRED AFTER THE TESTS/' \
+    .lap/log.jsonl > .lap/log.tampered && mv .lap/log.tampered .lap/log.jsonl
+expect_grep "CHAIN BROKEN" "$LAP" verify
+expect_fail "$LAP" verify
+mv .lap/log.jsonl.bak .lap/log.jsonl
+expect_grep "chain ok" "$LAP" verify
+
+# ------------------------------------------- blank lines are not anchors
+t "edits separated only by blank lines are ONE edit"
+printf 'aaa\n\nbbb\nxxx\nccc\n\nddd\n' > blanky.txt
+expect_ok "$LAP" commit blanky.txt -m "blanky baseline: two blocks split by a real anchor line xxx"
+printf 'AAA\n\nBBB\nxxx\nccc\n\nddd\n' > blanky.txt
+expect_grep "1 edit" "$LAP" status
+expect_ok "$LAP" commit blanky.txt -m "rewrite the first block: blank gap must not split it"
+printf 'AAA\n\nBBB\nxxx\nCCC\n\nDDD\n' > blanky.txt
+expect_grep "1 edit" "$LAP" status
+expect_ok "$LAP" commit blanky.txt -m "rewrite the second block in one commit too"
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+
+t "edits across a non-blank line still split"
+printf 'ZZZ\n\nBBB\nxxx\nCCC\n\nQQQ\n' > blanky.txt
+expect_grep "2 edits" "$LAP" status
+expect_ok "$LAP" commit blanky.txt -m "first block again" --edit 1
+expect_ok "$LAP" commit blanky.txt -m "last block again" --edit 1
+
+# ------------------------------------------------- message via -F / stdin
+t "message from a file with -F"
+printf 'summary from file\n\nlong rationale line two\n' > msg.tmp
+printf 'file-msg-test\n' > fmsg.txt
+expect_ok "$LAP" commit fmsg.txt -F msg.tmp
+expect_grep "summary from file" "$LAP" log -n 1
+# --msg matches the FULL message (the hit word is on line 3), while the
+# result row displays the summary line
+expect_grep "summary from file" "$LAP" search --msg "rationale"
+expect_grep "long rationale line two" "$LAP" search --msg "rationale" --json
+
+t "message from stdin with -F -"
+printf 'stdin-msg-test\n' > smsg.txt
+printf 'piped summary\npiped detail' | "$LAP" commit smsg.txt -F - \
+    >/dev/null 2>&1 || fail "stdin commit failed"
+expect_grep "piped summary" "$LAP" log -n 1
+
+t "-m and -F together are rejected; empty -F is rejected"
+printf 'x\n' > conflict.txt
+expect_fail "$LAP" commit conflict.txt -m "a" -F msg.tmp
+: > empty.tmp
+expect_fail "$LAP" commit conflict.txt -F empty.tmp
+expect_ok "$LAP" commit conflict.txt -m "conflict.txt landed with -m as usual"
+
+t "commit confirmation echoes the message summary"
+printf 'echo-check\n' > echocheck.txt
+expect_grep "message summary appears in output" \
+    "$LAP" commit echocheck.txt -m "message summary appears in output"
+
+# -------------------------------------------------- crash-safety repairs
+t "torn log tail: readers tolerate it, the next writer repairs it"
+printf '{"type":"commit","id":"L9' >> .lap/log.jsonl
+expect_ok "$LAP" log
+expect_grep "torn trailing record" "$LAP" verify
+printf 'torn-recovery\n' > torn.txt
+expect_ok "$LAP" commit torn.txt -m "commit after a crash-torn append: the writer truncates the torn bytes first"
+expect_grep "chain ok" "$LAP" verify
+expect_grep "0 mismatch" "$LAP" verify --deep
+
+t "verify --deep detects a missing shadow file"
+rm .lap/shadow/torn.txt
+expect_fail "$LAP" verify --deep
+expect_grep "missing shadow" "$LAP" verify --deep
+
+t "a writing command heals lost state.json and rebuilds shadows"
+rm .lap/state.json
+printf 'heal-me\n' > healfile.txt
+expect_ok "$LAP" commit healfile.txt -m "this write triggers a full heal first"
+expect_grep "chain ok" "$LAP" verify
+expect_grep "0 mismatch" "$LAP" verify --deep
+
+# ------------------------------------ partial-commit coordinate integrity
+t "partial commit stores committed-file coordinates; blame stays correct"
+printf 'p1\np2\np3\np4\np5\n' > coord.txt
+expect_ok "$LAP" commit coord.txt -m "coord baseline"
+printf 'TOP\nTOPB\np1\np2\np3\nP4\np5\n' > coord.txt
+CID=$("$LAP" commit coord.txt -m "uppercase p4 (committed before the top insertion)" --edit 2 --json | sed 's/.*"id":"\([^"]*\)".*/\1/')
+[ -n "$CID" ] || fail "could not extract the partial commit id"
+expect_grep "last touched by $CID" "$LAP" search --file coord.txt --line 6
+expect_ok "$LAP" commit coord.txt -m "top insertion, committed second"
+expect_grep "last touched by $CID" "$LAP" search --file coord.txt --line 6
+
+t "blame on an uncommitted new file reports pending"
+printf 'n1\nn2\n' > newpend.txt
+expect_grep "pending" "$LAP" search --file newpend.txt --line 1
+expect_grep '"pending":true' "$LAP" search --file newpend.txt --line 2 --json
+expect_ok "$LAP" commit newpend.txt -m "newpend baseline"
+
+# ----------------------------------------------------- argument hygiene
+t "a message that looks like a flag is a message, not a flag"
+printf 'f1\n' > flagmsg.txt
+expect_ok "$LAP" commit flagmsg.txt -m "--no-session"
+expect_grep '"session":"S' "$LAP" log -n 1 --json
+
+t "-- ends flags: files named like flags are committable"
+printf 'd1\n' > ./-dash.txt
+expect_ok "$LAP" commit -m "dash-named file survives the parser" -- -dash.txt
+expect_grep "dash-named" "$LAP" log -n 1
+
+t "paths with quotes stay valid JSON in blame output"
+printf 'q1\n' > 'q"uote.txt'
+expect_grep 'q\\"uote.txt' "$LAP" search --file 'q"uote.txt' --line 1 --json
+expect_ok "$LAP" commit 'q"uote.txt' -m "quoted-name file landed"
+
+# ------------------------------------------------------------- user field
+t "commits record the user (LAP_USER wins the resolution)"
+printf 'u1\n' > userfile.txt
+LAP_USER="e2e-test-bot" "$LAP" commit userfile.txt -m "user field: recorded from LAP_USER"
+expect_grep '"user":"e2e-test-bot"' "$LAP" log -n 1 --json
+UID_SHOW=$("$LAP" log -n 1 --json | sed 's/.*"id":"\([^"]*\)".*/\1/')
+expect_grep "user: e2e-test-bot" "$LAP" show "$UID_SHOW"
+
+# --------------------------------------------- acceleration layer / rebuild
+t "reads are identical with the index, without it, and after rebuild"
+WITH_IDX=$("$LAP" log -n 3)
+BLAME_IDX=$("$LAP" search --file coord.txt --line 6)
+rm -f .lap/index .lap/paths .lap/heads
+NO_IDX=$("$LAP" log -n 3)
+BLAME_NO=$("$LAP" search --file coord.txt --line 6)
+[ "$WITH_IDX" = "$NO_IDX" ] || fail "log -n differs without the index"
+[ "$BLAME_IDX" = "$BLAME_NO" ] || fail "blame differs without the index"
+expect_ok "$LAP" rebuild
+AFTER=$("$LAP" log -n 3)
+[ "$WITH_IDX" = "$AFTER" ] || fail "log -n differs after rebuild"
+
+t "the cache contract, file by file: deleting ANY one cache changes only speed"
+# group deletion is not enough — a half-present index is the dangerous state
+BLAME=$("$LAP" search --file coord.txt --line 6)
+LOGN=$("$LAP" log -n 3)
+SHOWF=$("$LAP" show "$CID" --full-file)
+for cache in index paths heads state.json snapshots shadow; do
+    cp -R .lap ".lapbak"
+    rm -rf ".lap/$cache"
+    OUT=$("$LAP" search --file coord.txt --line 6 2>&1)
+    [ "$OUT" = "$BLAME" ] || fail "rm .lap/$cache changed blame output"
+    OUT=$("$LAP" log -n 3 2>&1)
+    [ "$OUT" = "$LOGN" ] || fail "rm .lap/$cache changed log output"
+    OUT=$("$LAP" show "$CID" --full-file 2>&1)
+    [ "$OUT" = "$SHOWF" ] || fail "rm .lap/$cache changed show --full-file"
+    rm -rf .lap && mv .lapbak .lap
+done
+expect_ok "$LAP" rebuild
+
+t "a stale sidecar cannot outlive the index it belongs to"
+cp .lap/heads .lap/heads.old && cp .lap/paths .lap/paths.old
+printf 'stale probe\n' > stale.txt
+expect_ok "$LAP" commit stale.txt -m "commit that grows the path table"
+cp .lap/heads.old .lap/heads && cp .lap/paths.old .lap/paths   # rewind sidecars
+OUT=$("$LAP" search --file stale.txt --line 1 2>&1)
+rm -f .lap/heads.old .lap/paths.old
+expect_ok "$LAP" rebuild
+EXPECT=$("$LAP" search --file stale.txt --line 1 2>&1)
+[ "$OUT" = "$EXPECT" ] || fail "stale sidecars changed blame: [$OUT] vs [$EXPECT]"
+
+t "commit ids are verified, not just parsed"
+expect_fail "$LAP" show L1x
+expect_grep "no commit named L1x" "$LAP" show L1x
+rm -f .lap/index
+expect_grep "no commit named L1x" "$LAP" show L1x
+expect_ok "$LAP" rebuild
+
+t "session filters mean the same thing with and without the index"
+for s in S1 S01 S1x S ""; do
+    A=$("$LAP" log --session "$s" -n 5 2>&1)
+    mv .lap/index .lap/index.off
+    B=$("$LAP" log --session "$s" -n 5 2>&1)
+    mv .lap/index.off .lap/index
+    [ "$A" = "$B" ] || fail "--session '$s' differs with/without the index"
+done
+
+t "--text results match with and without the index"
+A=$("$LAP" search --text "tail marker" 2>&1)
+mv .lap/index .lap/index.off
+B=$("$LAP" search --text "tail marker" 2>&1)
+mv .lap/index.off .lap/index
+[ "$A" = "$B" ] || fail "--text differs with/without the index"
+
+t "a crashed atomic write leaves no phantom in verify"
+printf 'junk\n' > .lap/shadow/coord.txt.tmp.987654
+expect_grep "0 mismatch" "$LAP" verify --deep
+rm -f .lap/shadow/coord.txt.tmp.987654
+
+t "the cache contract: rm every cache, readers still work, rebuild restores"
+rm -rf .lap/shadow .lap/snapshots .lap/state.json \
+       .lap/index .lap/paths .lap/heads
+expect_ok "$LAP" log -n 1
+expect_ok "$LAP" rebuild
+expect_grep "chain ok" "$LAP" verify
+expect_grep "0 mismatch" "$LAP" verify --deep
+expect_grep "clean" "$LAP" status
+
+t "rebuild --verify fails on a tampered log"
+cp .lap/log.jsonl .lap/log.jsonl.bak
+sed 's/quoted-name file landed/QUOTED-NAME FILE LANDED/' \
+    .lap/log.jsonl > .lap/log.t && mv .lap/log.t .lap/log.jsonl
+expect_fail "$LAP" rebuild --verify
+mv .lap/log.jsonl.bak .lap/log.jsonl
+expect_ok "$LAP" rebuild --verify
+
+# ----------------------------------------------------------- snapshots
+t "hot files earn snapshots; replay stays exact; verify audits them"
+printf 'snap base\n' > snapfile.txt
+expect_ok "$LAP" commit snapfile.txt -m "snapshot probe baseline"
+i=0
+while [ $i -lt 20 ]; do
+    printf 'snap base edited %s\n' "$i" > snapfile.txt
+    "$LAP" commit snapfile.txt -m "snapshot probe edit $i" >/dev/null \
+        || fail "snapshot probe commit $i"
+    i=$((i + 1))
+done
+[ -f .lap/snapshots/snapfile.txt.jsonl ] || fail "no snapshot was taken"
+SID=$("$LAP" log -n 1 --file snapfile.txt --json | \
+      sed 's/.*"id":"\([^"]*\)".*/\1/')
+expect_grep "snap base edited 19" "$LAP" show "$SID" --full-file
+expect_grep "0 mismatch" "$LAP" verify --deep
+
+t "a corrupted snapshot is caught by verify --deep and cured by rebuild"
+cp .lap/snapshots/snapfile.txt.jsonl .lap/snap.bak
+sed 's/snap base/SNAP BASE/' .lap/snapshots/snapfile.txt.jsonl \
+    > .lap/snap.t && mv .lap/snap.t .lap/snapshots/snapfile.txt.jsonl
+expect_grep "stale snapshot" "$LAP" verify --deep
+expect_fail "$LAP" verify --deep
+expect_ok "$LAP" rebuild
+expect_grep "0 mismatch" "$LAP" verify --deep
+rm -f .lap/snap.bak
+
+t "snapshots are throwaway: deleting them changes nothing but speed"
+BEFORE_SNAP=$("$LAP" show "$SID" --full-file)
+rm -rf .lap/snapshots
+AFTER_SNAP=$("$LAP" show "$SID" --full-file)
+[ "$BEFORE_SNAP" = "$AFTER_SNAP" ] || fail "replay differs without snapshots"
+expect_ok "$LAP" rebuild
+
+# --------------------------------------------------------------- json
+t "json outputs stay machine-readable"
+expect_grep '"ok":true' "$LAP" status --json
+expect_grep '"ok":true' "$LAP" session list --json
+expect_grep '"ok":false' "$LAP" show L9999 --json
+
+# ------------------------------------------------------------ summary
+echo "e2e: $TESTS scenarios, $FAILED failure(s)"
+[ "$FAILED" -eq 0 ] || exit 1
+exit 0

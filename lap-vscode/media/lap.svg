@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- lap: repeated passes spiraling outward (candidate D, chosen 2026-09-21).
+       Geometry fills the canvas (18px span, ~2px margin) with stroke kept at
+       2px. Rendered by VSCode as an alpha mask: only the silhouette matters. -->
+  <path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"
+        stroke="#C5C5C5" stroke-width="2" stroke-linecap="round"/>
+</svg>

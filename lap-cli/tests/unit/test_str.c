@@ -1,0 +1,90 @@
+#include "str.h"
+#include "test.h"
+
+void test_str(void) {
+    Arena *a = arena_new(0);
+
+    t_begin("str: eq and find");
+    ASSERT_TRUE(str_eq(str_c("abc"), str_c("abc")));
+    ASSERT_TRUE(!str_eq(str_c("abc"), str_c("abd")));
+    ASSERT_TRUE(str_eq(str_c(""), str_c("")));
+    ASSERT_EQ_I(str_find(str_c("hello world"), str_c("world")), 6);
+    ASSERT_EQ_I(str_find(str_c("hello"), str_c("x")), -1);
+    ASSERT_EQ_I(str_find(str_c("aaab"), str_c("aab")), 1);
+    ASSERT_EQ_I(str_find(str_c("abc"), str_c("")), 0);
+    ASSERT_EQ_I(str_find(str_c("ab"), str_c("abc")), -1);
+
+    t_begin("str: builder");
+    StrBuf sb;
+    sb_init(&sb, a);
+    sb_puts(&sb, "a");
+    sb_putc(&sb, 'b');
+    sb_printf(&sb, "%d%s", 1, "c");
+    ASSERT_EQ_S(sb_finish(&sb), "ab1c");
+    ASSERT_EQ_I(sb.len, 4);
+
+    t_begin("str: split_lines basics");
+    Lines l = split_lines(a, "a\nb\nc\n", 6);
+    ASSERT_EQ_I(l.count, 3);
+    ASSERT_TRUE(l.eof_nl);
+    ASSERT_TRUE(str_eq_c(l.lines[0], "a"));
+    ASSERT_TRUE(str_eq_c(l.lines[2], "c"));
+
+    t_begin("str: split_lines without trailing newline");
+    l = split_lines(a, "a\nb", 3);
+    ASSERT_EQ_I(l.count, 2);
+    ASSERT_TRUE(!l.eof_nl);
+    ASSERT_TRUE(str_eq_c(l.lines[1], "b"));
+
+    t_begin("str: split_lines empty and blank lines");
+    l = split_lines(a, "", 0);
+    ASSERT_EQ_I(l.count, 0);
+    ASSERT_TRUE(l.eof_nl);
+    l = split_lines(a, "\n\n", 2);
+    ASSERT_EQ_I(l.count, 2);
+    ASSERT_TRUE(str_eq_c(l.lines[0], ""));
+
+    t_begin("str: CRLF is preserved byte-faithfully");
+    l = split_lines(a, "a\r\nb\r\n", 6);
+    ASSERT_EQ_I(l.count, 2);
+    ASSERT_TRUE(str_eq_c(l.lines[0], "a\r"));
+
+    t_begin("str: join_lines round-trips");
+    const char *cases[] = {"a\nb\nc\n", "a\nb", "", "\n", "x\r\ny\r\n"};
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        size_t n = strlen(cases[i]);
+        Lines split = split_lines(a, cases[i], n);
+        size_t out_len;
+        char *joined = join_lines(a, split, &out_len);
+        ASSERT_EQ_I(out_len, n);
+        ASSERT_EQ_S(joined, cases[i]);
+    }
+
+    t_begin("str: set add/has across growth");
+    StrSet set;
+    strset_init(&set, a);
+    char key[32];
+    for (int32_t i = 0; i < 500; i++) {
+        snprintf(key, sizeof key, "path/to/file-%d.c", i);
+        ASSERT_TRUE(strset_add(&set, key));
+    }
+    for (int32_t i = 0; i < 500; i++) {
+        snprintf(key, sizeof key, "path/to/file-%d.c", i);
+        ASSERT_TRUE(strset_has(&set, key));
+        ASSERT_TRUE(!strset_add(&set, key));
+    }
+    ASSERT_TRUE(!strset_has(&set, "path/to/file-500.c"));
+
+    t_begin("str: hash is conformant FNV-1a 64 (published vectors)");
+    /* Dispersion alone cannot catch a wrong offset basis — a mistyped one
+     * mixes just as well. Only published vectors pin the claim. */
+    ASSERT_TRUE(str_hash(str_c("")) == 0xcbf29ce484222325ULL);
+    ASSERT_TRUE(str_hash(str_c("a")) == 0xaf63dc4c8601ec8cULL);
+    ASSERT_TRUE(str_hash(str_c("foobar")) == 0x85944171f73967e8ULL);
+
+    t_begin("str: hash disperses");
+    ASSERT_TRUE(str_hash(str_c("a")) != str_hash(str_c("b")));
+    ASSERT_TRUE(str_hash(str_c("")) != str_hash(str_c(" ")));
+
+    arena_free(a);
+}

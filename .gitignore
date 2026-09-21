@@ -1,0 +1,24 @@
+# Build outputs
+lap-cli/bin/
+lap-vscode/out/
+lap-vscode/node_modules/
+*.vsix
+*.o
+*.plist
+build/
+
+# lap's own recorded history: the log is the truth, everything else in
+# .lap/ is a disposable cache (index, sidecars, snapshots, shadows,
+# state) that is native-endian and machine-local. Clone, then `lap
+# rebuild` — exactly the transport story in lap-cli/SPEC.md.
+**/.lap/*
+!**/.lap/log.jsonl
+
+# Machine-local Claude Code settings (this one sets bypassPermissions,
+# which should never be imposed on whoever clones the repo). The lap skill
+# under .claude/skills/ IS part of the project and stays tracked.
+.claude/settings.json
+.claude/settings.local.json
+
+# macOS
+.DS_Store
