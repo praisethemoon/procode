@@ -470,6 +470,61 @@ expect_grep '"ok":true' "$LAP" status --json
 expect_grep '"ok":true' "$LAP" session list --json
 expect_grep '"ok":false' "$LAP" show L9999 --json
 
+# --------------------------------------------------- review requests
+t "rr collapses a session into its trajectory and net change"
+mkdir -p "$WORK/rr" && cd "$WORK/rr"
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "add retry handling" >/dev/null 2>&1
+printf 'int fetch(void) {\n    return send();\n}\n' > fetch.c
+"$LAP" commit fetch.c -m "the fetcher as it was" >/dev/null 2>&1
+printf 'int fetch(void) {\n    int s = send();\n    return s;\n}\n' > fetch.c
+"$LAP" commit fetch.c -m "hold the status so we can branch on it" >/dev/null 2>&1
+printf 'int fetch(void) {\n    int s = send();\n    if (s == 429) return retry();\n    return s;\n}\n' > fetch.c
+"$LAP" commit fetch.c -m "retry on 429: staging returns it under load" >/dev/null 2>&1
+printf 'tmp\n' > scratch.txt
+"$LAP" commit scratch.txt -m "scratch for the experiment" >/dev/null 2>&1
+rm scratch.txt
+"$LAP" commit scratch.txt -m "experiment done" >/dev/null 2>&1
+"$LAP" session end >/dev/null 2>&1
+
+expect_grep "add retry handling" "$LAP" rr S1
+expect_grep "trajectory:" "$LAP" rr S1
+expect_grep "retry on 429" "$LAP" rr S1          # the reasoning, in order
+expect_grep "net change:" "$LAP" rr S1
+expect_grep "429" "$LAP" rr S1                   # the code, collapsed
+
+t "rr shows edits that cancelled out as no net change"
+expect_grep "no net change" "$LAP" rr S1
+
+t "rr collapses many commits to one file into one hunk"
+# three commits touched fetch.c; the net change must read as a single
+# create, not as three successive diffs
+HUNKS=$("$LAP" rr S1 | grep -c '@@')
+[ "$HUNKS" = "1" ] || fail "expected 1 net hunk, got $HUNKS"
+
+t "rr accepts an inclusive commit range"
+expect_grep "L2..L3" "$LAP" rr L2 L3
+expect_not_grep "the fetcher as it was" "$LAP" rr L2 L3
+expect_grep "hold the status" "$LAP" rr L2 L3
+
+t "rr with no target reviews the most recent session"
+expect_grep "add retry handling" "$LAP" rr
+
+t "rr is read-only and machine-readable"
+BEFORE_RR=$("$LAP" verify)
+"$LAP" rr S1 >/dev/null 2>&1
+[ "$("$LAP" verify)" = "$BEFORE_RR" ] || fail "rr changed the repository"
+expect_grep '"trajectory"' "$LAP" rr S1 --json
+expect_grep '"added"' "$LAP" rr S1 --json
+expect_fail "$LAP" rr S99
+
+t "--no-diff drops the hunks but keeps the summary, in both shapes"
+expect_not_grep '@@' "$LAP" rr S1 --no-diff
+expect_grep "fetch.c" "$LAP" rr S1 --no-diff
+expect_not_grep '"diff"' "$LAP" rr S1 --no-diff --json
+expect_grep '"added"' "$LAP" rr S1 --no-diff --json
+cd "$WORK"
+
 # ------------------------------------------------------------- colour
 # Every other scenario in this file reads lap through a pipe, which is
 # exactly where colour must not appear — so these checks compare the two
@@ -510,6 +565,8 @@ check_color search --text BETA
 check_color search --file tint.txt --line 1
 check_color session list
 check_color session current
+check_color rr
+check_color rr --no-diff
 check_color verify --deep
 
 t "json is never coloured, in either spelling of an escape"
@@ -526,6 +583,8 @@ no_escapes_json show L1 --json
 no_escapes_json show L1 --full-file --json
 no_escapes_json search --text BETA --json
 no_escapes_json session list --json
+no_escapes_json rr --json
+no_escapes_json rr --no-diff --json
 no_escapes_json verify --deep --json
 no_escapes_json show L9999 --json
 

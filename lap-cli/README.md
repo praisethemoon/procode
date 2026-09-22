@@ -118,6 +118,7 @@ lap search --msg "429"                  # which reasons mention this?
 lap session list                        # what tasks happened
 lap log --session S4                    # what was done in one of them
 lap show L23 --full-file                # one commit, plus the file as of it
+lap rr S4                               # the whole task: why, then what
 lap verify                              # is the history intact?
 ```
 
@@ -134,6 +135,7 @@ Deleting a file is a commit too: `rm` it, then `lap commit <path> -m "why"`.
 | `lap show <id>` | one commit in full (`--full-file` reconstructs the file) |
 | `lap search` | blame a line (`--file F --line N`), find text (`--text`), messages (`--msg`), sessions, time ranges |
 | `lap session` | `start "purpose"` / `end` / `list` / `current` |
+| `lap rr` | review request: a run of work as trajectory + net change (`<session>`, `<from> <to>`, `--no-diff`) |
 | `lap verify` | check the log's hash chain (`--deep`: replay everything, audit caches) |
 | `lap rebuild` | reconstruct every cache from the log (`--verify`: fail on a broken chain) |
 

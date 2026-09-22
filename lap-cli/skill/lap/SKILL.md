@@ -100,6 +100,12 @@ a listed range.
   `lap log --session S<n>`.
 - Read one commit in full (message + diff): `lap show L<n>`; add
   `--full-file` to see the whole file as of that commit.
+- **Review a whole piece of work** — before handing it over, or to catch up
+  on someone else's: `lap rr <session>` prints the trajectory (every
+  message in order) and the net change (each file diffed from before the
+  work to after, so cancelled-out edits vanish and many commits to one
+  function read as a single change). `lap rr <from> <to>` reviews a range;
+  `lap rr` alone reviews the latest session.
 
 ## Sanity
 

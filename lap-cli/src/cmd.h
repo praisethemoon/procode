@@ -17,6 +17,7 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv);
 int32_t cmd_session(Arena *a, int32_t argc, char **argv);
 int32_t cmd_verify(Arena *a, int32_t argc, char **argv);
 int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv);
+int32_t cmd_rr(Arena *a, int32_t argc, char **argv);
 
 /* ---- shared helpers (cmd_common.c) ----
  *

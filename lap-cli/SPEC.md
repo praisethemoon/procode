@@ -232,6 +232,17 @@ Asks the history questions; criteria AND together:
 One active session at a time; `start` requires a purpose message; a crashed
 session simply stays open. `list` shows every session with commit counts.
 
+### `lap rr [<session>] [<from> <to>] [--no-diff]`
+A **review request**: what a run of work changed, and why. Two halves —
+the *trajectory* (every commit's message in the order the work happened)
+and the *net change* (each touched file replayed to just before the range
+and again at its end, then diffed). Edits that cancelled out show as no
+net change; ten commits to one function show as one coherent change.
+
+The target is a session, an inclusive commit range, or — with no argument
+— the most recent session. `--no-diff` keeps the per-file summary and
+drops the hunks, in both the human and JSON shapes. Read-only.
+
 ### `lap verify [--deep]`
 Walks the hash chain. `--deep` also replays every file's history from
 birth and compares the result byte-for-byte with the shadow store and

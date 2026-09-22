@@ -34,6 +34,7 @@ set(LAP_LIB_SOURCES
     src/cmd_session.c
     src/cmd_verify.c
     src/cmd_rebuild.c
+    src/cmd_rr.c
     src/idx.c
     src/snap.c
     src/tty.c

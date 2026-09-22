@@ -20,6 +20,8 @@ static const char *USAGE =
     "  session [start \"purpose\" | end | list | current] [--json]\n"
     "  verify [--deep] [--json]   check the log hash chain (and caches)\n"
     "  rebuild [--verify]         reconstruct every cache from the log\n"
+    "  rr [<session>]             review request: trajectory + net change\n"
+    "     [<from> <to>] [--no-diff] [--json]\n"
     "\n"
     "global:\n"
     "  --color=auto|always|never  colour output (auto: only at a terminal;\n"
@@ -86,6 +88,8 @@ int main(int argc, char **argv) {
         rc = cmd_verify(a, argc2, argv2);
     else if (strcmp(cmd, "rebuild") == 0)
         rc = cmd_rebuild(a, argc2, argv2);
+    else if (strcmp(cmd, "rr") == 0 || strcmp(cmd, "review") == 0)
+        rc = cmd_rr(a, argc2, argv2);
     else {
         err_out(tty_json(), "unknown_command", "unknown command \"%s\"", cmd);
         if (!tty_json()) {

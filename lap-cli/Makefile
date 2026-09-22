@@ -22,7 +22,8 @@ SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/platform.c \
            src/ignore.c src/diff.c src/rec.c src/repo.c src/cmd_common.c \
            src/cmd_init.c src/cmd_status.c src/cmd_commit.c src/cmd_log.c \
            src/cmd_show.c src/cmd_search.c src/cmd_session.c src/cmd_verify.c \
-           src/cmd_rebuild.c src/idx.c src/snap.c src/tty.c
+           src/cmd_rebuild.c src/cmd_rr.c src/idx.c src/snap.c \
+           src/tty.c
 SRC_MAIN := src/main.c
 SRC_TESTS := $(wildcard tests/unit/*.c)
 
