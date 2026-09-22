@@ -6,6 +6,7 @@
 #include "ignore.h"
 #include "json.h"
 #include "snap.h"
+#include "tty.h"
 
 int32_t cmd_init(Arena *a, int32_t argc, char **argv);
 int32_t cmd_status(Arena *a, int32_t argc, char **argv);
@@ -77,5 +78,10 @@ bool file_diff_load(Arena *a, Repo *r, const char *rel, FileDiff *out,
 
 /* Writes a unified-diff-style render of one commit's region to sb. */
 void render_commit_diff(StrBuf *sb, const Rec *rec);
+
+/* One diff line: indent, then sign and content sharing a single style, so
+ * the marker and the text it marks read as one thing. */
+void sb_diff_line(StrBuf *sb, Style s, const char *indent, const char *sign,
+                  Str text);
 
 #endif /* LAP_CMD_H */

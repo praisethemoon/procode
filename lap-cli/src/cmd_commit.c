@@ -323,9 +323,10 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         region_describe(&shown, desc, sizeof desc);
         const char *nl = strchr(msg, '\n');
         int32_t mlen = nl ? (int32_t)(nl - msg) : (int32_t)strlen(msg);
-        printf("[%s] %s %s: %s  \"%.*s\"\n", rec.id,
-               rec.session ? rec.session : "(no session)", rel, desc, mlen,
-               msg);
+        printf("[%s%s%s] %s%s%s %s: %s%s%s  \"%.*s\"\n", sgr(S_ID), rec.id,
+               sgr_off(), sgr(S_SESSION),
+               rec.session ? rec.session : "(no session)", sgr_off(), rel,
+               sgr(S_MUTED), desc, sgr_off(), mlen, msg);
     }
     rc = LAP_EXIT_OK;
 

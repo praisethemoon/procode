@@ -85,6 +85,9 @@ a listed range.
 - Binary files are not tracked; add noisy artifacts to `.lapignore`.
 - `lap status --json`, and `--json` on every command, when you want to
   parse output.
+- Output is coloured only at a terminal, so piped output is plain. If you
+  run lap through a pseudo-terminal, pass `--color=never` (or set
+  `NO_COLOR=1`) to keep escape sequences out of what you read back.
 
 ## Using the history (do this before changing unfamiliar code)
 

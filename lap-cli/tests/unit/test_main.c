@@ -15,6 +15,7 @@ void test_json(void);
 void test_diff(void);
 void test_ignore(void);
 void test_rec(void);
+void test_tty(void);
 
 int main(void) {
     test_arena();
@@ -24,6 +25,7 @@ int main(void) {
     test_diff();
     test_ignore();
     test_rec();
+    test_tty();
     printf("unit tests: %d passed, %d failed\n", t_pass, t_fail);
     return t_fail == 0 ? 0 : 1;
 }

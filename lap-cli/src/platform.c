@@ -19,6 +19,10 @@
 #endif
 
 #ifdef _WIN32
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING /* absent in older SDK headers */
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#endif
+
 /* Converts '/' to '\\' into a stack buffer for Win32 calls. */
 static const char *winpath(char *buf, size_t bufsz, const char *path) {
     size_t n = strlen(path);
@@ -210,6 +214,22 @@ bool plat_fsync(FILE *f) {
     return _commit(_fileno(f)) == 0;
 #else
     return fsync(fileno(f)) == 0;
+#endif
+}
+
+bool plat_tty_ansi(FILE *f) {
+#ifdef _WIN32
+    int fd = _fileno(f);
+    if (fd < 0 || !_isatty(fd))
+        return false;
+    HANDLE h = (HANDLE)_get_osfhandle(fd);
+    DWORD mode;
+    if (h == INVALID_HANDLE_VALUE || !GetConsoleMode(h, &mode))
+        return false;
+    return (mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0 ||
+           SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+#else
+    return isatty(fileno(f)) == 1;
 #endif
 }
 

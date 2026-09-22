@@ -207,18 +207,21 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         puts(sb_finish(&sb));
     } else {
         if (log.chain_ok)
-            printf("chain ok: %d records\n", log.count);
+            printf("%schain ok%s: %d records\n", sgr(S_ADDED), sgr_off(),
+                   log.count);
         else
-            printf("CHAIN BROKEN: %s\n", log.chain_err);
+            printf("%sCHAIN BROKEN%s: %s\n", sgr(S_REMOVED), sgr_off(),
+                   log.chain_err);
         if (log.torn_tail)
             printf("note: torn trailing record ignored (%llu bytes from an "
                    "interrupted append; the next commit repairs it)\n",
                    (unsigned long long)log.torn_bytes);
         if (deep) {
             fputs(sb_finish(&deep_out), stdout);
-            printf("deep check: %d file%s, %d mismatch%s\n", checked,
-                   checked == 1 ? "" : "s", mismatched,
-                   mismatched == 1 ? "" : "es");
+            printf("deep check: %d file%s, %s%d mismatch%s%s\n", checked,
+                   checked == 1 ? "" : "s",
+                   sgr(mismatched ? S_REMOVED : S_ADDED), mismatched,
+                   mismatched == 1 ? "" : "es", sgr_off());
         }
     }
     return ok ? LAP_EXIT_OK : LAP_EXIT_ERR;

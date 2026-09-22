@@ -109,10 +109,16 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
         sb_puts(&sb, "}");
         puts(sb_finish(&sb));
     } else {
-        sb_printf(&sb, "commit %s", rec->id);
-        if (rec->session)
-            sb_printf(&sb, "  (session %s)", rec->session);
-        sb_printf(&sb, "\ndate: %s\n", rec->ts);
+        sb_puts(&sb, "commit ");
+        sb_field(&sb, S_ID, rec->id, 0);
+        if (rec->session) {
+            sb_puts(&sb, "  (session ");
+            sb_field(&sb, S_SESSION, rec->session, 0);
+            sb_putc(&sb, ')');
+        }
+        sb_puts(&sb, "\ndate: ");
+        sb_field(&sb, S_MUTED, rec->ts, 0);
+        sb_putc(&sb, '\n');
         if (rec->user)
             sb_printf(&sb, "user: %s\n", rec->user);
         sb_printf(&sb, "file: %s  (%s)\nmessage:\n", rec->file, rec->op);

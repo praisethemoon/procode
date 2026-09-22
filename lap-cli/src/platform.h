@@ -38,6 +38,10 @@ bool plat_read_range(Arena *a, const char *path, uint64_t off, size_t len,
 bool plat_file_size(const char *path, uint64_t *size);
 /* Flushes a stream all the way to disk. */
 bool plat_fsync(FILE *f);
+/* True when f is an interactive terminal that renders ANSI styling. On
+ * Windows this also switches the console into VT mode; a console that
+ * refuses is reported as not styleable. */
+bool plat_tty_ansi(FILE *f);
 /* True for an atomic-write temp file ("<name>.tmp.<pid>"), which cache
  * walks must ignore — a crashed write can leave one behind. */
 bool plat_is_tmp_name(const char *name);

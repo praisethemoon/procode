@@ -121,7 +121,10 @@ void test_rec(void) {
     sb_putn(&fsb, l2, lb);
     sb_putc(&fsb, '\n');
     sb_puts(&fsb, "{\"type\":\"commit\",\"id\":\"L9"); /* torn, no newline */
-    const char *tp = "bin/.torn_unit_test.jsonl";
+    /* cwd, not bin/: ctest runs from the build directory, where bin/ may
+     * not exist, and a write that silently fails takes the assertions with
+     * it */
+    const char *tp = ".torn_unit_test.jsonl";
     ASSERT_TRUE(plat_write_file_atomic(tp, fsb.data, fsb.len));
     RecLog tl;
     char terr[256];

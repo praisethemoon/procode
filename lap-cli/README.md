@@ -1,3 +1,5 @@
+<img src="../media/lap.svg" alt="lap" width="96" align="right">
+
 # lap
 
 **A flight recorder for AI agent work sessions.** lap records code changes
@@ -38,17 +40,28 @@ granularity agents work at.
 
 ## Build
 
-Zero dependencies — a C11 compiler is all you need.
+Zero third-party dependencies — a C11 compiler is all you need. No
+libraries to fetch, no build-time code generation, no network access.
 
 ```sh
 make                          # -> bin/lap
 make test                     # unit tests + end-to-end suite
-sudo make install             # -> /usr/local/bin/lap  (PREFIX=... to change)
+make unit                     # unit tests alone
+make e2e                      # end-to-end suite alone (needs sh)
+sudo make install             # -> /usr/local/bin/lap
 sudo make uninstall
 ```
 
-Or with CMake (the cross-platform path — use this on Windows with MSVC or
-MinGW, where the `_WIN32` branches are best-effort and untested):
+`PREFIX=/opt make install` installs elsewhere; `DESTDIR=` is honoured for
+packaging. `CC` and `CFLAGS` override the compiler and flags, which is how
+the sanitizer build runs:
+
+```sh
+make CFLAGS="-std=c11 -Wall -Wextra -O1 -g -fsanitize=address,undefined" test
+```
+
+Or with CMake — the cross-platform path, and the one to use on Windows with
+MSVC or MinGW:
 
 ```sh
 cmake -B build && cmake --build build
@@ -57,9 +70,60 @@ cmake --install build         # CMAKE_INSTALL_PREFIX to change the target
 cmake --build build --target uninstall
 ```
 
-POSIX (macOS/Linux) is the tested platform.
+POSIX (macOS/Linux) is the tested platform; see [Limitations](#limitations).
 
-## Commands
+## Use
+
+Record work as you do it:
+
+```sh
+lap init                                    # creates .lap/ and a starter .lapignore
+lap session start "add retry handling"      # name the task before you begin
+# ... edit src/fetch.c ...
+lap commit src/fetch.c -m "retry on 429: staging returns it under load"
+lap session end
+```
+
+The cadence that matters is **one edit, one commit, immediately** — not a
+batch at the end. If you changed two separate places, lap refuses and shows
+you how to split them:
+
+```
+$ lap commit src/fetch.c -m "..."
+error: 2 separate edits detected in src/fetch.c
+  [1] lines 10-12
+  [2] lines 48-49
+a commit is one edit; pick one:
+  lap commit src/fetch.c -m "..." --edit <n>
+  lap commit src/fetch.c -m "..." --lines <start>-<end>
+```
+
+Commit them one at a time, each with its own reason. After each commit the
+remaining edits are re-detected and **renumbered**, so read the fresh
+listing (or `lap status`) rather than reusing old numbers.
+
+Long messages avoid shell-quoting pain through a file or stdin:
+
+```sh
+printf 'summary line\n\nthe longer rationale...' | lap commit src/fetch.c -F -
+```
+
+Then interrogate the history:
+
+```sh
+lap status                              # what is pending, per file, numbered
+lap search --file src/fetch.c --line 12 # why does this line exist?
+lap search --text retry_with_backoff    # when did this string appear or vanish?
+lap search --msg "429"                  # which reasons mention this?
+lap session list                        # what tasks happened
+lap log --session S4                    # what was done in one of them
+lap show L23 --full-file                # one commit, plus the file as of it
+lap verify                              # is the history intact?
+```
+
+Deleting a file is a commit too: `rm` it, then `lap commit <path> -m "why"`.
+
+### Commands
 
 | command | purpose |
 |---|---|
@@ -73,7 +137,21 @@ POSIX (macOS/Linux) is the tested platform.
 | `lap verify` | check the log's hash chain (`--deep`: replay everything, audit caches) |
 | `lap rebuild` | reconstruct every cache from the log (`--verify`: fail on a broken chain) |
 
-Every command takes `--json` for machine-readable output.
+Every command takes `--json` for machine-readable output. Exit codes: `0`
+success, `1` user or repository error, `2` internal failure.
+
+`LAP_USER` sets the committer identity (agents should set it, e.g.
+`LAP_USER="claude/bugfix-agent"`); otherwise lap falls back to
+`git config user.name`, then the OS user.
+
+## Colour
+
+Output is coloured only when it is going to a terminal. A pipe, a file, or
+`--json` gets the same bytes it always did — no escape sequence ever
+reaches a parser or an agent's context. `--color=always` forces it on
+(useful for `less -R`), `--color=never`, `--no-color` and a non-empty
+`NO_COLOR` force it off, and the two modes differ only by the escapes:
+colour never moves a column.
 
 ## How it stores things
 
@@ -86,6 +164,53 @@ content snapshots that bound replay cost, and the shadow store. Delete any
 of it, `lap rebuild` restores it; reads stay correct (slower) even without
 it. `.lapignore` (gitignore-like subset) controls what is tracked. Details
 in [SPEC.md](SPEC.md).
+
+## Limitations
+
+Worth knowing before you rely on it.
+
+**lap cannot restore anything.** It records; it never writes to your files.
+There is no checkout, revert, branch, merge, staging area, or remote. To
+get old content back you read it out of `lap show --full-file` yourself.
+
+**lap does not watch git.** It compares the working tree against its own
+last-committed copy and nothing else. So when git changes files underneath
+it — `checkout`, `pull`, `rebase`, `merge` — those changes are
+indistinguishable from edits you made, and `lap status` will report them as
+your pending work. Commit or discard before switching branches.
+
+**A shared history file can be corrupted by merging it.** If
+`.lap/log.jsonl` is tracked by git and two branches both record commits,
+merging them conflicts on a single append-only file, and resolving that by
+interleaving lines breaks the hash chain. `lap verify` will detect the
+damage but cannot repair it. Either keep recorded history on one line of
+work, or add `.lap/` to `.gitignore` and let it stay machine-local.
+
+**Renames are two commits**, because lap tracks paths, not file identity —
+record the old path's disappearance and the new path's appearance, and name
+the other path in each message. Blame and `lap log --file` cannot follow a
+rename.
+
+**Text files only.** A NUL byte in the first 8 KB marks a file binary and
+lap refuses to track it. Files larger than 64 MB are refused outright.
+
+**One commit is one contiguous run of lines.** A single logical change
+scattered across a file becomes several commits — by design, but it does
+mean the unit of history is mechanical rather than semantic.
+
+**`lap status` reads every tracked file.** There is no stat cache, so it is
+linear in the size of the tree: roughly 0.6 s on a 7,450-file checkout
+against git's 0.02 s. Committing is unaffected.
+
+**One writer at a time.** An exclusive lock serializes writing commands for
+their whole run; readers never lock and never block. A second writer waits
+rather than failing.
+
+**Caches are machine-local** and native-endian. Transport a repository as
+its `log.jsonl` plus the working tree, then run `lap rebuild` on arrival.
+
+**Windows is best-effort and untested.** The `_WIN32` branches exist and
+compile via CMake, but POSIX is the only platform covered by the suites.
 
 ## For agents
 

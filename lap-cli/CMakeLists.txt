@@ -36,6 +36,7 @@ set(LAP_LIB_SOURCES
     src/cmd_rebuild.c
     src/idx.c
     src/snap.c
+    src/tty.c
 )
 
 add_executable(lap ${LAP_LIB_SOURCES} src/main.c)

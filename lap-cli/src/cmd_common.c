@@ -89,17 +89,22 @@ void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
                         const char *note) {
     const char *nl = strchr(rec->msg, '\n');
     int32_t mlen = nl ? (int32_t)(nl - rec->msg) : (int32_t)strlen(rec->msg);
+    sb_field(sb, S_ID, rec->id, 6);
+    sb_putc(sb, ' ');
+    sb_field(sb, S_MUTED, rec->ts, 0);
+    sb_puts(sb, "  ");
+    sb_field(sb, S_SESSION, rec->session ? rec->session : "-", 6);
+    sb_putc(sb, ' ');
     if (with_region) {
         Region shown = {rec->old_start, rec->old_lines, rec->new_start,
                         rec->new_lines};
         char desc[128];
         region_describe(&shown, desc, sizeof desc);
-        sb_printf(sb, "%-6s %s  %-6s %-8s %s  %s\n", rec->id, rec->ts,
-                  rec->session ? rec->session : "-", rec->op, rec->file,
-                  desc);
+        sb_printf(sb, "%-8s %s  ", rec->op, rec->file);
+        sb_field(sb, S_MUTED, desc, 0);
+        sb_putc(sb, '\n');
     } else {
-        sb_printf(sb, "%-6s %s  %-6s %s\n", rec->id, rec->ts,
-                  rec->session ? rec->session : "-", rec->file);
+        sb_printf(sb, "%s\n", rec->file);
     }
     if (note)
         sb_printf(sb, "       match: %s\n", note);
@@ -134,7 +139,8 @@ void err_out(bool json_mode, const char *code, const char *fmt, ...) {
         }
         fputs("\"}\n", stdout);
     } else {
-        fprintf(stderr, "error: %s\n", msg);
+        fprintf(stderr, "%serror:%s %s\n", sgr_f(stderr, S_ERROR),
+                sgr_off_f(stderr), msg);
     }
 }
 
@@ -261,17 +267,21 @@ bool file_diff_load(Arena *a, Repo *r, const char *rel, FileDiff *out,
     return true;
 }
 
+void sb_diff_line(StrBuf *sb, Style s, const char *indent, const char *sign,
+                  Str text) {
+    sb_puts(sb, indent);
+    sb_puts(sb, sgr(s));
+    sb_puts(sb, sign);
+    sb_putn(sb, text.ptr, text.len);
+    sb_puts(sb, sgr_off());
+    sb_putc(sb, 0x0a);
+}
+
 void render_commit_diff(StrBuf *sb, const Rec *rec) {
-    sb_printf(sb, "@@ -%d,%d +%d,%d @@\n", rec->old_start, rec->old_lines,
-              rec->new_start, rec->new_lines);
-    for (int32_t i = 0; i < rec->old_n; i++) {
-        sb_puts(sb, "- ");
-        sb_putn(sb, rec->old_text[i].ptr, rec->old_text[i].len);
-        sb_putc(sb, '\n');
-    }
-    for (int32_t i = 0; i < rec->new_n; i++) {
-        sb_puts(sb, "+ ");
-        sb_putn(sb, rec->new_text[i].ptr, rec->new_text[i].len);
-        sb_putc(sb, '\n');
-    }
+    sb_printf(sb, "%s@@ -%d,%d +%d,%d @@%s\n", sgr(S_HUNK), rec->old_start,
+              rec->old_lines, rec->new_start, rec->new_lines, sgr_off());
+    for (int32_t i = 0; i < rec->old_n; i++)
+        sb_diff_line(sb, S_REMOVED, "", "- ", rec->old_text[i]);
+    for (int32_t i = 0; i < rec->new_n; i++)
+        sb_diff_line(sb, S_ADDED, "", "+ ", rec->new_text[i]);
 }

@@ -242,10 +242,16 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             sb_puts(&sb, "}}");
             puts(sb_finish(&sb));
         } else {
-            sb_printf(&sb, "line %d of %s was last touched by %s (%s)\n",
-                      line, rel, rec->id, rec->ts);
-            if (rec->session)
-                sb_printf(&sb, "session: %s\n", rec->session);
+            sb_printf(&sb, "line %d of %s was last touched by ", line, rel);
+            sb_field(&sb, S_ID, rec->id, 0);
+            sb_puts(&sb, " (");
+            sb_field(&sb, S_MUTED, rec->ts, 0);
+            sb_puts(&sb, ")\n");
+            if (rec->session) {
+                sb_puts(&sb, "session: ");
+                sb_field(&sb, S_SESSION, rec->session, 0);
+                sb_putc(&sb, '\n');
+            }
             sb_puts(&sb, "message:\n");
             print_message(&sb, rec->msg);
             fputs(sb_finish(&sb), stdout);

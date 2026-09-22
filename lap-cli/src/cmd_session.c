@@ -50,10 +50,17 @@ static int32_t session_list(Arena *a, Repo *repo, bool json) {
             sb_printf(&sb, ",\"commits\":%d,\"active\":%s}", commits,
                       active ? "true" : "false");
         } else {
-            sb_printf(&sb, "%-6s %s  %2d commit%s  %s%s\n", st->id, st->ts,
-                      commits, commits == 1 ? " " : "s",
-                      first_line(a, st->msg),
-                      active ? "  (active)" : (end_ts ? "" : "  (open)"));
+            sb_field(&sb, active ? S_ACTIVE : S_SESSION, st->id, 6);
+            sb_putc(&sb, ' ');
+            sb_field(&sb, S_MUTED, st->ts, 0);
+            sb_printf(&sb, "  %2d commit%s  %s", commits,
+                      commits == 1 ? " " : "s", first_line(a, st->msg));
+            if (active || !end_ts) {
+                sb_puts(&sb, "  ");
+                sb_field(&sb, active ? S_ACTIVE : S_MUTED,
+                         active ? "(active)" : "(open)", 0);
+            }
+            sb_putc(&sb, '\n');
         }
         printed++;
     }
@@ -99,8 +106,8 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
             puts(sb_finish(&sb));
         } else {
             if (repo.active_session[0])
-                printf("%s \"%s\"\n", repo.active_session,
-                       first_line(a, repo.active_session_msg));
+                printf("%s%s%s \"%s\"\n", sgr(S_ACTIVE), repo.active_session,
+                       sgr_off(), first_line(a, repo.active_session_msg));
             else
                 printf("no active session\n");
         }
@@ -155,7 +162,8 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
         if (json)
             printf("{\"ok\":true,\"id\":\"%s\"}\n", idbuf);
         else
-            printf("session %s started: %s\n", idbuf, first_line(a, msg));
+            printf("session %s%s%s started: %s\n", sgr(S_ACTIVE), idbuf,
+                   sgr_off(), first_line(a, msg));
         rc = LAP_EXIT_OK;
     } else if (strcmp(sub, "end") == 0) {
         if (!repo.active_session[0]) {
@@ -178,7 +186,8 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
         if (json)
             printf("{\"ok\":true,\"id\":\"%s\"}\n", rec.id);
         else
-            printf("session %s ended\n", rec.id);
+            printf("session %s%s%s ended\n", sgr(S_SESSION), rec.id,
+                   sgr_off());
         rc = LAP_EXIT_OK;
     } else {
         err_out(json, "usage",

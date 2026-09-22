@@ -1,4 +1,9 @@
+<img src="media/lap.svg" alt="lap" width="96" align="right">
+
 # lap — workspace
+
+**A flight recorder for AI agent work sessions**: every small edit
+recorded with the reason it exists, below git, without touching git.
 
 - **[lap-cli/](lap-cli/)** — the lap CLI: a fine-grained, git-like edit
   recorder for AI agents. C11, zero dependencies. Build with `make`, test

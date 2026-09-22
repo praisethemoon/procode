@@ -21,6 +21,10 @@ static const char *USAGE =
     "  verify [--deep] [--json]   check the log hash chain (and caches)\n"
     "  rebuild [--verify]         reconstruct every cache from the log\n"
     "\n"
+    "global:\n"
+    "  --color=auto|always|never  colour output (auto: only at a terminal;\n"
+    "                             --no-color and NO_COLOR also turn it off)\n"
+    "\n"
     "rules:\n"
     "  - a commit is ONE contiguous run of changed lines in ONE file;\n"
     "    edits separated by a NON-BLANK unchanged line must be committed\n"
@@ -28,12 +32,28 @@ static const char *USAGE =
     "  - commits require an active session unless --no-session is given\n"
     "  - messages explain WHY the edit exists; multiline is welcome\n";
 
+/* Flags that belong to lap rather than to a command, and so may appear on
+ * either side of it. tty_init has already read them; main only has to see
+ * past them to find the command. */
+static bool is_global_flag(const char *arg) {
+    return strcmp(arg, "--no-color") == 0 ||
+           strncmp(arg, "--color=", sizeof "--color=" - 1) == 0;
+}
+
 int main(int argc, char **argv) {
-    if (argc < 2) {
+    if (!tty_init(argc, argv)) {
+        err_out(tty_json(), "bad_color",
+                "--color expects auto, always or never");
+        return LAP_EXIT_ERR;
+    }
+    int32_t at = 1;
+    while (at < argc && is_global_flag(argv[at]))
+        at++;
+    if (at >= argc) {
         fputs(USAGE, stderr);
         return LAP_EXIT_ERR;
     }
-    const char *cmd = argv[1];
+    const char *cmd = argv[at];
     if (strcmp(cmd, "--version") == 0 || strcmp(cmd, "version") == 0) {
         printf("lap %s\n", LAP_VERSION);
         return LAP_EXIT_OK;
@@ -45,8 +65,8 @@ int main(int argc, char **argv) {
     }
 
     Arena *a = arena_new(1 << 16);
-    int32_t argc2 = argc - 2;
-    char **argv2 = argv + 2;
+    int32_t argc2 = argc - at - 1;
+    char **argv2 = argv + at + 1;
     int32_t rc;
     if (strcmp(cmd, "init") == 0)
         rc = cmd_init(a, argc2, argv2);
@@ -67,8 +87,11 @@ int main(int argc, char **argv) {
     else if (strcmp(cmd, "rebuild") == 0)
         rc = cmd_rebuild(a, argc2, argv2);
     else {
-        fprintf(stderr, "error: unknown command \"%s\"\n\n", cmd);
-        fputs(USAGE, stderr);
+        err_out(tty_json(), "unknown_command", "unknown command \"%s\"", cmd);
+        if (!tty_json()) {
+            fputc('\n', stderr);
+            fputs(USAGE, stderr);
+        }
         rc = LAP_EXIT_ERR;
     }
     arena_free(a);

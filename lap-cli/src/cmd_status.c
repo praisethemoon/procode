@@ -87,8 +87,9 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
             const char *nl = strchr(repo.active_session_msg, '\n');
             int32_t mlen = nl ? (int32_t)(nl - repo.active_session_msg)
                               : (int32_t)strlen(repo.active_session_msg);
-            sb_printf(&sb, "session: %s \"%.*s\"\n", repo.active_session, mlen,
-                      repo.active_session_msg);
+            sb_puts(&sb, "session: ");
+            sb_field(&sb, S_ACTIVE, repo.active_session, 0);
+            sb_printf(&sb, " \"%.*s\"\n", mlen, repo.active_session_msg);
         } else {
             sb_puts(&sb, "session: none (start one with: lap session start "
                          "\"...\")\n");
@@ -147,22 +148,30 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
             }
             sb_putc(&sb, '}');
         } else {
+            Style st = strcmp(state, "modified") == 0   ? S_CHANGED
+                       : strcmp(state, "new") == 0      ? S_ADDED
+                       : strcmp(state, "deleted") == 0  ? S_REMOVED
+                                                        : S_MUTED;
+            sb_puts(&sb, "  ");
+            sb_field(&sb, st, state, 8);
+            sb_printf(&sb, "  %s", rel);
             if (strcmp(state, "modified") == 0) {
-                sb_printf(&sb, "  modified  %s  (%d edit%s)\n", rel,
-                          fd.regions.count, fd.regions.count == 1 ? "" : "s");
+                sb_printf(&sb, "  (%d edit%s)\n", fd.regions.count,
+                          fd.regions.count == 1 ? "" : "s");
                 for (int32_t e = 0; e < fd.regions.count; e++) {
                     char desc[128];
                     region_describe(&fd.regions.v[e], desc, sizeof desc);
-                    sb_printf(&sb, "      [%d] %s\n", e + 1, desc);
+                    sb_printf(&sb, "      [%d] ", e + 1);
+                    sb_field(&sb, S_MUTED, desc, 0);
+                    sb_putc(&sb, 0x0a);
                 }
             } else if (strcmp(state, "new") == 0) {
-                sb_printf(&sb, "  new       %s  (%d line%s)\n", rel,
-                          fd.work.count, fd.work.count == 1 ? "" : "s");
+                sb_printf(&sb, "  (%d line%s)\n", fd.work.count,
+                          fd.work.count == 1 ? "" : "s");
             } else if (strcmp(state, "deleted") == 0) {
-                sb_printf(&sb, "  deleted   %s\n", rel);
+                sb_putc(&sb, 0x0a);
             } else {
-                sb_printf(&sb, "  binary    %s  (unsupported, ignored)\n",
-                          rel);
+                sb_puts(&sb, "  (unsupported, ignored)\n");
             }
         }
     }

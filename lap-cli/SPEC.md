@@ -160,6 +160,36 @@ a message like `-m "--no-session"` is never misread as a flag; a literal
 `--` ends flag parsing, letting file names that start with `-` be committed
 (`lap commit -m "msg" -- -weird.txt`).
 
+### Colour
+
+`--color=auto|always|never` and `--no-color` are lap's own flags rather
+than any command's, and may appear on either side of the command name; the
+last one given wins. They are spelled with `=` so that a command's own
+parser, which skips anything starting with `-`, cannot mistake the mode for
+a positional argument. The scan that finds them applies the same rule every
+command does: **a value-taking flag's value is data**, so
+`lap commit -m "--color=always"` records that message and changes nothing
+about the display.
+
+Colour is bound by one contract: **it never changes what the output says,
+only how it looks.** Concretely —
+
+- `auto` (the default) styles a stream only when that stream is an
+  interactive terminal. stdout and stderr are decided independently, so
+  `lap log | less` still shows a human a red `error:`.
+- A non-empty `NO_COLOR` disables colour unconditionally, overriding even
+  `--color=always`: it is the environment's kill switch, and honouring it
+  is what lets a caller guarantee escape-free output.
+- `TERM=dumb` disables colour in `auto`.
+- `--json` output is never styled, in any mode. This is enforced where the
+  mode is resolved rather than in each command's JSON branch, so a styled
+  helper reached from a JSON path emits nothing instead of depending on
+  every branch to remember.
+- Removing the escape sequences from styled output yields the unstyled
+  output byte for byte. Nothing is padded, truncated, or re-ordered for
+  colour, and every aligned column is padded by visible width rather than
+  by byte count.
+
 ### `lap init`
 Creates `.lap/` in the cwd plus a starter `.lapignore` (kept if present).
 

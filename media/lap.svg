@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96" fill="none" role="img" aria-label="lap logo: a spiral of repeated outward passes">
+  <!-- lap: repeated passes spiralling outward — one lap, then the next, each
+       wider than the last. Same geometry as the editor icon
+       (lap-vscode/media/lap.svg), restruck in a warm tone that stays legible
+       on both light and dark README backgrounds rather than the editor's
+       theme-masked grey. -->
+  <path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"
+        stroke="#e2641f" stroke-width="2" stroke-linecap="round"/>
+</svg>

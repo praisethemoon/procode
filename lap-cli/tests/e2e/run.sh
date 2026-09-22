@@ -470,6 +470,105 @@ expect_grep '"ok":true' "$LAP" status --json
 expect_grep '"ok":true' "$LAP" session list --json
 expect_grep '"ok":false' "$LAP" show L9999 --json
 
+# ------------------------------------------------------------- colour
+# Every other scenario in this file reads lap through a pipe, which is
+# exactly where colour must not appear — so these checks compare the two
+# modes against each other instead of describing either one.
+mkdir -p "$WORK/color" && cd "$WORK/color"
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "paint the terminal" >/dev/null 2>&1
+printf 'alpha\nbeta\n' > tint.txt
+"$LAP" commit tint.txt -m "seed the file the colour tests read" >/dev/null 2>&1
+printf 'alpha\nBETA\n' > tint.txt
+"$LAP" commit tint.txt -m "shout beta so there is a diff to colour" >/dev/null 2>&1
+printf 'alpha\nBETA\ngamma\n' > tint.txt
+
+ESC=$(printf '\033')
+strip_ansi() { sed "s/${ESC}\[[0-9;]*m//g"; }
+has_esc() { printf '%s' "$1" | grep -q "$ESC"; }
+
+# check_color <args...>: a pipe stays plain, --color=never matches it
+# byte for byte, --color=always adds escapes, and removing those escapes
+# gives the piped bytes back — that last one is the layout guarantee.
+check_color() {
+    plain=$("$LAP" "$@" 2>&1)
+    never=$("$LAP" --color=never "$@" 2>&1)
+    always=$("$LAP" --color=always "$@" 2>&1)
+    ! has_esc "$plain" || fail "escapes reached a pipe: lap $*"
+    [ "$plain" = "$never" ] || fail "--color=never differs from a pipe: lap $*"
+    has_esc "$always" || fail "--color=always printed no colour: lap $*"
+    [ "$(printf '%s' "$always" | strip_ansi)" = "$plain" ] || \
+        fail "colour changed the layout: lap $*"
+}
+
+t "colour reaches a terminal, never a pipe, and never moves anything"
+check_color status
+check_color log
+check_color show L1
+check_color show L1 --full-file
+check_color search --text BETA
+check_color search --file tint.txt --line 1
+check_color session list
+check_color session current
+check_color verify --deep
+
+t "json is never coloured, in either spelling of an escape"
+# a raw ESC cannot survive JSON encoding — it comes out as  — so
+# grepping for the byte alone passes while escapes sit in the payload
+no_escapes_json() {
+    out=$("$LAP" --color=always "$@" 2>&1)
+    ! printf '%s' "$out" | grep -q "$ESC" || fail "raw escape in json: lap $*"
+    ! printf '%s' "$out" | grep -q 'u001b' || fail "encoded escape: lap $*"
+}
+no_escapes_json status --json
+no_escapes_json log --json
+no_escapes_json show L1 --json
+no_escapes_json show L1 --full-file --json
+no_escapes_json search --text BETA --json
+no_escapes_json session list --json
+no_escapes_json verify --deep --json
+no_escapes_json show L9999 --json
+
+t "NO_COLOR overrides even an explicit --color=always"
+has_esc "$(NO_COLOR=1 "$LAP" --color=always log 2>&1)" && \
+    fail "NO_COLOR did not disable colour"
+has_esc "$(NO_COLOR= "$LAP" --color=always log 2>&1)" || \
+    fail "an empty NO_COLOR disabled colour"
+
+t "the last colour flag on the line wins"
+has_esc "$("$LAP" --color=always --no-color log 2>&1)" && \
+    fail "--no-color did not override an earlier --color=always"
+has_esc "$("$LAP" --no-color --color=always log 2>&1)" || \
+    fail "--color=always did not override an earlier --no-color"
+
+t "errors are coloured for a human and plain for a pipe"
+has_esc "$("$LAP" --color=always show L9999 2>&1)" || fail "error uncoloured"
+has_esc "$("$LAP" show L9999 2>&1)" && fail "escapes in a piped error"
+
+t "--color rejects a mode that does not exist"
+expect_fail "$LAP" --color=purple log
+expect_grep "auto, always or never" "$LAP" --color=purple log
+expect_grep '"ok":false' "$LAP" --color=purple status --json
+
+t "the colour flag reads the same before or after the command"
+[ "$("$LAP" --color=always log 2>&1)" = "$("$LAP" log --color=always 2>&1)" ] \
+    || fail "--color behaved differently before and after the command"
+
+t "a value that looks like a flag is data, not a flag"
+# these used to abort before the command ran, committing nothing
+expect_ok "$LAP" commit tint.txt -m "--color=true was replaced by --color=auto"
+printf 'alpha\nBETA\ngamma\ndelta\n' > tint.txt
+expect_ok "$LAP" commit tint.txt -m "--no-color is also spelled --color=never"
+expect_ok "$LAP" search --text "--color=1"
+has_esc "$("$LAP" log -n 1 2>&1)" && fail "a message switched colour on"
+
+t "a path after -- is a path, not a colour flag"
+printf 'x\n' > './--color=always'
+has_esc "$("$LAP" commit -m "a file whose name looks like a flag" \
+    -- --color=always 2>&1)" && fail "a filename switched colour on"
+rm -f './--color=always'
+cd "$WORK"
+
 # ------------------------------------------------------------ summary
 echo "e2e: $TESTS scenarios, $FAILED failure(s)"
 [ "$FAILED" -eq 0 ] || exit 1
