@@ -173,7 +173,8 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
             const char *nl = strchr(rng.title, '\n');
             int32_t tl = nl ? (int32_t)(nl - rng.title)
                             : (int32_t)strlen(rng.title);
-            sb_printf(&sb, " — %.*s", tl, rng.title);
+            sb_puts(&sb, " — ");
+            sb_text(&sb, rng.title, (size_t)tl);
         }
         char span[80];
         snprintf(span, sizeof span, "%s → %s", log.v[rng.first].ts,
@@ -193,6 +194,10 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
         if (n > pathw)
             pathw = n;
     }
+    /* One deep path must not tax every other row with its width; past the
+     * cap a path overflows its own line instead. */
+    if (pathw > 40)
+        pathw = 40;
 
     int32_t printed = 0;
     for (int32_t i = rng.first; i <= rng.last; i++) {
@@ -211,8 +216,11 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
         } else {
             sb_puts(&sb, "  ");
             sb_field(&sb, S_ID, rec->id, 6);
-            sb_printf(&sb, "  %-*s  %.*s\n", pathw, rec->file, mlen,
-                      rec->msg);
+            sb_puts(&sb, "  ");
+            sb_pad_text(&sb, rec->file, pathw);
+            sb_puts(&sb, "  ");
+            sb_text(&sb, rec->msg, (size_t)mlen);
+            sb_putc(&sb, '\n');
         }
         printed++;
     }
@@ -259,9 +267,10 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
             }
             sb_putc(&sb, '}');
         } else {
-            sb_printf(&sb, "  %-*s  %s+%d%s %s-%d%s", pathw, files[f],
-                      sgr(S_ADDED), plus, sgr_off(), sgr(S_REMOVED), minus,
-                      sgr_off());
+            sb_puts(&sb, "  ");
+            sb_pad_text(&sb, files[f], pathw);
+            sb_printf(&sb, "  %s+%d%s %s-%d%s", sgr(S_ADDED), plus,
+                      sgr_off(), sgr(S_REMOVED), minus, sgr_off());
             if (d2) {
                 sb_puts(&sb, "  ");
                 sb_field(&sb, S_MUTED, "(deleted)", 0);

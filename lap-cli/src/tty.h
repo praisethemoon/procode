@@ -47,10 +47,25 @@ const char *sgr_off_f(FILE *f);
 static inline const char *sgr(Style s) { return sgr_f(stdout, s); }
 static inline const char *sgr_off(void) { return sgr_off_f(stdout); }
 
+/* Appends recorded text — a message, a path, a line of a file — for human
+ * display, with control bytes rendered in caret notation. Returns the
+ * columns written.
+ *
+ * Recorded history travels: messages and paths are authored elsewhere and
+ * read here. A raw escape byte in one of them would otherwise drive the
+ * reader's terminal, and — being invisible — would silently widen whatever
+ * column it sat in. Tabs pass through, being ordinary in source text. */
+size_t sb_text(StrBuf *sb, const char *s, size_t n);
+
 /* Appends text styled for stdout, then pads with spaces to `width` VISIBLE
  * columns. Escape sequences occupy no columns, which is exactly what
  * printf's "%-*s" cannot know — so every aligned column goes through here,
- * and the layout comes out identical whether or not colour is on. */
+ * and the layout comes out identical whether or not colour is on. Text is
+ * written through sb_text. */
 void sb_field(StrBuf *sb, Style s, const char *text, int32_t width);
+
+/* sb_text, then padded to `width` visible columns: a column of recorded
+ * data that carries no colour of its own. */
+void sb_pad_text(StrBuf *sb, const char *s, int32_t width);
 
 #endif /* LAP_TTY_H */

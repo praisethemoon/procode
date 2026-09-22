@@ -111,13 +111,38 @@ const char *sgr_off_f(FILE *f) {
     return styled(f) ? "\033[0m" : "";
 }
 
+size_t sb_text(StrBuf *sb, const char *s, size_t n) {
+    size_t cols = 0;
+    for (size_t i = 0; i < n; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c == '\t' || (c >= 0x20 && c != 0x7f)) {
+            sb_putc(sb, (char)c);
+            cols++;
+        } else {
+            /* caret notation, as a pager shows it: visible, and two columns
+             * wide rather than an invisible byte that silently shifts a
+             * table */
+            sb_putc(sb, '^');
+            sb_putc(sb, c == 0x7f ? '?' : (char)(c + '@'));
+            cols += 2;
+        }
+    }
+    return cols;
+}
+
+void sb_pad_text(StrBuf *sb, const char *s, int32_t width) {
+    size_t cols = sb_text(sb, s, strlen(s));
+    for (int32_t pad = width - (int32_t)cols; pad > 0; pad--)
+        sb_putc(sb, ' ');
+}
+
 void sb_field(StrBuf *sb, Style s, const char *text, int32_t width) {
-    size_t n = strlen(text);
-    if (n) {
+    size_t cols = 0;
+    if (*text) {
         sb_puts(sb, sgr(s));
-        sb_putn(sb, text, n);
+        cols = sb_text(sb, text, strlen(text));
         sb_puts(sb, sgr_off());
     }
-    for (int32_t pad = width - (int32_t)n; pad > 0; pad--)
+    for (int32_t pad = width - (int32_t)cols; pad > 0; pad--)
         sb_putc(sb, ' ');
 }

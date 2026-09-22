@@ -121,13 +121,15 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
         sb_putc(&sb, '\n');
         if (rec->user)
             sb_printf(&sb, "user: %s\n", rec->user);
-        sb_printf(&sb, "file: %s  (%s)\nmessage:\n", rec->file, rec->op);
+        sb_puts(&sb, "file: ");
+        sb_text(&sb, rec->file, strlen(rec->file));
+        sb_printf(&sb, "  (%s)\nmessage:\n", rec->op);
         const char *m = rec->msg;
         while (*m) {
             const char *nl = strchr(m, '\n');
             size_t len = nl ? (size_t)(nl - m) : strlen(m);
             sb_puts(&sb, "  ");
-            sb_putn(&sb, m, len);
+            sb_text(&sb, m, len);
             sb_putc(&sb, '\n');
             if (!nl)
                 break;
@@ -142,7 +144,8 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
                 sb_puts(&sb, "file after this commit:\n");
                 for (int32_t i = 0; i < content.count; i++) {
                     sb_printf(&sb, "%5d | ", i + 1);
-                    sb_putn(&sb, content.lines[i].ptr, content.lines[i].len);
+                    sb_text(&sb, content.lines[i].ptr,
+                            content.lines[i].len);
                     sb_putc(&sb, '\n');
                 }
             }

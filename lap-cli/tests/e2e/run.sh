@@ -361,8 +361,15 @@ t "the cache contract, file by file: deleting ANY one cache changes only speed"
 BLAME=$("$LAP" search --file coord.txt --line 6)
 LOGN=$("$LAP" log -n 3)
 SHOWF=$("$LAP" show "$CID" --full-file)
+# status reads the shadow store and rr replays the log; both answer from a
+# different direction than blame does, so both belong in this loop
+STAT=$("$LAP" status)
+RR=$("$LAP" rr --no-diff)
+# the backup lives outside the repository: a copy inside it would show up
+# as untracked files and change what status reports
+CACHEBAK=$(mktemp -d "${TMPDIR:-/tmp}/lap-cachebak.XXXXXX")
 for cache in index paths heads state.json snapshots shadow; do
-    cp -R .lap ".lapbak"
+    rm -rf "$CACHEBAK/lap" && cp -R .lap "$CACHEBAK/lap"
     rm -rf ".lap/$cache"
     OUT=$("$LAP" search --file coord.txt --line 6 2>&1)
     [ "$OUT" = "$BLAME" ] || fail "rm .lap/$cache changed blame output"
@@ -370,8 +377,13 @@ for cache in index paths heads state.json snapshots shadow; do
     [ "$OUT" = "$LOGN" ] || fail "rm .lap/$cache changed log output"
     OUT=$("$LAP" show "$CID" --full-file 2>&1)
     [ "$OUT" = "$SHOWF" ] || fail "rm .lap/$cache changed show --full-file"
-    rm -rf .lap && mv .lapbak .lap
+    OUT=$("$LAP" status 2>&1)
+    [ "$OUT" = "$STAT" ] || fail "rm .lap/$cache changed status output"
+    OUT=$("$LAP" rr --no-diff 2>&1)
+    [ "$OUT" = "$RR" ] || fail "rm .lap/$cache changed rr output"
+    rm -rf .lap && cp -R "$CACHEBAK/lap" .lap
 done
+rm -rf "$CACHEBAK"
 expect_ok "$LAP" rebuild
 
 t "a stale sidecar cannot outlive the index it belongs to"
@@ -626,6 +638,44 @@ printf 'x\n' > './--color=always'
 has_esc "$("$LAP" commit -m "a file whose name looks like a flag" \
     -- --color=always 2>&1)" && fail "a filename switched colour on"
 rm -f './--color=always'
+cd "$WORK"
+
+# ----------------------------------- control bytes in recorded data
+# Recorded history is meant to be shared, so a message, a path or a line of
+# a file may have been written by someone else. None of it may emit a raw
+# escape when read back, and none of it may silently widen a column.
+mkdir -p "$WORK/ctl" && cd "$WORK/ctl"
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "a purpose" >/dev/null 2>&1
+printf 'line\033[31mone\n' > esc.c
+"$LAP" commit esc.c -m "$(printf 'why \033[2J here')" >/dev/null 2>&1
+
+t "recorded data cannot drive the reader's terminal"
+for c in "log" "status" "show L1" "show L1 --full-file" \
+         "search --text line" "rr --no-diff"; do
+    out=$("$LAP" $c 2>&1)
+    ! printf '%s' "$out" | grep -q "$ESC" || \
+        fail "a raw escape reached the output of: lap $c"
+done
+# it is shown, not swallowed: caret notation, as a pager renders it
+expect_grep '\^\[\[31m' "$LAP" show L1 --full-file
+expect_grep '\^\[\[2J' "$LAP" log
+
+# Column alignment needs no separate test: once no invisible byte can reach
+# the output, every byte printed occupies the column it is counted for.
+
+t "one deep path does not pad every other row"
+mkdir -p "$WORK/ctl/a_very_deeply_nested_directory/with_another_level"
+printf 'x\n' > a_very_deeply_nested_directory/with_another_level/deep.txt
+printf 'y\n' > s.txt
+"$LAP" commit a_very_deeply_nested_directory/with_another_level/deep.txt \
+    -m "a deeply nested file" >/dev/null 2>&1
+"$LAP" commit s.txt -m "a short one" >/dev/null 2>&1
+SHORTW=$("$LAP" rr --no-diff | grep ' s.txt' | head -1 | awk '{print length}')
+[ -n "$SHORTW" ] || fail "could not measure the short row"
+# the path is 58 columns: uncapped it pads this row past 80, capped to 40
+# it lands near 63
+[ "$SHORTW" -lt 70 ] || fail "a short row was padded to $SHORTW columns"
 cd "$WORK"
 
 # ------------------------------------------------------------ summary

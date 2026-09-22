@@ -100,15 +100,23 @@ void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
                         rec->new_lines};
         char desc[128];
         region_describe(&shown, desc, sizeof desc);
-        sb_printf(sb, "%-8s %s  ", rec->op, rec->file);
+        sb_printf(sb, "%-8s ", rec->op);
+        sb_text(sb, rec->file, strlen(rec->file));
+        sb_puts(sb, "  ");
         sb_field(sb, S_MUTED, desc, 0);
         sb_putc(sb, '\n');
     } else {
-        sb_printf(sb, "%s\n", rec->file);
+        sb_text(sb, rec->file, strlen(rec->file));
+        sb_putc(sb, '\n');
     }
-    if (note)
-        sb_printf(sb, "       match: %s\n", note);
-    sb_printf(sb, "       %.*s\n", mlen, rec->msg);
+    if (note) {
+        sb_puts(sb, "       match: ");
+        sb_text(sb, note, strlen(note));
+        sb_putc(sb, '\n');
+    }
+    sb_puts(sb, "       ");
+    sb_text(sb, rec->msg, (size_t)mlen);
+    sb_putc(sb, '\n');
 }
 
 void caches_sync_warn(Arena *a, const Repo *r) {
@@ -272,7 +280,7 @@ void sb_diff_line(StrBuf *sb, Style s, const char *indent, const char *sign,
     sb_puts(sb, indent);
     sb_puts(sb, sgr(s));
     sb_puts(sb, sign);
-    sb_putn(sb, text.ptr, text.len);
+    sb_text(sb, text.ptr, text.len);
     sb_puts(sb, sgr_off());
     sb_putc(sb, 0x0a);
 }

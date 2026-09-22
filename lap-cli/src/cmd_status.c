@@ -89,7 +89,9 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
                               : (int32_t)strlen(repo.active_session_msg);
             sb_puts(&sb, "session: ");
             sb_field(&sb, S_ACTIVE, repo.active_session, 0);
-            sb_printf(&sb, " \"%.*s\"\n", mlen, repo.active_session_msg);
+            sb_puts(&sb, " \"");
+            sb_text(&sb, repo.active_session_msg, (size_t)mlen);
+            sb_puts(&sb, "\"\n");
         } else {
             sb_puts(&sb, "session: none (start one with: lap session start "
                          "\"...\")\n");
@@ -154,7 +156,8 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
                                                         : S_MUTED;
             sb_puts(&sb, "  ");
             sb_field(&sb, st, state, 8);
-            sb_printf(&sb, "  %s", rel);
+            sb_puts(&sb, "  ");
+            sb_text(&sb, rel, strlen(rel));
             if (strcmp(state, "modified") == 0) {
                 sb_printf(&sb, "  (%d edit%s)\n", fd.regions.count,
                           fd.regions.count == 1 ? "" : "s");
