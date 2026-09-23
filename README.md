@@ -13,8 +13,6 @@ recorded with the reason it exists, below git, without touching git.
   sessions and commits (grouped or raw), commit detail as diff-highlighted
   documents, active-session status bar. Its own `.lap/` holds the history of
   it being built — lap dogfooding lap.
-- **[feedback.md](feedback.md)** — dogfooding notes and open questions from
-  building the extension with the lap CLI.
 - **.claude/skills/lap/** — agent skill teaching the lap workflow
   (canonical copy lives at `lap-cli/skill/lap/SKILL.md`).
 

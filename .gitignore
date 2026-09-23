@@ -20,5 +20,8 @@ build/
 .claude/settings.json
 .claude/settings.local.json
 
+# Dogfooding notes: useful locally, not part of the project's record.
+feedback.md
+
 # macOS
 .DS_Store
