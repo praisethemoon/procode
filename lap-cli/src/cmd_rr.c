@@ -185,9 +185,9 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
         sb_puts(&sb, "\n\ntrajectory:\n");
     }
 
-    /* both halves of the review list the same files, so they share a
-     * column: the trajectory's messages and the net change's counts line
-     * up under each other */
+    /* One path width for both halves, so each reads as a column of its
+     * own. The halves are indented differently and do not line up with
+     * each other; sharing the width is what keeps either one straight. */
     int32_t pathw = 0;
     for (size_t f = 0; f < nfiles; f++) {
         int32_t n = (int32_t)strlen(files[f]);
