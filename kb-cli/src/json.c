@@ -209,7 +209,33 @@ static bool lit(Parser *ps, const char *word) {
     return false;
 }
 
+static JVal *parse_value_inner(Parser *ps);
+
+/* EVERY VALUE REMEMBERS THE BYTES IT CAME FROM.
+ *
+ * `index-api.md` §1.2 makes a document's `meta` free-form: whatever the writer
+ * handed in is what a reader gets back. That cannot be satisfied by parsing
+ * and re-printing — a printer rewrites 1.0 as 1, reorders keys and respells
+ * escapes, none of which the writer asked for, and the store would be handing
+ * back something nobody wrote.
+ *
+ * So the span is recorded here rather than in each of the type parsers: this
+ * wrapper brackets whatever `parse_value_inner` consumed, which means a value
+ * nested three objects deep gets its span for free and no new parser can
+ * forget to set one. Leading whitespace is skipped before the start is taken
+ * so the span is the value, not the gap in front of it. */
 static JVal *parse_value(Parser *ps) {
+    skip_ws(ps);
+    const char *from = ps->p;
+    JVal *v = parse_value_inner(ps);
+    if (v) {
+        v->src.ptr = from;
+        v->src.len = (size_t)(ps->p - from);
+    }
+    return v;
+}
+
+static JVal *parse_value_inner(Parser *ps) {
     if (ps->failed)
         return NULL;
     if (++ps->depth > JSON_MAX_DEPTH) {

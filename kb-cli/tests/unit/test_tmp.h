@@ -13,6 +13,9 @@
 #include <stdint.h>
 
 #include "../../src/arena.h"
+/* `test_tmp.c` walks and removes real directories, so it needs the platform
+ * layer as well as the arena — this header is what carries both to it. */
+#include "../../src/platform.h"
 
 /* A unique, existing directory under the platform's temporary location.
  * Distinct per call, so two tests in one run cannot collide. */

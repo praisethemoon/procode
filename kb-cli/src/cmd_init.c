@@ -56,28 +56,38 @@ int32_t cmd_init(Arena *a, int32_t argc, char **argv) {
         }
     }
 
-    /* Existing is not an error worth an exit code — `kb init` is the kind of
-     * command a script runs unconditionally — but it must not be reported as
-     * having created anything, because a caller that believes it made a fresh
-     * store will believe the store is empty. */
-    bool existed = plat_is_dir(dir);
+    /* AN EXISTING STORE IS AN ERROR, NOT A NO-OP. `kb init` is the one command
+     * whose whole effect is creating something, so "it was already there" is a
+     * different outcome from "I made it" and the caller has to be able to tell
+     * — silently succeeding would let a script believe it had a fresh store
+     * and then be surprised by what is in it. Nothing is overwritten either
+     * way; the logs are the truth and init never touches an existing one. */
+    if (plat_is_dir(dir)) {
+        err_out(json, "exists", "a store already exists at %s", dir);
+        return KB_EXIT_ERR;
+    }
 
     char err[512];
-    if (!existed && !store_create(a, dir, err, sizeof err)) {
+    if (!store_create(a, dir, err, sizeof err)) {
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
     }
 
+    /* `store` names the TIER, not the path: it is the same vocabulary every
+     * other route uses — §1.4's project and global, and the `store` field on
+     * every search hit — so a caller reading one response reads them all. The
+     * path is reported beside it, because the tier alone does not say where. */
+    const char *tier = (want && strcmp(want, "global") == 0) ? "global"
+                                                             : "project";
     if (json) {
         StrBuf sb;
         sb_init(&sb, a);
-        sb_puts(&sb, "{\"ok\":true,\"store\":");
+        sb_printf(&sb, "{\"ok\":true,\"store\":\"%s\",\"path\":", tier);
         json_escape_c(&sb, dir);
-        sb_printf(&sb, ",\"created\":%s}", existed ? "false" : "true");
+        sb_putc(&sb, '}');
         puts(sb_finish(&sb));
     } else {
-        printf("%s %s\n", existed ? "store already at" : "store created at",
-               dir);
+        printf("%s store created at %s\n", tier, dir);
     }
     return KB_EXIT_OK;
 }
