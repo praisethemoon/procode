@@ -18,6 +18,7 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), "coboard-host-"));
 const commands = new Map<string, (...a: unknown[]) => unknown>();
 const posted: unknown[] = [];
 const executed: unknown[][] = [];
+const threads: { uri: { path: string }; range: { startLine: number; endLine: number }; comments: { author: { name: string }; body: { value: string } }[]; canReply: boolean; label: string }[] = [];
 let content: { provideTextDocumentContent(uri: { toString(): string }): string } | null = null;
 const LAP = path.resolve(__dirname, "../../../../cli/lap-cli/bin/lap");
 let provider: { getChildren(n?: unknown): { item: { id: string }; label: string; description: string }[] } | null = null;
@@ -37,6 +38,21 @@ const fake = {
     EventEmitter,
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     ViewColumn: { Active: -1 },
+    CommentMode: { Editing: 0, Preview: 1 },
+    CommentThreadCollapsibleState: { Collapsed: 0, Expanded: 1 },
+    MarkdownString: class {
+        constructor(public value: string) {}
+    },
+    comments: {
+        createCommentController: () => ({
+            dispose() {},
+            createCommentThread: (uri: unknown, range: unknown, comments: unknown[]) => {
+                const t = { uri, range, comments, canReply: true, collapsibleState: 0, label: "" } as unknown as (typeof threads)[number];
+                threads.push(t);
+                return t;
+            },
+        }),
+    },
     Range: class {
         constructor(public startLine: number, public startCharacter: number, public endLine: number, public endCharacter: number) {}
     },
@@ -135,15 +151,30 @@ test("clicking a lap edit on a ticket opens it as a diff at the edited line", { 
     lap("commit", "x.c", "-m", "capital b");
     lap("session", "end");
 
-    onMessage!({ type: "showEdit", commit: "L2" });
+    onMessage!({ type: "showEdit", commit: "L2", sessionMsg: "T-1: work" });
     await new Promise((r) => setTimeout(r, 300));
     const diff = executed.find((c) => c[0] === "vscode.diff");
     assert.ok(diff, "vscode.diff was opened");
     const [, left, right, title, opts] = diff as [string, { path: string }, { path: string }, string, { selection: { startLine: number } }];
     assert.equal(left.path, "/L2/before/x.c");
     assert.equal(right.path, "/L2/after/x.c");
-    assert.match(title, /^L2 x\.c — capital b$/);
+    assert.equal(title, "L2 · x.c");
     assert.equal(opts.selection.startLine, 1, "scrolled to line 2 (0-based 1)");
     assert.equal(content!.provideTextDocumentContent(left as never), "a\nb\nc\n");
     assert.equal(content!.provideTextDocumentContent(right as never), "a\nB\nc\n");
+
+    // The reason for the edit sits on the changed line, as in Lap History.
+    assert.equal(threads.length, 1);
+    const t = threads[0];
+    assert.equal(t.uri.path, "/L2/after/x.c");
+    assert.deepEqual([t.range.startLine, t.range.endLine], [1, 1]);
+    assert.equal(t.label, "x.c · line 2");
+    assert.equal(t.canReply, false);
+    assert.match(t.comments[0].author.name, /^L2 @ .+ t:$/);
+    assert.match(t.comments[0].body.value, /^capital b\n\n---\n\n\*session S1: T\\-1: work\*/);
+
+    // Opening the same edit again reuses its thread.
+    onMessage!({ type: "showEdit", commit: "L2", sessionMsg: "T-1: work" });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(threads.length, 1);
 });

@@ -26,6 +26,7 @@ import {
     view,
 } from "coboard";
 
+import { commentText, regionLabel, regionLines } from "./lapview";
 import type { Choices, ToHost, ToView } from "./protocol";
 
 let board: Board | null = null;
@@ -248,7 +249,7 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Tree, id: string, p
                 await pushSessions(m.ticket, panel);
                 return;
             case "showEdit":
-                await showEdit(m.commit);
+                await showEdit(m.commit, m.sessionMsg ?? null);
                 return;
             case "commits": {
                 const b = requireBoard();
@@ -268,14 +269,18 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Tree, id: string, p
 
 /* ------------------------------------------------------------ lap edits */
 
-/* One lap commit shown as VS Code's own diff: the file just before the edit
- * against the file just after it, scrolled to where the edit starts. The two
- * sides are read-only documents served from memory under `coboard-lap:`; the
- * path keeps the file's name so the diff gets its syntax highlighting. */
+/* One lap commit shown exactly as Lap History shows it: VS Code's own diff of
+ * the file just before and just after the edit, scrolled to it, with the
+ * commit's reason attached as an inline comment thread on the changed lines.
+ * The two sides are read-only documents served from memory under
+ * `coboard-lap:`; the path keeps the file's name so the diff gets its syntax
+ * highlighting. */
 const EDIT_SCHEME = "coboard-lap";
 const editText = new Map<string, string>();
+const editThreads = new Map<string, vscode.CommentThread>();
+let editComments: vscode.CommentController | null = null;
 
-async function showEdit(commit: string): Promise<void> {
+async function showEdit(commit: string, sessionMsg: string | null): Promise<void> {
     const b = requireBoard();
     syncLapPath();
     const d = await commitDiff(b.root, commit);
@@ -284,9 +289,24 @@ async function showEdit(commit: string): Promise<void> {
     const right = side("after");
     editText.set(left.toString(), d.before);
     editText.set(right.toString(), d.after);
-    const line = new vscode.Range(d.line - 1, 0, d.line - 1, 0);
-    const title = `${d.id} ${d.file.split("/").pop()} — ${d.msg.split("\n")[0]}`;
-    await vscode.commands.executeCommand("vscode.diff", left, right, title, { selection: line, preview: true });
+    const lines = regionLines(d);
+    const range = new vscode.Range(lines.start, 0, lines.end, 0);
+    await vscode.commands.executeCommand("vscode.diff", left, right, `${d.id} · ${d.file}`, { preview: true, selection: range });
+
+    const existing = editThreads.get(d.id);
+    if (existing) {
+        existing.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
+        return;
+    }
+    if (!editComments) return;
+    const text = commentText(d, sessionMsg);
+    const thread = editComments.createCommentThread(right, range, [
+        { author: { name: text.author }, body: new vscode.MarkdownString(text.body), mode: vscode.CommentMode.Preview },
+    ]);
+    thread.canReply = false;
+    thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
+    thread.label = `${d.file} · ${regionLabel(d)}`;
+    editThreads.set(d.id, thread);
 }
 
 /* -------------------------------------------------------------- commands */
@@ -310,13 +330,15 @@ export function activate(ctx: vscode.ExtensionContext): void {
     const reg = (name: string, fn: (...args: unknown[]) => unknown) =>
         ctx.subscriptions.push(vscode.commands.registerCommand(name, (...args: unknown[]) => guarded(() => fn(...args))));
 
+    editComments = vscode.comments.createCommentController("coboard-lap", "lap edit");
     ctx.subscriptions.push(
+        editComments,
         vscode.workspace.registerTextDocumentContentProvider(EDIT_SCHEME, {
             provideTextDocumentContent: (uri) => editText.get(uri.toString()) ?? "",
         }),
     );
     reg("coboard.refresh", () => refreshAll(tree));
-    reg("coboard.showEdit", (arg) => (typeof arg === "string" ? showEdit(arg) : undefined));
+    reg("coboard.showEdit", (arg) => (typeof arg === "string" ? showEdit(arg, null) : undefined));
     reg("coboard.open", (arg) => {
         const id = idOf(arg);
         if (id) open(ctx, tree, id);

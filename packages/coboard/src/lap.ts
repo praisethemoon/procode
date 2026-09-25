@@ -89,8 +89,16 @@ export interface LapDiff {
     readonly file: string;
     readonly op: string;
     readonly msg: string;
+    readonly ts: string;
+    readonly user: string;
+    readonly session: string | null;
     readonly before: string;
     readonly after: string;
+    /* The edited region, 1-based, as lap records it. */
+    readonly oldStart: number;
+    readonly oldLines: number;
+    readonly newStart: number;
+    readonly newLines: number;
     /* 1-based line in `after` where the edit starts, to scroll to. */
     readonly line: number;
 }
@@ -124,8 +132,15 @@ export async function commitDiff(root: string, commit: string): Promise<LapDiff>
         file: String(p["file"]),
         op,
         msg: String(p["msg"] ?? ""),
+        ts: String(p["ts"] ?? ""),
+        user: String(p["user"] ?? ""),
+        session: typeof p["session"] === "string" ? p["session"] : null,
         before,
         after,
+        oldStart: Number(p["old_start"] ?? 0),
+        oldLines: Number(p["old_lines"] ?? 0),
+        newStart: Number(p["new_start"] ?? 0),
+        newLines: Number(p["new_lines"] ?? 0),
         line: Math.max(1, Number(p["new_start"] ?? 1)),
     };
 }

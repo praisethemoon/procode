@@ -221,7 +221,7 @@ function SessionsSection(props: { ticket: string; sessions: Sessions | null; com
                                                     key={c.id}
                                                     className="cb-commit"
                                                     title={`Show the diff of ${c.id}`}
-                                                    onClick={() => send({ type: "showEdit", commit: c.id })}
+                                                    onClick={() => send({ type: "showEdit", commit: c.id, sessionMsg: x.msg })}
                                                 >
                                                     <Icon name="diff" /> <code>{c.id}</code> <span className="cb-muted">{c.op}</span>{" "}
                                                     <code>{c.file}</code> — {c.msg.split("\n")[0]}
