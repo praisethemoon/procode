@@ -7,7 +7,71 @@ static const char *first_line(Arena *a, const char *s) {
     return arena_strndup(a, s, (size_t)(nl - s));
 }
 
-static int32_t session_list(Arena *a, Repo *repo, bool json) {
+/* Every `--meta key=value` on the command line, in order. Keys are
+ * [a-z0-9_.-]+ so they read the same in a filter as in the record; values are
+ * any non-empty text. A repeated key is refused rather than last-wins: two
+ * tickets on one session is a question, not an answer. */
+static bool meta_args(Arena *a, int32_t argc, char **argv, Rec *rec,
+                      char *err, size_t errsz) {
+    int32_t cap = 0;
+    for (int32_t i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--") == 0)
+            break;
+        if (strcmp(argv[i], "--meta") == 0)
+            cap++;
+    }
+    if (cap == 0)
+        return true;
+    rec->meta_keys = (const char **)arena_alloc(a, (size_t)cap * sizeof(char *));
+    rec->meta_vals = (const char **)arena_alloc(a, (size_t)cap * sizeof(char *));
+    for (int32_t i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--") == 0)
+            break;
+        if (strcmp(argv[i], "--meta") != 0)
+            continue;
+        const char *kv = i + 1 < argc ? argv[++i] : NULL;
+        const char *eq = kv ? strchr(kv, '=') : NULL;
+        if (!eq || eq == kv || eq[1] == '\0') {
+            snprintf(err, errsz, "--meta expects key=value, e.g. --meta "
+                                 "ticket=T-12");
+            return false;
+        }
+        for (const char *p = kv; p < eq; p++) {
+            char c = *p;
+            if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+                  c == '_' || c == '.' || c == '-')) {
+                snprintf(err, errsz, "meta key \"%.*s\" must be lower-case "
+                                     "letters, digits, '_', '.' or '-'",
+                         (int)(eq - kv), kv);
+                return false;
+            }
+        }
+        const char *key = arena_strndup(a, kv, (size_t)(eq - kv));
+        for (int32_t k = 0; k < rec->meta_n; k++) {
+            if (strcmp(rec->meta_keys[k], key) == 0) {
+                snprintf(err, errsz, "meta key \"%s\" given twice", key);
+                return false;
+            }
+        }
+        rec->meta_keys[rec->meta_n] = key;
+        rec->meta_vals[rec->meta_n] = eq + 1;
+        rec->meta_n++;
+    }
+    return true;
+}
+
+/* A session matches a filter when it carries every key with the same value. */
+static bool meta_match(const Rec *st, const Rec *want) {
+    for (int32_t k = 0; k < want->meta_n; k++) {
+        const char *v = rec_meta(st, want->meta_keys[k]);
+        if (!v || strcmp(v, want->meta_vals[k]) != 0)
+            return false;
+    }
+    return true;
+}
+
+static int32_t session_list(Arena *a, Repo *repo, bool json,
+                            const Rec *filter) {
     RecLog log;
     char err[512];
     if (!rec_log_load(a, repo->logpath, &log, err, sizeof err)) {
@@ -23,6 +87,8 @@ static int32_t session_list(Arena *a, Repo *repo, bool json) {
         if (log.v[i].type != REC_SESSION_START)
             continue;
         const Rec *st = &log.v[i];
+        if (!meta_match(st, filter))
+            continue;
         const char *end_ts = NULL;
         int32_t commits = 0;
         for (int32_t j = i + 1; j < log.count; j++) {
@@ -47,8 +113,10 @@ static int32_t session_list(Arena *a, Repo *repo, bool json) {
                 sb_printf(&sb, ",\"ended\":\"%s\"", end_ts);
             else
                 sb_puts(&sb, ",\"ended\":null");
-            sb_printf(&sb, ",\"commits\":%d,\"active\":%s}", commits,
+            sb_printf(&sb, ",\"commits\":%d,\"active\":%s", commits,
                       active ? "true" : "false");
+            rec_meta_json(&sb, st);
+            sb_putc(&sb, '}');
         } else {
             sb_field(&sb, active ? S_ACTIVE : S_SESSION, st->id, 6);
             sb_putc(&sb, ' ');
@@ -57,6 +125,12 @@ static int32_t session_list(Arena *a, Repo *repo, bool json) {
                       commits == 1 ? " " : "s");
             const char *fl = first_line(a, st->msg);
             sb_text(&sb, fl, strlen(fl));
+            for (int32_t k = 0; k < st->meta_n; k++) {
+                sb_puts(&sb, "  ");
+                sb_field(&sb, S_MUTED, st->meta_keys[k], 0);
+                sb_putc(&sb, '=');
+                sb_text(&sb, st->meta_vals[k], strlen(st->meta_vals[k]));
+            }
             if (active || !end_ts) {
                 sb_puts(&sb, "  ");
                 sb_field(&sb, active ? S_ACTIVE : S_MUTED,
@@ -78,7 +152,7 @@ static int32_t session_list(Arena *a, Repo *repo, bool json) {
 }
 
 int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"-m", "-F", NULL};
+    static const char *const value_flags[] = {"-m", "-F", "--meta", NULL};
     bool json = has_flag(argc, argv, value_flags, "--json");
     const char *sub = positional_arg(argc, argv, value_flags, 0);
 
@@ -91,6 +165,12 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
         return LAP_EXIT_ERR;
     }
     int32_t rc = LAP_EXIT_ERR;
+    Rec meta;
+    memset(&meta, 0, sizeof meta);
+    if (!meta_args(a, argc, argv, &meta, err, sizeof err)) {
+        err_out(json, "bad_meta", "%s", err);
+        goto done;
+    }
 
     if (!sub || strcmp(sub, "current") == 0) {
         if (json) {
@@ -101,6 +181,22 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
                                "\"msg\":",
                           repo.active_session);
                 json_escape_c(&sb, repo.active_session_msg);
+                /* The metadata lives on the session_start record, not in
+                 * state.json, so it is read back from the log. */
+                RecLog log;
+                Rec none;
+                memset(&none, 0, sizeof none);
+                const Rec *st = &none;
+                if (rec_log_load(a, repo.logpath, &log, err, sizeof err)) {
+                    for (int32_t i = log.count - 1; i >= 0; i--) {
+                        if (log.v[i].type == REC_SESSION_START &&
+                            strcmp(log.v[i].id, repo.active_session) == 0) {
+                            st = &log.v[i];
+                            break;
+                        }
+                    }
+                }
+                rec_meta_json(&sb, st);
                 sb_puts(&sb, "}}");
             } else {
                 sb_puts(&sb, "{\"ok\":true,\"session\":null}");
@@ -115,7 +211,7 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
         }
         rc = LAP_EXIT_OK;
     } else if (strcmp(sub, "list") == 0) {
-        rc = session_list(a, &repo, json);
+        rc = session_list(a, &repo, json, &meta);
     } else if (strcmp(sub, "start") == 0) {
         const char *msg = NULL;
         char merr[512];
@@ -149,6 +245,9 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
                  (long long)repo.next_session);
         rec.id = idbuf;
         rec.msg = msg;
+        rec.meta_keys = meta.meta_keys;
+        rec.meta_vals = meta.meta_vals;
+        rec.meta_n = meta.meta_n;
         repo.next_session++;
         snprintf(repo.active_session, sizeof repo.active_session, "%s",
                  idbuf);
@@ -193,8 +292,8 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
         rc = LAP_EXIT_OK;
     } else {
         err_out(json, "usage",
-                "usage: lap session [start \"purpose\" | end | list | "
-                "current]");
+                "usage: lap session [start \"purpose\" [--meta k=v]... | end | "
+                "list [--meta k=v]... | current]");
     }
 
 done:

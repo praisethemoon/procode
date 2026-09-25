@@ -30,6 +30,13 @@ typedef struct {
     const char *ts;      /* ISO-8601 UTC */
     const char *op;      /* commit only: "edit" | "create" | "delete" */
     const char *msg;     /* commit + session_start */
+    /* session_start only: flat string key/value pairs, e.g. ticket=T-12, so
+     * a session can be found by what it was for. Absent (n == 0) in every
+     * record written before sessions carried metadata, and then not encoded
+     * at all, so old lines re-encode to the same bytes. */
+    const char **meta_keys;
+    const char **meta_vals;
+    int32_t meta_n;
     const char *prev;    /* hex chain hash */
     int32_t old_start, old_lines, new_start, new_lines; /* commit only */
     Str *old_text;
@@ -88,5 +95,12 @@ void rec_apply(Arena *a, Lines *cur, const Rec *rec);
  * trailing garbage). Both the index and the scan paths parse session
  * filters with this, so they can never disagree. */
 uint32_t rec_session_no(const char *id);
+
+/* The value of one metadata key on a session_start record, or NULL. */
+const char *rec_meta(const Rec *rec, const char *key);
+
+/* Emits `"meta":{...}` (with a leading comma) for a session_start record, or
+ * `,"meta":{}` when it has none, so JSON readers always find the key. */
+void rec_meta_json(StrBuf *sb, const Rec *rec);
 
 #endif /* LAP_REC_H */

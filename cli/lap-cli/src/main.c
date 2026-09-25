@@ -18,6 +18,8 @@ static const char *USAGE =
     "         [--msg STR] [--session S] [--since TS] [--until TS]\n"
     "         [--limit N] [--json]\n"
     "  session [start \"purpose\" | end | list | current] [--json]\n"
+    "          [--meta key=value]...  on start: tag the session, e.g.\n"
+    "                             --meta ticket=T-12; on list: filter by it\n"
     "  verify [--deep] [--json]   check the log hash chain (and caches)\n"
     "  rebuild [--verify]         reconstruct every cache from the log\n"
     "  rr [<session>]             review request: trajectory + net change\n"

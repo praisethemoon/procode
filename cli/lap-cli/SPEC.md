@@ -106,7 +106,8 @@ Record types:
  "old_text":["..."],"new_text":["..."],         // full replaced/replacement lines
  "msg":"...","ts":"...","prev":"..."}
 
-{"type":"session_start","id":"S2","user":"jane","msg":"purpose","ts":"...","prev":"..."}
+{"type":"session_start","id":"S2","user":"jane","msg":"purpose",
+ "meta":{"ticket":"T-12"},"ts":"...","prev":"..."}   // meta: optional
 {"type":"session_end","id":"S2","ts":"...","prev":"..."}
 ```
 
@@ -228,9 +229,17 @@ Asks the history questions; criteria AND together:
 - `--msg STR` — message substring.
 - `--session S`, `--since TS`, `--until TS`, `--limit N`.
 
-### `lap session [start "purpose" | end | list | current]`
+### `lap session [start "purpose" | end | list | current] [--meta key=value]...`
 One active session at a time; `start` requires a purpose message; a crashed
 session simply stays open. `list` shows every session with commit counts.
+
+`--meta key=value` (repeatable) on `start` tags the session with flat string
+metadata, stored on the `session_start` record. Keys are `[a-z0-9_.-]+`; a
+key given twice is refused. `list --meta key=value` keeps only the sessions
+carrying every given pair, and `list --json` / `current --json` always carry
+a `meta` object. This is how other tools link work to a session: coboard
+starts sessions with `--meta ticket=T-12` and finds a ticket's sessions with
+`lap session list --meta ticket=T-12`.
 
 ### `lap rr [<session>] [<from> <to>] [--no-diff]`
 A **review request**: what a run of work changed, and why. Two halves —

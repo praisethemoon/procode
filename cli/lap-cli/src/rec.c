@@ -65,6 +65,8 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
         }
         sb_puts(&sb, ",\"msg\":");
         json_escape_c(&sb, rec->msg);
+        if (rec->meta_n > 0)
+            rec_meta_json(&sb, rec);
         break;
     case REC_SESSION_END:
         sb_printf(&sb, ",\"id\":\"%s\"", rec->id);
@@ -150,6 +152,26 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
         if (!out->id || !out->msg) {
             snprintf(err, errsz, "session_start record missing field");
             return false;
+        }
+        JVal *meta = jobj_get(v, "meta");
+        if (meta) {
+            if (meta->t != J_OBJ) {
+                snprintf(err, errsz, "session_start meta is not an object");
+                return false;
+            }
+            size_t n = meta->obj.n ? meta->obj.n : 1;
+            out->meta_keys = (const char **)arena_alloc(a, n * sizeof(char *));
+            out->meta_vals = (const char **)arena_alloc(a, n * sizeof(char *));
+            for (size_t i = 0; i < meta->obj.n; i++) {
+                if (meta->obj.vals[i]->t != J_STR) {
+                    snprintf(err, errsz, "session_start meta value is not a "
+                                         "string");
+                    return false;
+                }
+                out->meta_keys[i] = meta->obj.keys[i].ptr;
+                out->meta_vals[i] = meta->obj.vals[i]->s.ptr;
+            }
+            out->meta_n = (int32_t)meta->obj.n;
         }
     } else if (strcmp(type, "session_end") == 0) {
         out->type = REC_SESSION_END;
@@ -293,4 +315,24 @@ bool rec_replay_file(Arena *a, const RecLog *log, const char *rel,
     *out = cur;
     *deleted = is_deleted;
     return true;
+}
+
+const char *rec_meta(const Rec *rec, const char *key) {
+    for (int32_t i = 0; i < rec->meta_n; i++) {
+        if (strcmp(rec->meta_keys[i], key) == 0)
+            return rec->meta_vals[i];
+    }
+    return NULL;
+}
+
+void rec_meta_json(StrBuf *sb, const Rec *rec) {
+    sb_puts(sb, ",\"meta\":{");
+    for (int32_t i = 0; i < rec->meta_n; i++) {
+        if (i)
+            sb_putc(sb, ',');
+        json_escape_c(sb, rec->meta_keys[i]);
+        sb_putc(sb, ':');
+        json_escape_c(sb, rec->meta_vals[i]);
+    }
+    sb_putc(sb, '}');
 }

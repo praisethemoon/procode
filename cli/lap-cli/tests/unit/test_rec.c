@@ -79,6 +79,29 @@ void test_rec(void) {
     ASSERT_EQ_S(back.id, "S9");
     ASSERT_EQ_S(back.user, "session-bot");
     ASSERT_EQ_S(back.msg, "fix the flaky test");
+    ASSERT_EQ_I(back.meta_n, 0);
+    /* No metadata, no key: old lines must re-encode to their own bytes or
+     * the hash chain breaks. */
+    ASSERT_TRUE(strstr(line, "\"meta\"") == NULL);
+
+    t_begin("rec: session metadata round-trips");
+    const char *mk[] = {"ticket", "epic"};
+    const char *mv[] = {"T-12", "E-\"1\""};
+    s.meta_keys = mk;
+    s.meta_vals = mv;
+    s.meta_n = 2;
+    line = rec_encode(a, &s, &len);
+    ASSERT_TRUE(rec_decode(a, line, len, &back, err, sizeof err));
+    ASSERT_EQ_I(back.meta_n, 2);
+    ASSERT_EQ_S(rec_meta(&back, "ticket"), "T-12");
+    ASSERT_EQ_S(rec_meta(&back, "epic"), "E-\"1\"");
+    ASSERT_TRUE(rec_meta(&back, "milestone") == NULL);
+    ASSERT_EQ_S(back.hash, s.hash);
+    const char *bad_meta = "{\"type\":\"session_start\",\"id\":\"S1\","
+                           "\"msg\":\"m\",\"meta\":{\"k\":1},\"ts\":\"t\","
+                           "\"prev\":\"p\"}";
+    ASSERT_TRUE(!rec_decode(a, bad_meta, strlen(bad_meta), &back, err,
+                            sizeof err));
 
     t_begin("rec: malformed records are rejected");
     ASSERT_TRUE(!rec_decode(a, "{}", 2, &back, err, sizeof err));
