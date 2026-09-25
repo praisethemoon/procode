@@ -1,0 +1,124 @@
+# knowledge base — UI specification
+
+Status: draft. Companion to `index-api.md`.
+
+A reader's surface over the same store the agent queries. Its whole job is:
+find a document, read it, see where it came from. It is deliberately smaller
+than the board.
+
+Built with baukasten, following the conventions in `UI.md` — read-only custom
+editors on a URI scheme, public identifiers only, no dirty state, no save.
+
+---
+
+## 1. Surface
+
+One contribution to the VSCode activity bar:
+
+| view | codicon | contents |
+|---|---|---|
+| **Knowledge** | `book` | documents, searchable |
+
+A webview sidebar, for the same reason the board is one: a native `TreeView`
+cannot carry a search field and per-row metadata.
+
+## 2. Sidebar
+
+A search `Input` at the top, a collection `Select` beside it, and a list below.
+
+**With no query**, the list is every document in scope, newest first. Browsing
+is the default state, not an empty prompt — the store is worth looking through
+even when there is no question.
+
+**With a query**, the list is search results (`GET /search`, hybrid). Search
+runs debounced as the reader types; a local hybrid search is fast enough that
+submitting is unnecessary ceremony.
+
+A row carries:
+
+- the document title
+- the collection
+- the fetched date
+- a one-line snippet, clamped, with the full text on hover
+- a `stale` badge when the document is older than the staleness threshold
+- which retrieval paths matched, when the row came from a search
+
+Rows are not highlighted and matches are not marked up. The row says which
+document it is; reading it is the next step, and the reader does that in the
+document.
+
+**Empty**: "Nothing indexed yet. Research lands here when an agent files what
+it read."
+
+**Title-bar actions**: add the current file, add a URL, refresh stale documents.
+
+## 3. Document
+
+A document opens in an editor tab at `kb:/D-241`.
+
+### 3.1 Header
+
+The provenance, always visible, because a passage whose age and origin are
+unknown is a passage that will eventually be trusted when it should not be:
+
+- title
+- the source locator, as a link that opens the original externally
+- collection
+- fetched date, and indexed date when they differ
+- `stale` badge with a refresh action
+- size, mime, chunk count
+
+Anything else the document carries in `meta` — a paper's authors and year, a
+page's section path, a file's language — renders as a plain key/value list
+below. It is free-form per document (`index-api.md` §1.2), so the header shows
+what is there and asserts nothing about what should be.
+
+### 3.2 Body
+
+The document text, rendered for reading: Markdown as Markdown, HTML as
+sanitized prose, source code with syntax highlighting, everything else as
+plain text.
+
+No match highlighting. Opening a search result scrolls to the matching chunk's
+heading and stops there — the chunk already carries its heading and span
+(`index-api.md` §1.2), so the navigation is free, while marking up the text is
+a feature with a maintenance cost and no reader asking for it.
+
+Read-only. Editing an indexed copy of someone else's documentation would make
+the content hash meaningless and the provenance a lie.
+
+## 4. Collections
+
+`kb:/collections` lists every collection with its document count, byte size and
+oldest fetch date. Rename and delete live here and nowhere else.
+
+A collection row opens the sidebar scoped to it.
+
+## 5. Quick open
+
+A command, `Knowledge: Search`, opens a `QuickPick` over the same search.
+Picking a result opens the document. This is the path for a reader who already
+knows roughly what they are looking for and does not want to leave the
+keyboard.
+
+## 6. URIs
+
+```
+kb:/D-241          a document
+kb:/S-3            a source, with its documents
+kb:/collections    the collection list
+```
+
+Same scheme discipline as `UI.md` §4 and §6: one string is both the reference
+and the editor URI, every identifier shown is the public one, and opening a
+document that already has a tab focuses it.
+
+## 7. Not included
+
+- **Editing.** The store holds fetched copies; the originals are elsewhere.
+- **Match highlighting.** §3.2.
+- **A graph view.** `index-api.md` §6 keeps links minimal and §12 leaves entity
+  nodes unresolved; a visualisation of a schema that has not settled would
+  settle it by accident.
+- **Ingest configuration.** Chunk sizes, model choice and store paths are CLI
+  and config concerns, not reader-facing ones.

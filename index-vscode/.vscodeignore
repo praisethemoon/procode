@@ -1,0 +1,26 @@
+# A "!" line in a .vscodeignore is an unconditional override, not a later
+# rule: vsce keeps a file that any "!" matches, whatever else ignored it.
+# coboard-vscode's own file records the trap; this is the same trap with one
+# sibling package instead of two, because kb-js has to be requirable from the
+# installed extension.
+#
+# What is kept is exactly what a running extension calls: out/*.js is kb-js's
+# flat module layer, and its out/test/, .d.ts and .map files are left behind by
+# never matching an exception.
+.vscode/**
+src/**
+webview/**
+scripts/**
+assets/**
+out/test/**
+node_modules/**
+!node_modules/kb-js/package.json
+!node_modules/kb-js/out/*.js
+.npmrc
+tsconfig.json
+tsconfig.webview.json
+.lapignore
+.lap/**
+.kb/**
+**/*.map
+**/.DS_Store

@@ -1,0 +1,566 @@
+/* The Knowledge surface's own stylesheet: the rail, the rows, the document.
+ *
+ * OVER `--bk-*` TOKENS ONLY. The token layer is what maps onto the user's
+ * theme, and a literal is a value that ignores it. `baukasten-base.css` is
+ * loaded beside this file and its class names are vanilla-extract output —
+ * generated, hashed and unstable — so nothing here targets one.
+ *
+ * A TOKEN THAT DOES NOT EXIST IS A HARDCODED VALUE WITH EXTRA STEPS. An
+ * undefined custom property is invalid at computed-value time: the rule wins
+ * the cascade and then computes to nothing, so a misspelled colour token does
+ * not fall back to something sensible — the declaration is dropped and the
+ * element renders as though nobody had styled it. That is silent and it looks
+ * deliberate. `guards.test.ts` reads baukasten's shipped token layer and fails
+ * on any name this file uses that is not in it.
+ *
+ * COLOURS CARRY NO FALLBACK AND LENGTHS DO. A fallback colour is a literal that
+ * ships the moment a token is renamed — the failure the guard exists to catch,
+ * hidden behind a value that looks intentional. A fallback length is a floor on
+ * geometry and costs nothing.
+ *
+ * `--bk-padding-xs|sm|md|lg` ARE NOT LENGTHS. Each is `<vertical> <horizontal>`
+ * — two values — so it is correct ONLY as the sole value of the `padding`
+ * shorthand. Anywhere else it misbehaves silently:
+ *
+ *   padding: var(--bk-padding-md) 0    -> a THREE-value shorthand; the bottom
+ *                                         padding becomes zero
+ *   padding-left: var(--bk-padding-md) -> a longhand handed two values; the
+ *                                         declaration is DROPPED
+ *
+ * `--bk-spacing-*` and `--bk-gap-*` are single lengths and compose freely.
+ * `guards.test.ts` has a check for this too, because every name involved is
+ * real and it is the SHAPE that is wrong.
+ */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  color: var(--bk-color-foreground);
+  background: transparent;
+  font-family: var(--bk-font-family-sans);
+  font-size: var(--bk-font-size-md, 13px);
+  line-height: var(--bk-line-height-normal, 1.5);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+#root { height: 100%; }
+
+.kb-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.kb-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: var(--bk-gap-md, 12px);
+}
+
+.kb-grow { flex: 1 1 7rem; min-width: 0; }
+.kb-small { font-size: var(--bk-font-size-sm, 12px); }
+.kb-muted { color: var(--bk-color-foreground-muted); }
+.kb-spread { display: inline-flex; align-items: center; gap: var(--bk-gap-xs, 4px); flex-wrap: wrap; }
+
+/* Off-screen but in the accessibility tree. `display: none` and
+ * `visibility: hidden` both remove an element from that tree, which is the
+ * opposite of what a label is for. */
+.kb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- the bar */
+
+/* §2's search `Input` and collection `Select`, on one line.
+ *
+ * THE LINE WRAPS RATHER THAN OVERFLOWS. VSCode lets a sidebar be dragged to
+ * about 170px, and two controls that do not fit beside each other fit under
+ * each other. Without the wrap the field beside the `Select` is squeezed to a
+ * few characters before anything gives, which is a narrower kind of broken. */
+.kb-bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--bk-z-index-sticky, 100);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bk-gap-xs, 4px);
+  padding: var(--bk-padding-sm);
+  background: var(--bk-color-background);
+  border-bottom: 1px solid var(--bk-color-border);
+  flex: 0 0 auto;
+}
+
+/* A fixed, narrow column for the scope `Select`. Fixed rather than
+ * shrink-to-fit so the field beside it keeps the width it gains and loses as
+ * the rail is resized, and so a control whose longest option is three
+ * characters does not become a three-character control. `max-width` is what
+ * stops the column itself becoming the overflow in a pane too narrow to hold
+ * even one of them. */
+.kb-narrow { flex: 0 0 auto; width: 7rem; max-width: 100%; }
+
+/* THE RAIL'S HORIZONTAL OVERFLOW, AT ITS CAUSE.
+ *
+ * baukasten's `Select` puts `min-width: calc(var(--bk-spacing-20) * 2.5)` on
+ * its own root — 12.5rem, which is 162.5px at the root size `html` is given
+ * above, wider than a VSCode sidebar at its narrowest. `fullWidth` adds
+ * `width: 100%` beside it and LOSES: a min-width clamps a width from below. So
+ * the control's box stays 162.5px wide in a 170px rail whatever slot it is put
+ * in, and everything past the slot's edge is horizontal scrollbar. `Input`
+ * carries no such floor, which is why the box beside it never shows it.
+ *
+ * The floor has to be lifted off the CONTROL and not off the wrapper:
+ * `min-width: 0` on the wrapper only lets the wrapper shrink, and the child
+ * overflows it just the same.
+ *
+ * NOT `overflow: hidden` ON THE BAR. That would hide the overhang rather than
+ * fix it, leave the control unreachable, and clip an open dropdown with it. It
+ * is also unnecessary: the `Select` portals its open panel to `document.body`
+ * and positions it absolutely, so there is nothing inside the bar to clip and
+ * nothing in the document at all while the control is closed. */
+.kb-narrow > *,
+.kb-bar > .kb-grow > * { min-width: 0; }
+
+/* The box and the cross inside it. `position: relative` here is what the cross
+ * is positioned against; it has to be the element WRAPPING the `Input` because
+ * baukasten renders a wrapper div of its own around the field. */
+.kb-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Room at the right end of the FIELD for the cross, reserved whether or not the
+ * cross is drawn so text does not reflow under the caret the moment the first
+ * character arrives. `className` on baukasten's `Input` lands on the `<input>`
+ * itself, and this file is the last stylesheet the document links — so this
+ * longhand beats the component's own `padding` shorthand at equal specificity,
+ * on source order. */
+.kb-search-input { padding-right: var(--bk-spacing-6, 20px); }
+
+.kb-search-clear {
+  position: absolute;
+  right: var(--bk-spacing-0-5, 2px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--bk-size-xs, 16px);
+  height: var(--bk-size-xs, 16px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--bk-radius-sm, 3px);
+  background: none;
+  color: var(--bk-color-input-placeholder);
+  font: inherit;
+  cursor: pointer;
+}
+
+.kb-search-clear:hover {
+  color: var(--bk-color-input-foreground);
+  background: var(--bk-color-hover);
+}
+
+.kb-search-clear:focus-visible {
+  outline: 1px solid var(--bk-color-focus);
+  outline-offset: -1px;
+}
+
+/* ------------------------------------------------------------ the rows */
+
+.kb-list { display: flex; flex-direction: column; }
+
+/* A row is a PLACE: clicking it opens a tab, so it carries the pointer cursor
+ * and turns text selection off — dragging down the rail should pick a row, not
+ * highlight four titles. */
+.kb-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bk-spacing-0-5, 2px);
+  padding: var(--bk-padding-sm);
+  border-bottom: 1px solid var(--bk-color-divider);
+  cursor: pointer;
+  user-select: none;
+}
+
+.kb-row:hover { background: var(--bk-color-list-hover); }
+
+.kb-row:focus-visible {
+  outline: 1px solid var(--bk-color-list-focus-outline);
+  outline-offset: -1px;
+}
+
+.kb-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--bk-gap-xs, 4px);
+  min-width: 0;
+}
+
+/* One line, ellipsised. The full title is on the row's own hover. */
+.kb-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--bk-font-weight-medium);
+}
+
+/* §2's one-line snippet, CLAMPED. `oneLine` has already collapsed the newlines
+ * and cut it to a length; this is the width half, and both are needed — width
+ * alone would hand the DOM a paragraph per row, length alone would leave a line
+ * longer than a 170px rail. */
+.kb-row-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--bk-color-foreground-muted);
+  font-size: var(--bk-font-size-sm, 12px);
+}
+
+/* A locator is not a quote, and it does not read as one. `view/rows.ts` says
+ * why a browsed row shows one at all. */
+.kb-row-line-locator {
+  font-family: var(--bk-font-family-mono);
+  font-size: var(--bk-font-size-xs, 11px);
+}
+
+.kb-row-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--bk-gap-xs, 4px);
+  font-size: var(--bk-font-size-xs, 11px);
+  color: var(--bk-color-foreground-muted);
+}
+
+.kb-chip {
+  padding: 0 var(--bk-spacing-1, 3px);
+  border-radius: var(--bk-radius-sm, 3px);
+  background: var(--bk-color-badge-background);
+  color: var(--bk-color-badge-foreground);
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-chip-quiet {
+  background: none;
+  color: var(--bk-color-foreground-muted);
+  border: 1px solid var(--bk-color-border);
+}
+
+.kb-when { font-variant-numeric: tabular-nums; }
+
+/* §2's "which retrieval paths matched". The two are DRAWN DIFFERENTLY because
+ * §4 says they are different kinds of answer: keyword retrieval resolved an
+ * exact identifier, semantic retrieval found what the reader could not name. A
+ * row found by both carries both marks, which is the third kind. */
+.kb-match {
+  padding: 0 var(--bk-spacing-1, 3px);
+  border-radius: var(--bk-radius-sm, 3px);
+  border: 1px solid var(--bk-color-border);
+  font-family: var(--bk-font-family-mono);
+}
+
+.kb-match-keyword { color: var(--bk-color-info); border-color: var(--bk-color-info); }
+.kb-match-semantic { color: var(--bk-color-success); border-color: var(--bk-color-success); }
+
+.kb-count {
+  padding: var(--bk-padding-sm);
+  color: var(--bk-color-foreground-muted);
+  font-size: var(--bk-font-size-xs, 11px);
+}
+
+/* §2 and §3.1's badge, one rule for both. */
+.kb-stale {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bk-spacing-0-5, 2px);
+  flex: 0 0 auto;
+  padding: 0 var(--bk-spacing-1, 3px);
+  border-radius: var(--bk-radius-sm, 3px);
+  color: var(--bk-color-warning);
+  border: 1px solid var(--bk-color-warning);
+  font-size: var(--bk-font-size-xs, 11px);
+}
+
+/* ---------------------------------------------------- empties and errors */
+
+.kb-empty,
+.kb-notice {
+  padding: var(--bk-padding-md);
+  color: var(--bk-color-foreground-muted);
+  font-size: var(--bk-font-size-sm, 12px);
+}
+
+.kb-notice h2 {
+  margin: 0 0 var(--bk-gap-xs, 4px);
+  font-size: var(--bk-font-size-md, 13px);
+  color: var(--bk-color-foreground);
+}
+
+.kb-pre {
+  overflow-x: auto;
+  padding: var(--bk-padding-sm);
+  background: var(--bk-color-code-background);
+  color: var(--bk-color-code-foreground);
+  font-family: var(--bk-font-family-mono);
+  font-size: var(--bk-font-size-xs, 11px);
+}
+
+/* --------------------------------------------------------- the document */
+
+.kb-doc { font-size: var(--bk-font-size-md, 13px); }
+
+.kb-doc .kb-scroll { padding: var(--bk-padding-md); }
+
+/* §3.1: the provenance, always visible. Not a collapsible and not a hover — a
+ * passage whose age and origin are unknown is a passage that will eventually be
+ * trusted when it should not be. */
+.kb-head {
+  margin-bottom: var(--bk-gap-md, 12px);
+  padding-bottom: var(--bk-gap-sm, 8px);
+  border-bottom: 1px solid var(--bk-color-border);
+}
+
+.kb-head-title {
+  margin: 0 0 var(--bk-gap-xs, 4px);
+  font-size: var(--bk-font-size-lg, 15px);
+  font-weight: var(--bk-font-weight-semibold);
+  line-height: var(--bk-line-height-tight, 1.25);
+}
+
+.kb-head-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--bk-gap-xs, 4px);
+  margin-bottom: var(--bk-gap-sm, 8px);
+  min-width: 0;
+}
+
+/* An identifier is held apart from the title beside it by its FACE. Tabular
+ * figures line a number up with the number below it and do nothing at all about
+ * the word beside it. */
+.kb-ref {
+  font-family: var(--bk-font-family-mono);
+  font-size: var(--bk-font-size-xs, 11px);
+  color: var(--bk-color-foreground-muted);
+}
+
+.kb-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--bk-color-link);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kb-link:hover { color: var(--bk-color-link-hover); text-decoration: underline; }
+.kb-link:focus-visible { outline: 1px solid var(--bk-color-focus); outline-offset: 1px; }
+
+/* The locator can be a very long URL, and it is the one fact on the header line
+ * that must not push the badge off the end of it. */
+.kb-locator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bk-spacing-0-5, 2px);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--bk-font-family-mono);
+  font-size: var(--bk-font-size-xs, 11px);
+}
+
+.kb-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bk-spacing-0-5, 2px);
+  padding: 0 var(--bk-spacing-1, 3px);
+  border: 1px solid var(--bk-color-border);
+  border-radius: var(--bk-radius-sm, 3px);
+  background: none;
+  color: var(--bk-color-foreground-muted);
+  font: inherit;
+  font-size: var(--bk-font-size-xs, 11px);
+  cursor: pointer;
+}
+
+.kb-action:hover { color: var(--bk-color-foreground); background: var(--bk-color-hover); }
+.kb-action:focus-visible { outline: 1px solid var(--bk-color-focus); outline-offset: -1px; }
+.kb-action-danger:hover { color: var(--bk-color-danger); border-color: var(--bk-color-danger); }
+
+/* §3.1's facts, and §3.1's free-form `meta` below them, as one anatomy: a
+ * label, a value, and a row per fact. A grid rather than a two-column table
+ * because a 170px-wide tab and a 900px-wide one want different wrapping and a
+ * table gives neither. */
+.kb-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bk-gap-xs, 4px) var(--bk-gap-md, 12px);
+  margin: 0;
+  font-size: var(--bk-font-size-sm, 12px);
+}
+
+.kb-fact { display: flex; align-items: baseline; gap: var(--bk-spacing-1, 3px); min-width: 0; }
+
+.kb-fact dt {
+  color: var(--bk-color-foreground-muted);
+  font-size: var(--bk-font-size-xs, 11px);
+  text-transform: uppercase;
+  letter-spacing: var(--bk-letter-spacing-wide, 0.02em);
+}
+
+.kb-fact dd {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 24rem;
+}
+
+/* §1.2 makes `meta` free-form, so the block that shows it is visibly a
+ * different kind of list from the facts above: same anatomy, quieter. */
+.kb-meta {
+  margin-top: var(--bk-gap-sm, 8px);
+  padding-top: var(--bk-gap-sm, 8px);
+  border-top: 1px solid var(--bk-color-divider);
+}
+
+.kb-meta dd { font-family: var(--bk-font-family-mono); font-size: var(--bk-font-size-xs, 11px); }
+
+/* -------------------------------------------------------------- prose */
+
+.kb-prose { max-width: 62rem; line-height: var(--bk-line-height-relaxed, 1.65); }
+
+.kb-prose h1, .kb-prose h2, .kb-prose h3,
+.kb-prose h4, .kb-prose h5, .kb-prose h6 {
+  margin: var(--bk-gap-lg, 16px) 0 var(--bk-gap-xs, 4px);
+  line-height: var(--bk-line-height-tight, 1.25);
+  font-weight: var(--bk-font-weight-semibold);
+}
+
+.kb-prose h1 { font-size: var(--bk-font-size-xl, 17px); }
+.kb-prose h2 { font-size: var(--bk-font-size-lg, 15px); }
+.kb-prose h3 { font-size: var(--bk-font-size-md, 13px); }
+.kb-prose h4, .kb-prose h5, .kb-prose h6 { font-size: var(--bk-font-size-sm, 12px); }
+
+.kb-prose p, .kb-prose ul, .kb-prose ol, .kb-prose blockquote, .kb-prose dl {
+  margin: var(--bk-gap-sm, 8px) 0;
+}
+
+.kb-prose ul, .kb-prose ol { padding-left: var(--bk-spacing-5, 16px); }
+
+.kb-prose blockquote {
+  padding-left: var(--bk-spacing-3, 10px);
+  border-left: 2px solid var(--bk-color-border);
+  color: var(--bk-color-foreground-muted);
+}
+
+.kb-prose code {
+  padding: 0 var(--bk-spacing-0-5, 2px);
+  border-radius: var(--bk-radius-sm, 3px);
+  background: var(--bk-color-code-background);
+  color: var(--bk-color-code-foreground);
+  font-family: var(--bk-font-family-mono);
+  font-size: var(--bk-font-size-sm, 12px);
+}
+
+/* A wide block scrolls INSIDE ITSELF. The alternative is a document that
+ * scrolls horizontally as a whole, which moves the prose out from under the
+ * reader every time they reach a long line of code. */
+.kb-prose pre {
+  overflow-x: auto;
+  padding: var(--bk-padding-sm);
+  background: var(--bk-color-code-background);
+  border-radius: var(--bk-radius-sm, 3px);
+}
+
+.kb-prose pre code { padding: 0; background: none; }
+
+.kb-prose table { border-collapse: collapse; display: block; overflow-x: auto; max-width: 100%; }
+.kb-prose th, .kb-prose td {
+  padding: var(--bk-padding-xs);
+  border: 1px solid var(--bk-color-border);
+  text-align: left;
+}
+
+.kb-prose img { max-width: 100%; }
+
+/* --------------------------------------------------------------- code */
+
+/* §3.2's "source code with syntax highlighting". The whole block scrolls
+ * horizontally inside itself for the reason a `pre` in prose does. */
+.kb-code,
+.kb-plain {
+  margin: 0;
+  overflow-x: auto;
+  padding: var(--bk-padding-sm);
+  background: var(--bk-color-code-background);
+  border-radius: var(--bk-radius-sm, 3px);
+  font-family: var(--bk-font-family-mono);
+  font-size: var(--bk-font-size-sm, 12px);
+  line-height: var(--bk-line-height-normal, 1.5);
+  tab-size: 4;
+}
+
+.kb-plain { white-space: pre-wrap; word-break: break-word; }
+
+.kb-code-line { display: flex; white-space: pre; }
+
+/* The gutter is a column and not a prefix on the text: a number printed into
+ * the line would be selected and copied with it, and this surface exists so
+ * somebody can take a passage away with them. `user-select: none` is what makes
+ * that true for a pointer drag as well as for select-all. */
+.kb-code-gutter {
+  flex: 0 0 auto;
+  width: 3.5rem;
+  padding-right: var(--bk-spacing-3, 10px);
+  text-align: right;
+  color: var(--bk-color-foreground-muted);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-code-text { flex: 1 1 auto; }
+
+.kb-tok-comment { color: var(--bk-color-foreground-muted); font-style: italic; }
+.kb-tok-string { color: var(--bk-color-success); }
+.kb-tok-number { color: var(--bk-color-info); }
+.kb-tok-keyword { color: var(--bk-color-link); font-weight: var(--bk-font-weight-medium); }
+
+/* -------------------------------------------------------- collections */
+
+.kb-collection { cursor: default; }
+.kb-collection:hover { background: none; }
+
+.kb-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 var(--bk-spacing-1, 3px);
+  border: 1px solid var(--bk-color-input-focus-border);
+  border-radius: var(--bk-radius-sm, 3px);
+  background: var(--bk-color-input-background);
+  color: var(--bk-color-input-foreground);
+  font: inherit;
+}

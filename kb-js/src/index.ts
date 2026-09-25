@@ -1,0 +1,94 @@
+/* `kb-js`: a typed, tested wrapper over the `kb` CLI (index-api.md §10).
+ *
+ * It spawns the binary, passes `--json`, and maps exit codes to typed errors.
+ * It does not reimplement retrieval — §10 and `client.ts`'s header record why,
+ * and the short form is that searching needs the model, and two inference paths
+ * that disagree produce a store which answers differently depending on which
+ * door the caller came through.
+ *
+ * The surface is deliberately flat: one class, the shapes it answers, and the
+ * two error kinds the exit codes divide into.
+ */
+
+export { Kb, KbSearchResult } from "./client";
+export {
+    AddOptions,
+    GetOptions,
+    LsOptions,
+    RefreshOptions,
+    SearchMode,
+    SearchOptions,
+    StaleOptions,
+    addArgv,
+    chunkArgv,
+    collectionsArgv,
+    deleteCollectionArgv,
+    getArgv,
+    initArgv,
+    lsArgv,
+    refreshArgv,
+    renameCollectionArgv,
+    searchArgv,
+    staleArgv,
+    statusArgv,
+} from "./argv";
+export {
+    CLI_ERROR_CODES,
+    CliErrorCode,
+    KbCrash,
+    KbError,
+    KbErrorCode,
+    SPEC_ERROR_CODES,
+    SpecErrorCode,
+    isKbCrash,
+    isKbError,
+    isKnownCode,
+    isSpecErrorCode,
+} from "./errors";
+export {
+    DEFAULT_BIN,
+    DEFAULT_MAX_BYTES,
+    DEFAULT_TIMEOUT_MS,
+    KbOptions,
+    run,
+} from "./run";
+export {
+    DEFAULT_STALE_DAYS,
+    NO_DATE,
+    fetchedAtKey,
+    isStale,
+    newestFirst,
+    staleOf,
+} from "./stale";
+export {
+    arr,
+    bool,
+    num,
+    obj,
+    readChunk,
+    readCollection,
+    readDocument,
+    readHit,
+    readSource,
+    readStore,
+    str,
+    strOrNull,
+} from "./shape";
+export {
+    KbAdded,
+    KbChunk,
+    KbChunkRead,
+    KbCollection,
+    KbDocument,
+    KbDocumentRead,
+    KbHit,
+    KbScores,
+    KbSource,
+    KbStatus,
+    KbTierStatus,
+    RETRIEVAL_PATHS,
+    RetrievalPath,
+    SourceKind,
+    Store,
+    StoreSelector,
+} from "./types";

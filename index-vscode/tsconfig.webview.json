@@ -1,0 +1,20 @@
+{
+  "//": "esbuild strips types and never checks them, so a bundle that builds proves nothing about the webview's types. This config is the check, and it emits nothing: the bundle is esbuild's output and this is only the compiler's opinion of it. `types` deliberately omits vscode — a webview is a browser document and there is no extension-host API in it — and it omits node for the same reason, which is what keeps a `node:fs` import from type-checking its way into the bundle.",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": [],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
+  },
+  "include": ["webview", "src/view", "src/uri.ts", "src/protocol.ts"]
+}
