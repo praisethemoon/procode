@@ -23,7 +23,7 @@ static const char *USAGE =
     "                             one chunk in full, with its neighbours\n"
     "  collections [--store project|global|all]\n"
     "  collections rename <old> <new>\n"
-    "  collections forget <name>  refuses while the topic holds documents\n"
+    "  collections delete <name>  refuses while the topic holds documents\n"
     "  stats [--store project|global|all]\n"
     "                             per collection: documents, chunks, bytes\n"
     "\n"
@@ -37,10 +37,11 @@ static const char *USAGE =
     "                             HTTP client and fetches nothing\n"
     "\n"
     "links:\n"
-    "  link <D-n> <type> <D-m>    supersedes | cites | analogue_of |\n"
-    "                             implements | see_also\n"
-    "  unlink <D-n> <type> <D-m>\n"
     "  links <D-n>                outgoing and incoming, resolved to rows\n"
+    "  links add <D-n> <type> <D-m>\n"
+    "                             supersedes | cites | analogue_of |\n"
+    "                             implements | see_also\n"
+    "  links delete <D-n> <type> <D-m>\n"
     "\n"
     "maintenance:\n"
     "  rebuild [--store project|global|all]\n"
@@ -104,10 +105,6 @@ int main(int argc, char **argv) {
         rc = cmd_stale(a, argc2, argv2);
     else if (strcmp(cmd, "refresh") == 0)
         rc = cmd_refresh(a, argc2, argv2);
-    else if (strcmp(cmd, "link") == 0)
-        rc = cmd_link(a, argc2, argv2, false);
-    else if (strcmp(cmd, "unlink") == 0)
-        rc = cmd_link(a, argc2, argv2, true);
     else if (strcmp(cmd, "links") == 0)
         rc = cmd_links(a, argc2, argv2);
     else if (strcmp(cmd, "stats") == 0)

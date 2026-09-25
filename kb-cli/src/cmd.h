@@ -17,7 +17,6 @@ int32_t cmd_chunk(Arena *a, int32_t argc, char **argv);
 int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv);
 int32_t cmd_stale(Arena *a, int32_t argc, char **argv);
 int32_t cmd_refresh(Arena *a, int32_t argc, char **argv);
-int32_t cmd_link(Arena *a, int32_t argc, char **argv, bool remove);
 int32_t cmd_links(Arena *a, int32_t argc, char **argv);
 int32_t cmd_stats(Arena *a, int32_t argc, char **argv);
 int32_t cmd_reindex(Arena *a, int32_t argc, char **argv);

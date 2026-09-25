@@ -18,12 +18,12 @@
  *
  *   kb collections                     list
  *   kb collections rename <old> <new>  PATCH
- *   kb collections forget <name>       DELETE
+ *   kb collections delete <name>       DELETE
  *
  * A COLLECTION IS NOT STORED ANYWHERE, so neither is a write to one. §1.3
  * makes a collection a field on a Source, created implicitly on first ingest;
  * renaming a topic is therefore appending a revised `source` record for each
- * source in it, and forgetting one is appending a `forget` record for each.
+ * source in it, and deleting one is appending a `forget` record for each.
  * Both are ordinary append-only motions, and both are refused before the
  * first append when they would be wrong — so a half-renamed collection is not
  * a state this can produce except by crashing, and a crash mid-rename leaves
@@ -64,12 +64,12 @@ static int compare(const void *x, const void *y) {
     return strcmp(a->name, b->name);
 }
 
-/* The write half. `to` is NULL for a forget. */
+/* The write half. `to` is NULL for a delete. */
 static int32_t collection_write(Arena *a, int32_t argc, char **argv, bool json,
                                 const char *from, const char *to) {
     if (!from || !from[0]) {
         err_out(json, "usage", "kb collections %s expects a collection name",
-                to ? "rename" : "forget");
+                to ? "rename" : "delete");
         return KB_EXIT_ERR;
     }
     if (to && (!to[0] || strchr(to, '/') || strchr(to, '\\'))) {
@@ -165,7 +165,7 @@ static int32_t collection_write(Arena *a, int32_t argc, char **argv, bool json,
         StrBuf sb;
         sb_init(&sb, a);
         sb_printf(&sb, "{\"ok\":true,\"action\":\"%s\",\"store\":\"%s\",",
-                  to ? "rename" : "forget", tier_name(s.tier));
+                  to ? "rename" : "delete", tier_name(s.tier));
         sb_puts(&sb, "\"collection\":");
         json_escape_c(&sb, from);
         if (to) {
@@ -207,7 +207,7 @@ int32_t cmd_collections(Arena *a, int32_t argc, char **argv) {
         const char *from = positional_arg(argc, argv, VALUE_FLAGS, 1);
         const char *to = positional_arg(argc, argv, VALUE_FLAGS, 2);
         /* Checked here rather than inside: a missing new name would reach
-         * collection_write as a NULL `to`, which is how a forget is spelled,
+         * collection_write as a NULL `to`, which is how a delete is spelled,
          * and "rename" must never be able to become a delete. */
         if (!to) {
             err_out(json, "usage",
@@ -216,14 +216,14 @@ int32_t cmd_collections(Arena *a, int32_t argc, char **argv) {
         }
         return collection_write(a, argc, argv, json, from, to);
     }
-    if (verb && strcmp(verb, "forget") == 0)
+    if (verb && strcmp(verb, "delete") == 0)
         return collection_write(a, argc, argv, json,
                                 positional_arg(argc, argv, VALUE_FLAGS, 1),
                                 NULL);
     if (verb) {
         err_out(json, "usage",
                 "kb collections takes no argument, or \"rename <old> <new>\", "
-                "or \"forget <name>\"");
+                "or \"delete <name>\"");
         return KB_EXIT_ERR;
     }
     StoreSel sel;
