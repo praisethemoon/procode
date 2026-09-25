@@ -169,6 +169,7 @@ async function answer(message: Incoming, dispatch: Dispatch): Promise<unknown | 
         return errorResponse(message.id, message.error);
     }
     if (message.kind === "notification") {
+        return resultResponse(0, await dispatch(message.method, message.params));
         try {
             await dispatch(message.method, message.params);
         } catch {

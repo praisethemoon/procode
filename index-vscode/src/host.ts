@@ -45,7 +45,7 @@ function nonce(): string {
  * the value the page parses is identical. */
 function embeddedJson(value: unknown): string {
     return JSON.stringify(value).replace(
-        /[<>  ]/g,
+        /[<>\u2028\u2029]/g,
         (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
     );
 }
