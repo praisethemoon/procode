@@ -443,13 +443,18 @@ async function links(kb: Kb, args: Record<string, unknown>): Promise<ToolResult>
     return rows(await kb.link(from, type, to));
 }
 
+/* The rows AND the threshold the store used. "18 documents are stale" means
+ * nothing without "older than what", and a caller that sent no `olderThan`
+ * cannot say which default it got — so the answer carries the store's own
+ * `olderThan` and the instant it computed from it. */
 async function stale(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
-    const documents = await kb.stale({
-        olderThan: asString("kb_stale", "olderThan", args["olderThan"]),
-        collection: asString("kb_stale", "collection", args["collection"]),
-        store: asStore("kb_stale", args["store"]),
-    });
-    return rows({ count: documents.length, documents });
+    return rows(
+        await kb.stale({
+            olderThan: asString("kb_stale", "olderThan", args["olderThan"]),
+            collection: asString("kb_stale", "collection", args["collection"]),
+            store: asStore("kb_stale", args["store"]),
+        }),
+    );
 }
 
 type Handler = (kb: Kb, args: Record<string, unknown>) => Promise<ToolResult>;

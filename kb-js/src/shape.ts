@@ -34,8 +34,10 @@ import {
     KbLink,
     KbLinkWritten,
     KbLinks,
+    KbRefresh,
     KbScores,
     KbSource,
+    KbStaleList,
     KbStats,
     KbStatus,
     KbTierStatus,
@@ -176,6 +178,49 @@ export function readCollection(v: unknown): KbCollection {
         }
     }
     return row as unknown as KbCollection;
+}
+
+export function readStaleList(payload: Record<string, unknown>): KbStaleList {
+    const documents = arr(payload["documents"]).map(readDocument);
+    return {
+        documents,
+        /* The store's own count, and the array's length only when it did not
+         * give one. A store that pages would report a total the array does not
+         * have, and answering `documents.length` would quietly redefine the
+         * field. */
+        count: "count" in payload ? num(payload["count"]) : documents.length,
+        olderThan: str(payload["olderThan"]),
+        staleBefore: str(payload["staleBefore"]),
+    };
+}
+
+export function readRefresh(payload: Record<string, unknown>): KbRefresh {
+    return {
+        action: str(payload["action"]),
+        refetched: num(payload["refetched"]),
+        reembedded: num(payload["reembedded"]),
+        sources: arr(payload["sources"]).map((v) => {
+            const s = obj(v);
+            return {
+                id: str(s["id"]),
+                store: readStore(s["store"]),
+                kind: str(s["kind"]),
+                locator: str(s["locator"]),
+                collection: str(s["collection"]),
+                staleDocuments: num(s["staleDocuments"]),
+                fetchedAt: str(s["fetchedAt"]),
+                refetchBy: str(s["refetchBy"]),
+            };
+        }),
+        count: num(payload["count"]),
+        staleDocuments: num(payload["staleDocuments"]),
+        olderThan: str(payload["olderThan"]),
+        staleBefore: str(payload["staleBefore"]),
+        /* The sentence that says it was a report. Read last and never
+         * defaulted away: a surface that shows the two zeroes without this
+         * tells a reader the corpus is up to date. */
+        note: str(payload["note"]),
+    };
 }
 
 export function readStats(payload: Record<string, unknown>): KbStats {

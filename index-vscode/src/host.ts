@@ -159,10 +159,14 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
         case "collections":
             return kb.collections("all");
         case "refresh":
+            /* §5's route takes a scope and a threshold and nothing else. A
+             * `document` was passed here and `kb refresh` refuses it with
+             * `usage: unknown option` — §3.1's per-document action is §2's
+             * `POST /sources/{id}/refresh`, which is a different route and not
+             * a filter on this one. */
             return kb.refresh({
                 collection: text("collection"),
                 olderThan: text("olderThan"),
-                document: text("document"),
                 store: tier("store"),
             });
         case "renameCollection":

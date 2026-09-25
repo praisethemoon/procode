@@ -289,6 +289,61 @@ export interface KbLinkWritten {
     readonly at: string;
 }
 
+/* §5's `GET /stale`, whole.
+ *
+ * NOT JUST THE ROWS. The threshold the store used is part of the answer: "18
+ * documents are stale" means nothing without "older than what", and a caller
+ * that had to know which `olderThan` it sent — or worse, did not send one and
+ * so cannot say — is a caller reporting a number it cannot explain. `count` is
+ * the store's own, not `documents.length`, because a store that limited the
+ * list would report a total the array does not have. */
+export interface KbStaleList {
+    readonly documents: readonly KbDocument[];
+    readonly count: number;
+    readonly olderThan: string;
+    readonly staleBefore: string;
+}
+
+/* §5's `POST /refresh`, and the one field that matters most.
+ *
+ * `note` IS WHY THIS TYPE EXISTS. §12.2 resolved against putting an HTTP
+ * client and TLS in the binary, so refresh REPORTS what would be refetched and
+ * fetches nothing. `refetched` and `reembedded` are therefore always zero
+ * today — which means a reader that invented those two keys and read nothing
+ * else got the right numbers for the wrong reason and would go on getting them
+ * the day the command started acting. `action`, `note` and the source rows are
+ * what say it was a report, and they are read here so that a surface cannot
+ * announce a refresh that did not happen.
+ *
+ * `action` IS NOT NARROWED TO `"report"`, for the same reason `matched` is not
+ * narrowed to two paths: the day it becomes an action, a reader that only knew
+ * one word would drop the one that changed. */
+export interface KbRefreshSource {
+    readonly id: SourceId;
+    readonly store: Store;
+    readonly kind: SourceKind | string;
+    readonly locator: string;
+    readonly collection: string;
+    readonly staleDocuments: number;
+    readonly fetchedAt: string;
+    /* The route that WOULD bring this source up to date, named per kind. The
+     * store answering "here is how", rather than a caller having to work it
+     * out from `kind`. */
+    readonly refetchBy: string;
+}
+
+export interface KbRefresh {
+    readonly action: string;
+    readonly refetched: number;
+    readonly reembedded: number;
+    readonly sources: readonly KbRefreshSource[];
+    readonly count: number;
+    readonly staleDocuments: number;
+    readonly olderThan: string;
+    readonly staleBefore: string;
+    readonly note: string;
+}
+
 /* §7's `GET /stats`. `KbCollection` is the row `kb collections` prints and
  * this is the row `kb stats` prints; they overlap and neither contains the
  * other, which is why both exist. */

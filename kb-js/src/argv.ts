@@ -254,22 +254,37 @@ export function staleArgv(options: StaleOptions = {}): string[] {
     return argv;
 }
 
+/* §5's `POST /refresh?collection=&olderThan=`, AND NOTHING ELSE ON IT.
+ *
+ * `--document` AND `--source` WERE HERE AND WERE WRONG. They were written
+ * against a route that does not exist: §5's refresh takes a collection and a
+ * threshold, and `kb refresh` refuses either flag with `usage: unknown
+ * option`. The reason they were invented is worth keeping, because it is the
+ * mistake rather than the fix — §3.1 of the UI spec wants a per-document
+ * refresh action, and a filter on a scope-wide route looked like the cheapest
+ * way to have one. It is not the same operation. §2 has the route for it,
+ * `POST /sources/{id}/refresh`, which refetches ONE source and compares by
+ * hash; a `--source` narrowing on this command would be a third thing that is
+ * neither, and would answer a report about one source while looking like it
+ * had refetched it.
+ *
+ * SO IT IS NOT BEING ASKED FOR HERE. If §3.1's action is built, the thing to
+ * add is `kb refresh <S-n>` — §2's own route, spelled as its own subject —
+ * and this function is not where it goes.
+ *
+ * `--store` IS REAL AND IS HONOURED (`cmd_stale.c`'s `REFRESH_FLAGS` lists
+ * it), and it takes `all`: a report about what has gone stale spans both tiers
+ * for the same reason a search does. */
 export interface RefreshOptions {
     collection?: string | null;
     olderThan?: string | null;
-    /* §2's `POST /sources/{id}/refresh` narrowed to one thing, which is what
-     * §3.1's per-document refresh action needs. */
-    document?: string | null;
-    source?: string | null;
-    store?: Exclude<StoreSelector, "all"> | null;
+    store?: StoreSelector | null;
 }
 
 export function refreshArgv(options: RefreshOptions = {}): string[] {
     const argv = ["refresh"];
     put(argv, "--collection", options.collection);
     put(argv, "--older-than", options.olderThan);
-    put(argv, "--document", options.document);
-    put(argv, "--source", options.source);
     putStore(argv, options.store);
     return argv;
 }

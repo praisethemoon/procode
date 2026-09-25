@@ -317,8 +317,17 @@ export async function refreshStale(
     try {
         const done = await kb.refresh({ olderThan: `${olderThanDays}d` });
         announce();
+        /* IT SAYS WHAT HAPPENED, WHICH TODAY IS NOTHING. §12.2 resolved
+         * against putting an HTTP client and TLS in the binary, so refresh
+         * reports what has gone stale and fetches none of it. This used to
+         * read "Refreshed 0 documents; 0 had changed" off two keys the store
+         * has never emitted — right by accident, and a sentence that told a
+         * reader their corpus was current. `note` is the store's own word for
+         * it and is shown rather than summarised. */
         void vscode.window.showInformationMessage(
-            `Refreshed ${done.refreshed} document${done.refreshed === 1 ? "" : "s"}; ${done.changed} had changed.`,
+            done.count === 0
+                ? `Nothing older than ${done.olderThan}.`
+                : `${done.count} source${done.count === 1 ? "" : "s"} older than ${done.olderThan}, covering ${done.staleDocuments} document${done.staleDocuments === 1 ? "" : "s"}. ${done.note}`,
         );
     } catch (e) {
         report(e, "refresh stale documents");

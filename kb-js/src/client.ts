@@ -57,6 +57,8 @@ import {
     readHit,
     readLinkWritten,
     readLinks,
+    readRefresh,
+    readStaleList,
     readStats,
     readStatus,
     str,
@@ -70,6 +72,8 @@ import {
     KbHit,
     KbLinkWritten,
     KbLinks,
+    KbRefresh,
+    KbStaleList,
     KbStats,
     KbStatus,
     StoreSelector,
@@ -77,6 +81,12 @@ import {
 
 export interface KbSearchResult {
     readonly hits: readonly KbHit[];
+    /* Which retrieval path the store actually ran. §4 makes hybrid the default
+     * and §8 makes it refuse without a model, so the mode that came back is
+     * not always the mode that was asked for — and a caller told only the hits
+     * cannot know whether the exact identifier it searched for was resolved by
+     * keyword or approximated by vectors. */
+    readonly mode: string;
     /* How many hits came back, as the store counted them. Read rather than
      * taken from `hits.length`: a store that pages would report a total the
      * array does not have, and a binding that answered the array's length
@@ -133,7 +143,11 @@ export class Kb {
     async search(query: string, options: SearchOptions = {}): Promise<KbSearchResult> {
         const payload = await run(searchArgv(query, options), this.options);
         const hits = arr(payload["hits"]).map(readHit);
-        return { hits, count: "count" in payload ? num(payload["count"]) : hits.length };
+        return {
+            hits,
+            mode: str(payload["mode"]),
+            count: "count" in payload ? num(payload["count"]) : hits.length,
+        };
     }
 
     /* §4's `GET /chunks/{id}`: "the full chunk text and its neighbours". */
@@ -172,10 +186,13 @@ export class Kb {
     }
 
     /* §5's `GET /stale`: "documents whose age exceeds a threshold, newest
-     * sources first". */
-    async stale(options: StaleOptions = {}): Promise<readonly KbDocument[]> {
-        const payload = await run(staleArgv(options), this.options);
-        return arr(payload["documents"]).map(readDocument);
+     * sources first".
+     *
+     * THE THRESHOLD COMES BACK WITH THE ROWS. "18 documents are stale" means
+     * nothing without "older than what", and a caller that did not send an
+     * `olderThan` cannot say which default it got. */
+    async stale(options: StaleOptions = {}): Promise<KbStaleList> {
+        return readStaleList(await run(staleArgv(options), this.options));
     }
 
     /* §6's `GET /documents/{id}/links`: "outgoing and incoming, resolved to
@@ -202,13 +219,21 @@ export class Kb {
         return readStats(await run(statsArgv(store), this.options));
     }
 
-    /* §5's `POST /refresh`: "refetch a whole scope, re-embedding only changed
-     * content". The command does not exist in the CLI yet (`argv.ts` says so),
-     * so today this answers a `usage` refusal — which is a sentence a reader
-     * can act on, and is what a surface offering the action owes them. */
-    async refresh(options: RefreshOptions = {}): Promise<{ refreshed: number; changed: number }> {
-        const payload = await run(refreshArgv(options), this.options);
-        return { refreshed: num(payload["refreshed"]), changed: num(payload["changed"]) };
+    /* §5's `POST /refresh`, which today REPORTS and does not act.
+     *
+     * §12.2 resolved against putting an HTTP client and TLS in the binary, so
+     * the command names the sources that have gone stale and the route that
+     * would bring each up to date, and fetches nothing. `KbRefresh.note` is
+     * the store saying so in a sentence, and a surface that announces a
+     * refresh without showing it is announcing something that did not happen.
+     *
+     * The two keys this used to read — `refreshed` and `changed` — were never
+     * in the answer and defaulted to zero, which is the number a report of no
+     * action has. It was right by accident, which is worse than wrong: it
+     * would have stayed right in appearance and become wrong in fact on the
+     * day refresh started refetching. */
+    async refresh(options: RefreshOptions = {}): Promise<KbRefresh> {
+        return readRefresh(await run(refreshArgv(options), this.options));
     }
 
     /* §7's `PATCH /collections/{name}`. */
