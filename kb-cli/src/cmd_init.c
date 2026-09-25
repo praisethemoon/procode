@@ -63,7 +63,13 @@ int32_t cmd_init(Arena *a, int32_t argc, char **argv) {
      * and then be surprised by what is in it. Nothing is overwritten either
      * way; the logs are the truth and init never touches an existing one. */
     if (plat_is_dir(dir)) {
-        err_out(json, "exists", "a store already exists at %s", dir);
+        /* `init_failed`, not a code of this command's own invention. §11's
+         * table is not the whole vocabulary — the CLI also prints
+         * `corrupt_log`, `internal`, `unknown_command` and `usage` — and
+         * `kb-js` carries the full list with a guard that fails on any code
+         * the C can print and the reader has never heard of. A new spelling
+         * here would reach a caller flagged as unrecognised. */
+        err_out(json, "init_failed", "a store already exists at %s", dir);
         return KB_EXIT_ERR;
     }
 
