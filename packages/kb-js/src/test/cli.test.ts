@@ -499,7 +499,7 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
             {
                 /* Every include at once, on a document that has an edge:
                  * the plain `get` above never asks for links, which is how a
-                 * reader that dropped them (T-1) went unnoticed. */
+                 * reader that dropped them went unnoticed. */
                 what: "get with every include",
                 argv: ["get", added.document, "--include", "text,chunks,links"],
                 read: await (async () => {

@@ -374,7 +374,7 @@ test("kb_links is checked against the real binary the moment kb links exists", a
         const read = payload(await call(work, "kb_links", { op: "list", document: a }));
         assert.equal((read["outgoing"] as unknown[]).length, 1);
 
-        /* T-1: the same edge through kb_get's include, from both ends, with
+        /* The same edge through kb_get's include, from both ends, with
          * the far document resolved to a row. */
         type Edge = { to: string; from: string; type: string; document: { title: string } | null };
         type Links = { outgoing: Edge[]; incoming: Edge[] };
