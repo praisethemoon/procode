@@ -25,3 +25,9 @@ feedback.md
 
 # macOS
 .DS_Store
+kb-cli/bin/
+kb-js/node_modules/
+kb-js/out/
+index-vscode/node_modules/
+index-vscode/out/
+*.vsix
