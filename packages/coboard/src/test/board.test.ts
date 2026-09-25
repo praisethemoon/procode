@@ -5,6 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { commitDiff } from "../lap";
 import { handle } from "../mcp";
 import { search, view } from "../query";
 import { Board, BoardError, findBoard } from "../store";
@@ -291,4 +292,18 @@ test("lap: a session tagged with a ticket is found through the board", { skip: !
     assert.equal(s.sessions[0].commits[0].msg, "the first line");
     const got = JSON.parse((await call(dir, "board_get", { id: "T-1" })).text);
     assert.equal(got.sessions[0].id, "S1");
+
+    // An edit in the middle of a file comes back as the file before and after.
+    lap("session", "end");
+    lap("session", "start", "T-1: more", "--meta", "ticket=T-1");
+    fs.writeFileSync(path.join(dir, "a.txt"), "hello\nkeep\nold one\nold two\ntail\n");
+    lap("commit", "a.txt", "-m", "grow it");
+    fs.writeFileSync(path.join(dir, "a.txt"), "hello\nkeep\nnew\ntail\n");
+    lap("commit", "a.txt", "-m", "replace two lines with one");
+    const edit = await commitDiff(dir, "L3");
+    assert.equal(edit.before, "hello\nkeep\nold one\nold two\ntail\n");
+    assert.equal(edit.after, "hello\nkeep\nnew\ntail\n");
+    assert.equal(edit.line, 3);
+    const created = await commitDiff(dir, "L1");
+    assert.deepEqual([created.op, created.before, created.after], ["create", "", "hello\n"]);
 });

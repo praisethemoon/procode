@@ -3,6 +3,7 @@
  * from a real board, and answers a tab's first message with the item's view. */
 
 import * as assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -16,6 +17,9 @@ import { Board } from "coboard";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "coboard-host-"));
 const commands = new Map<string, (...a: unknown[]) => unknown>();
 const posted: unknown[] = [];
+const executed: unknown[][] = [];
+let content: { provideTextDocumentContent(uri: { toString(): string }): string } | null = null;
+const LAP = path.resolve(__dirname, "../../../../cli/lap-cli/bin/lap");
 let provider: { getChildren(n?: unknown): { item: { id: string }; label: string; description: string }[] } | null = null;
 let onMessage: ((m: unknown) => void) | null = null;
 
@@ -33,7 +37,13 @@ const fake = {
     EventEmitter,
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     ViewColumn: { Active: -1 },
-    Uri: { joinPath: (...p: { fsPath?: string }[]) => ({ fsPath: p.map((x) => x.fsPath ?? String(x)).join("/") }) },
+    Range: class {
+        constructor(public startLine: number, public startCharacter: number, public endLine: number, public endCharacter: number) {}
+    },
+    Uri: {
+        joinPath: (...p: { fsPath?: string }[]) => ({ fsPath: p.map((x) => x.fsPath ?? String(x)).join("/") }),
+        from: (c: { scheme: string; path: string }) => ({ ...c, toString: () => `${c.scheme}:${c.path}` }),
+    },
     window: {
         createTreeView: (_id: string, o: { treeDataProvider: typeof provider }) => {
             provider = o.treeDataProvider;
@@ -58,11 +68,18 @@ const fake = {
             commands.set(name, fn);
             return { dispose() {} };
         },
-        executeCommand: (name: string, ...a: unknown[]) => commands.get(name)?.(...a),
+        executeCommand: (name: string, ...a: unknown[]) => {
+            executed.push([name, ...a]);
+            return commands.get(name)?.(...a);
+        },
     },
     workspace: {
         workspaceFolders: [{ uri: { scheme: "file", fsPath: root } }],
-        getConfiguration: () => ({ get: (_k: string, d: unknown) => d }),
+        getConfiguration: () => ({ get: (k: string, d: unknown) => (k === "lapPath" ? LAP : d) }),
+        registerTextDocumentContentProvider: (_scheme: string, p: typeof content) => {
+            content = p;
+            return { dispose() {} };
+        },
         createFileSystemWatcher: () => ({ onDidChange() {}, onDidCreate() {}, onDidDelete() {}, dispose() {} }),
         onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
     },
@@ -106,4 +123,27 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
     await new Promise((r) => setTimeout(r, 10));
     const t = b.get("T-3");
     assert.ok(t.kind === "ticket" && t.comments.length === 1);
+});
+
+test("clicking a lap edit on a ticket opens it as a diff at the edited line", { skip: !fs.existsSync(LAP) && "lap is not built" }, async () => {
+    const lap = (...args: string[]) => execFileSync(LAP, args, { cwd: root, env: { ...process.env, LAP_USER: "t" } });
+    lap("init");
+    lap("session", "start", "T-1: work", "--meta", "ticket=T-1");
+    fs.writeFileSync(path.join(root, "x.c"), "a\nb\nc\n");
+    lap("commit", "x.c", "-m", "first");
+    fs.writeFileSync(path.join(root, "x.c"), "a\nB\nc\n");
+    lap("commit", "x.c", "-m", "capital b");
+    lap("session", "end");
+
+    onMessage!({ type: "showEdit", commit: "L2" });
+    await new Promise((r) => setTimeout(r, 300));
+    const diff = executed.find((c) => c[0] === "vscode.diff");
+    assert.ok(diff, "vscode.diff was opened");
+    const [, left, right, title, opts] = diff as [string, { path: string }, { path: string }, string, { selection: { startLine: number } }];
+    assert.equal(left.path, "/L2/before/x.c");
+    assert.equal(right.path, "/L2/after/x.c");
+    assert.match(title, /^L2 x\.c — capital b$/);
+    assert.equal(opts.selection.startLine, 1, "scrolled to line 2 (0-based 1)");
+    assert.equal(content!.provideTextDocumentContent(left as never), "a\nb\nc\n");
+    assert.equal(content!.provideTextDocumentContent(right as never), "a\nB\nc\n");
 });

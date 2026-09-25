@@ -239,7 +239,16 @@ body {
 }
 
 .cb-commits li {
-    padding: 2px 0;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.cb-commit {
+    cursor: pointer;
+}
+
+.cb-commit:hover {
+    background: var(--vscode-list-hoverBackground);
 }
 
 .cb-error {

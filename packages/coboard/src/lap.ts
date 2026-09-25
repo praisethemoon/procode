@@ -83,6 +83,53 @@ export async function sessionCommits(root: string, session: string): Promise<Lap
     }
 }
 
+/* One edit as the file before and after it: what a diff view needs. */
+export interface LapDiff {
+    readonly id: string;
+    readonly file: string;
+    readonly op: string;
+    readonly msg: string;
+    readonly before: string;
+    readonly after: string;
+    /* 1-based line in `after` where the edit starts, to scroll to. */
+    readonly line: number;
+}
+
+/* lap gives the file after a commit and the lines the commit replaced; the
+ * file before it is the one with those lines put back. */
+export async function commitDiff(root: string, commit: string): Promise<LapDiff> {
+    const p = await run(root, ["show", commit, "--full-file"]);
+    const op = String(p["op"]);
+    const oldText = (p["old_text"] as string[]) ?? [];
+    const newText = (p["new_text"] as string[]) ?? [];
+    const joined = (lines: string[], nl: boolean) => (lines.length ? lines.join("\n") + (nl ? "\n" : "") : "");
+    let before: string;
+    let after: string;
+    if (op === "create") {
+        before = "";
+        after = String(p["file_content"] ?? joined(newText, true));
+    } else if (op === "delete" || p["file_deleted"] === true) {
+        before = joined(oldText, true);
+        after = "";
+    } else {
+        after = String(p["file_content"] ?? "");
+        const nl = after.endsWith("\n");
+        const lines = (nl ? after.slice(0, -1) : after).split("\n");
+        const start = Math.max(0, Number(p["new_start"] ?? 1) - 1);
+        lines.splice(start, Number(p["new_lines"] ?? newText.length), ...oldText);
+        before = joined(lines, nl);
+    }
+    return {
+        id: String(p["id"]),
+        file: String(p["file"]),
+        op,
+        msg: String(p["msg"] ?? ""),
+        before,
+        after,
+        line: Math.max(1, Number(p["new_start"] ?? 1)),
+    };
+}
+
 /* Starts a lap session for a ticket. Fails when lap does, e.g. because
  * another session is already active. */
 export async function startSession(root: string, ticket: string, purpose: string): Promise<string> {

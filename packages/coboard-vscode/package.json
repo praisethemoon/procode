@@ -58,6 +58,7 @@
       { "command": "coboard.goTo", "title": "Go to Item…", "category": "Board", "icon": "$(search)" },
       { "command": "coboard.delete", "title": "Delete", "category": "Board" },
       { "command": "coboard.startSession", "title": "Start lap Session for Ticket", "category": "Board" },
+      { "command": "coboard.showEdit", "title": "Show lap Edit", "category": "Board" },
       { "command": "coboard.refresh", "title": "Refresh", "category": "Board", "icon": "$(refresh)" }
     ],
     "menus": {
@@ -79,7 +80,8 @@
         { "command": "coboard.newMilestone", "when": "false" },
         { "command": "coboard.newTicket", "when": "false" },
         { "command": "coboard.delete", "when": "false" },
-        { "command": "coboard.startSession", "when": "false" }
+        { "command": "coboard.startSession", "when": "false" },
+        { "command": "coboard.showEdit", "when": "false" }
       ]
     },
     "configuration": {

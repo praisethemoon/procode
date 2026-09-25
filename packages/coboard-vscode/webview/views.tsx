@@ -217,8 +217,14 @@ function SessionsSection(props: { ticket: string; sessions: Sessions | null; com
                                             <li className="cb-muted">No commits.</li>
                                         ) : (
                                             commits.map((c) => (
-                                                <li key={c.id}>
-                                                    <code>{c.id}</code> <span className="cb-muted">{c.op}</span> <code>{c.file}</code> — {c.msg.split("\n")[0]}
+                                                <li
+                                                    key={c.id}
+                                                    className="cb-commit"
+                                                    title={`Show the diff of ${c.id}`}
+                                                    onClick={() => send({ type: "showEdit", commit: c.id })}
+                                                >
+                                                    <Icon name="diff" /> <code>{c.id}</code> <span className="cb-muted">{c.op}</span>{" "}
+                                                    <code>{c.file}</code> — {c.msg.split("\n")[0]}
                                                 </li>
                                             ))
                                         )}

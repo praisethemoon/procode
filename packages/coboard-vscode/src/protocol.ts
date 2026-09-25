@@ -40,4 +40,5 @@ export type ToHost =
     | { readonly type: "comment"; readonly ticket: string; readonly body: string }
     | { readonly type: "delete"; readonly id: string }
     | { readonly type: "startSession"; readonly ticket: string }
-    | { readonly type: "commits"; readonly session: string };
+    | { readonly type: "commits"; readonly session: string }
+    | { readonly type: "showEdit"; readonly commit: string };

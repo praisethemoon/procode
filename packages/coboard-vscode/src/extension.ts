@@ -16,6 +16,7 @@ import {
     BoardError,
     Item,
     Summary,
+    commitDiff,
     findBoard,
     search,
     sessionCommits,
@@ -246,6 +247,9 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Tree, id: string, p
                 await vscode.commands.executeCommand("coboard.startSession", m.ticket);
                 await pushSessions(m.ticket, panel);
                 return;
+            case "showEdit":
+                await showEdit(m.commit);
+                return;
             case "commits": {
                 const b = requireBoard();
                 syncLapPath();
@@ -260,6 +264,29 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Tree, id: string, p
         fail(e);
         push(id, panel);
     }
+}
+
+/* ------------------------------------------------------------ lap edits */
+
+/* One lap commit shown as VS Code's own diff: the file just before the edit
+ * against the file just after it, scrolled to where the edit starts. The two
+ * sides are read-only documents served from memory under `coboard-lap:`; the
+ * path keeps the file's name so the diff gets its syntax highlighting. */
+const EDIT_SCHEME = "coboard-lap";
+const editText = new Map<string, string>();
+
+async function showEdit(commit: string): Promise<void> {
+    const b = requireBoard();
+    syncLapPath();
+    const d = await commitDiff(b.root, commit);
+    const side = (which: string) => vscode.Uri.from({ scheme: EDIT_SCHEME, path: `/${d.id}/${which}/${d.file}` });
+    const left = side("before");
+    const right = side("after");
+    editText.set(left.toString(), d.before);
+    editText.set(right.toString(), d.after);
+    const line = new vscode.Range(d.line - 1, 0, d.line - 1, 0);
+    const title = `${d.id} ${d.file.split("/").pop()} — ${d.msg.split("\n")[0]}`;
+    await vscode.commands.executeCommand("vscode.diff", left, right, title, { selection: line, preview: true });
 }
 
 /* -------------------------------------------------------------- commands */
@@ -283,7 +310,13 @@ export function activate(ctx: vscode.ExtensionContext): void {
     const reg = (name: string, fn: (...args: unknown[]) => unknown) =>
         ctx.subscriptions.push(vscode.commands.registerCommand(name, (...args: unknown[]) => guarded(() => fn(...args))));
 
+    ctx.subscriptions.push(
+        vscode.workspace.registerTextDocumentContentProvider(EDIT_SCHEME, {
+            provideTextDocumentContent: (uri) => editText.get(uri.toString()) ?? "",
+        }),
+    );
     reg("coboard.refresh", () => refreshAll(tree));
+    reg("coboard.showEdit", (arg) => (typeof arg === "string" ? showEdit(arg) : undefined));
     reg("coboard.open", (arg) => {
         const id = idOf(arg);
         if (id) open(ctx, tree, id);
