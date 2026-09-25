@@ -28,6 +28,7 @@ import { KbChunk, KbDocument, isStale } from "kb-js/pure";
 import { documentFacts, formatDate, metaEntries } from "../src/view/facts";
 import { headingId } from "../src/view/headings";
 import { mimeLabel } from "../src/view/mime";
+import { RefreshOutcome, outcomeMessage } from "../src/refresh";
 import { Body } from "./Body";
 import { Codicon, Resolved, StaleBadge, useQuery } from "./parts";
 import { call, link, notify, onHostEvent, open, setTitle, tag } from "./rpc";
@@ -175,9 +176,15 @@ export function DocumentView(props: { reference: string }): JSX.Element {
         };
     }, [state, props.reference]);
 
+    /* §3.1's refresh: this document, from its own source. The outcome is
+     * said out loud, because "unchanged" and "re-indexed" look identical on
+     * the page and "cannot" would otherwise look like nothing at all. */
     const onRefresh = (): void => {
-        call("refresh", { document: props.reference })
-            .then(() => refresh())
+        call<RefreshOutcome>("refreshDocument", { id: props.reference })
+            .then((outcome) => {
+                notify(outcome.outcome === "cannot" ? "warning" : "info", outcomeMessage(props.reference, outcome));
+                refresh();
+            })
             .catch((e: unknown) => {
                 notify("warning", e instanceof Error ? e.message : String(e));
             });

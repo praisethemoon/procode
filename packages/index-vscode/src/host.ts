@@ -25,6 +25,7 @@ import * as vscode from "vscode";
 
 import { Kb, KbCrash, KbError, isKbCrash, isKbError } from "kb-js";
 
+import { refreshDocument } from "./commands";
 import { KNOWLEDGE_STYLESHEETS, knowledgePolicy } from "./policy";
 import { Operation, Request, Response, ViewTag, isRequest } from "./protocol";
 import { Settings } from "./session";
@@ -155,15 +156,15 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
         case "collections":
             return kb.collections();
         case "refresh":
-            /* §5's route takes a scope and a threshold and nothing else. A
-             * `document` was passed here and `kb refresh` refuses it with
-             * `usage: unknown option` — §3.1's per-document action is §2's
-             * `POST /sources/{id}/refresh`, which is a different route and not
-             * a filter on this one. */
+            /* §5's route takes a scope and a threshold and nothing else: a
+             * report over the store. One document's refresh is its own
+             * operation, below, because it reads that document's source. */
             return kb.refresh({
                 collection: text("collection"),
                 olderThan: text("olderThan"),
             });
+        case "refreshDocument":
+            return refreshDocument(kb, text("id") ?? "");
         case "renameCollection":
             return kb.renameCollection(text("from") ?? "", text("to") ?? "");
         default:
@@ -236,7 +237,7 @@ async function answer(
         /* A write is the only thing that can have changed the store under the
          * other views, and it is the only thing that announces. A read that
          * announced would put every view into a loop of re-asking. */
-        if (op === "refresh" || op === "renameCollection" || op === "deleteCollection") {
+        if (op === "refresh" || op === "refreshDocument" || op === "renameCollection" || op === "deleteCollection") {
             ctx.announce();
         }
     } catch (e) {

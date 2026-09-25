@@ -26,6 +26,8 @@ import * as vscode from "vscode";
 
 import { Kb, KbError, isKbError } from "kb-js";
 
+import { RefreshOutcome, refreshPlan } from "./refresh";
+
 /* VSCode's language identifiers, mapped onto the mimes `kb add` files under.
  *
  * WHY THIS EXISTS AT ALL. `kb add` guesses a mime from the locator's
@@ -315,6 +317,54 @@ export async function addUrl(kb: Kb, announce: () => void): Promise<void> {
     } catch (e) {
         report(e, "file that page");
     }
+}
+
+/* index-ui §3.1's refresh action for one document: read its source again and
+ * re-file the text through kb under everything the store already knows about
+ * it, so kb's hash comparison decides whether anything changed. A URL is the
+ * one network request Knowledge makes, so it is asked for first, exactly as
+ * adding a URL is. */
+export async function refreshDocument(kb: Kb, id: string): Promise<RefreshOutcome> {
+    const d = (await kb.get(id)).document;
+    const plan = refreshPlan(d.locator);
+    if (plan.kind === "none") {
+        return { outcome: "cannot", why: plan.why };
+    }
+    let text: string;
+    let mime = d.mime;
+    if (plan.kind === "url") {
+        const go = await vscode.window.showWarningMessage(
+            `Fetch ${plan.host} again?`,
+            { modal: true, detail: `Refreshing ${d.id} downloads its page again and files the text if it changed.\n\n${plan.url}` },
+            "Fetch",
+        );
+        if (go !== "Fetch") {
+            return { outcome: "declined" };
+        }
+        const fetched = await fetchPage(plan.url);
+        text = fetched.text;
+        mime = fetched.mime;
+    } else {
+        let bytes: Uint8Array;
+        try {
+            bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(plan.path));
+        } catch {
+            return { outcome: "cannot", why: `its file is no longer at ${plan.path}.` };
+        }
+        text = Buffer.from(bytes).toString("utf8");
+    }
+    const added = await kb.add(text, {
+        title: d.title,
+        collection: d.collection,
+        url: d.locator,
+        mime,
+        meta: d.meta,
+    });
+    return {
+        outcome: added.created || added.reindexed ? "updated" : "unchanged",
+        document: added.document,
+        fetchedAt: added.fetchedAt,
+    };
 }
 
 export interface FetchedPage {

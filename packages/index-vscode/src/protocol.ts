@@ -34,6 +34,7 @@ export const OPERATIONS = [
     "get",
     "collections",
     "refresh",
+    "refreshDocument",
     "renameCollection",
     "deleteCollection",
 ] as const;

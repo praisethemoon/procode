@@ -16,5 +16,5 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true
   },
-  "include": ["webview", "src/view", "src/uri.ts", "src/protocol.ts"]
+  "include": ["webview", "src/view", "src/uri.ts", "src/protocol.ts", "src/refresh.ts"]
 }
