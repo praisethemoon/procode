@@ -64,11 +64,166 @@ static int compare(const void *x, const void *y) {
     return strcmp(a->name, b->name);
 }
 
+/* The write half. `to` is NULL for a forget. */
+static int32_t collection_write(Arena *a, int32_t argc, char **argv, bool json,
+                                const char *from, const char *to) {
+    if (!from || !from[0]) {
+        err_out(json, "usage", "kb collections %s expects a collection name",
+                to ? "rename" : "forget");
+        return KB_EXIT_ERR;
+    }
+    if (to && (!to[0] || strchr(to, '/') || strchr(to, '\\'))) {
+        /* §1.3: collections are a flat named scope. A separator suggests
+         * nesting, which does not exist. */
+        err_out(json, "usage",
+                "a collection name must be non-empty and must not nest");
+        return KB_EXIT_ERR;
+    }
+    StoreSel sel;
+    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
+                         &sel)) {
+        err_out(json, "usage", "--store expects project or global");
+        return KB_EXIT_ERR;
+    }
+    if (sel == SEL_ALL) {
+        err_out(json, "usage", "--store all cannot be a write target");
+        return KB_EXIT_ERR;
+    }
+    char err[512];
+    TierSet tiers;
+    if (!tiers_resolve(sel, true, &tiers, err, sizeof err)) {
+        err_out(json, "not_found", "%s", err);
+        return KB_EXIT_ERR;
+    }
+    Store s;
+    const char *code;
+    if (!store_open(a, &s, tiers.dir[0], tiers.tier[0], true, err, sizeof err,
+                    &code)) {
+        err_out(json, code, "%s", err);
+        return strcmp(code, "internal") == 0 ? KB_EXIT_FATAL : KB_EXIT_ERR;
+    }
+
+    /* Everything below is decided from the log this locked open just read. */
+    uint32_t nsources = 0, ndocs = 0;
+    bool target_exists = false;
+    for (size_t i = 0; i < s.sources.n; i++) {
+        if (strcmp(s.sources.v[i].collection, from) == 0)
+            nsources++;
+        else if (to && strcmp(s.sources.v[i].collection, to) == 0)
+            target_exists = true;
+    }
+    for (size_t i = 0; i < s.documents.n; i++) {
+        const Source *src = src_by_id(&s.sources, s.documents.v[i].source);
+        if (src && strcmp(src->collection, from) == 0)
+            ndocs++;
+    }
+    if (nsources == 0) {
+        store_close(&s);
+        err_out(json, "not_found", "no collection \"%s\" in the %s store",
+                from, tier_name(s.tier));
+        return KB_EXIT_ERR;
+    }
+    if (!to && ndocs > 0) {
+        /* §11's collection_in_use, with the count §11 asks for. Forgetting a
+         * topic that still holds documents would orphan every one of them,
+         * and §7 gives no route that would put them anywhere else. */
+        store_close(&s);
+        err_out(json, "collection_in_use",
+                "\"%s\" still holds %lu document%s; forget those first", from,
+                (unsigned long)ndocs, ndocs == 1 ? "" : "s");
+        return KB_EXIT_ERR;
+    }
+    if (to && strcmp(from, to) == 0) {
+        store_close(&s);
+        err_out(json, "usage", "\"%s\" is already its own name", from);
+        return KB_EXIT_ERR;
+    }
+
+    char now[32];
+    plat_timestamp(now);
+    for (size_t i = 0; i < s.sources.n; i++) {
+        const Source *src = &s.sources.v[i];
+        if (strcmp(src->collection, from) != 0)
+            continue;
+        size_t len;
+        char *line;
+        if (to) {
+            Source rev = *src;
+            rev.collection = to;
+            line = doc_encode_source(a, &rev, &len);
+        } else {
+            line = doc_encode_source_forget(a, src->id, &len);
+        }
+        if (!store_append(&s, STORE_SOURCES, line, len, err, sizeof err)) {
+            store_close(&s);
+            err_out(json, "internal", "%s", err);
+            return KB_EXIT_FATAL;
+        }
+    }
+
+    if (json) {
+        StrBuf sb;
+        sb_init(&sb, a);
+        sb_printf(&sb, "{\"ok\":true,\"action\":\"%s\",\"store\":\"%s\",",
+                  to ? "rename" : "forget", tier_name(s.tier));
+        sb_puts(&sb, "\"collection\":");
+        json_escape_c(&sb, from);
+        if (to) {
+            sb_puts(&sb, ",\"renamedTo\":");
+            json_escape_c(&sb, to);
+            /* Renaming onto a name that already exists MERGES the two, which
+             * is a reasonable thing to want and a terrible thing to discover
+             * later. It is allowed and it is reported; it is never silent. */
+            sb_printf(&sb, ",\"merged\":%s", target_exists ? "true" : "false");
+        }
+        sb_printf(&sb, ",\"sources\":%lu,\"documents\":%lu,\"at\":\"%s\"}",
+                  (unsigned long)nsources, (unsigned long)ndocs, now);
+        puts(sb_finish(&sb));
+    } else if (to) {
+        printf("renamed %s to %s (%lu source%s, %lu document%s)%s\n", from, to,
+               (unsigned long)nsources, nsources == 1 ? "" : "s",
+               (unsigned long)ndocs, ndocs == 1 ? "" : "s",
+               target_exists ? "  (merged into an existing collection)" : "");
+    } else {
+        printf("forgot %s (%lu empty source%s)\n", from,
+               (unsigned long)nsources, nsources == 1 ? "" : "s");
+    }
+    store_close(&s);
+    return KB_EXIT_OK;
+}
+
 int32_t cmd_collections(Arena *a, int32_t argc, char **argv) {
     bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
     const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
+        return KB_EXIT_ERR;
+    }
+    /* A verb in the first positional. A collection genuinely named "rename"
+     * is still listable — `kb collections` lists everything — and is the only
+     * thing this costs. */
+    const char *verb = positional_arg(argc, argv, VALUE_FLAGS, 0);
+    if (verb && strcmp(verb, "rename") == 0) {
+        const char *from = positional_arg(argc, argv, VALUE_FLAGS, 1);
+        const char *to = positional_arg(argc, argv, VALUE_FLAGS, 2);
+        /* Checked here rather than inside: a missing new name would reach
+         * collection_write as a NULL `to`, which is how a forget is spelled,
+         * and "rename" must never be able to become a delete. */
+        if (!to) {
+            err_out(json, "usage",
+                    "kb collections rename expects <old> <new>");
+            return KB_EXIT_ERR;
+        }
+        return collection_write(a, argc, argv, json, from, to);
+    }
+    if (verb && strcmp(verb, "forget") == 0)
+        return collection_write(a, argc, argv, json,
+                                positional_arg(argc, argv, VALUE_FLAGS, 1),
+                                NULL);
+    if (verb) {
+        err_out(json, "usage",
+                "kb collections takes no argument, or \"rename <old> <new>\", "
+                "or \"forget <name>\"");
         return KB_EXIT_ERR;
     }
     StoreSel sel;

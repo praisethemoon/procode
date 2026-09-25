@@ -2,9 +2,14 @@
 
 /* §6 — a small, optional layer over documents. Not a graph database.
  *
- *   kb link   <from> <type> <to>     POST /links
- *   kb unlink <from> <type> <to>     DELETE /links/{from}/{type}/{to}
- *   kb links  <D-n>                  GET /documents/{id}/links
+ *   kb links <D-n>                       GET /documents/{id}/links
+ *   kb links add    <from> <type> <to>   POST /links
+ *   kb links delete <from> <type> <to>   DELETE /links/{from}/{type}/{to}
+ *
+ * The verbs are subcommands of the noun, exactly as `kb collections rename`
+ * and `kb collections delete` are, and each is named after its route's
+ * method. A top-level `kb link` beside `kb links` would be two commands one
+ * letter apart that do opposite things.
  *
  * DOCUMENTS ONLY. Entity nodes — an API symbol, a concept, a platform as
  * first-class things — are deliberately absent (§6, §12.1) until there is a
@@ -15,19 +20,20 @@
  * names a different document in each tier, and §1.2's Link carries no store
  * field. A cross-tier edge is therefore not representable, and rather than
  * invent a spelling for one, a link is written into the store both of its
- * ends live in. `kb links` resolves an id the way `kb get` does: project
- * first, first match wins.
+ * ends live in. A read resolves an id the way `kb get` does: project first,
+ * first match wins.
  *
  * A LINK TO A DOCUMENT THAT DOES NOT EXIST IS REFUSED AT WRITE TIME, and a
  * link whose target is later forgotten still reads — as a row with
  * `resolved: false`. Those two rules are not in tension: the first keeps a
  * typo from becoming a dangling edge, and the second keeps a dangling edge
- * from becoming an unreadable document. `unlink` deliberately does NOT check
+ * from becoming an unreadable document. `delete` deliberately does NOT check
  * that either end still exists, because removing an edge whose far end is
  * gone is exactly the repair a reader would want.
  */
 
-static const char *const VALUE_FLAGS[] = {"--store", NULL};
+static const char *const VALUE_FLAGS[] = {"--store", "--older-than",
+                                          "--olderThan", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 /* "supersedes, cites, analogue_of, implements or see_also" — built from the
@@ -43,26 +49,24 @@ static const char *type_list(Arena *a) {
     return sb_finish(&sb);
 }
 
-int32_t cmd_link(Arena *a, int32_t argc, char **argv, bool remove) {
-    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
-    const char *verb = remove ? "unlink" : "link";
-    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
-    if (bad) {
-        err_out(json, "usage", "unknown option \"%s\"", bad);
-        return KB_EXIT_ERR;
-    }
-    const char *from = positional_arg(argc, argv, VALUE_FLAGS, 0);
-    const char *rel_in = positional_arg(argc, argv, VALUE_FLAGS, 1);
-    const char *to = positional_arg(argc, argv, VALUE_FLAGS, 2);
+/* ---- POST /links, DELETE /links/{from}/{type}/{to} --------------------- */
+
+static int32_t links_write(Arena *a, int32_t argc, char **argv, bool json,
+                           bool remove) {
+    const char *verb = remove ? "delete" : "add";
+    const char *from = positional_arg(argc, argv, VALUE_FLAGS, 1);
+    const char *rel_in = positional_arg(argc, argv, VALUE_FLAGS, 2);
+    const char *to = positional_arg(argc, argv, VALUE_FLAGS, 3);
     if (!from || !rel_in || !to) {
         err_out(json, "usage",
-                "kb %s expects <from> <type> <to>, e.g. kb %s D-1 supersedes "
-                "D-2",
+                "kb links %s expects <from> <type> <to>, e.g. kb links %s "
+                "D-1 supersedes D-2",
                 verb, verb);
         return KB_EXIT_ERR;
     }
-    if (positional_arg(argc, argv, VALUE_FLAGS, 3)) {
-        err_out(json, "usage", "kb %s takes exactly three arguments", verb);
+    if (positional_arg(argc, argv, VALUE_FLAGS, 4)) {
+        err_out(json, "usage", "kb links %s takes exactly three arguments",
+                verb);
         return KB_EXIT_ERR;
     }
     if (kb_id_num(from, 'D') == 0 || kb_id_num(to, 'D') == 0) {
@@ -79,9 +83,8 @@ int32_t cmd_link(Arena *a, int32_t argc, char **argv, bool remove) {
     }
     const char *rel = link_type_canon(rel_in);
     if (!rel) {
-        err_out(json, "usage",
-                "\"%s\" is not a link type; the five are %s", rel_in,
-                type_list(a));
+        err_out(json, "usage", "\"%s\" is not a link type; the five are %s",
+                rel_in, type_list(a));
         return KB_EXIT_ERR;
     }
     StoreSel sel;
@@ -110,8 +113,8 @@ int32_t cmd_link(Arena *a, int32_t argc, char **argv, bool remove) {
     }
 
     /* Read-then-write, inside the one locked section: whether the documents
-     * exist and whether the edge is already there are both decided from a
-     * log nobody else can be appending to. */
+     * exist and whether the edge is already there are both decided from a log
+     * nobody else can be appending to. */
     bool present = link_find(&s.documents, from, rel, to) != NULL;
     if (!remove) {
         const char *missing = NULL;
@@ -179,32 +182,17 @@ int32_t cmd_link(Arena *a, int32_t argc, char **argv, bool remove) {
 
 /* ---- GET /documents/{id}/links ----------------------------------------- */
 
-static const char *const READ_VALUE_FLAGS[] = {"--store", "--older-than",
-                                               "--olderThan", NULL};
-
-int32_t cmd_links(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, READ_VALUE_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, READ_VALUE_FLAGS, BOOL_FLAGS);
-    if (bad) {
-        err_out(json, "usage", "unknown option \"%s\"", bad);
-        return KB_EXIT_ERR;
-    }
-    const char *id = positional_arg(argc, argv, READ_VALUE_FLAGS, 0);
-    if (!id || kb_id_num(id, 'D') == 0) {
-        err_out(json, "usage",
-                "kb links expects a document id, e.g. kb links D-241");
-        return KB_EXIT_ERR;
-    }
+static int32_t links_read(Arena *a, int32_t argc, char **argv, bool json,
+                          const char *id) {
     StoreSel sel;
-    if (!store_sel_parse(flag_value(argc, argv, READ_VALUE_FLAGS, "--store"),
+    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
                          &sel)) {
         err_out(json, "usage", "--store expects project, global or all");
         return KB_EXIT_ERR;
     }
-
     char err[512];
     Staleness st;
-    if (!staleness_init(&st, older_than_arg(argc, argv, READ_VALUE_FLAGS), err,
+    if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
                         sizeof err)) {
         err_out(json, "usage", "%s", err);
         return KB_EXIT_ERR;
@@ -268,4 +256,31 @@ int32_t cmd_links(Arena *a, int32_t argc, char **argv) {
     }
     err_out(json, "not_found", "no document %s", id);
     return KB_EXIT_ERR;
+}
+
+int32_t cmd_links(Arena *a, int32_t argc, char **argv) {
+    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
+    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
+    if (bad) {
+        err_out(json, "usage", "unknown option \"%s\"", bad);
+        return KB_EXIT_ERR;
+    }
+    /* The first positional is either a verb or the document being read. The
+     * two can never be confused: a document id is `D-<n>` and no verb is. */
+    const char *first = positional_arg(argc, argv, VALUE_FLAGS, 0);
+    if (first && strcmp(first, "add") == 0)
+        return links_write(a, argc, argv, json, false);
+    if (first && strcmp(first, "delete") == 0)
+        return links_write(a, argc, argv, json, true);
+    if (!first || kb_id_num(first, 'D') == 0) {
+        err_out(json, "usage",
+                "kb links expects a document id, or \"add\"/\"delete\" with "
+                "<from> <type> <to>");
+        return KB_EXIT_ERR;
+    }
+    if (positional_arg(argc, argv, VALUE_FLAGS, 1)) {
+        err_out(json, "usage", "kb links reads one document at a time");
+        return KB_EXIT_ERR;
+    }
+    return links_read(a, argc, argv, json, first);
 }

@@ -612,7 +612,7 @@ first=$(printf '%s' "$out" | sed -n 's/.*"hits":\[{"chunk":"[^"]*","document":"\
 t "the hit shape is §4's, as far as this slice can fill it"
 out=$(kbi search io_uring_prep_recv --store project --json)
 for k in chunk document source title heading snippet collection store \
-         alsoGlobal matched scores fetchedAt; do
+         alsoGlobal matched scores fetchedAt stale; do
     has "hit shape" "$out" "\"$k\":"
 done
 has "hit shape" "$out" '"matched":\["keyword"\]'
@@ -620,10 +620,12 @@ has "hit shape" "$out" '"mode":"keyword"'
 
 t "an absent score is absent, not zero"
 # §4's vector and fused belong to a path that did not run. A caller must be
-# able to tell that from a path that ran and found nothing.
+# able to tell that from a path that ran and found nothing. `stale` is a
+# different case and is always present: §5 puts it on every hit, and a
+# freshly filed document answers "false" rather than saying nothing.
 hasnt "scores" "$out" '"vector"'
 hasnt "scores" "$out" '"fused"'
-hasnt "scores" "$out" '"stale"'
+has "scores" "$out" '"stale":false'
 
 t "search returns snippets, never whole chunks"
 # The snippet is capped; the full passage is what kb chunk is for.

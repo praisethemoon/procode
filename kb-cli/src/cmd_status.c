@@ -12,7 +12,8 @@
  * exactly as a store built with another model would (§8).
  */
 
-static const char *const VALUE_FLAGS[] = {"--store", NULL};
+static const char *const VALUE_FLAGS[] = {"--store", "--older-than",
+                                          "--olderThan", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 /* dir is NULL when the tier has no path at all — no store above the current
@@ -20,7 +21,7 @@ static const char *const BOOL_FLAGS[] = {"--json", NULL};
  * from a known path with nothing at it yet, which still tells the caller
  * where `kb init` would put one. */
 static void tier_json(StrBuf *sb, Arena *a, const char *dir, Tier tier,
-                      bool present) {
+                      bool present, const Staleness *st) {
     sb_printf(sb, "{\"store\":\"%s\",\"path\":", tier_name(tier));
     if (dir)
         json_escape_c(sb, dir);
@@ -41,10 +42,12 @@ static void tier_json(StrBuf *sb, Arena *a, const char *dir, Tier tier,
     }
     uint64_t index_bytes = 0;
     uint64_t total = store_disk_bytes(a, &s, &index_bytes);
-    uint64_t chunks = 0, content = 0;
+    uint64_t chunks = 0, content = 0, stale = 0;
     for (size_t i = 0; i < s.documents.n; i++) {
         chunks += s.documents.v[i].chunk_count;
         content += s.documents.v[i].bytes;
+        if (doc_stale(st, &s.documents.v[i]))
+            stale++;
     }
     ChunkParams cp = store_chunk_params(a, &s);
     bool matches = cp.chunk_tokens == KB_CHUNK_TOKENS &&
@@ -62,6 +65,15 @@ static void tier_json(StrBuf *sb, Arena *a, const char *dir, Tier tier,
               "\"chunk\":\"C-%lld\"}",
               (long long)s.next_source, (long long)s.next_document,
               (long long)s.next_chunk);
+    /* §5 and §6, the two things this slice adds that a reader would otherwise
+     * have to go and count. The threshold is stated beside the count, because
+     * a number of stale documents means nothing without the question it
+     * answers. */
+    sb_printf(sb,
+              ",\"links\":%zu,\"stale\":{\"documents\":%llu,"
+              "\"olderThan\":\"%s\",\"before\":\"%s\"}",
+              s.documents.nlinks, (unsigned long long)stale, st->spec,
+              st->cutoff_iso);
     sb_printf(sb,
               ",\"chunking\":{\"recorded\":%s,\"chunker\":\"%s\","
               "\"chunkTokens\":%lu,\"chunkOverlap\":%lu,\"current\":%s}",
@@ -98,7 +110,7 @@ static void tier_json(StrBuf *sb, Arena *a, const char *dir, Tier tier,
 }
 
 static void tier_human(Arena *a, const char *dir, Tier tier, bool present,
-                       bool is_default_write) {
+                       bool is_default_write, const Staleness *st) {
     printf("%-8s %s%s\n", tier_name(tier),
            dir ? dir : (tier == TIER_PROJECT
                             ? "(none above the current directory)"
@@ -117,12 +129,17 @@ static void tier_human(Arena *a, const char *dir, Tier tier, bool present,
     }
     uint64_t index_bytes = 0;
     uint64_t total = store_disk_bytes(a, &s, &index_bytes);
-    uint64_t chunks = 0;
-    for (size_t i = 0; i < s.documents.n; i++)
+    uint64_t chunks = 0, stale = 0;
+    for (size_t i = 0; i < s.documents.n; i++) {
         chunks += s.documents.v[i].chunk_count;
+        if (doc_stale(st, &s.documents.v[i]))
+            stale++;
+    }
     ChunkParams cp = store_chunk_params(a, &s);
     printf("         %zu sources, %zu documents, %llu chunks\n", s.sources.n,
            s.documents.n, (unsigned long long)chunks);
+    printf("         %zu links, %llu documents older than %s\n",
+           s.documents.nlinks, (unsigned long long)stale, st->spec);
     printf("         %llu bytes on disk (%llu in index/)\n",
            (unsigned long long)total, (unsigned long long)index_bytes);
     printf("         next ids S-%lld D-%lld C-%lld\n",
@@ -159,6 +176,14 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         return KB_EXIT_ERR;
     }
 
+    char serr[512];
+    Staleness st;
+    if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), serr,
+                        sizeof serr)) {
+        err_out(json, "usage", "%s", serr);
+        return KB_EXIT_ERR;
+    }
+
     char project[KB_PATH_MAX], global[KB_PATH_MAX];
     /* The project store is only ever a path once it exists — it is found by
      * walking up, not by construction. The global one has a path whether or
@@ -174,16 +199,17 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         StrBuf sb;
         sb_init(&sb, a);
         sb_puts(&sb, "{\"ok\":true,\"tiers\":[");
-        tier_json(&sb, a, project_dir, TIER_PROJECT, has_project);
+        tier_json(&sb, a, project_dir, TIER_PROJECT, has_project, &st);
         sb_putc(&sb, ',');
-        tier_json(&sb, a, global_dir, TIER_GLOBAL, has_global);
-        sb_printf(&sb, "],\"defaultWrite\":\"%s\"}",
-                  has_project ? "project" : (has_global ? "global" : "none"));
+        tier_json(&sb, a, global_dir, TIER_GLOBAL, has_global, &st);
+        sb_printf(&sb, "],\"defaultWrite\":\"%s\",\"olderThan\":\"%s\"}",
+                  has_project ? "project" : (has_global ? "global" : "none"),
+                  st.spec);
         puts(sb_finish(&sb));
     } else {
-        tier_human(a, project_dir, TIER_PROJECT, has_project, has_project);
+        tier_human(a, project_dir, TIER_PROJECT, has_project, has_project, &st);
         tier_human(a, global_dir, TIER_GLOBAL, has_global,
-                   !has_project && has_global);
+                   !has_project && has_global, &st);
     }
     return KB_EXIT_OK;
 }

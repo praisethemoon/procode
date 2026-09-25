@@ -479,15 +479,19 @@ void json_links(StrBuf *sb, const Store *s, const char *id, bool outgoing,
     bool first = true;
     for (size_t i = 0; i < s->documents.nlinks; i++) {
         const Link *l = &s->documents.links[i];
-        const char *near = outgoing ? l->from : l->to;
+        const char *this_end = outgoing ? l->from : l->to;
         const char *far = outgoing ? l->to : l->from;
-        if (strcmp(near, id) != 0)
+        if (strcmp(this_end, id) != 0)
             continue;
         if (!first)
             sb_putc(sb, ',');
         first = false;
-        sb_printf(sb, "{\"type\":\"%s\",\"%s\":\"%s\"", l->rel,
-                  outgoing ? "to" : "from", far);
+        /* BOTH ends on every row, not just the far one. A caller holding a
+         * row would otherwise have to remember which list it came out of to
+         * know which way the edge points, and a row that cannot be read on
+         * its own is a row that gets read wrong. */
+        sb_printf(sb, "{\"type\":\"%s\",\"from\":\"%s\",\"to\":\"%s\"", l->rel,
+                  l->from, l->to);
         const Document *d = doc_by_id(&s->documents, far);
         /* §6 says "resolved to rows". A row whose far end is gone is still a
          * row: the edge exists in the log and hiding it would turn a

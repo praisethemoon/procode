@@ -37,6 +37,9 @@ set(KB_LIB_SOURCES
     src/cmd_rebuild.c
     src/cmd_collections.c
     src/cmd_status.c
+    src/cmd_stale.c
+    src/cmd_links.c
+    src/cmd_maint.c
 )
 
 add_executable(kb ${KB_LIB_SOURCES} src/main.c)
