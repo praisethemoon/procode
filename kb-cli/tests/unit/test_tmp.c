@@ -1,5 +1,9 @@
 #include "test_tmp.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 void tmp_dir(char *out, size_t outsz) {
     static int32_t seq = 0;
     const char *base = getenv("TMPDIR");
@@ -36,6 +40,15 @@ static WalkAction collect(const char *rel, bool is_dir, void *ud) {
 }
 
 void tmp_rm(Arena *a, const char *root) {
+    /* Only ever remove a directory tmp_dir made. This walks and deletes
+     * everything under root, so a wrong root — an empty path, a caller's
+     * typo, a mutated path helper — must stop the run rather than proceed. */
+    const char *slash = root ? strrchr(root, '/') : NULL;
+    if (!slash || strncmp(slash + 1, "kb-unit-", 8) != 0) {
+        fprintf(stderr, "tmp_rm: refusing to remove %s: not made by tmp_dir\n",
+                root ? root : "(null)");
+        abort();
+    }
     Found f;
     memset(&f, 0, sizeof f);
     f.a = a;

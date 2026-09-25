@@ -75,7 +75,7 @@ test("a write reads as a sentence: from, type, to", () => {
 });
 
 test("a hostile id is one argument of the link commands too", () => {
-    const hostile = 'D-1; rm -rf ~ && echo "$(id)"';
+    const hostile = 'D-1; rm -rf ~/dummy && echo "$(id)"';
     for (const argv of [linksArgv(hostile), linkArgv(hostile, hostile, hostile)]) {
         assert.equal(argv.filter((a) => a === hostile).length >= 1, true);
         for (const element of argv) {

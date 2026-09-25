@@ -8,7 +8,7 @@
  * class of bug this file exists to catch.
  *
  * IT RECORDS WHAT IT WAS GIVEN, which is how the injection tests are stated as
- * facts rather than as intentions: a query containing `; rm -rf ~` is asserted
+ * facts rather than as intentions: a query containing `; rm -rf ~/dummy` is asserted
  * to arrive as ONE element of `process.argv`, whole, with the semicolon in it.
  * A package that had built a command string would fail that assertion by
  * arriving as several elements, or not arriving at all.

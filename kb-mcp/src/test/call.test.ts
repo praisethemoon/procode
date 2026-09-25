@@ -191,7 +191,7 @@ test("§4's ceiling of 100 hits is the schema's and is enforced", async () => {
 });
 
 test("a query full of shell metacharacters reaches the store as one argument", async () => {
-    const hostile = 'io_uring; rm -rf ~ && echo "$(id)"';
+    const hostile = 'io_uring; rm -rf ~/dummy && echo "$(id)"';
     await withKb([{ stdout: ok({ hits: [], count: 0 }) }], async (kb, fake) => {
         await callTool(kb, "kb_search", { q: hostile });
         const argv = fake.calls()[0].argv;

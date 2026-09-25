@@ -368,6 +368,9 @@ RR=$("$LAP" rr --no-diff)
 # the backup lives outside the repository: a copy inside it would show up
 # as untracked files and change what status reports
 CACHEBAK=$(mktemp -d "${TMPDIR:-/tmp}/lap-cachebak.XXXXXX")
+# an unchecked mktemp would leave CACHEBAK empty and aim the loop's
+# rm -rf "$CACHEBAK/lap" at /lap
+[ -n "$CACHEBAK" ] && [ -d "$CACHEBAK" ] || { echo "mktemp failed for the cache backup" >&2; exit 1; }
 for cache in index paths heads state.json snapshots shadow; do
     rm -rf "$CACHEBAK/lap" && cp -R .lap "$CACHEBAK/lap"
     rm -rf ".lap/$cache"

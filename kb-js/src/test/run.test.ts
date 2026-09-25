@@ -54,7 +54,7 @@ test("a hostile value arrives as one argument, with its metacharacters in it", a
      * in it, so a query a reader typed cannot become syntax. Stated against a
      * real `process.argv` rather than against the array this package built,
      * because the thing that would break it is a shell between the two. */
-    const hostile = 'io_uring; rm -rf ~ && echo "$(whoami)" > /tmp/pwned';
+    const hostile = 'io_uring; rm -rf ~/dummy && echo "$(whoami)" > /tmp/pwned';
     await withFake([{ stdout: ok({ hits: [] }) }], async (fake) => {
         await run(["search", hostile], { bin: fake.bin, env: fake.env() });
         const [call] = fake.calls();

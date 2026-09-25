@@ -204,7 +204,7 @@ test("meta crosses as one argument of JSON, which is safe whatever is in it", ()
         collection: "win32-iocp",
         url: "https://example.test/x",
         mime: "text/markdown",
-        meta: { authors: ["a b"], note: 'he said "hi"; rm -rf ~' },
+        meta: { authors: ["a b"], note: 'he said "hi"; rm -rf ~/dummy' },
         store: "global",
     });
     assert.deepEqual(argv, [
@@ -218,7 +218,7 @@ test("meta crosses as one argument of JSON, which is safe whatever is in it", ()
         "--mime",
         "text/markdown",
         "--meta",
-        '{"authors":["a b"],"note":"he said \\"hi\\"; rm -rf ~"}',
+        '{"authors":["a b"],"note":"he said \\"hi\\"; rm -rf ~/dummy"}',
         "--store",
         "global",
         "--file",
@@ -250,7 +250,7 @@ test("no builder ever produces an argument that is two arguments", () => {
      *
      * The values below are the ones a reader can actually type into §2's box
      * and §3's title. */
-    const hostile = 'a b; rm -rf ~ && echo "$(whoami)" | tee /tmp/x `id` \n\t--json';
+    const hostile = 'a b; rm -rf ~/dummy && echo "$(whoami)" | tee /tmp/x `id` \n\t--json';
     const lines: string[][] = [
         lsArgv({ collection: hostile, mime: hostile, since: hostile }),
         getArgv(hostile, { text: true }),
@@ -274,7 +274,7 @@ test("no builder ever produces an argument that is two arguments", () => {
         /* And the hostile text arrives whole wherever it was passed, never
          * split and never quoted — quoting would be this package inventing a
          * shell that is not there. */
-        const carried = argv.filter((a) => a.includes("rm -rf ~"));
+        const carried = argv.filter((a) => a.includes("rm -rf ~/dummy"));
         for (const element of carried) {
             assert.ok(
                 element === hostile || element.includes(JSON.stringify(hostile).slice(1, -1)),
