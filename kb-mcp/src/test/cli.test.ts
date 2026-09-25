@@ -55,6 +55,10 @@ function hasCommand(name: string): boolean {
 
 interface Work {
     server: Server;
+    /* The same directory and environment the server was given, so a test that
+     * builds a second client points at the same throwaway store. */
+    dir: string;
+    env: NodeJS.ProcessEnv;
     dispose(): void;
 }
 
@@ -66,6 +70,8 @@ function workspace(): Work {
     execFileSync(BIN, ["init", "--store", "project", "--json"], { cwd: project, env });
     return {
         server: new Server(new Kb({ bin: BIN, cwd: project, env })),
+        dir: project,
+        env,
         dispose: () => fs.rmSync(dir, { recursive: true, force: true }),
     };
 }
@@ -354,5 +360,85 @@ test("every tool this server offers is one the CLI could serve", async (t) => {
         if (!hasCommand(command)) {
             t.diagnostic(`kb ${command} does not exist yet; kb_${command} cannot be exercised end to end`);
         }
+    }
+});
+
+/* ------------------------------ what the tools answer, against what kb-js read
+ *
+ * THE SAME CHECK AS `kb-js`'s `cli.test.ts`, ONE LAYER UP, AND IT IS HERE
+ * BECAUSE THIS LAYER MADE THE SAME MISTAKE. `kb_search` answered `{count,
+ * hits}` off a reader that also carried `mode` and `olderThan`, so the
+ * retrieval path that actually ran and the threshold every `stale` flag was
+ * measured against reached the agent as nothing. It was invisible for exactly
+ * the reason the `refresh` defect was invisible: everything present was
+ * correct, and what was missing had no test asking for it.
+ *
+ * So a tool's payload is compared against the reader's own answer rather than
+ * against a list somebody wrote. A field that turns up in `kb-js` and not in a
+ * tool fails here; a field a tool invents fails too.
+ */
+
+test("a tool answers every field the reader it is built on answered", async (t) => {
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        const kb = new Kb({ bin: BIN, cwd: work.dir, env: work.env });
+        await call(work, "kb_add", {
+            documents: [
+                { title: "IOCP", content: IOCP, collection: "win32-iocp", mime: "text/markdown" },
+            ],
+        });
+
+        /* Each row: the tool's payload, and the reader's answer for the same
+         * question. `kb_add` and `kb_collections` are not here — the first
+         * wraps its rows in a filing report and the second joins two commands,
+         * and both are checked for their own shapes above. */
+        const cases: { what: string; tool: Record<string, unknown>; read: object }[] = [
+            {
+                what: "kb_search",
+                tool: payload(await call(work, "kb_search", { q: "CreateIoCompletionPort" })),
+                read: await kb.search("CreateIoCompletionPort"),
+            },
+            {
+                what: "kb_stale",
+                tool: payload(await call(work, "kb_stale", { olderThan: "1d" })),
+                read: await kb.stale({ olderThan: "1d" }),
+            },
+            {
+                what: "kb_links",
+                tool: payload(await call(work, "kb_links", { op: "list", document: "D-1" })),
+                read: await kb.links("D-1"),
+            },
+        ];
+        for (const c of cases) {
+            assert.deepEqual(
+                Object.keys(c.tool).sort(),
+                Object.keys(c.read).sort(),
+                `${c.what} and the reader it is built on do not agree about what the answer contains`,
+            );
+        }
+    } finally {
+        work.dispose();
+    }
+});
+
+test("kb_search tells the agent which path ran and what stale was measured against", async (t) => {
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await call(work, "kb_add", {
+            documents: [{ title: "IOCP", content: IOCP, collection: "win32-iocp" }],
+        });
+        const found = payload(await call(work, "kb_search", { q: "CreateIoCompletionPort" }));
+        assert.equal(found["mode"], "keyword");
+        assert.ok(String(found["olderThan"]).length > 0);
+    } finally {
+        work.dispose();
     }
 });

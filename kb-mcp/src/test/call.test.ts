@@ -144,6 +144,21 @@ test("a hit keeps every field §4 puts on it, including which tier it came from"
     });
 });
 
+test("a search says which retrieval path ran and what stale was measured against", async () => {
+    /* §4 makes hybrid the default and §8 makes it refuse without a model, so
+     * the mode that came back is not always the mode that was asked for; and
+     * a hit flagged stale without the threshold cannot say older than what.
+     * Both are the store's words and both cross. */
+    await withKb(
+        [{ stdout: ok({ mode: "keyword", olderThan: "90d", hits: [HIT], count: 1 }) }],
+        async (kb) => {
+            const answer = body(await callTool(kb, "kb_search", { q: "iocp" }));
+            assert.equal(answer["mode"], "keyword");
+            assert.equal(answer["olderThan"], "90d");
+        },
+    );
+});
+
 test("a filter spelled wrong is refused instead of silently doing nothing", async () => {
     /* `collections` for `collection` is not a search of one collection that
      * fails; it is a search of the whole store that succeeds. */
@@ -557,9 +572,22 @@ test("the arguments of one operation are refused on the other", async () => {
 
 /* --------------------------------------------------------------- kb_stale */
 
-test("kb_stale passes §5's threshold in §5's own spelling", async () => {
+test("kb_stale passes §5's threshold in §5's own spelling, and answers it back", async () => {
+    /* THE THRESHOLD IS PART OF THE ANSWER. "one document is stale" means
+     * nothing without "older than what", and an agent that sent no `olderThan`
+     * cannot say which default the store applied — so the row set and the
+     * threshold that produced it travel together. */
     await withKb(
-        [{ stdout: ok({ documents: [DOCUMENT_OLD], count: 1 }) }],
+        [
+            {
+                stdout: ok({
+                    documents: [DOCUMENT_OLD],
+                    count: 1,
+                    olderThan: "90d",
+                    staleBefore: "2026-06-27T00:00:00Z",
+                }),
+            },
+        ],
         async (kb, fake) => {
             const answer = body(
                 await callTool(kb, "kb_stale", {
@@ -569,6 +597,9 @@ test("kb_stale passes §5's threshold in §5's own spelling", async () => {
                 }),
             );
             assert.equal(answer["count"], 1);
+            assert.equal(answer["olderThan"], "90d");
+            assert.equal(answer["staleBefore"], "2026-06-27T00:00:00Z");
+            assert.equal((answer["documents"] as unknown[]).length, 1);
             assert.deepEqual(fake.calls()[0].argv, [
                 "stale",
                 "--older-than",

@@ -27,7 +27,7 @@ import { test } from "node:test";
 
 import { Kb } from "../client";
 import { KbError } from "../errors";
-import { lsArgv, searchArgv } from "../argv";
+import { lsArgv, refreshArgv, searchArgv } from "../argv";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const BIN = path.resolve(ROOT, "..", "kb-cli", "bin", "kb");
@@ -44,6 +44,9 @@ function help(): string {
 interface Work {
     dir: string;
     kb: Kb;
+    /* The same environment the client was given, so a test that runs the
+     * binary directly points at the same throwaway global tier. */
+    env: NodeJS.ProcessEnv;
     dispose(): void;
 }
 
@@ -57,7 +60,12 @@ function workspace(): Work {
         /* The global tier, inside the throwaway. Never `~/.kb`. */
         env: { ...process.env, KB_STORE: path.join(dir, "global") },
     });
-    return { dir: project, kb, dispose: () => fs.rmSync(dir, { recursive: true, force: true }) };
+    return {
+        dir: project,
+        kb,
+        env: { ...process.env, KB_STORE: path.join(dir, "global") },
+        dispose: () => fs.rmSync(dir, { recursive: true, force: true }),
+    };
 }
 
 test("every flag this package spells for an implemented command is one the CLI names", async (t) => {
@@ -273,6 +281,194 @@ test("a collection name with a space survives the argument list", async (t) => {
         const [row] = await work.kb.ls({ collection: "two words" });
         assert.equal(row.collection, "two words");
         assert.equal(row.title, "A title with spaces");
+    } finally {
+        work.dispose();
+    }
+});
+
+/* ------------------------------------------- the readers against the binary
+ *
+ * THE FAILURE THIS FILE DID NOT CATCH, AND WHY. `Kb.refresh` read `refreshed`
+ * and `changed` off the payload for as long as `kb refresh` did not exist.
+ * When it landed it printed neither, so both read as 0 — and 0 is the right
+ * number for a command that refetches nothing, so every fixture-driven test
+ * agreed with the reader and the reader was wrong. A hand-written fixture
+ * agrees with whoever wrote it. Only the binary disagrees.
+ *
+ * So these compare the READER'S OWN KEYS against the BINARY'S OWN KEYS, in
+ * both directions and without a third list in the middle:
+ *
+ *   - a key the store prints that the reader does not answer is a fact
+ *     arriving at a caller as nothing;
+ *   - a key the reader answers that the store does not print is a field with
+ *     no source, which is the bug above.
+ *
+ * Where a reader deliberately reshapes, the keys it drops are named with a
+ * reason. That list is the only hand-written part and it is small on purpose:
+ * adding to it is a visible act, and a key that turns up later still fails.
+ */
+
+function raw(work: Work, argv: readonly string[]): Record<string, unknown> {
+    const out = execFileSync(BIN, [...argv, "--json"], {
+        cwd: work.dir,
+        env: work.env,
+        encoding: "utf8",
+    });
+    return JSON.parse(out) as Record<string, unknown>;
+}
+
+/* `ok` is the envelope rather than the answer, and `run.ts` deliberately does
+ * not strip it — it is not a field any reader claims. */
+function printed(payload: Record<string, unknown>): string[] {
+    return Object.keys(payload).filter((k) => k !== "ok").sort();
+}
+
+function answered(value: object): string[] {
+    return Object.keys(value).sort();
+}
+
+test("the refresh reader answers exactly the keys the real binary prints", async (t) => {
+    /* THE REGRESSION TEST FOR THE BUG ITSELF. `refreshed` and `changed` would
+     * appear on the right and nowhere on the left. */
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await work.kb.init("project");
+        await work.kb.add("# IOCP\n", { title: "IOCP", collection: "win32-iocp" });
+        assert.deepEqual(
+            answered(await work.kb.refresh({ olderThan: "1d" })),
+            printed(raw(work, ["refresh", "--older-than", "1d"])),
+        );
+        /* And the field that carries the whole meaning of the answer: §12.2
+         * kept an HTTP client out of the binary, so this reports and does not
+         * act, and a surface that cannot see `note` will say it refreshed. */
+        const report = await work.kb.refresh({ olderThan: "1d" });
+        assert.equal(report.action, "report");
+        assert.match(report.note, /report, not an action/);
+        assert.equal(report.refetched, 0);
+        assert.equal(report.reembedded, 0);
+        assert.equal(report.olderThan, "1d");
+    } finally {
+        work.dispose();
+    }
+});
+
+test("refresh takes the two narrowings §5 gives it, and no invented ones", async (t) => {
+    /* `--document` and `--source` were sent here and `kb refresh` refuses
+     * both. §3.1's per-document action is §2's `POST /sources/{id}/refresh`,
+     * a different route; a filter on this one would report about a source
+     * while looking like it had refetched it. */
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    assert.deepEqual(refreshArgv(), ["refresh"]);
+    assert.deepEqual(
+        refreshArgv({ collection: "win32-iocp", olderThan: "90d", store: "all" }),
+        ["refresh", "--collection", "win32-iocp", "--older-than", "90d", "--store", "all"],
+    );
+    for (const flag of refreshArgv({ collection: "c", olderThan: "1d", store: "all" })) {
+        if (flag.startsWith("--")) {
+            assert.ok(help().includes(flag), `kb refresh does not take ${flag}`);
+        }
+    }
+    const text = help();
+    assert.equal(/refresh[^\n]*--document/.test(text), false);
+    assert.equal(/refresh[^\n]*--source\b/.test(text), false);
+});
+
+test("every reader answers exactly the keys the real binary prints", async (t) => {
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await work.kb.init("project");
+        const added = await work.kb.add("# IOCP\n\nCreateIoCompletionPort binds a handle.\n", {
+            title: "IOCP",
+            collection: "win32-iocp",
+            mime: "text/markdown",
+        });
+        const second = await work.kb.add("io_uring_setup\n", {
+            title: "Ring",
+            collection: "io-uring",
+        });
+        const chunk = `C-${added.chunkBase}`;
+
+        /* Each row: the command, the reader's answer, and the keys the reader
+         * drops on purpose with the reason it drops them. */
+        const cases: {
+            what: string;
+            argv: string[];
+            read: object;
+            dropped?: Record<string, string>;
+        }[] = [
+            { what: "add", argv: [], read: added },
+            { what: "stale", argv: ["stale", "--older-than", "1d"], read: await work.kb.stale({ olderThan: "1d" }) },
+            {
+                what: "links",
+                argv: ["links", added.document],
+                read: await work.kb.links(added.document),
+            },
+            {
+                what: "search",
+                argv: ["search", "CreateIoCompletionPort"],
+                read: await work.kb.search("CreateIoCompletionPort"),
+            },
+            {
+                what: "chunk",
+                argv: ["chunk", chunk],
+                read: await work.kb.chunk(chunk),
+            },
+            {
+                what: "get",
+                argv: ["get", added.document],
+                read: await work.kb.get(added.document),
+            },
+            {
+                what: "stats",
+                argv: ["stats"],
+                read: await work.kb.stats(),
+                dropped: {
+                    count: "the number of collections, which is the array's own length",
+                },
+            },
+        ];
+
+        for (const c of cases) {
+            /* `add` writes, so its payload is the one already in hand rather
+             * than a second ingest. */
+            const keys =
+                c.what === "add"
+                    ? answered(added)
+                    : printed(raw(work, c.argv)).filter(
+                          (k) => !Object.keys(c.dropped ?? {}).includes(k),
+                      );
+            assert.deepEqual(
+                answered(c.read),
+                keys,
+                `the ${c.what} reader and kb ${c.what} do not agree about what the answer contains`,
+            );
+        }
+
+        /* `collections` is the one reader that answers an ARRAY rather than a
+         * record, so there is no key set to compare — the check there is that
+         * each ROW carries what the store printed on it. */
+        const rows = raw(work, ["collections"])["collections"] as Record<string, unknown>[];
+        const read = await work.kb.collections();
+        assert.equal(read.length, rows.length);
+        for (let i = 0; i < rows.length; i++) {
+            assert.deepEqual(
+                answered(read[i]),
+                Object.keys(rows[i]).sort(),
+                "a collections row carries a key the reader does not answer",
+            );
+        }
+        assert.equal(second.created, true);
     } finally {
         work.dispose();
     }

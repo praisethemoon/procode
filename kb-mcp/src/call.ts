@@ -237,8 +237,21 @@ async function search(kb: Kb, args: Record<string, unknown>): Promise<ToolResult
     /* The hits as the store ranked them, and nothing fetched on top of them.
      * ONE PROCESS PER SEARCH is the observable form of §4's rule: a layer that
      * enriched a hit with its document's text would be a second call per row
-     * and a context flooded by a list. */
-    return rows({ count: answer.count, hits: answer.hits });
+     * and a context flooded by a list.
+     *
+     * AND THE WHOLE ANSWER, NOT ONLY THE ROWS. `mode` says which retrieval
+     * path actually ran — §4 makes hybrid the default and §8 makes it refuse
+     * without a model, so it is not always the one that was asked for — and
+     * `olderThan` is the threshold every hit's `stale` flag was measured
+     * against. Dropping either is the defect `cli.test.ts` next door is
+     * written against, one layer up: a fact the store printed arriving at a
+     * caller as nothing. */
+    return rows({
+        count: answer.count,
+        mode: answer.mode,
+        olderThan: answer.olderThan,
+        hits: answer.hits,
+    });
 }
 
 /* §1.1's prefixes, which is how one tool serves two routes. */

@@ -87,6 +87,13 @@ export interface KbSearchResult {
      * cannot know whether the exact identifier it searched for was resolved by
      * keyword or approximated by vectors. */
     readonly mode: string;
+    /* The staleness threshold every hit's `stale` flag was computed against.
+     * FOUND BY THE KEY-COVERAGE TEST IN `cli.test.ts`, NOT BY READING THE
+     * COMMAND: the store started printing it and this reader went on not
+     * answering it, which is the same defect as `refresh` one route along. §4
+     * puts `stale` on a hit and §5 says why it matters; a caller shown a hit
+     * flagged stale and not the threshold cannot say older than what. */
+    readonly olderThan: string;
     /* How many hits came back, as the store counted them. Read rather than
      * taken from `hits.length`: a store that pages would report a total the
      * array does not have, and a binding that answered the array's length
@@ -146,6 +153,7 @@ export class Kb {
         return {
             hits,
             mode: str(payload["mode"]),
+            olderThan: str(payload["olderThan"]),
             count: "count" in payload ? num(payload["count"]) : hits.length,
         };
     }
