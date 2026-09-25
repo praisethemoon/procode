@@ -185,6 +185,76 @@ export async function addCurrentFile(kb: Kb, announce: () => void): Promise<void
     }
 }
 
+/* Files picked from disk with the system dialog, several at once. Each is
+ * filed under its own name, with its path as the locator — exactly what
+ * "add the current file" does for one open file — so re-adding an unchanged
+ * file re-indexes nothing. `collection` is preselected when the dialog was
+ * opened from a collection's row. Empty and binary files are skipped and
+ * named, rather than filed as noise. */
+export async function addFiles(kb: Kb, announce: () => void, collection?: string): Promise<void> {
+    const picked = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        canSelectFiles: true,
+        canSelectFolders: false,
+        openLabel: "Add to Knowledge",
+        title: collection ? `Add files to ${collection}` : "Add files to Knowledge",
+        filters: {
+            "Text and code": ["md", "markdown", "txt", "rst", "adoc", "html", "htm", "c", "h", "cc", "cpp", "hpp", "rs", "go", "py", "ts", "tsx", "js", "java", "json", "yaml", "yml", "toml"],
+            "All files": ["*"],
+        },
+    });
+    if (picked === undefined || picked.length === 0) {
+        return;
+    }
+    const into = collection ?? (await pickCollection(kb));
+    if (into === undefined || into.length === 0) {
+        return;
+    }
+    let title: string | undefined;
+    if (picked.length === 1) {
+        title = await vscode.window.showInputBox({
+            title: "Title",
+            value: path.basename(picked[0].path),
+            prompt: "What this document is called in the store.",
+        });
+        if (title === undefined || title.trim().length === 0) {
+            return;
+        }
+    }
+    const filed: string[] = [];
+    const skipped: string[] = [];
+    for (const uri of picked) {
+        const name = path.basename(uri.path);
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        if (bytes.length === 0 || bytes.includes(0)) {
+            skipped.push(name);
+            continue;
+        }
+        try {
+            const added = await kb.add(Buffer.from(bytes).toString("utf8"), {
+                title: (title ?? name).trim(),
+                collection: into,
+                /* The path is the locator, and kb infers the mime (and so the
+                 * splitter: headings for Markdown, declarations for code)
+                 * from its extension. */
+                url: uri.fsPath,
+            });
+            filed.push(added.document);
+        } catch (e) {
+            report(e, `file ${name}`);
+        }
+    }
+    if (filed.length > 0) {
+        announce();
+    }
+    const parts = [];
+    if (filed.length > 0) parts.push(`Filed ${filed.join(", ")} in ${into}.`);
+    if (skipped.length > 0) parts.push(`Skipped ${skipped.join(", ")}: empty or not text.`);
+    if (parts.length > 0) {
+        void vscode.window.showInformationMessage(parts.join(" "));
+    }
+}
+
 /* §2: "add a URL". See the header for why the fetch is here. */
 export async function addUrl(kb: Kb, announce: () => void): Promise<void> {
     const typed = await vscode.window.showInputBox({

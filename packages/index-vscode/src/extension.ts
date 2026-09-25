@@ -37,7 +37,7 @@ import { HostContext } from "./host";
 import { KnowledgeEditor } from "./editor";
 import { NO_FOLDER, Settings, makeClient, noFolder, readSettings, workspaceRoot } from "./session";
 import { Sidebar } from "./sidebar";
-import { addCurrentFile, addUrl, refreshStale } from "./commands";
+import { addCurrentFile, addFiles, addUrl, refreshStale } from "./commands";
 import { quickSearch } from "./quickopen";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -47,13 +47,13 @@ export function activate(context: vscode.ExtensionContext): void {
     /* A command with no folder to run in says so and does nothing; see
      * `session.ts`. The webviews get the same sentence as a refusal. */
     const withClient =
-        (run: (kb: Kb) => unknown) =>
-        (): unknown => {
+        (run: (kb: Kb, ...args: unknown[]) => unknown) =>
+        (...args: unknown[]): unknown => {
             if (client === undefined) {
                 void vscode.window.showWarningMessage(NO_FOLDER);
                 return undefined;
             }
-            return run(client);
+            return run(client, ...args);
         };
 
     const ctx: HostContext = {
@@ -160,6 +160,12 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand(
             "knowledge.addCurrentFile",
             withClient((kb) => addCurrentFile(kb, announce)),
+        ),
+        vscode.commands.registerCommand(
+            "knowledge.addFiles",
+            withClient((kb, collection?: unknown) =>
+                addFiles(kb, announce, typeof collection === "string" && collection ? collection : undefined),
+            ),
         ),
         vscode.commands.registerCommand(
             "knowledge.addUrl",

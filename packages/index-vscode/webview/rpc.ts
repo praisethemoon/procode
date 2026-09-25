@@ -108,6 +108,10 @@ export function link(href: string): void {
 }
 
 /* §4: "a collection row opens the sidebar scoped to it." */
+export function addFiles(collection: string | null = null): void {
+    send({ kind: "addFiles", collection });
+}
+
 export function scope(collection: string): void {
     send({ kind: "scope", collection });
 }

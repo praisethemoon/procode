@@ -75,6 +75,11 @@
         "icon": "$(file-add)"
       },
       {
+        "command": "knowledge.addFiles",
+        "title": "Knowledge: Add Files…",
+        "icon": "$(new-file)"
+      },
+      {
         "command": "knowledge.addUrl",
         "title": "Knowledge: Add A URL",
         "icon": "$(link)"
@@ -95,6 +100,11 @@
           "command": "knowledge.addCurrentFile",
           "when": "view == knowledge.documents",
           "group": "navigation@1"
+        },
+        {
+          "command": "knowledge.addFiles",
+          "when": "view == knowledge.documents",
+          "group": "navigation@2"
         },
         {
           "command": "knowledge.addUrl",

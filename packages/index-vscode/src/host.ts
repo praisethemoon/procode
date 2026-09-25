@@ -199,6 +199,9 @@ export function handleRequest(ctx: HostContext, surface: Surface, raw: unknown):
         case "notify":
             notify(request.level, request.message);
             return;
+        case "addFiles":
+            void vscode.commands.executeCommand("knowledge.addFiles", request.collection ?? undefined);
+            return;
         default:
             void vscode.window
                 .showWarningMessage(

@@ -21,13 +21,14 @@
  * cannot do it", which is a different sentence from "the store refused".
  */
 
+import { Button, IconButton } from "baukasten-ui/core";
 import { useState } from "react";
 
 import { KbCollection, KbDocument } from "kb-js/pure";
 
 import { CollectionRow, collectionRows, formatBytes, formatDate } from "../src/view/facts";
 import { Codicon, Resolved, useQuery } from "./parts";
-import { call, confirm, notify, scope } from "./rpc";
+import { addFiles, call, confirm, notify, scope } from "./rpc";
 
 function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element {
     const row = props.row;
@@ -109,27 +110,36 @@ function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element 
                     </button>
                 )}
                 <span className="kb-grow" />
-                <button
-                    type="button"
-                    className="kb-action"
-                    aria-label={`Rename ${row.name}`}
-                    title="Rename"
-                    onClick={() => {
-                        setDraft(row.name);
-                        setRenaming(true);
-                    }}
-                >
-                    <Codicon name="edit" />
-                </button>
-                <button
-                    type="button"
-                    className="kb-action kb-action-danger"
-                    aria-label={`Forget ${row.name}`}
-                    title="Forget this collection and every document in it"
-                    onClick={remove}
-                >
-                    <Codicon name="trash" />
-                </button>
+                <span className="kb-row-actions">
+                    <IconButton
+                        icon={<Codicon name="new-file" />}
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Add files to ${row.name}`}
+                        title={`Add files to ${row.name}…`}
+                        onClick={() => addFiles(row.name)}
+                    />
+                    <IconButton
+                        icon={<Codicon name="edit" />}
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Rename ${row.name}`}
+                        title="Rename"
+                        onClick={() => {
+                            setDraft(row.name);
+                            setRenaming(true);
+                        }}
+                    />
+                    <IconButton
+                        icon={<Codicon name="trash" />}
+                        variant="ghost"
+                        size="sm"
+                        className="kb-danger"
+                        aria-label={`Forget ${row.name}`}
+                        title="Forget this collection and every document in it"
+                        onClick={remove}
+                    />
+                </span>
             </div>
             <div className="kb-row-meta">
                 <span>
@@ -159,11 +169,16 @@ export function Collections(): JSX.Element {
     return (
         <div className="kb-view kb-doc">
             <div className="kb-scroll">
-                <header className="kb-head">
-                    <h1 className="kb-head-title">Collections</h1>
-                    <div className="kb-small kb-muted">
-                        A collection is a flat named scope and a document belongs to exactly one.
+                <header className="kb-head kb-head-actions">
+                    <div>
+                        <h1 className="kb-head-title">Collections</h1>
+                        <div className="kb-small kb-muted">
+                            A collection is a flat named scope and a document belongs to exactly one.
+                        </div>
                     </div>
+                    <Button size="sm" variant="secondary" onClick={() => addFiles()}>
+                        <Codicon name="new-file" /> Add files…
+                    </Button>
                 </header>
                 <Resolved state={collections.state} loading="Counting…">
                     {(rows) => (

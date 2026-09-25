@@ -75,6 +75,8 @@ export type Request =
      * so instead of the host making a second call for one string. */
     | { kind: "title"; reference: string; title: string }
     | { kind: "notify"; level: "info" | "warning" | "error"; message: string }
+    /* Pick files from disk and file them, into `collection` when a row asked. */
+    | { kind: "addFiles"; collection: string | null }
     /* §4's delete, whose text has to tell the truth about what it does. */
     | { kind: "confirm"; id: number; title: string; detail: string; confirm: string };
 
@@ -111,6 +113,7 @@ export function isRequest(data: unknown): data is Request {
         kind === "scope" ||
         kind === "title" ||
         kind === "notify" ||
+        kind === "addFiles" ||
         kind === "confirm"
     );
 }

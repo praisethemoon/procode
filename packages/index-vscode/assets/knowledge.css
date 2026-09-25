@@ -552,6 +552,26 @@ html, body {
 /* -------------------------------------------------------- collections */
 
 .kb-collection { cursor: default; }
+
+/* A page header with an action beside its title. */
+.kb-head-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--bk-gap-md, 12px);
+}
+
+/* A row's actions stay quiet until the row is pointed at or focused, so a
+ * list of collections reads as names and numbers, not as a wall of buttons. */
+.kb-row-actions {
+  display: inline-flex;
+  gap: var(--bk-spacing-0-5, 2px);
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+.kb-collection:hover .kb-row-actions,
+.kb-row-actions:focus-within { opacity: 1; }
+.kb-danger:hover { color: var(--bk-color-danger); }
 .kb-collection:hover { background: none; }
 
 .kb-rename {
