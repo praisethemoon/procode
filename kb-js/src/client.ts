@@ -36,6 +36,8 @@ import {
     deleteCollectionArgv,
     getArgv,
     initArgv,
+    linkArgv,
+    linksArgv,
     lsArgv,
     refreshArgv,
     renameCollectionArgv,
@@ -52,6 +54,8 @@ import {
     readDocument,
     readDocumentRead,
     readHit,
+    readLink,
+    readLinks,
     readStatus,
     str,
 } from "./shape";
@@ -62,6 +66,8 @@ import {
     KbDocument,
     KbDocumentRead,
     KbHit,
+    KbLink,
+    KbLinks,
     KbStatus,
     StoreSelector,
 } from "./types";
@@ -167,6 +173,25 @@ export class Kb {
     async stale(options: StaleOptions = {}): Promise<readonly KbDocument[]> {
         const payload = await run(staleArgv(options), this.options);
         return arr(payload["documents"]).map(readDocument);
+    }
+
+    /* §6's `GET /documents/{id}/links`: "outgoing and incoming, resolved to
+     * rows". The command does not exist in the CLI yet (`argv.ts` says so). */
+    async links(document: string, store?: StoreSelector | null): Promise<KbLinks> {
+        return readLinks(await run(linksArgv(document, store), this.options));
+    }
+
+    /* §6's `POST /links`. `analogue_of` is the one that motivated the layer:
+     * IOCP and io_uring and kqueue solve the same problem three ways, and no
+     * amount of semantic similarity will state that relationship. */
+    async link(
+        from: string,
+        type: string,
+        to: string,
+        store?: "project" | "global" | null,
+    ): Promise<KbLink> {
+        const payload = await run(linkArgv(from, type, to, store), this.options);
+        return readLink(payload["link"] ?? payload);
     }
 
     /* §5's `POST /refresh`: "refetch a whole scope, re-embedding only changed

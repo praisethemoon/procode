@@ -31,6 +31,8 @@ import {
     KbDocument,
     KbDocumentRead,
     KbHit,
+    KbLink,
+    KbLinks,
     KbScores,
     KbSource,
     KbStatus,
@@ -225,6 +227,31 @@ export function readDocumentRead(payload: Record<string, unknown>): KbDocumentRe
         read["chunks"] = payload["chunks"] === null ? null : arr(payload["chunks"]).map(readChunk);
     }
     return read as unknown as KbDocumentRead;
+}
+
+/* §6's edge. `document` is the resolved row at the far end and stays null when
+ * the store did not carry one — a dangling edge is a fact about the store, and
+ * a reader that invented an empty row for it would be reporting a document
+ * that is not there. */
+export function readLink(v: unknown): KbLink {
+    const l = obj(v);
+    return {
+        from: str(l["from"]),
+        to: str(l["to"]),
+        type: str(l["type"]),
+        document: readLinkTarget(l["document"]),
+    };
+}
+
+function readLinkTarget(v: unknown): KbDocument | null {
+    return typeof v === "object" && v !== null && !Array.isArray(v) ? readDocument(v) : null;
+}
+
+export function readLinks(payload: Record<string, unknown>): KbLinks {
+    return {
+        outgoing: arr(payload["outgoing"]).map(readLink),
+        incoming: arr(payload["incoming"]).map(readLink),
+    };
 }
 
 export function readChunkRead(payload: Record<string, unknown>): KbChunkRead {

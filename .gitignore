@@ -30,4 +30,6 @@ kb-js/node_modules/
 kb-js/out/
 index-vscode/node_modules/
 index-vscode/out/
+kb-mcp/node_modules/
+kb-mcp/out/
 *.vsix

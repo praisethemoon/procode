@@ -79,6 +79,42 @@ char *doc_encode_touch(Arena *a, const char *id, const char *fetched_at,
     return sb_finish(&sb);
 }
 
+const char *const LINK_TYPES[] = {"supersedes", "cites", "analogue_of",
+                                  "implements", "see_also", NULL};
+
+const char *link_type_canon(const char *rel) {
+    if (!rel)
+        return NULL;
+    for (int32_t i = 0; LINK_TYPES[i]; i++) {
+        if (strcmp(rel, LINK_TYPES[i]) == 0)
+            return LINK_TYPES[i];
+    }
+    return NULL;
+}
+
+/* from/to/rel go in unescaped, like every other id in this file: they are
+ * `D-<n>` and a pointer into LINK_TYPES by the time a writer gets here, and
+ * neither spelling can contain a byte JSON would need to escape. */
+char *doc_encode_link(Arena *a, const Link *l, bool present, size_t *out_len) {
+    StrBuf sb;
+    sb_init(&sb, a);
+    sb_printf(&sb, "{\"type\":\"%s\",\"from\":\"%s\",\"rel\":\"%s\","
+                   "\"to\":\"%s\"",
+              present ? "link" : "unlink", l->from, l->rel, l->to);
+    put_str(&sb, "createdAt", l->created_at);
+    sb_putc(&sb, '}');
+    *out_len = sb.len;
+    return sb_finish(&sb);
+}
+
+char *doc_encode_source_forget(Arena *a, const char *id, size_t *out_len) {
+    StrBuf sb;
+    sb_init(&sb, a);
+    sb_printf(&sb, "{\"type\":\"forget\",\"id\":\"%s\"}", id);
+    *out_len = sb.len;
+    return sb_finish(&sb);
+}
+
 /* ---- loading ---------------------------------------------------------- */
 
 /* Splits a log file into complete lines. A crash mid-append leaves an
@@ -143,6 +179,19 @@ bool srclog_load(Arena *a, const char *path, SourceList *out, char *err,
         if (num > out->max_id)
             out->max_id = num;
         const char *type = jobj_str(j, "type");
+        if (type && strcmp(type, "forget") == 0) {
+            /* §7's DELETE /collections/{name}, the only writer of these. The
+             * id stays floored into max_id above, so forgetting a source
+             * never lets its identifier come back (§1.1). */
+            for (size_t k = 0; k < n; k++) {
+                if (id && strcmp(v[k].id, id) == 0) {
+                    memmove(&v[k], &v[k + 1], (n - k - 1) * sizeof(Source));
+                    n--;
+                    break;
+                }
+            }
+            continue;
+        }
         if (!type || strcmp(type, "source") != 0)
             continue; /* a record kind this build does not know: skip it */
         Source s;
@@ -183,6 +232,8 @@ bool doclog_load(Arena *a, const char *path, DocList *out, char *err,
     Document *v = (Document *)arena_alloc(
         a, (size_t)(l.count ? l.count : 1) * sizeof(Document));
     size_t n = 0;
+    Link *lk = NULL;
+    size_t nlk = 0, lk_cap = 0;
     for (int32_t i = 0; i < l.count; i++) {
         if (l.lines[i].len == 0)
             continue;
@@ -211,6 +262,43 @@ bool doclog_load(Arena *a, const char *path, DocList *out, char *err,
                     break;
                 }
             }
+            continue;
+        }
+        bool is_link = strcmp(type, "link") == 0;
+        if (is_link || strcmp(type, "unlink") == 0) {
+            /* §6, folded last-wins over the (from, rel, to) triple. A record
+             * missing any of the three, or naming a type outside §6's five,
+             * is a record this build cannot mean anything by; it is dropped
+             * rather than half-applied. */
+            Link e;
+            e.from = jobj_str(j, "from");
+            e.rel = link_type_canon(jobj_str(j, "rel"));
+            e.to = jobj_str(j, "to");
+            e.created_at = jobj_str(j, "createdAt");
+            if (!e.from || !e.rel || !e.to)
+                continue;
+            size_t at = nlk;
+            for (size_t k = 0; k < nlk; k++) {
+                if (strcmp(lk[k].from, e.from) == 0 &&
+                    lk[k].rel == e.rel &&
+                    strcmp(lk[k].to, e.to) == 0) {
+                    at = k;
+                    break;
+                }
+            }
+            if (!is_link) {
+                if (at < nlk) {
+                    memmove(&lk[at], &lk[at + 1], (nlk - at - 1) * sizeof(Link));
+                    nlk--;
+                }
+                continue;
+            }
+            if (at < nlk) {
+                lk[at] = e; /* a re-link refreshes createdAt, nothing else */
+                continue;
+            }
+            ARENA_GROW(a, lk, nlk, lk_cap, Link);
+            lk[nlk++] = e;
             continue;
         }
         if (strcmp(type, "document") != 0)
@@ -249,6 +337,8 @@ bool doclog_load(Arena *a, const char *path, DocList *out, char *err,
     }
     out->v = v;
     out->n = n;
+    out->links = lk;
+    out->nlinks = nlk;
     return true;
 }
 
@@ -291,6 +381,17 @@ const Document *doc_by_source_path(const DocList *l, const char *source,
         if (strcmp(l->v[i].source, source) == 0 &&
             strcmp(l->v[i].path, path) == 0)
             return &l->v[i];
+    }
+    return NULL;
+}
+
+const Link *link_find(const DocList *l, const char *from, const char *rel,
+                      const char *to) {
+    for (size_t i = 0; i < l->nlinks; i++) {
+        if (strcmp(l->links[i].from, from) == 0 &&
+            strcmp(l->links[i].rel, rel) == 0 &&
+            strcmp(l->links[i].to, to) == 0)
+            return &l->links[i];
     }
     return NULL;
 }

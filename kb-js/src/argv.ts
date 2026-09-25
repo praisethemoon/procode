@@ -296,6 +296,41 @@ export function deleteCollectionArgv(
     return argv;
 }
 
+/* §6's two reads and its one write, as subcommands of the noun they are about
+ * — `kb links D-241` and `kb links add D-241 analogue_of D-7`.
+ *
+ * NEITHER COMMAND EXISTS IN THE CLI YET, on the same terms as the block above:
+ * spelled from the route, reconciled here on the day it lands, and refused with
+ * `usage` or `unknown_command` until then.
+ *
+ * THE WRITE READS AS A SENTENCE — from, type, to — rather than as §6's
+ * `{ from, to, type }` field order. Three bare ids and a word in a row are a
+ * thing somebody has to get right at a terminal, and `D-241 analogue_of D-7`
+ * is the only ordering of the three that can be read back to check.
+ *
+ * BEHIND `--`, ALWAYS. A document id cannot begin with a dash today, but the
+ * subject of a write is a value and a value that reaches the parser as a flag
+ * is the bug `--` exists to close; `collections rename` above is written the
+ * same way and for the same reason. */
+export function linksArgv(document: string, store?: StoreSelector | null): string[] {
+    const argv = ["links"];
+    putStore(argv, store);
+    argv.push("--", document);
+    return argv;
+}
+
+export function linkArgv(
+    from: string,
+    type: string,
+    to: string,
+    store?: Exclude<StoreSelector, "all"> | null,
+): string[] {
+    const argv = ["links", "add"];
+    putStore(argv, store);
+    argv.push("--", from, type, to);
+    return argv;
+}
+
 export function initArgv(store?: Exclude<StoreSelector, "all"> | null): string[] {
     const argv = ["init"];
     putStore(argv, store);

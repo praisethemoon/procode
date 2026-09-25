@@ -1,0 +1,38 @@
+{
+  "name": "kb-mcp",
+  "displayName": "kb-mcp",
+  "description": "The kb knowledge base as MCP tools for agents: the six of index-api.md §9, spoken as JSON-RPC 2.0 over stdio.",
+  "version": "0.1.0",
+  "publisher": "praisethemoon",
+  "author": {
+    "name": "Soulaymen Chouri",
+    "email": "doit@praisethemoon.org"
+  },
+  "license": "MIT",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "bin": {
+    "kb-mcp": "./bin/kb-mcp"
+  },
+  "files": [
+    "out",
+    "bin",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "link": "node scripts/link.mjs",
+    "compile": "node scripts/link.mjs && tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test \"out/test/*.test.js\""
+  },
+  "dependencies": {
+    "kb-js": "file:../kb-js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}

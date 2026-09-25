@@ -9,16 +9,33 @@
  * boundary and a reader can tell a complete record from a torn one by
  * nothing more than the presence of the terminator.
  *
- * sources.jsonl holds one `source` record per source and never revises it.
- * Everything §1.2 lists on Source that changes as documents arrive —
- * fetchedAt, contentHash, docCount, bytes, status — is derived from that
- * source's documents instead of stored, so the two can never disagree.
+ * sources.jsonl holds `source` records folded last-wins by id, plus `forget`
+ * records that remove one. Everything §1.2 lists on Source that changes as
+ * documents arrive — fetchedAt, contentHash, docCount, bytes, status — is
+ * derived from that source's documents instead of stored, so the two can
+ * never disagree. What a later `source` record CAN revise is the collection,
+ * because §7's `PATCH /collections/{name}` renames a topic and a collection
+ * exists nowhere but on a Source (§1.3).
  *
  * documents.jsonl holds `document` records folded last-wins by id, plus
  * `touch` records that carry a new fetchedAt and nothing else. A re-ingest
  * of unchanged content is exactly a touch: §2 says it re-indexes nothing
  * and updates fetchedAt, and in an append-only log an update is a later
  * record that supersedes an earlier one.
+ *
+ * IT ALSO HOLDS `link` AND `unlink` RECORDS (§6), AND THAT IS DELIBERATE.
+ * §1.6 lists `index/links.bin` as a derived, disposable adjacency, which
+ * means the truth is a log — but §1.5 names exactly three committed things,
+ * and a fourth top-level file would quietly enlarge that list. Links belong
+ * in documents.jsonl for a stronger reason than economy: a link is a fact
+ * about two documents, and a separate file could be committed out of step
+ * with the one that gives it referents. One file, one commit, one consistent
+ * state. The loader already ignores record kinds it does not know, so an
+ * older build reads a store with links in it and simply sees no links.
+ *
+ * The link's own §1.2 field `type` is spelled `rel` in the record, because
+ * `type` already names the record KIND in both logs and one word cannot
+ * carry both jobs.
  */
 #ifndef KB_DOC_H
 #define KB_DOC_H
@@ -66,6 +83,26 @@ typedef struct {
     int64_t chunk_base;
 } Document;
 
+/* §1.2's Link, with `type` spelled `rel` (see the header comment). Both ends
+ * name documents in THIS store: identifiers are per store (§1.4) and §1.2
+ * gives a Link no store field, so a cross-tier edge is not representable and
+ * is not invented here. */
+typedef struct {
+    const char *from;
+    const char *rel;
+    const char *to;
+    const char *created_at;
+} Link;
+
+/* §6's five, and nothing else is a link type. One table, so the writer that
+ * validates and the reader that prints cannot drift apart. */
+extern const char *const LINK_TYPES[];
+#define LINK_TYPE_COUNT 5
+/* The canonical spelling, or NULL when `rel` is not one of the five. Returning
+ * the table's own pointer means an accepted type is stored as the table spells
+ * it rather than as the caller typed it. */
+const char *link_type_canon(const char *rel);
+
 typedef struct {
     Source *v;
     size_t n;
@@ -82,6 +119,15 @@ typedef struct {
     int64_t max_id;
     int64_t max_chunk_id;
     bool torn_tail;
+    /* §6's adjacency, folded from the same single pass over documents.jsonl.
+     * It is NOT materialised under index/: every other derived structure is
+     * cached because recomputing it means re-chunking or re-embedding, and
+     * this one is already in memory the moment the log is read. A cache with
+     * no reader cannot be checked for staleness by anything, so there is no
+     * links.bin here and `kb rebuild` reconstructs the adjacency by doing
+     * what every open already does. */
+    Link *links;
+    size_t nlinks;
 } DocList;
 
 /* Encoders. Each returns one line WITHOUT its trailing newline. */
@@ -89,6 +135,14 @@ char *doc_encode_source(Arena *a, const Source *s, size_t *out_len);
 char *doc_encode_document(Arena *a, const Document *d, size_t *out_len);
 char *doc_encode_touch(Arena *a, const char *id, const char *fetched_at,
                        size_t *out_len);
+/* `link` when present, `unlink` when not. The pair folds last-wins over the
+ * (from, rel, to) triple, so removing an edge and restoring it are the same
+ * append-only motion as superseding a document. */
+char *doc_encode_link(Arena *a, const Link *l, bool present, size_t *out_len);
+/* Removes a source from the fold. §7's DELETE /collections/{name} is the only
+ * writer: it refuses while any document remains (§11's collection_in_use), so
+ * what this forgets is a source that has none. */
+char *doc_encode_source_forget(Arena *a, const char *id, size_t *out_len);
 
 /* Loaders. A torn (unterminated) final line is dropped and reported; a
  * complete line that does not parse is an error, because silently skipping
@@ -106,5 +160,7 @@ const Source *src_by_key(const SourceList *l, const char *kind,
 const Document *doc_by_id(const DocList *l, const char *id);
 const Document *doc_by_source_path(const DocList *l, const char *source,
                                    const char *path);
+const Link *link_find(const DocList *l, const char *from, const char *rel,
+                      const char *to);
 
 #endif /* KB_DOC_H */

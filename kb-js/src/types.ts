@@ -222,3 +222,39 @@ export interface KbChunkRead {
     readonly chunk: KbChunk;
     readonly neighbours: readonly KbChunk[];
 }
+
+/* §6's small, optional layer over documents. Not a graph database: links
+ * connect documents only, and entity nodes are deliberately absent until there
+ * is a traversal retrieval cannot answer. */
+export const LINK_TYPES = ["supersedes", "cites", "analogue_of", "implements", "see_also"] as const;
+
+export type LinkType = (typeof LINK_TYPES)[number];
+
+export function isLinkType(v: unknown): v is LinkType {
+    return typeof v === "string" && (LINK_TYPES as readonly string[]).includes(v);
+}
+
+/* One edge, with the row at the far end of it.
+ *
+ * §6 says the read resolves links "to rows", and that is the whole reason this
+ * is not just a pair of ids: a caller that had to fetch each neighbour to learn
+ * its title would make one call per edge to draw a list. `document` is the far
+ * end — the `to` of an outgoing edge, the `from` of an incoming one — and is
+ * null when the store has an edge pointing at something it cannot resolve,
+ * which is a dangling link worth showing rather than hiding.
+ *
+ * `type` IS NOT NARROWED TO `LinkType`. §6 names five today; a sixth added
+ * later would be dropped by a reader that only knew the five, and an edge would
+ * then claim a relationship it does not have. `LINK_TYPES` is what is known,
+ * not what is permitted — the same rule `KbHit.matched` follows. */
+export interface KbLink {
+    readonly from: DocumentId;
+    readonly to: DocumentId;
+    readonly type: string;
+    readonly document: KbDocument | null;
+}
+
+export interface KbLinks {
+    readonly outgoing: readonly KbLink[];
+    readonly incoming: readonly KbLink[];
+}

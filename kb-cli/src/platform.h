@@ -54,6 +54,26 @@ bool plat_append_file_sync(const char *path, const void *data, size_t len);
 /* UTC ISO-8601, e.g. "2026-09-20T12:34:56Z". */
 void plat_timestamp(char out[32]);
 
+/* ---- absolute time ----
+ *
+ * Everywhere else in kb a timestamp is a string and "newer than" is a string
+ * comparison, which is exact and needs no calendar (§4's `since`). §5's
+ * `olderThan` is a DURATION, and subtracting 90 days from a date is calendar
+ * arithmetic however it is spelled — so these three exist, and nothing else
+ * in kb converts a time.
+ *
+ * plat_timestamp is plat_time_format(plat_now_epoch()), so there is exactly
+ * one spelling of a kb timestamp and a value this parses is a value that
+ * formatter wrote.
+ */
+int64_t plat_now_epoch(void);
+void plat_time_format(int64_t epoch, char out[32]);
+/* Strict: exactly the 20 bytes plat_time_format writes, a real calendar date,
+ * and nothing else. Every value it sees came out of a log line a person can
+ * edit, and a lenient parser would silently reinterpret "2026-02-31" rather
+ * than say it cannot read it. */
+bool plat_time_parse(const char *iso, int64_t *out);
+
 /* Directory walk, depth-first, entries sorted by name for determinism.
  * The callback sees repo-relative paths with '/' separators. Directories are
  * reported before their contents; returning WALK_SKIP_DIR prunes descent.

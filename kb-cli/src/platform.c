@@ -369,15 +369,75 @@ bool plat_append_file_sync(const char *path, const void *data, size_t len) {
     return ok;
 }
 
-void plat_timestamp(char out[32]) {
-    time_t now = time(NULL);
+int64_t plat_now_epoch(void) {
+    return (int64_t)time(NULL);
+}
+
+void plat_time_format(int64_t epoch, char out[32]) {
+    time_t t = (time_t)epoch;
     struct tm tmv;
 #ifdef _WIN32
-    gmtime_s(&tmv, &now);
+    gmtime_s(&tmv, &t);
 #else
-    gmtime_r(&now, &tmv);
+    gmtime_r(&t, &tmv);
 #endif
     strftime(out, 32, "%Y-%m-%dT%H:%M:%SZ", &tmv);
+}
+
+void plat_timestamp(char out[32]) {
+    plat_time_format(plat_now_epoch(), out);
+}
+
+/* Days from 1970-01-01 to a proleptic-Gregorian y/m/d. Hinnant's
+ * days_from_civil: exact for every representable date, no loops, no tables,
+ * and no dependence on the platform's timezone database — which matters
+ * because gmtime is a one-way street and timegm is not in C11. */
+static int64_t days_from_civil(int64_t y, uint32_t m, uint32_t d) {
+    y -= m <= 2;
+    int64_t era = (y >= 0 ? y : y - 399) / 400;
+    uint32_t yoe = (uint32_t)(y - era * 400);   /* year of era, [0, 399] */
+    uint32_t mp = m > 2 ? m - 3u : m + 9u;      /* March-first month, [0, 11] */
+    uint32_t doy = (153u * mp + 2u) / 5u + d - 1u;
+    uint32_t doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;
+    return era * 146097 + (int64_t)doe - 719468;
+}
+
+static uint32_t days_in_month(int64_t y, uint32_t m) {
+    static const uint8_t len[13] = {0,  31, 28, 31, 30, 31, 30,
+                                    31, 31, 30, 31, 30, 31};
+    if (m == 2 && ((y % 4 == 0 && y % 100 != 0) || y % 400 == 0))
+        return 29;
+    return len[m];
+}
+
+/* Two digits at p, or -1. Written out rather than left to sscanf, which
+ * would accept " 7", "+7" and a field that runs past its width. */
+static int32_t two_digits(const char *p) {
+    if (p[0] < '0' || p[0] > '9' || p[1] < '0' || p[1] > '9')
+        return -1;
+    return (p[0] - '0') * 10 + (p[1] - '0');
+}
+
+bool plat_time_parse(const char *iso, int64_t *out) {
+    if (!iso || strlen(iso) != 20)
+        return false;
+    if (iso[4] != '-' || iso[7] != '-' || iso[10] != 'T' || iso[13] != ':' ||
+        iso[16] != ':' || iso[19] != 'Z')
+        return false;
+    int32_t hi = two_digits(iso), lo = two_digits(iso + 2);
+    int32_t mo = two_digits(iso + 5), d = two_digits(iso + 8);
+    int32_t h = two_digits(iso + 11), mi = two_digits(iso + 14);
+    int32_t s = two_digits(iso + 17);
+    if (hi < 0 || lo < 0 || mo < 0 || d < 0 || h < 0 || mi < 0 || s < 0)
+        return false;
+    int64_t y = (int64_t)hi * 100 + lo;
+    if (mo < 1 || mo > 12 || h > 23 || mi > 59 || s > 59)
+        return false;
+    if (d < 1 || (uint32_t)d > days_in_month(y, (uint32_t)mo))
+        return false;
+    *out = days_from_civil(y, (uint32_t)mo, (uint32_t)d) * 86400 +
+           (int64_t)h * 3600 + (int64_t)mi * 60 + s;
+    return true;
 }
 
 /* ---- directory walk ---- */

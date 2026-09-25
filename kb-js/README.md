@@ -64,7 +64,7 @@ template literal by name.
 
 ## Commands that do not exist yet
 
-`search`, `chunk`, `stale`, `refresh` and the two collection writes are built
+`stale`, `refresh`, §6's two link commands and the two collection writes are built
 to the specification and the CLI does not have them yet. Each is the route from
 `index-api.md` spelled in the CLI's own idiom; a caller that reaches one today
 gets a `usage` or `unknown_command` refusal. `argv.ts` is the one file to
