@@ -150,6 +150,70 @@ bool read_text_arg(Arena *a, const char *path, char **out, size_t *out_len) {
     return true;
 }
 
+/* ---- staleness (§5) --------------------------------------------------- */
+
+bool duration_parse(const char *s, int64_t *seconds) {
+    if (!s || !s[0])
+        return false;
+    int64_t n = 0;
+    const char *p = s;
+    for (; *p >= '0' && *p <= '9'; p++) {
+        if (n > (INT64_MAX - (*p - '0')) / 10)
+            return false; /* a threshold nobody meant */
+        n = n * 10 + (*p - '0');
+    }
+    if (p == s || p[0] == '\0' || p[1] != '\0')
+        return false; /* no digits, no unit, or more than one unit letter */
+    int64_t mul;
+    switch (*p) {
+    case 's': mul = 1; break;
+    case 'm': mul = 60; break;
+    case 'h': mul = 3600; break;
+    case 'd': mul = 86400; break;
+    case 'w': mul = 604800; break;
+    /* No month and no year on purpose: both are calendar quantities whose
+     * length depends on when you start counting, and §5's question — "is
+     * this older than X" — deserves an answer that does not. */
+    default: return false;
+    }
+    if (n > INT64_MAX / mul)
+        return false;
+    *seconds = n * mul;
+    return true;
+}
+
+const char *older_than_arg(int32_t argc, char **argv,
+                           const char *const *value_flags) {
+    const char *v = flag_value(argc, argv, value_flags, "--older-than");
+    return v ? v : flag_value(argc, argv, value_flags, "--olderThan");
+}
+
+bool staleness_init(Staleness *st, const char *older_than, char *err,
+                    size_t errsz) {
+    memset(st, 0, sizeof(*st));
+    st->spec = older_than && older_than[0] ? older_than : KB_STALE_DEFAULT;
+    if (!duration_parse(st->spec, &st->seconds)) {
+        snprintf(err, errsz,
+                 "\"%s\" is not a duration; write a count and a unit, one of "
+                 "s m h d w (for example 90d)",
+                 st->spec);
+        return false;
+    }
+    st->now = plat_now_epoch();
+    st->cutoff = st->now - st->seconds;
+    plat_time_format(st->cutoff, st->cutoff_iso);
+    return true;
+}
+
+bool doc_stale(const Staleness *st, const Document *d) {
+    int64_t at;
+    if (!d->fetched_at || !plat_time_parse(d->fetched_at, &at))
+        return true;
+    /* Strictly older than the cutoff. A document fetched exactly on the
+     * boundary is inside the window the caller asked for, not outside it. */
+    return at < st->cutoff;
+}
+
 /* ---- tiers ------------------------------------------------------------ */
 
 bool store_sel_parse(const char *v, StoreSel *out) {
@@ -376,7 +440,7 @@ SourceFacts source_facts(Arena *a, const Store *s, const char *source_id) {
 /* ---- shared JSON shapes ----------------------------------------------- */
 
 void json_document(StrBuf *sb, const Store *s, const Document *d,
-                   const Source *src) {
+                   const Source *src, const Staleness *st) {
     sb_printf(sb, "\"id\":\"%s\",\"source\":\"%s\",\"store\":\"%s\"", d->id,
               d->source, tier_name(s->tier));
     sb_puts(sb, ",\"collection\":");
@@ -397,10 +461,53 @@ void json_document(StrBuf *sb, const Store *s, const Document *d,
     sb_printf(sb, ",\"fetchedAt\":\"%s\",\"indexedAt\":\"%s\"",
               d->fetched_at ? d->fetched_at : "",
               d->indexed_at ? d->indexed_at : "");
+    /* §5 puts `stale` beside `fetchedAt` on a hit; a row that carries the
+     * date must carry the verdict too, or `ls` and `search` would answer the
+     * same question differently. */
+    sb_printf(sb, ",\"stale\":%s", doc_stale(st, d) ? "true" : "false");
     sb_printf(sb, ",\"chunkCount\":%lu,\"chunkBase\":%lld",
               (unsigned long)d->chunk_count, (long long)d->chunk_base);
     sb_puts(sb, ",\"meta\":");
     sb_puts(sb, d->meta ? d->meta : "{}");
+}
+
+/* ---- links (§6) -------------------------------------------------------- */
+
+void json_links(StrBuf *sb, const Store *s, const char *id, bool outgoing,
+                const Staleness *st) {
+    sb_putc(sb, '[');
+    bool first = true;
+    for (size_t i = 0; i < s->documents.nlinks; i++) {
+        const Link *l = &s->documents.links[i];
+        const char *near = outgoing ? l->from : l->to;
+        const char *far = outgoing ? l->to : l->from;
+        if (strcmp(near, id) != 0)
+            continue;
+        if (!first)
+            sb_putc(sb, ',');
+        first = false;
+        sb_printf(sb, "{\"type\":\"%s\",\"%s\":\"%s\"", l->rel,
+                  outgoing ? "to" : "from", far);
+        const Document *d = doc_by_id(&s->documents, far);
+        /* §6 says "resolved to rows". A row whose far end is gone is still a
+         * row: the edge exists in the log and hiding it would turn a
+         * dangling link into an invisible one. */
+        sb_printf(sb, ",\"resolved\":%s", d ? "true" : "false");
+        if (d) {
+            sb_puts(sb, ",\"document\":{");
+            json_document(sb, s, d, src_by_id(&s->sources, d->source), st);
+            sb_putc(sb, '}');
+        } else {
+            sb_puts(sb, ",\"document\":null");
+        }
+        sb_puts(sb, ",\"createdAt\":");
+        if (l->created_at)
+            json_escape_c(sb, l->created_at);
+        else
+            sb_puts(sb, "null");
+        sb_putc(sb, '}');
+    }
+    sb_putc(sb, ']');
 }
 
 void json_source(StrBuf *sb, const Store *s, const Source *src) {

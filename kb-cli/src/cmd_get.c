@@ -1,8 +1,9 @@
 #include "cmd.h"
 
-/* GET /documents/{id} (§2) with ?include=text,chunks. */
+/* GET /documents/{id} (§2) with ?include=text,chunks,links. */
 
-static const char *const VALUE_FLAGS[] = {"--include", "--store", NULL};
+static const char *const VALUE_FLAGS[] = {"--include", "--store",
+                                          "--older-than", "--olderThan", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 static bool include_has(const char *list, const char *what) {
@@ -79,6 +80,7 @@ int32_t cmd_get(Arena *a, int32_t argc, char **argv) {
     const char *include = flag_value(argc, argv, VALUE_FLAGS, "--include");
     bool want_text = include_has(include, "text");
     bool want_chunks = include_has(include, "chunks");
+    bool want_links = include_has(include, "links");
     StoreSel sel;
     if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
                          &sel)) {
@@ -87,6 +89,12 @@ int32_t cmd_get(Arena *a, int32_t argc, char **argv) {
     }
 
     char err[512];
+    Staleness st;
+    if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
+                        sizeof err)) {
+        err_out(json, "usage", "%s", err);
+        return KB_EXIT_ERR;
+    }
     TierSet tiers;
     if (!tiers_resolve(sel, false, &tiers, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
@@ -114,8 +122,15 @@ int32_t cmd_get(Arena *a, int32_t argc, char **argv) {
         sb_init(&sb, a);
         if (json) {
             sb_puts(&sb, "{\"ok\":true,\"document\":{");
-            json_document(&sb, &s, d, src);
+            json_document(&sb, &s, d, src, &st);
             sb_putc(&sb, '}');
+            if (want_links) {
+                sb_puts(&sb, ",\"links\":{\"outgoing\":");
+                json_links(&sb, &s, d->id, true, &st);
+                sb_puts(&sb, ",\"incoming\":");
+                json_links(&sb, &s, d->id, false, &st);
+                sb_putc(&sb, '}');
+            }
             if (want_text) {
                 char *text;
                 size_t len;
@@ -144,11 +159,31 @@ int32_t cmd_get(Arena *a, int32_t argc, char **argv) {
                       src ? src->kind : "?");
             sb_printf(&sb, "mime       %s\n", d->mime ? d->mime : "");
             sb_printf(&sb, "bytes      %llu\n", (unsigned long long)d->bytes);
-            sb_printf(&sb, "fetchedAt  %s\n",
-                      d->fetched_at ? d->fetched_at : "");
+            sb_printf(&sb, "fetchedAt  %s%s\n",
+                      d->fetched_at ? d->fetched_at : "",
+                      doc_stale(&st, d) ? "  (stale)" : "");
             sb_printf(&sb, "chunks     %lu (C-%lld..C-%lld)\n",
                       (unsigned long)d->chunk_count, (long long)d->chunk_base,
                       (long long)(d->chunk_base + d->chunk_count - 1));
+            if (want_links) {
+                for (size_t i = 0; i < s.documents.nlinks; i++) {
+                    const Link *l = &s.documents.links[i];
+                    bool out = strcmp(l->from, d->id) == 0;
+                    if (!out && strcmp(l->to, d->id) != 0)
+                        continue;
+                    const char *far = out ? l->to : l->from;
+                    const Document *fd = doc_by_id(&s.documents, far);
+                    sb_printf(&sb, "link       %s %s %s", out ? "->" : "<-",
+                              l->rel, far);
+                    if (fd) {
+                        sb_puts(&sb, "  ");
+                        sb_puts_safe(&sb, fd->title ? fd->title : "");
+                    } else {
+                        sb_puts(&sb, "  (forgotten)");
+                    }
+                    sb_putc(&sb, '\n');
+                }
+            }
             fputs(sb_finish(&sb), stdout);
             if (want_chunks) {
                 char *text;

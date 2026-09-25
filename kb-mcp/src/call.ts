@@ -1,0 +1,462 @@
+/* `tools/call`: an argument object in, the store's own rows out.
+ *
+ * WHAT GOES WRONG HERE IS NOT WHAT GOES WRONG IN `jsonrpc.ts`, AND THE TWO
+ * MUST NOT BE FOLDED TOGETHER.
+ *
+ *   - An argument object this surface will not accept — an unknown tool, a
+ *     missing `q`, a `k` of 500, a key spelled `collections` — is a fault in
+ *     the CALL. It throws `RpcError` and reaches the client as a transport
+ *     error, because the call never happened and there is nothing to read.
+ *   - A call that was well formed and that the store refused — `not_found`,
+ *     `model_mismatch`, a command this binary does not have yet — is a RESULT
+ *     with `isError: true`. The tool ran; this is what it found out. An agent
+ *     has to be able to READ that and do something else, and a client that saw
+ *     a transport error instead would show the model a broken tool and the
+ *     model would ask the same question again.
+ *
+ * UNKNOWN KEYS ARE REFUSED, WHICH IS THE ONE STRICTNESS WORTH PAYING FOR. The
+ * failure it catches is silent: `collection` mistyped as `collections` is not a
+ * search of one collection that fails, it is a search of the whole store that
+ * succeeds — the wrong answer, confidently, with no sign that a filter was
+ * dropped. §9 asks for `GET /search` "with every filter", and a filter that
+ * goes nowhere is a filter that is not there.
+ *
+ * NOTHING HERE RANKS, MERGES, SUMMARISES OR SHORTENS. §4: the store returns
+ * passages and does not answer; the rows below are what `kb-js` read out of
+ * the CLI's `--json`, unaltered. The one thing this layer decides is that a
+ * search result carries snippets, which it does by never asking for anything
+ * else.
+ */
+
+import {
+    AddOptions,
+    Kb,
+    SearchMode,
+    SearchOptions,
+    StoreSelector,
+    isKbCrash,
+    isKbError,
+} from "kb-js";
+
+import { INVALID_PARAMS, RpcError } from "./jsonrpc";
+import { findTool } from "./tools";
+
+export interface ToolContent {
+    readonly type: "text";
+    readonly text: string;
+}
+
+export interface ToolResult {
+    readonly content: readonly ToolContent[];
+    readonly isError?: boolean;
+}
+
+/* ------------------------------------------------------------ the answers */
+
+/* The store's rows, as JSON text.
+ *
+ * INDENTED, AND THAT IS A CHOICE WITH A COST. Two spaces per level is perhaps
+ * a quarter more of the caller's context than the compact form, bought for a
+ * transcript a person can read when a retrieval went wrong — which is most of
+ * what anybody does with a log of an agent's tool calls. §4's discipline keeps
+ * the size bounded from the other side: search carries snippets, so the thing
+ * being indented is small. */
+function rows(payload: unknown): ToolResult {
+    return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+}
+
+/* How much of a failing process's diagnostics travel back. A binary in a loop
+ * writing to stderr must not be able to fill the caller's context through a
+ * failure path. */
+const STDERR_LIMIT = 2000;
+
+/* A refusal the store made — exit 1, §11's vocabulary — and a fault in kb
+ * itself, kept apart on the wire the way `kb-js` keeps them apart in its types.
+ * A caller that saw one word for both would tell the reader to fix input that
+ * was never the problem. */
+function whyItFailed(e: unknown): Record<string, unknown> {
+    if (isKbError(e)) {
+        return { ok: false, kind: "refused", error: e.code, message: e.message };
+    }
+    if (isKbCrash(e)) {
+        return {
+            ok: false,
+            kind: "failed",
+            message: e.message,
+            exitCode: e.exitCode,
+            stderr: e.stderr.slice(0, STDERR_LIMIT),
+        };
+    }
+    return { ok: false, kind: "failed", message: e instanceof Error ? e.message : String(e) };
+}
+
+function failure(e: unknown): ToolResult {
+    return {
+        content: [{ type: "text", text: JSON.stringify(whyItFailed(e), null, 2) }],
+        isError: true,
+    };
+}
+
+/* ---------------------------------------------------------- the arguments */
+
+function bad(tool: string, detail: string): RpcError {
+    return new RpcError(INVALID_PARAMS, `${tool}: ${detail}`);
+}
+
+/* The argument object, with every key checked against the schema's own list.
+ * `undefined` and `null` are an empty object, because a tool with no required
+ * argument may legitimately be called with neither. */
+function fields(tool: string, args: unknown, schema: Record<string, unknown>): Record<string, unknown> {
+    if (args === undefined || args === null) {
+        return {};
+    }
+    if (typeof args !== "object" || Array.isArray(args)) {
+        throw bad(tool, "arguments must be an object.");
+    }
+    const value = args as Record<string, unknown>;
+    const allowed = Object.keys((schema["properties"] ?? {}) as Record<string, unknown>);
+    for (const key of Object.keys(value)) {
+        if (!allowed.includes(key)) {
+            throw bad(
+                tool,
+                `there is no argument called "${key}". It takes: ${allowed.join(", ")}.`,
+            );
+        }
+    }
+    for (const key of (schema["required"] ?? []) as string[]) {
+        if (value[key] === undefined || value[key] === null) {
+            throw bad(tool, `"${key}" is required.`);
+        }
+    }
+    return value;
+}
+
+function asString(tool: string, key: string, v: unknown): string | undefined {
+    if (v === undefined || v === null) {
+        return undefined;
+    }
+    if (typeof v !== "string") {
+        throw bad(tool, `"${key}" must be a string.`);
+    }
+    return v;
+}
+
+function asEnum<T extends string>(
+    tool: string,
+    key: string,
+    v: unknown,
+    values: readonly T[],
+): T | undefined {
+    const s = asString(tool, key, v);
+    if (s === undefined) {
+        return undefined;
+    }
+    if (!(values as readonly string[]).includes(s)) {
+        throw bad(tool, `"${key}" must be one of: ${values.join(", ")}.`);
+    }
+    return s as T;
+}
+
+function asNumber(tool: string, key: string, v: unknown): number | undefined {
+    if (v === undefined || v === null) {
+        return undefined;
+    }
+    if (typeof v !== "number" || !Number.isFinite(v)) {
+        throw bad(tool, `"${key}" must be a number.`);
+    }
+    return v;
+}
+
+function asInteger(
+    tool: string,
+    key: string,
+    v: unknown,
+    min: number,
+    max?: number,
+): number | undefined {
+    const n = asNumber(tool, key, v);
+    if (n === undefined) {
+        return undefined;
+    }
+    if (!Number.isInteger(n) || n < min || (max !== undefined && n > max)) {
+        throw bad(
+            tool,
+            max === undefined
+                ? `"${key}" must be a whole number of at least ${min}.`
+                : `"${key}" must be a whole number between ${min} and ${max}.`,
+        );
+    }
+    return n;
+}
+
+function asStrings(tool: string, key: string, v: unknown): string[] | undefined {
+    if (v === undefined || v === null) {
+        return undefined;
+    }
+    if (!Array.isArray(v)) {
+        throw bad(tool, `"${key}" must be an array of strings.`);
+    }
+    return v.map((element) => {
+        if (typeof element !== "string") {
+            throw bad(tool, `"${key}" must be an array of strings.`);
+        }
+        return element;
+    });
+}
+
+const STORES = ["all", "project", "global"] as const;
+
+function asStore(tool: string, v: unknown): StoreSelector | undefined {
+    return asEnum(tool, "store", v, STORES);
+}
+
+/* --------------------------------------------------------------- the six */
+
+async function search(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    const q = asString("kb_search", "q", args["q"]) ?? "";
+    /* §4's filters, all of them. A filter this surface accepts and does not
+     * pass on is the silent wrong answer `fields` is written against, from the
+     * other direction — so `argv.test.ts` next door and `call.test.ts` here
+     * both count them. */
+    const options: SearchOptions = {
+        collection: asStrings("kb_search", "collection", args["collection"]),
+        mode: asEnum("kb_search", "mode", args["mode"], [
+            "hybrid",
+            "semantic",
+            "keyword",
+        ]) as SearchMode | undefined,
+        k: asInteger("kb_search", "k", args["k"], 1, 100),
+        expand: asInteger("kb_search", "expand", args["expand"], 0),
+        store: asStore("kb_search", args["store"]),
+        source: asString("kb_search", "source", args["source"]),
+        mime: asString("kb_search", "mime", args["mime"]),
+        since: asString("kb_search", "since", args["since"]),
+        minScore: asNumber("kb_search", "minScore", args["minScore"]),
+    };
+    const answer = await kb.search(q, options);
+    /* The hits as the store ranked them, and nothing fetched on top of them.
+     * ONE PROCESS PER SEARCH is the observable form of §4's rule: a layer that
+     * enriched a hit with its document's text would be a second call per row
+     * and a context flooded by a list. */
+    return rows({ count: answer.count, hits: answer.hits });
+}
+
+/* §1.1's prefixes, which is how one tool serves two routes. */
+const CHUNK_PREFIX = "C-";
+const DOCUMENT_PREFIX = "D-";
+
+async function get(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    const id = asString("kb_get", "id", args["id"]) ?? "";
+    const store = asStore("kb_get", args["store"]);
+    if (id.startsWith(CHUNK_PREFIX)) {
+        /* `include` says nothing about a chunk — a chunk read is the text and
+         * its neighbours, which is the whole of what there is — so it is
+         * ignored rather than refused, the way the schema says. */
+        const expand = asInteger("kb_get", "expand", args["expand"], 0);
+        return rows(await kb.chunk(id, { expand, store }));
+    }
+    if (id.startsWith(DOCUMENT_PREFIX)) {
+        /* Text by default, because this is the tool a caller reaches for when
+         * they have decided to read the whole thing. `include: []` is how a
+         * caller asks for the metadata alone, and it is a real answer rather
+         * than a degenerate one: it is the cheap way to check a document's
+         * collection, size and age before deciding to pull it in. */
+        const include = asStrings("kb_get", "include", args["include"]);
+        for (const name of include ?? []) {
+            if (name !== "text" && name !== "chunks") {
+                throw bad("kb_get", `"include" takes text and chunks, not "${name}".`);
+            }
+        }
+        const wanted = include ?? ["text"];
+        return rows(
+            await kb.get(id, {
+                text: wanted.includes("text"),
+                chunks: wanted.includes("chunks"),
+                store,
+            }),
+        );
+    }
+    throw bad(
+        "kb_get",
+        `"${id}" is neither a chunk (C-n) nor a document (D-n). The prefix says which kind an id is.`,
+    );
+}
+
+async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    const list = args["documents"];
+    if (!Array.isArray(list) || list.length === 0) {
+        throw bad("kb_add", '"documents" must be a non-empty array.');
+    }
+    interface Filing {
+        readonly title: string;
+        readonly content: string;
+        readonly options: AddOptions;
+    }
+    const filings: Filing[] = list.map((entry, i) => {
+        if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+            throw bad("kb_add", `documents[${i}] must be an object.`);
+        }
+        const d = entry as Record<string, unknown>;
+        const where = `documents[${i}]`;
+        for (const key of Object.keys(d)) {
+            if (!["title", "content", "collection", "url", "mime", "meta"].includes(key)) {
+                throw bad("kb_add", `${where} has no argument called "${key}".`);
+            }
+        }
+        const title = asString("kb_add", `${where}.title`, d["title"]);
+        const content = asString("kb_add", `${where}.content`, d["content"]);
+        const collection = asString("kb_add", `${where}.collection`, d["collection"]);
+        if (title === undefined || content === undefined || collection === undefined) {
+            throw bad("kb_add", `${where} needs title, content and collection.`);
+        }
+        const meta = d["meta"];
+        if (meta !== undefined && meta !== null) {
+            if (typeof meta !== "object" || Array.isArray(meta)) {
+                throw bad("kb_add", `${where}.meta must be an object.`);
+            }
+        }
+        return {
+            title,
+            content,
+            options: {
+                title,
+                collection,
+                url: asString("kb_add", `${where}.url`, d["url"]),
+                mime: asString("kb_add", `${where}.mime`, d["mime"]),
+                meta: (meta ?? undefined) as Readonly<Record<string, unknown>> | undefined,
+                /* NO `store`. §1.4 sends an ingest to the project store when
+                 * one exists; §9 keeps the decision to move it to global away
+                 * from the caller entirely. Sending nothing is how that stays
+                 * true. */
+            },
+        };
+    });
+
+    /* ONE CALL PER DOCUMENT, WHICH IS NOT §2'S `POST /documents/batch`. That
+     * route is "many at once, one transaction" and the CLI has no command for
+     * it, so there is no transaction to be had here and pretending otherwise
+     * would be the lie. What is offered instead is stated plainly: they are
+     * filed in order, the first refusal stops the run, and the answer names
+     * exactly which ones landed. Filing is idempotent by content hash, so
+     * re-running a batch after fixing the one that failed costs nothing for
+     * the ones that already went in. */
+    const added: unknown[] = [];
+    for (let i = 0; i < filings.length; i++) {
+        const filing = filings[i];
+        try {
+            added.push(await kb.add(filing.content, filing.options));
+        } catch (e) {
+            const stopped = whyItFailed(e);
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: JSON.stringify(
+                            {
+                                ok: false,
+                                filed: added.length,
+                                added,
+                                stoppedAt: { index: i, title: filing.title },
+                                because: stopped,
+                                note: "documents are filed one at a time and the first refusal stops the run; the ones listed in added are in the store.",
+                            },
+                            null,
+                            2,
+                        ),
+                    },
+                ],
+                isError: true,
+            };
+        }
+    }
+    return rows({ filed: added.length, added });
+}
+
+async function collections(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    const list = await kb.collections(asStore("kb_collections", args["store"]));
+    return rows({ count: list.length, collections: list });
+}
+
+const LINK_TYPES = ["supersedes", "cites", "analogue_of", "implements", "see_also"] as const;
+
+async function links(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    const op = asEnum("kb_links", "op", args["op"], ["list", "add"] as const);
+    if (op === "list") {
+        const document = asString("kb_links", "document", args["document"]);
+        if (document === undefined || document === "") {
+            throw bad("kb_links", 'op "list" needs the document whose links to read.');
+        }
+        for (const key of ["from", "to", "type"]) {
+            if (args[key] !== undefined) {
+                throw bad("kb_links", `"${key}" belongs to op "add", not to "list".`);
+            }
+        }
+        return rows(await kb.links(document, asStore("kb_links", args["store"])));
+    }
+    const from = asString("kb_links", "from", args["from"]);
+    const to = asString("kb_links", "to", args["to"]);
+    const type = asEnum("kb_links", "type", args["type"], LINK_TYPES);
+    if (from === undefined || to === undefined || type === undefined) {
+        throw bad("kb_links", 'op "add" needs from, to and type.');
+    }
+    if (args["document"] !== undefined) {
+        throw bad("kb_links", '"document" belongs to op "list", not to "add".');
+    }
+    /* A WRITE TAKES NO TIER, on the same terms as `kb_add`: §1.4 decides where
+     * a write lands and §9 keeps that decision away from the caller. A `store`
+     * here would be quietly ignored on a write, which is the shape of bug this
+     * package refuses everywhere else, so it is refused out loud instead. */
+    if (args["store"] !== undefined) {
+        throw bad(
+            "kb_links",
+            '"store" narrows a read; a link is written where the store\'s own default sends it.',
+        );
+    }
+    return rows(await kb.link(from, type, to));
+}
+
+async function stale(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    const documents = await kb.stale({
+        olderThan: asString("kb_stale", "olderThan", args["olderThan"]),
+        collection: asString("kb_stale", "collection", args["collection"]),
+        store: asStore("kb_stale", args["store"]),
+    });
+    return rows({ count: documents.length, documents });
+}
+
+type Handler = (kb: Kb, args: Record<string, unknown>) => Promise<ToolResult>;
+
+/* The dispatch table. Its keys are checked against `TOOLS` by test, in both
+ * directions: a tool with no handler is a tool that answers nothing, and a
+ * handler with no tool is a seventh route into the store that `tools/list`
+ * never mentions. */
+export const HANDLERS: Readonly<Record<string, Handler>> = Object.freeze({
+    kb_search: search,
+    kb_get: get,
+    kb_add: add,
+    kb_collections: collections,
+    kb_links: links,
+    kb_stale: stale,
+});
+
+export async function callTool(kb: Kb, name: string, args: unknown): Promise<ToolResult> {
+    const tool = findTool(name);
+    const handler = HANDLERS[name];
+    if (tool === undefined || handler === undefined) {
+        /* A fault in the call, so it goes back as a transport error: there is
+         * no tool, so there is no result for the model to read. */
+        throw new RpcError(INVALID_PARAMS, `There is no tool called "${name}".`);
+    }
+    const checked = fields(name, args, tool.inputSchema);
+    try {
+        return await handler(kb, checked);
+    } catch (e) {
+        /* An `RpcError` raised while reading the arguments is still a fault in
+         * the call and keeps travelling as one. Everything else is the store
+         * having answered, or failed to. */
+        if (e instanceof RpcError) {
+            throw e;
+        }
+        return failure(e);
+    }
+}

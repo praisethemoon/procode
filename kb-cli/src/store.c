@@ -471,19 +471,36 @@ bool store_put_blob(Store *s, const void *data, size_t len, char hash[65],
     return true;
 }
 
-bool store_get_blob(Store *s, const char *hash, char **data, size_t *len) {
-    /* The hash comes out of a log line, which is a file a person can edit.
-     * A blob name is 64 hex digits and nothing else, so anything that is
-     * not one is refused rather than joined onto a path. */
+/* The hash comes out of a log line or a directory listing, both of which are
+ * files a person can edit. A blob name is 64 lowercase hex digits and nothing
+ * else, so anything that is not one is refused rather than joined onto a path
+ * — and "../../etc/passwd" is refused by the same rule that refuses "CAFE".
+ * One predicate, so the reader and the deleter cannot disagree about what a
+ * blob name is. */
+bool store_is_blob_name(const char *hash) {
     if (!hash || strlen(hash) != 64)
         return false;
     for (const char *p = hash; *p; p++) {
         if (!((*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'f')))
             return false;
     }
+    return true;
+}
+
+bool store_get_blob(Store *s, const char *hash, char **data, size_t *len) {
+    if (!store_is_blob_name(hash))
+        return false;
     char path[KB_PATH_MAX];
     store_blob_path(s, hash, path, sizeof path);
     return plat_read_file_max(s->a, path, data, len, (size_t)-1);
+}
+
+bool store_drop_blob(Store *s, const char *hash) {
+    if (!s->lock || !store_is_blob_name(hash))
+        return false;
+    char path[KB_PATH_MAX];
+    store_blob_path(s, hash, path, sizeof path);
+    return plat_remove_file(path);
 }
 
 /* ---- model.json ------------------------------------------------------- */
@@ -513,14 +530,9 @@ ChunkParams store_chunk_params(Arena *a, const Store *s) {
     return p;
 }
 
-bool store_write_chunk_params(Store *s, char *err, size_t errsz) {
+static bool put_chunk_params(Store *s, char *err, size_t errsz) {
     char path[KB_PATH_MAX];
     snprintf(path, sizeof path, "%s/%s", s->dir, KB_MODEL_NAME);
-    /* Never overwrite: this file states what the index on disk was actually
-     * built with. Rewriting it to match the current build would erase the
-     * only evidence that a reindex is owed (§8). */
-    if (plat_is_file(path))
-        return true;
     if (!plat_mkdirs(s->index_dir)) {
         snprintf(err, errsz, "cannot create %s", s->index_dir);
         return false;
@@ -536,6 +548,32 @@ bool store_write_chunk_params(Store *s, char *err, size_t errsz) {
         return false;
     }
     return true;
+}
+
+bool store_write_chunk_params(Store *s, char *err, size_t errsz) {
+    char path[KB_PATH_MAX];
+    snprintf(path, sizeof path, "%s/%s", s->dir, KB_MODEL_NAME);
+    /* Never overwrite: this file states what the index on disk was actually
+     * built with. Rewriting it to match the current build would erase the
+     * only evidence that a reindex is owed (§8). */
+    if (plat_is_file(path))
+        return true;
+    return put_chunk_params(s, err, errsz);
+}
+
+bool store_rewrite_chunk_params(Store *s, char *err, size_t errsz) {
+    /* Written under the lock, like every other change to a store's truth —
+     * and after the re-chunked records are already appended, so a crash in
+     * between leaves the file saying the OLD parameters while the log holds
+     * the NEW ranges. That state is detected (a re-split under the recorded
+     * parameters no longer matches the log) and a second reindex converges
+     * on it. The other order would leave a state a second reindex reads as
+     * already correct. */
+    if (!s->lock) {
+        snprintf(err, errsz, "internal: model.json rewritten without the lock");
+        return false;
+    }
+    return put_chunk_params(s, err, errsz);
 }
 
 /* ---- disk use --------------------------------------------------------- */

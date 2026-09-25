@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+/* The entry point an agent host spawns.
+ *
+ * It starts the server in the directory it was started in, because §1.4 finds
+ * the project store by walking up from there — so the host's choice of working
+ * directory is the choice of which knowledge base this is. */
+"use strict";
+require("../out/main.js")
+    .main()
+    .then(
+        function (code) {
+            process.exitCode = code;
+        },
+        function (e) {
+            process.stderr.write("kb-mcp: " + (e && e.message ? e.message : String(e)) + "\n");
+            process.exitCode = 2;
+        },
+    );

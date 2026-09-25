@@ -95,6 +95,22 @@
 #define KB_SNIPPET_BYTES 240u
 #define KB_EXPAND_MAX 3
 
+/* ---- staleness (§5) ----------------------------------------------------
+ *
+ * §5 gives `olderThan` as a parameter on `GET /stale`, and then says a hit
+ * whose document is older than "the staleness threshold" carries
+ * `stale: true` — without saying where THAT threshold comes from. A search
+ * hit has no olderThan of its own in §4's parameter list, so either the flag
+ * is never set on a hit (which would make the sentence dead) or there is a
+ * default. There is a default, and this is it: the same 90 days §5 writes in
+ * its own example.
+ *
+ * Every route that can set the flag also takes `--older-than` to override it,
+ * and every response states the threshold it used — so a caller never has to
+ * guess which number produced the flag it is reading.
+ */
+#define KB_STALE_DEFAULT "90d"
+
 /* Exit codes: 0 success, 1 user/store error, 2 internal error. */
 #define KB_EXIT_OK 0
 #define KB_EXIT_ERR 1

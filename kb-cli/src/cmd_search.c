@@ -29,8 +29,9 @@
  */
 
 static const char *const VALUE_FLAGS[] = {
-    "--collection", "--mode",  "--k",     "--expand",   "--store",
-    "--source",     "--mime",  "--since", "--min-score", "--minScore",
+    "--collection", "--mode",      "--k",          "--expand",
+    "--store",      "--source",    "--mime",       "--since",
+    "--min-score",  "--minScore",  "--older-than", "--olderThan",
     NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
@@ -234,6 +235,12 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
     }
 
     char err[512];
+    Staleness st;
+    if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
+                        sizeof err)) {
+        err_out(json, "usage", "%s", err);
+        return KB_EXIT_ERR;
+    }
     TierSet tiers;
     if (!tiers_resolve(sel, false, &tiers, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
@@ -376,8 +383,11 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
              * able to tell "the vector path found nothing" from "the vector
              * path did not run". */
             sb_printf(&sb, ",\"scores\":{\"bm25\":%.6f}", c->bm25);
-            sb_printf(&sb, ",\"fetchedAt\":\"%s\"",
-                      d->fetched_at ? d->fetched_at : "");
+            /* §5: every hit carries how old it is AND the verdict on that
+             * age, from the one definition in cmd_common.c. */
+            sb_printf(&sb, ",\"fetchedAt\":\"%s\",\"stale\":%s",
+                      d->fetched_at ? d->fetched_at : "",
+                      doc_stale(&st, d) ? "true" : "false");
             if (expand) {
                 sb_puts(&sb, ",\"neighbours\":[");
                 bool first = true;
@@ -416,6 +426,8 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             }
             if (also_global)
                 sb_puts(&sb, "  (also global)");
+            if (doc_stale(&st, d))
+                sb_puts(&sb, "  (stale)");
             sb_puts(&sb, "\n    ");
             sb_puts_safe(&sb, snip);
             sb_putc(&sb, '\n');
@@ -433,7 +445,9 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         }
     }
     if (json) {
-        sb_printf(&sb, "],\"count\":%zu}", nfused);
+        sb_printf(&sb, "],\"count\":%zu,\"olderThan\":\"%s\","
+                       "\"staleBefore\":\"%s\"}",
+                  nfused, st.spec, st.cutoff_iso);
         puts(sb_finish(&sb));
     } else if (nfused == 0) {
         puts("no hits");

@@ -13,6 +13,29 @@
  * and a collection with no documents left simply stops existing — which is the
  * behaviour §7's DELETE /collections/{name} implies anyway. */
 
+/* PATCH and DELETE /collections/{name} (§7) live here too, as verbs in the
+ * first positional:
+ *
+ *   kb collections                     list
+ *   kb collections rename <old> <new>  PATCH
+ *   kb collections forget <name>       DELETE
+ *
+ * A COLLECTION IS NOT STORED ANYWHERE, so neither is a write to one. §1.3
+ * makes a collection a field on a Source, created implicitly on first ingest;
+ * renaming a topic is therefore appending a revised `source` record for each
+ * source in it, and forgetting one is appending a `forget` record for each.
+ * Both are ordinary append-only motions, and both are refused before the
+ * first append when they would be wrong — so a half-renamed collection is not
+ * a state this can produce except by crashing, and a crash mid-rename leaves
+ * the sources it reached under the new name and the rest under the old, which
+ * a second rename finishes.
+ *
+ * NEITHER TOUCHES THE KEYWORD INDEX. fts.db's digest covers what decides a
+ * chunk's text and identity — id, content hash, chunk range, mime, path — and
+ * a collection is none of those; it is read live from the log as a search
+ * filter. So a rename cannot stale the index, and rebuilding after one would
+ * be work for nothing. */
+
 static const char *const VALUE_FLAGS[] = {"--store", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 

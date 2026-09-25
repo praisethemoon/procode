@@ -2,9 +2,9 @@
 
 /* GET /documents (§2) with its ?collection=&source=&mime=&since= filters. */
 
-static const char *const VALUE_FLAGS[] = {"--collection", "--source", "--mime",
-                                          "--since",      "--limit",  "--store",
-                                          NULL};
+static const char *const VALUE_FLAGS[] = {
+    "--collection", "--source", "--mime",  "--since",
+    "--limit",      "--store",  "--older-than", "--olderThan", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef struct {
@@ -55,6 +55,12 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
     }
 
     char err[512];
+    Staleness st;
+    if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
+                        sizeof err)) {
+        err_out(json, "usage", "%s", err);
+        return KB_EXIT_ERR;
+    }
     TierSet tiers;
     if (!tiers_resolve(sel, false, &tiers, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
@@ -90,12 +96,13 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
                     sb_putc(&sb, ',');
                 first = false;
                 sb_putc(&sb, '{');
-                json_document(&sb, &s, d, src);
+                json_document(&sb, &s, d, src, &st);
                 sb_putc(&sb, '}');
             } else {
-                sb_printf(&sb, "%-8s %-8s %-14s %-21s ", d->id,
+                sb_printf(&sb, "%-8s %-8s %-14s %-21s %-5s ", d->id,
                           tier_name(s.tier), src ? src->collection : "-",
-                          d->fetched_at ? d->fetched_at : "-");
+                          d->fetched_at ? d->fetched_at : "-",
+                          doc_stale(&st, d) ? "stale" : "");
                 sb_puts_safe(&sb, d->title ? d->title : "");
                 sb_putc(&sb, '\n');
             }
@@ -103,7 +110,11 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
         store_close(&s);
     }
     if (json) {
-        sb_printf(&sb, "],\"count\":%lld}", (long long)shown);
+        /* The threshold that produced every `stale` above, so a caller never
+         * has to know which default it got (§5). */
+        sb_printf(&sb, "],\"count\":%lld,\"olderThan\":\"%s\",\"staleBefore\":"
+                       "\"%s\"}",
+                  (long long)shown, st.spec, st.cutoff_iso);
         puts(sb_finish(&sb));
     } else if (shown == 0) {
         puts("no documents");

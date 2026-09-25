@@ -118,6 +118,9 @@ bool store_put_blob(Store *s, const void *data, size_t len, char hash[65],
 void store_blob_path(const Store *s, const char *hash, char *out,
                      size_t outsz);
 bool store_get_blob(Store *s, const char *hash, char **data, size_t *len);
+/* 64 lowercase hex digits and nothing else. The one predicate every path that
+ * turns a name into a blob path goes through. */
+bool store_is_blob_name(const char *hash);
 
 /* index/model.json (§8). This slice owns only the chunking parameters; the
  * model's own identity joins them when the embedder exists. Written at
@@ -134,6 +137,21 @@ typedef struct {
 
 ChunkParams store_chunk_params(Arena *a, const Store *s);
 bool store_write_chunk_params(Store *s, char *err, size_t errsz);
+
+/* Overwrites it with what this build would use. `POST /reindex` (§7) is the
+ * ONLY caller, and the reason is the one hole §1.6 and §8 leave between them:
+ * §1.6 calls everything under index/ reconstructible from the logs and blobs,
+ * while §8 defines this file as the record of the configuration the index was
+ * BUILT with — which the logs do not contain and cannot. So `rebuild` writes
+ * it only when absent and otherwise obeys it, and `reindex` is the one
+ * command that re-derives every chunk under new parameters and therefore the
+ * one command entitled to say so. */
+bool store_rewrite_chunk_params(Store *s, char *err, size_t errsz);
+
+/* Deletes one blob by hash. `POST /compact` (§7) is the only caller. The name
+ * is validated exactly as store_get_blob validates it, so nothing that is not
+ * 64 hex digits can ever be turned into a path and unlinked. */
+bool store_drop_blob(Store *s, const char *hash);
 
 /* Total bytes of everything under the store, and of index/ alone. */
 uint64_t store_disk_bytes(Arena *a, const Store *s, uint64_t *index_bytes);
