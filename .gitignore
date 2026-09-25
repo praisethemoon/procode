@@ -6,6 +6,8 @@ packages/kb-js/out/
 packages/kb-mcp/out/
 packages/index-vscode/out/
 packages/lap-vscode/out/
+packages/coboard/out/
+packages/coboard-vscode/out/
 *.vsix
 *.o
 *.plist

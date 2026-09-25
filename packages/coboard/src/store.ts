@@ -1,0 +1,437 @@
+/* The board on disk: `.coboard/log.jsonl`, append-only, one JSON record a line.
+ *
+ *   {"op":"put","item":{...}}                    an epic, milestone or ticket, whole
+ *   {"op":"comment","ticket":"T-3","author":..,"body":..,"at":..}
+ *   {"op":"delete","id":"T-3","at":..}
+ *
+ * The board is the fold of the log: the last `put` of an id wins, a `delete`
+ * removes it, comments attach to their ticket in order. Every write re-reads
+ * the log under a lock first, so the VS Code extension and any number of
+ * agents can write to the same board without clobbering each other or
+ * handing out the same id twice. The log is small text and is meant to be
+ * committed; there is no cache to rebuild.
+ */
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+import {
+    Comment,
+    Epic,
+    Item,
+    Kind,
+    Milestone,
+    PREFIX,
+    PRIORITIES,
+    SIZES,
+    Ticket,
+    idNumber,
+    kindOf,
+    statusesOf,
+} from "./model";
+
+export const BOARD_DIR = ".coboard";
+export const LOG_FILE = "log.jsonl";
+
+export class BoardError extends Error {
+    constructor(
+        readonly code: "not_found" | "invalid" | "in_use" | "no_board" | "locked",
+        message: string,
+    ) {
+        super(message);
+    }
+}
+
+/* The first `.coboard/` at or above `from`, like git finds `.git`. */
+export function findBoard(from: string): string | null {
+    let dir = path.resolve(from);
+    for (;;) {
+        const probe = path.join(dir, BOARD_DIR);
+        try {
+            if (fs.statSync(probe).isDirectory()) {
+                return dir;
+            }
+        } catch {
+            // not here
+        }
+        const up = path.dirname(dir);
+        if (up === dir) {
+            return null;
+        }
+        dir = up;
+    }
+}
+
+export interface Fields {
+    title?: string;
+    description?: string;
+    status?: string;
+    size?: string | null;
+    priority?: string;
+    assignee?: string | null;
+    labels?: readonly string[];
+}
+
+export interface CreateInput extends Fields {
+    kind: Kind;
+    title: string;
+    epic?: string | null;
+    milestone?: string | null;
+}
+
+export interface Placement {
+    epic?: string | null;
+    milestone?: string | null;
+}
+
+interface State {
+    items: Map<string, Item>;
+    comments: Map<string, Comment[]>;
+    next: Record<Kind, number>;
+}
+
+function now(): string {
+    return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+export class Board {
+    readonly dir: string;
+    readonly logPath: string;
+
+    /* `root` is the directory that holds `.coboard/`. Nothing is created until
+     * the first write. */
+    constructor(readonly root: string) {
+        this.dir = path.join(root, BOARD_DIR);
+        this.logPath = path.join(this.dir, LOG_FILE);
+    }
+
+    exists(): boolean {
+        return fs.existsSync(this.logPath) || fs.existsSync(this.dir);
+    }
+
+    /* ------------------------------------------------------------ reading */
+
+    private load(): State {
+        const st: State = {
+            items: new Map(),
+            comments: new Map(),
+            next: { epic: 1, milestone: 1, ticket: 1 },
+        };
+        let text = "";
+        try {
+            text = fs.readFileSync(this.logPath, "utf8");
+        } catch {
+            return st;
+        }
+        for (const line of text.split("\n")) {
+            if (!line.trim()) {
+                continue;
+            }
+            let rec: Record<string, unknown>;
+            try {
+                rec = JSON.parse(line) as Record<string, unknown>;
+            } catch {
+                continue; // a torn final line from a crash; never acknowledged
+            }
+            if (rec["op"] === "put") {
+                const item = rec["item"] as Item;
+                const kind = kindOf(item?.id ?? "");
+                if (!kind) {
+                    continue;
+                }
+                st.items.set(item.id, item);
+                st.next[kind] = Math.max(st.next[kind], idNumber(item.id) + 1);
+            } else if (rec["op"] === "comment") {
+                const t = String(rec["ticket"]);
+                const list = st.comments.get(t) ?? [];
+                list.push({ author: String(rec["author"] ?? ""), body: String(rec["body"] ?? ""), at: String(rec["at"] ?? "") });
+                st.comments.set(t, list);
+            } else if (rec["op"] === "delete") {
+                st.items.delete(String(rec["id"]));
+            }
+        }
+        return st;
+    }
+
+    private withComments(st: State, item: Item): Item {
+        return item.kind === "ticket" ? { ...item, comments: st.comments.get(item.id) ?? [] } : item;
+    }
+
+    /* Every item, epics then milestones then tickets, each in id order. */
+    all(): Item[] {
+        const st = this.load();
+        const order: Record<Kind, number> = { epic: 0, milestone: 1, ticket: 2 };
+        return [...st.items.values()]
+            .map((i) => this.withComments(st, i))
+            .sort((a, b) => order[a.kind] - order[b.kind] || idNumber(a.id) - idNumber(b.id));
+    }
+
+    get(id: string): Item {
+        const st = this.load();
+        const item = st.items.get(id.trim().toUpperCase());
+        if (!item) {
+            throw new BoardError("not_found", `no ${id} on this board`);
+        }
+        return this.withComments(st, item);
+    }
+
+    /* ------------------------------------------------------------ writing */
+
+    /* Runs `fn` against a fresh read of the log while holding
+     * `.coboard/lock`, and appends whatever records it returns. */
+    private write<T>(fn: (st: State) => { records: object[]; result: T }): T {
+        fs.mkdirSync(this.dir, { recursive: true });
+        const lock = path.join(this.dir, "lock");
+        const deadline = Date.now() + 5000;
+        for (;;) {
+            try {
+                fs.writeFileSync(lock, String(process.pid), { flag: "wx" });
+                break;
+            } catch {
+                // A lock older than 30s belongs to a writer that died holding it.
+                try {
+                    if (Date.now() - fs.statSync(lock).mtimeMs > 30_000) {
+                        fs.rmSync(lock, { force: true });
+                        continue;
+                    }
+                } catch {
+                    continue;
+                }
+                if (Date.now() > deadline) {
+                    throw new BoardError("locked", "the board is locked by another writer");
+                }
+                Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+            }
+        }
+        try {
+            const { records, result } = fn(this.load());
+            if (records.length > 0) {
+                fs.appendFileSync(this.logPath, records.map((r) => JSON.stringify(r) + "\n").join(""));
+            }
+            return result;
+        } finally {
+            fs.rmSync(lock, { force: true });
+        }
+    }
+
+    create(input: CreateInput): Item {
+        return this.write((st) => {
+            const title = cleanTitle(input.title);
+            const at = now();
+            const id = `${PREFIX[input.kind]}-${st.next[input.kind]}`;
+            const base = {
+                id,
+                title,
+                description: input.description ?? "",
+                status: checkStatus(input.kind, input.status ?? statusesOf(input.kind)[0]),
+                created: at,
+                updated: at,
+            };
+            let item: Item;
+            if (input.kind === "epic") {
+                item = { ...base, kind: "epic" };
+            } else if (input.kind === "milestone") {
+                const epic = need(st, input.epic, "epic", "a milestone needs an epic");
+                item = { ...base, kind: "milestone", epic: epic.id };
+            } else {
+                const place = resolvePlacement(st, input.epic ?? null, input.milestone ?? null);
+                item = {
+                    ...base,
+                    kind: "ticket",
+                    epic: place.epic,
+                    milestone: place.milestone,
+                    size: checkSize(input.size ?? null),
+                    priority: checkPriority(input.priority ?? "medium"),
+                    assignee: cleanOptional(input.assignee),
+                    labels: cleanLabels(input.labels ?? []),
+                    comments: [],
+                };
+            }
+            return { records: [{ op: "put", item: stored(item) }], result: item };
+        });
+    }
+
+    update(id: string, fields: Fields): Item {
+        return this.write((st) => {
+            const item = need(st, id, null, "");
+            const next: Record<string, unknown> = { ...item, updated: now() };
+            if (fields.title !== undefined) {
+                next["title"] = cleanTitle(fields.title);
+            }
+            if (fields.description !== undefined) {
+                next["description"] = fields.description;
+            }
+            if (fields.status !== undefined) {
+                next["status"] = checkStatus(item.kind, fields.status);
+            }
+            const ticketOnly = ["size", "priority", "assignee", "labels"] as const;
+            for (const k of ticketOnly) {
+                if (fields[k] !== undefined && item.kind !== "ticket") {
+                    throw new BoardError("invalid", `${k} is a ticket field and ${item.id} is a ${item.kind}`);
+                }
+            }
+            if (fields.size !== undefined) {
+                next["size"] = checkSize(fields.size);
+            }
+            if (fields.priority !== undefined) {
+                next["priority"] = checkPriority(fields.priority);
+            }
+            if (fields.assignee !== undefined) {
+                next["assignee"] = cleanOptional(fields.assignee);
+            }
+            if (fields.labels !== undefined) {
+                next["labels"] = cleanLabels(fields.labels);
+            }
+            const updated = this.withComments(st, next as unknown as Item);
+            return { records: [{ op: "put", item: stored(updated) }], result: updated };
+        });
+    }
+
+    /* A ticket to another epic and/or milestone (`milestone: null` takes it
+     * out of its milestone), or a milestone — with its tickets — to another
+     * epic. */
+    move(id: string, to: Placement): Item {
+        return this.write((st) => {
+            const item = need(st, id, null, "");
+            const at = now();
+            if (item.kind === "epic") {
+                throw new BoardError("invalid", "an epic is not inside anything and cannot move");
+            }
+            if (item.kind === "milestone") {
+                if (to.milestone !== undefined && to.milestone !== null) {
+                    throw new BoardError("invalid", "a milestone moves to an epic, not into another milestone");
+                }
+                const epic = need(st, to.epic, "epic", "moving a milestone needs the epic to move it to");
+                const moved: Milestone = { ...item, epic: epic.id, updated: at };
+                const records: object[] = [{ op: "put", item: moved }];
+                for (const t of st.items.values()) {
+                    if (t.kind === "ticket" && t.milestone === item.id && t.epic !== epic.id) {
+                        records.push({ op: "put", item: stored({ ...t, epic: epic.id, updated: at }) });
+                    }
+                }
+                return { records, result: moved };
+            }
+            // A new epic without a milestone leaves the old milestone behind:
+            // it belongs to the old epic.
+            let milestone = to.milestone;
+            if (milestone === undefined) {
+                milestone = to.epic && to.epic !== item.epic ? null : item.milestone;
+            }
+            const place = resolvePlacement(st, to.epic ?? (milestone ? null : item.epic), milestone);
+            const moved: Ticket = { ...item, epic: place.epic, milestone: place.milestone, updated: at };
+            const withC = this.withComments(st, moved);
+            return { records: [{ op: "put", item: stored(withC) }], result: withC };
+        });
+    }
+
+    comment(ticket: string, body: string, author: string): Ticket {
+        return this.write((st) => {
+            const t = need(st, ticket, "ticket", "");
+            if (!body.trim()) {
+                throw new BoardError("invalid", "a comment needs a body");
+            }
+            const c: Comment = { author: author.trim() || "anonymous", body, at: now() };
+            const result = { ...(this.withComments(st, t) as Ticket) };
+            result.comments = [...result.comments, c] as Comment[];
+            return { records: [{ op: "comment", ticket: t.id, ...c }], result };
+        });
+    }
+
+    /* An epic or milestone that still holds anything is refused rather than
+     * taking its children with it; a deleted milestone's tickets would have
+     * nowhere obvious to go, so empty it first. */
+    remove(id: string): void {
+        this.write((st) => {
+            const item = need(st, id, null, "");
+            const children = [...st.items.values()].filter(
+                (c) => (c.kind !== "epic" && "epic" in c && c.epic === item.id) || (c.kind === "ticket" && c.milestone === item.id),
+            );
+            if (children.length > 0) {
+                throw new BoardError(
+                    "in_use",
+                    `${item.id} still holds ${children.map((c) => c.id).join(", ")}; move or delete them first`,
+                );
+            }
+            return { records: [{ op: "delete", id: item.id, at: now() }], result: undefined };
+        });
+    }
+}
+
+/* ------------------------------------------------------------ validation */
+
+function need(st: State, id: string | null | undefined, kind: Kind | null, missing: string): Item {
+    if (!id || !id.trim()) {
+        throw new BoardError("invalid", missing || "an id is required");
+    }
+    const key = id.trim().toUpperCase();
+    const item = st.items.get(key);
+    if (!item) {
+        throw new BoardError("not_found", `no ${key} on this board`);
+    }
+    if (kind && item.kind !== kind) {
+        throw new BoardError("invalid", `${key} is a ${item.kind}, not a ${kind}`);
+    }
+    return item;
+}
+
+/* A ticket's epic and milestone, agreeing with each other: a milestone
+ * implies its epic, and an epic given alongside it must be that one. */
+function resolvePlacement(st: State, epic: string | null, milestone: string | null): { epic: string; milestone: string | null } {
+    if (milestone) {
+        const m = need(st, milestone, "milestone", "") as Milestone;
+        if (epic && epic.trim().toUpperCase() !== m.epic) {
+            throw new BoardError("invalid", `${m.id} belongs to ${m.epic}, not ${epic.trim().toUpperCase()}`);
+        }
+        return { epic: m.epic, milestone: m.id };
+    }
+    const e = need(st, epic, "epic", "a ticket needs an epic (or a milestone, which implies one)");
+    return { epic: e.id, milestone: null };
+}
+
+function stored(item: Item): Item {
+    if (item.kind !== "ticket") {
+        return item;
+    }
+    // Comments live in their own records; a put never carries them.
+    const { comments: _comments, ...rest } = item;
+    return rest as Ticket;
+}
+
+function cleanTitle(title: string | undefined): string {
+    const t = (title ?? "").replace(/\s+/g, " ").trim();
+    if (!t) {
+        throw new BoardError("invalid", "a title is required");
+    }
+    return t;
+}
+
+function cleanOptional(v: string | null | undefined): string | null {
+    const t = (v ?? "").trim();
+    return t ? t : null;
+}
+
+function cleanLabels(labels: readonly string[]): string[] {
+    return [...new Set(labels.map((l) => l.trim().toLowerCase()).filter((l) => l.length > 0))];
+}
+
+function oneOf(what: string, v: string, allowed: readonly string[]): string {
+    const s = v.trim().toLowerCase();
+    if (!allowed.includes(s)) {
+        throw new BoardError("invalid", `${what} "${v}" is not one of ${allowed.join(", ")}`);
+    }
+    return s;
+}
+
+function checkStatus(kind: Kind, v: string): string {
+    return oneOf(`${kind} status`, v, statusesOf(kind));
+}
+
+function checkSize(v: string | null): string | null {
+    return v === null || v.trim() === "" ? null : oneOf("size", v, SIZES);
+}
+
+function checkPriority(v: string): string {
+    return oneOf("priority", v, PRIORITIES);
+}
+
+export type { Epic, Milestone, Ticket, Item };

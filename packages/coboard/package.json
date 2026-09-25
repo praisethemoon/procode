@@ -1,0 +1,35 @@
+{
+  "name": "coboard",
+  "displayName": "coboard",
+  "description": "A small board of epics, milestones and tickets that developers and agents share: an append-only log in .coboard/, a generic search, a link to lap sessions, and an MCP server.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "praisethemoon",
+  "author": {
+    "name": "Soulaymen Chouri",
+    "email": "doit@praisethemoon.org"
+  },
+  "license": "MIT",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "bin": {
+    "coboard-mcp": "./bin/coboard-mcp"
+  },
+  "files": [
+    "out",
+    "bin",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test \"out/test/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}

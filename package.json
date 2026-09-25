@@ -6,7 +6,9 @@
         "packages/kb-js",
         "packages/kb-mcp",
         "packages/index-vscode",
-        "packages/lap-vscode"
+        "packages/lap-vscode",
+        "packages/coboard",
+        "packages/coboard-vscode"
     ],
     "scripts": {
         "setup": "npm install && npm run build",
