@@ -373,6 +373,21 @@ test("kb_links is checked against the real binary the moment kb links exists", a
         assert.notEqual(written.isError, true, written.content[0].text);
         const read = payload(await call(work, "kb_links", { op: "list", document: a }));
         assert.equal((read["outgoing"] as unknown[]).length, 1);
+
+        /* T-1: the same edge through kb_get's include, from both ends, with
+         * the far document resolved to a row. */
+        type Edge = { to: string; from: string; type: string; document: { title: string } | null };
+        type Links = { outgoing: Edge[]; incoming: Edge[] };
+        const fromA = payload(await call(work, "kb_get", { id: a, include: ["links"] }))["links"] as Links;
+        assert.deepEqual(
+            fromA.outgoing.map((e) => [e.type, e.to, e.document?.title]),
+            [["analogue_of", b, "Ring"]],
+        );
+        assert.deepEqual(fromA.incoming, []);
+        const fromB = payload(await call(work, "kb_get", { id: b, include: ["links"] }))["links"] as Links;
+        assert.deepEqual(fromB.incoming.map((e) => [e.from, e.document?.title]), [[a, "IOCP"]]);
+        const plain = payload(await call(work, "kb_get", { id: a }));
+        assert.equal("links" in plain, false, "links only when asked for");
     } finally {
         work.dispose();
     }

@@ -497,6 +497,17 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
                 read: await work.kb.get(added.document),
             },
             {
+                /* Every include at once, on a document that has an edge:
+                 * the plain `get` above never asks for links, which is how a
+                 * reader that dropped them (T-1) went unnoticed. */
+                what: "get with every include",
+                argv: ["get", added.document, "--include", "text,chunks,links"],
+                read: await (async () => {
+                    await work.kb.link(added.document, "see_also", second.document);
+                    return work.kb.get(added.document, { text: true, chunks: true, links: true });
+                })(),
+            },
+            {
                 what: "stats",
                 argv: ["stats"],
                 read: await work.kb.stats(),

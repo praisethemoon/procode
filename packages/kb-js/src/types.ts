@@ -191,14 +191,16 @@ export interface KbAdded {
     readonly fetchedAt: string;
 }
 
-/* `kb get` with `--include text,chunks`. The document is always there; the
- * other two are present exactly when they were asked for, because §4's
+/* `kb get` with `--include text,chunks,links`. The document is always there;
+ * the other three are present exactly when they were asked for, because §4's
  * discipline is that a list must not be able to flood a caller's context and
  * the same rule holds for a read that was not asked to carry the text. */
 export interface KbDocumentRead {
     readonly document: KbDocument;
     readonly text?: string | null;
     readonly chunks?: readonly KbChunk[] | null;
+    /* §6's edges, resolved to rows, the same shape `kb links` answers. */
+    readonly links?: { readonly outgoing: readonly KbLink[]; readonly incoming: readonly KbLink[] };
 }
 
 /* §4's `GET /chunks/{id}`: "the full chunk text and its neighbours". */

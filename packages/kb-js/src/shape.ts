@@ -275,6 +275,13 @@ export function readDocumentRead(payload: Record<string, unknown>): KbDocumentRe
     if ("chunks" in payload) {
         read["chunks"] = payload["chunks"] === null ? null : arr(payload["chunks"]).map(readChunk);
     }
+    if ("links" in payload) {
+        const links = obj(payload["links"]);
+        read["links"] = {
+            outgoing: arr(links["outgoing"]).map(readLink),
+            incoming: arr(links["incoming"]).map(readLink),
+        };
+    }
     return read as unknown as KbDocumentRead;
 }
 
