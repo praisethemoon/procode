@@ -83,7 +83,7 @@ const NAMED: Readonly<Record<string, string>> = {
      * indistinguishable from a plain one on screen and in most diffs, so a
      * literal here is a character anything that copies this file can silently
      * flatten — which is exactly what happened to it once. */
-    nbsp: " ",
+    nbsp: "\u00a0",
     hellip: "…",
     mdash: "—",
     ndash: "–",
