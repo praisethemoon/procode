@@ -8,6 +8,7 @@ packages/index-vscode/out/
 packages/lap-vscode/out/
 packages/coboard/out/
 packages/coboard-vscode/out/
+packages/combined/dist/
 *.vsix
 *.o
 *.plist

@@ -111,6 +111,22 @@ server's `kb` finds it by walking up from its working directory, so start the
 MCP server from inside the project; with no `.kb/` above it, every tool refuses
 with `not_found` rather than filing anywhere else.
 
+**Everything at once: procode (VS Code).** `npm run package --workspace
+combined` builds `packages/combined/procode-0.1.0-<platform>.vsix`: Lap
+History, Knowledge and the Board in one extension, with the `lap` and `kb`
+CLIs built in for this machine and the kb and coboard MCP servers bundled.
+Install it with `code --install-extension <file>.vsix` instead of the three
+separate ones. The build checks the extension starts before it packages it.
+
+- **VS Code's agent** gets both MCP servers automatically (VS Code 1.101+);
+  each runs in the workspace folder, so it uses that workspace's `.kb/` and
+  `.coboard/`.
+- **Claude Code**: in a project, run **procode: Set Up MCP for Claude Code**.
+  It writes `coboard` and `kb` into the project's `.mcp.json` (other servers
+  are kept). They run on VS Code's own runtime, so no separate Node is
+  needed. After updating procode, the extension offers to repoint the
+  entries at the new version.
+
 **Knowledge (VS Code).** `npm run package` builds a self-contained
 `packages/index-vscode/index-vscode-0.1.0.vsix`. Install it with
 `code --install-extension <file>.vsix`. The setting `knowledge.cliPath`

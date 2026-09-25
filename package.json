@@ -8,7 +8,8 @@
         "packages/index-vscode",
         "packages/lap-vscode",
         "packages/coboard",
-        "packages/coboard-vscode"
+        "packages/coboard-vscode",
+        "packages/combined"
     ],
     "scripts": {
         "setup": "npm install && npm run build",
