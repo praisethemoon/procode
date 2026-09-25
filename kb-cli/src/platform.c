@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -278,6 +279,89 @@ bool plat_file_size(const char *path, uint64_t *size) {
         return false;
     *size = (uint64_t)sz;
     return true;
+}
+
+/* ---- read-only whole-file mapping -------------------------------------- */
+
+struct PlatMap {
+    void *base;
+    size_t len;
+#ifdef _WIN32
+    HANDLE file;
+    HANDLE mapping;
+#endif
+};
+
+PlatMap *plat_map_file(Arena *a, const char *path, const uint8_t **base,
+                       size_t *len) {
+    *base = NULL;
+    *len = 0;
+#ifdef _WIN32
+    char wb[KB_PATH_MAX];
+    HANDLE fh = CreateFileA(winpath(wb, sizeof wb, path), GENERIC_READ,
+                            FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                            FILE_ATTRIBUTE_NORMAL, NULL);
+    if (fh == INVALID_HANDLE_VALUE)
+        return NULL;
+    LARGE_INTEGER sz;
+    if (!GetFileSizeEx(fh, &sz) || sz.QuadPart <= 0 ||
+        (uint64_t)sz.QuadPart > (uint64_t)SIZE_MAX) {
+        CloseHandle(fh);
+        return NULL;
+    }
+    HANDLE mh = CreateFileMappingA(fh, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (!mh) {
+        CloseHandle(fh);
+        return NULL;
+    }
+    void *p = MapViewOfFile(mh, FILE_MAP_READ, 0, 0, 0);
+    if (!p) {
+        CloseHandle(mh);
+        CloseHandle(fh);
+        return NULL;
+    }
+    PlatMap *m = (PlatMap *)arena_alloc(a, sizeof(PlatMap));
+    m->base = p;
+    m->len = (size_t)sz.QuadPart;
+    m->file = fh;
+    m->mapping = mh;
+#else
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return NULL;
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
+        (uint64_t)st.st_size > (uint64_t)SIZE_MAX) {
+        close(fd);
+        return NULL;
+    }
+    void *p = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    /* The descriptor has done its job: a mapping keeps the file alive on its
+     * own, and holding the fd as well would leak one per model load. */
+    close(fd);
+    if (p == MAP_FAILED)
+        return NULL;
+    PlatMap *m = (PlatMap *)arena_alloc(a, sizeof(PlatMap));
+    m->base = p;
+    m->len = (size_t)st.st_size;
+#endif
+    *base = (const uint8_t *)m->base;
+    *len = m->len;
+    return m;
+}
+
+void plat_unmap_file(PlatMap *m) {
+    if (!m || !m->base)
+        return;
+#ifdef _WIN32
+    UnmapViewOfFile(m->base);
+    CloseHandle(m->mapping);
+    CloseHandle(m->file);
+#else
+    munmap(m->base, m->len);
+#endif
+    m->base = NULL;
+    m->len = 0;
 }
 
 bool plat_truncate(const char *path, uint64_t new_size) {

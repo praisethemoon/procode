@@ -37,6 +37,27 @@ bool plat_read_range(Arena *a, const char *path, uint64_t off, size_t len,
                      char **data);
 /* File size in bytes; false if the file does not exist. */
 bool plat_file_size(const char *path, uint64_t *size);
+
+/* ---- read-only whole-file mapping ----
+ *
+ * Every other reader here copies into the arena, which is right for a log or
+ * a blob: they are small, they are parsed once, and a copy is simpler than a
+ * mapping. The embedding model is neither — it is tens of megabytes of
+ * quantised weights that the forward pass reads over and over and never
+ * writes. Copying it would spend the memory twice and the time once for
+ * nothing, so it is mapped instead, and the pages stay shared with every
+ * other process that has the same model open.
+ *
+ * The mapping is READ-ONLY and PRIVATE: kb must not be able to write through
+ * it even by accident, and nothing kb does may reach the user's model file.
+ *
+ * Returns NULL on failure (including an empty file, which cannot be mapped
+ * and is never a model anyway). *len gets the size on success.
+ */
+typedef struct PlatMap PlatMap;
+PlatMap *plat_map_file(Arena *a, const char *path, const uint8_t **base,
+                       size_t *len);
+void plat_unmap_file(PlatMap *m);
 /* Flushes a stream all the way to disk. */
 bool plat_fsync(FILE *f);
 /* True when f is an interactive terminal that renders ANSI styling. On
