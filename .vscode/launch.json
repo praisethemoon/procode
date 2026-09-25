@@ -2,16 +2,62 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Lap Extension",
+      "name": "Run Lap History",
       "type": "extensionHost",
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/packages/lap-vscode",
         "--disable-extensions",
-        "${workspaceFolder}/packages/lap-vscode"
+        "${workspaceFolder}/.playground"
       ],
+      "env": { "PATH": "${workspaceFolder}/cli/lap-cli/bin:${workspaceFolder}/cli/kb-cli/bin:${env:PATH}" },
       "outFiles": ["${workspaceFolder}/packages/lap-vscode/out/**/*.js"],
-      "preLaunchTask": "npm: compile - lap-vscode"
+      "preLaunchTask": "prepare: Lap History"
+    },
+    {
+      "name": "Run Knowledge",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/index-vscode",
+        "--disable-extensions",
+        "${workspaceFolder}/.playground"
+      ],
+      "env": { "PATH": "${workspaceFolder}/cli/lap-cli/bin:${workspaceFolder}/cli/kb-cli/bin:${env:PATH}" },
+      "outFiles": ["${workspaceFolder}/packages/index-vscode/out/**/*.js"],
+      "preLaunchTask": "prepare: Knowledge"
+    },
+    {
+      "name": "Run Board",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/coboard-vscode",
+        "--disable-extensions",
+        "${workspaceFolder}/.playground"
+      ],
+      "env": { "PATH": "${workspaceFolder}/cli/lap-cli/bin:${workspaceFolder}/cli/kb-cli/bin:${env:PATH}" },
+      "outFiles": ["${workspaceFolder}/packages/coboard-vscode/out/**/*.js"],
+      "preLaunchTask": "prepare: Board"
+    },
+    {
+      "name": "Run All Extensions",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/lap-vscode",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/index-vscode",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/coboard-vscode",
+        "--disable-extensions",
+        "${workspaceFolder}/.playground"
+      ],
+      "env": { "PATH": "${workspaceFolder}/cli/lap-cli/bin:${workspaceFolder}/cli/kb-cli/bin:${env:PATH}" },
+      "outFiles": [
+        "${workspaceFolder}/packages/lap-vscode/out/**/*.js",
+        "${workspaceFolder}/packages/index-vscode/out/**/*.js",
+        "${workspaceFolder}/packages/coboard-vscode/out/**/*.js"
+      ],
+      "preLaunchTask": "prepare: all extensions"
     }
   ]
 }

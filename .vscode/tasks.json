@@ -2,11 +2,67 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "type": "npm",
-      "script": "compile",
-      "path": "packages/lap-vscode/",
-      "label": "npm: compile - lap-vscode",
+      "label": "build: lap-cli",
+      "type": "shell",
+      "command": "make -C cli/lap-cli",
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "build: kb-cli",
+      "type": "shell",
+      "command": "make -C cli/kb-cli",
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "compile: lap-vscode",
+      "type": "shell",
+      "command": "npm run compile --workspace lap-vscode",
       "problemMatcher": "$tsc"
+    },
+    {
+      "label": "compile: index-vscode",
+      "type": "shell",
+      "command": "npm run compile --workspace index-vscode",
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "compile: coboard-vscode",
+      "type": "shell",
+      "command": "npm run compile --workspace coboard-vscode",
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "playground",
+      "detail": "Creates .playground/ (gitignored) with a lap repository and a kb store, if they are not there yet. Never deletes anything.",
+      "type": "shell",
+      "command": "mkdir -p .playground && cd .playground && { [ -d .lap ] || ../cli/lap-cli/bin/lap init; } && { [ -d .kb ] || ../cli/kb-cli/bin/kb init; }",
+      "dependsOn": ["build: lap-cli", "build: kb-cli"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare: Lap History",
+      "dependsOn": ["playground", "compile: lap-vscode"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare: Knowledge",
+      "dependsOn": ["playground", "compile: index-vscode"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare: Board",
+      "dependsOn": ["playground", "compile: coboard-vscode"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare: all extensions",
+      "dependsOn": ["playground", "compile: lap-vscode", "compile: index-vscode", "compile: coboard-vscode"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
     }
   ]
 }

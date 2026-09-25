@@ -31,3 +31,6 @@ feedback.md
 
 # macOS
 .DS_Store
+
+# A scratch folder the VS Code launch configs open for testing.
+.playground/
