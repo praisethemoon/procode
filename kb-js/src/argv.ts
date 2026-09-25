@@ -79,6 +79,10 @@ export function lsArgv(options: LsOptions = {}): string[] {
 export interface GetOptions {
     text?: boolean;
     chunks?: boolean;
+    /* §2's third: `?include=text,chunks,links`. A document's edges alongside
+     * its content, so a reader following §6's layer does not pay a second call
+     * for the one question that follows from the first. */
+    links?: boolean;
     store?: StoreSelector | null;
 }
 
@@ -93,6 +97,9 @@ export function getArgv(id: string, options: GetOptions = {}): string[] {
     }
     if (options.chunks === true) {
         include.push("chunks");
+    }
+    if (options.links === true) {
+        include.push("links");
     }
     if (include.length > 0) {
         argv.push("--include", include.join(","));
@@ -296,26 +303,25 @@ export function deleteCollectionArgv(
     return argv;
 }
 
-/* §6's two reads and its one write, as subcommands of the noun they are about
- * — `kb links D-241` and `kb links add D-241 analogue_of D-7`.
- *
- * NEITHER COMMAND EXISTS IN THE CLI YET, on the same terms as the block above:
- * spelled from the route, reconciled here on the day it lands, and refused with
- * `usage` or `unknown_command` until then.
+/* §6's read and its write, as subcommands of the noun they are about —
+ * `kb links D-241` and `kb links add D-241 analogue_of D-7`, which is the
+ * CLI's own spelling and is checked against `kb --help`.
  *
  * THE WRITE READS AS A SENTENCE — from, type, to — rather than as §6's
  * `{ from, to, type }` field order. Three bare ids and a word in a row are a
  * thing somebody has to get right at a terminal, and `D-241 analogue_of D-7`
  * is the only ordering of the three that can be read back to check.
  *
- * BEHIND `--`, ALWAYS. A document id cannot begin with a dash today, but the
- * subject of a write is a value and a value that reaches the parser as a flag
- * is the bug `--` exists to close; `collections rename` above is written the
- * same way and for the same reason. */
+ * NO `--`, WHICH IS THE ONE PLACE THIS FILE DIFFERS FROM `collections rename`
+ * ABOVE AND IS NOT A PREFERENCE. `cmd_links.c` counts its positional arguments
+ * rather than routing them through the common parser, so a `--` is a fourth
+ * argument to a command that takes three and the refusal says so. The argument
+ * for `--` is that a value must not reach a parser as a flag; the answer here
+ * is that these values are ids the store itself issued (§1.1: `D-<n>`), and a
+ * spelling the binary rejects protects nothing. */
 export function linksArgv(document: string, store?: StoreSelector | null): string[] {
-    const argv = ["links"];
+    const argv = ["links", document];
     putStore(argv, store);
-    argv.push("--", document);
     return argv;
 }
 
@@ -325,9 +331,21 @@ export function linkArgv(
     to: string,
     store?: Exclude<StoreSelector, "all"> | null,
 ): string[] {
-    const argv = ["links", "add"];
+    const argv = ["links", "add", from, type, to];
     putStore(argv, store);
-    argv.push("--", from, type, to);
+    return argv;
+}
+
+/* §7's `GET /stats`: "per-collection document, chunk and byte counts".
+ *
+ * A SEPARATE COMMAND FROM `collections`, because the CLI made them two. The
+ * two rows overlap and neither contains the other: `collections` carries
+ * `oldestFetchedAt`, which is §5's freshness question, and `stats` carries
+ * `chunks` and a store-wide total. A caller that wants the whole picture asks
+ * both, and this is the second half. */
+export function statsArgv(store?: StoreSelector | null): string[] {
+    const argv = ["stats"];
+    putStore(argv, store);
     return argv;
 }
 

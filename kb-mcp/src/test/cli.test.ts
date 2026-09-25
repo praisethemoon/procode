@@ -1,0 +1,358 @@
+/* Against the real binary, through the real protocol.
+ *
+ * WHAT THIS ADDS OVER THE FAKE. The fake proves what this server does with an
+ * answer; this proves the questions are ones the CLI actually accepts. Every
+ * flag `kb-js` spells is a claim about a program in another language, and a
+ * claim checked only against a fixture can be wrong for as long as nobody runs
+ * the real thing.
+ *
+ * THE STORE IS NOT THE AGENT'S TO CREATE. `kb init` is not one of §9's six, so
+ * the workspace below is initialised with the binary directly — which is the
+ * arrangement in practice as well: a reader makes a store, and an agent fills
+ * it and reads it.
+ *
+ * IT NEVER TOUCHES A STORE IT WAS NOT ASKED TO. `KB_STORE` points inside a
+ * throwaway directory and the working directory is inside it too, so the global
+ * tier is the temporary one and the project tier is found by walking up from a
+ * directory that exists for the length of the run.
+ *
+ * IT SKIPS RATHER THAN FAILS FOR A COMMAND THAT IS NOT THERE YET. §5's `stale`
+ * and §6's `links` were built in parallel with this and landed during it, so
+ * all six tools are now driven against the real binary. The conditional is
+ * kept rather than collapsed: it costs one branch, it is what let this file be
+ * written before the commands existed, and the next tool built against a route
+ * the CLI has not grown yet gets the same treatment. What it asserts while a
+ * command is missing is that the tool degrades into a sentence rather than
+ * into a crash, which is what a surface offering the action owes whoever
+ * pressed it.
+ */
+
+import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { execFileSync } from "node:child_process";
+import { test } from "node:test";
+
+import { Kb } from "kb-js";
+
+import { handle } from "../jsonrpc";
+import { Server } from "../server";
+
+const BIN = path.resolve(__dirname, "..", "..", "..", "kb-cli", "bin", "kb");
+
+function built(): boolean {
+    return fs.existsSync(BIN);
+}
+
+function help(): string {
+    return execFileSync(BIN, ["--help"], { encoding: "utf8" });
+}
+
+function hasCommand(name: string): boolean {
+    return new RegExp(`^\\s{2}${name}\\b`, "m").test(help());
+}
+
+interface Work {
+    server: Server;
+    dispose(): void;
+}
+
+function workspace(): Work {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-mcp-real-"));
+    const project = path.join(dir, "project");
+    fs.mkdirSync(project);
+    const env = { ...process.env, KB_STORE: path.join(dir, "global") };
+    execFileSync(BIN, ["init", "--store", "project", "--json"], { cwd: project, env });
+    return {
+        server: new Server(new Kb({ bin: BIN, cwd: project, env })),
+        dispose: () => fs.rmSync(dir, { recursive: true, force: true }),
+    };
+}
+
+interface Called {
+    content: { type: string; text: string }[];
+    isError?: boolean;
+}
+
+/* One tool call, all the way through JSON-RPC. */
+async function call(work: Work, name: string, args: unknown): Promise<Called> {
+    const response = (await handle(
+        JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: { name, arguments: args },
+        }),
+        work.server.dispatch,
+    )) as Record<string, unknown>;
+    assert.equal(
+        "error" in response,
+        false,
+        `${name} came back as a transport error: ${JSON.stringify(response["error"])}`,
+    );
+    return response["result"] as Called;
+}
+
+function payload(result: Called): Record<string, unknown> {
+    return JSON.parse(result.content[0].text) as Record<string, unknown>;
+}
+
+/* The marker sits at the far end of a long document, and the term the search
+ * will match sits at the near end. A snippet is a window around the match, so
+ * a result that contains the marker is a result that carried the whole thing —
+ * which is the §4 violation this document is shaped to catch. */
+const IOCP = `# I/O Completion Ports
+
+CreateIoCompletionPort associates an open file handle with a completion port.
+A thread calls GetQueuedCompletionStatus to dequeue a packet.
+
+${"Each completion packet carries the number of bytes transferred. ".repeat(120)}
+
+THE-WHOLE-DOCUMENT-MARKER
+`;
+
+test("a store filed into and searched through §9's tools", async (t) => {
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        /* §2's load-bearing route: the caller already has the text. */
+        const added = payload(
+            await call(work, "kb_add", {
+                documents: [
+                    {
+                        title: "I/O Completion Ports",
+                        content: IOCP,
+                        collection: "win32-iocp",
+                        url: "https://learn.microsoft.test/win32/iocp",
+                        mime: "text/markdown",
+                        meta: { authors: ["MSDN"], year: 2026 },
+                    },
+                ],
+            }),
+        );
+        assert.equal(added["filed"], 1);
+        const rows = added["added"] as Record<string, unknown>[];
+        /* §1.4: a write goes to the project store when one exists, and this
+         * surface never named a tier. */
+        assert.equal(rows[0]["store"], "project");
+        assert.match(String(rows[0]["document"]), /^D-\d+$/);
+        const documentId = String(rows[0]["document"]);
+
+        const found = payload(await call(work, "kb_search", { q: "CreateIoCompletionPort" }));
+        const hits = found["hits"] as Record<string, unknown>[];
+        assert.ok(hits.length >= 1, "the document just filed was not found");
+        assert.equal(hits[0]["document"], documentId);
+        assert.equal(hits[0]["collection"], "win32-iocp");
+        assert.equal(hits[0]["store"], "project");
+        assert.ok(String(hits[0]["snippet"]).length > 0);
+        assert.ok((hits[0]["matched"] as string[]).length >= 1);
+
+        /* §4, against the real retrieval path: snippets only. */
+        assert.equal(
+            JSON.stringify(found).includes("THE-WHOLE-DOCUMENT-MARKER"),
+            false,
+            "a real search result carried the whole document",
+        );
+
+        /* And the deliberate read that does carry it. */
+        const whole = payload(await call(work, "kb_get", { id: documentId }));
+        assert.match(String(whole["text"]), /THE-WHOLE-DOCUMENT-MARKER/);
+        assert.equal(
+            (whole["document"] as Record<string, unknown>)["mime"],
+            "text/markdown",
+        );
+
+        /* §1.1's prefix, on the real chunk the search returned. */
+        const chunkId = String(hits[0]["chunk"]);
+        assert.match(chunkId, /^C-\d+$/);
+        const chunk = payload(await call(work, "kb_get", { id: chunkId }));
+        assert.equal((chunk["chunk"] as Record<string, unknown>)["document"], documentId);
+        assert.ok(String((chunk["chunk"] as Record<string, unknown>)["text"]).length > 0);
+
+        const collections = payload(await call(work, "kb_collections", {}));
+        const list = collections["collections"] as Record<string, unknown>[];
+        assert.equal(list.length, 1);
+        assert.equal(list[0]["name"], "win32-iocp");
+        assert.equal(list[0]["documents"], 1);
+        /* §9 puts both of §7's routes behind this tool: the chunk count comes
+         * from `kb stats` and the date from `kb collections`, and the row
+         * carries both or the join is not happening. */
+        assert.ok(Number(list[0]["chunks"]) >= 1, "the row has no chunk count, so stats was not read");
+        assert.ok(String(list[0]["oldestFetchedAt"]).length > 0);
+        assert.equal((collections["totals"] as Record<string, unknown>)["documents"], 1);
+    } finally {
+        work.dispose();
+    }
+});
+
+test("a filter §4 names is one the real binary accepts", async (t) => {
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await call(work, "kb_add", {
+            documents: [{ title: "Ring", content: "io_uring_prep_recv\n", collection: "io-uring" }],
+        });
+        /* Every filter this tool offers, sent at once. A flag the CLI does not
+         * have comes back as a `usage` refusal, which is the failure this
+         * exists to catch — `mode` is left off because hybrid retrieval needs
+         * the model and the CLI answers keyword until §8 lands. */
+        const result = await call(work, "kb_search", {
+            q: "io_uring_prep_recv",
+            collection: ["io-uring"],
+            k: 5,
+            expand: 1,
+            store: "all",
+            mime: "text/plain",
+            since: "2000-01-01T00:00:00Z",
+            minScore: 0,
+        });
+        assert.notEqual(
+            result.isError,
+            true,
+            `the CLI refused a filter §4 names: ${result.content[0].text}`,
+        );
+        assert.equal((payload(result)["hits"] as unknown[]).length, 1);
+    } finally {
+        work.dispose();
+    }
+});
+
+test("a document that is not there is a refusal the model can read", async (t) => {
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        const result = await call(work, "kb_get", { id: "D-9999" });
+        assert.equal(result.isError, true);
+        const answer = payload(result);
+        assert.equal(answer["kind"], "refused");
+        assert.equal(answer["error"], "not_found");
+    } finally {
+        work.dispose();
+    }
+});
+
+test("a query full of shell metacharacters reaches the real store as one argument", async (t) => {
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        const hostile = 'D-1; touch /tmp/kb-mcp-should-not-exist && echo "$(id)"';
+        const result = await call(work, "kb_get", { id: hostile });
+        /* Refused for not being a `D-n`, with the WHOLE string in the reason —
+         * which is only possible if the whole string arrived as one argument.
+         * A shell would have eaten the semicolon and everything after it, and
+         * the message would name a shorter id. */
+        assert.equal(result.isError, true);
+        const answer = payload(result);
+        assert.equal(answer["kind"], "refused");
+        assert.ok(
+            String(answer["message"]).includes(hostile),
+            `the store did not see the whole argument; it said: ${String(answer["message"])}`,
+        );
+        assert.equal(
+            fs.existsSync("/tmp/kb-mcp-should-not-exist"),
+            false,
+            "a shell ran the second half of the argument",
+        );
+    } finally {
+        work.dispose();
+    }
+});
+
+test("kb_stale is checked against the real binary the moment kb stale exists", async (t) => {
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        const result = await call(work, "kb_stale", { olderThan: "90d" });
+        if (!hasCommand("stale")) {
+            /* Until §5 lands: the refusal has to arrive as a sentence rather
+             * than as a crash, because that is what a surface offering the
+             * action owes whoever pressed it. */
+            assert.equal(result.isError, true);
+            const answer = payload(result);
+            assert.equal(answer["kind"], "refused", `kb stale failed rather than refused: ${result.content[0].text}`);
+            t.diagnostic(`kb stale is not implemented; it refuses with ${String(answer["error"])}`);
+            return;
+        }
+        assert.notEqual(result.isError, true, result.content[0].text);
+        assert.ok(Array.isArray(payload(result)["documents"]));
+    } finally {
+        work.dispose();
+    }
+});
+
+test("kb_links is checked against the real binary the moment kb links exists", async (t) => {
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        const added = payload(
+            await call(work, "kb_add", {
+                documents: [
+                    { title: "IOCP", content: "CreateIoCompletionPort\n", collection: "win32" },
+                    { title: "Ring", content: "io_uring_setup\n", collection: "io-uring" },
+                ],
+            }),
+        );
+        const [a, b] = (added["added"] as Record<string, unknown>[]).map((r) =>
+            String(r["document"]),
+        );
+        const written = await call(work, "kb_links", {
+            op: "add",
+            from: a,
+            to: b,
+            type: "analogue_of",
+        });
+        if (!hasCommand("links")) {
+            assert.equal(written.isError, true);
+            assert.equal(payload(written)["kind"], "refused", written.content[0].text);
+            t.diagnostic(
+                `kb links is not implemented; it refuses with ${String(payload(written)["error"])}`,
+            );
+            return;
+        }
+        assert.notEqual(written.isError, true, written.content[0].text);
+        const read = payload(await call(work, "kb_links", { op: "list", document: a }));
+        assert.equal((read["outgoing"] as unknown[]).length, 1);
+    } finally {
+        work.dispose();
+    }
+});
+
+test("every tool this server offers is one the CLI could serve", async (t) => {
+    /* The surface stated against `kb --help`, so that a tool built on a
+     * command nobody has written is visible as such rather than discovered by
+     * whoever calls it. */
+    if (!built()) {
+        t.skip("kb-cli/bin/kb is not built");
+        return;
+    }
+    const text = help();
+    for (const command of ["search", "get", "chunk", "add", "collections"]) {
+        assert.ok(hasCommand(command), `kb --help does not name ${command}`);
+    }
+    assert.ok(text.includes("--json"));
+    /* And the two that are not there yet, recorded rather than asserted. */
+    for (const command of ["stale", "links"]) {
+        if (!hasCommand(command)) {
+            t.diagnostic(`kb ${command} does not exist yet; kb_${command} cannot be exercised end to end`);
+        }
+    }
+});

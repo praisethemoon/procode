@@ -43,6 +43,7 @@ import {
     renameCollectionArgv,
     searchArgv,
     staleArgv,
+    statsArgv,
     statusArgv,
 } from "./argv";
 import { KbOptions, run } from "./run";
@@ -54,8 +55,9 @@ import {
     readDocument,
     readDocumentRead,
     readHit,
-    readLink,
+    readLinkWritten,
     readLinks,
+    readStats,
     readStatus,
     str,
 } from "./shape";
@@ -66,8 +68,9 @@ import {
     KbDocument,
     KbDocumentRead,
     KbHit,
-    KbLink,
+    KbLinkWritten,
     KbLinks,
+    KbStats,
     KbStatus,
     StoreSelector,
 } from "./types";
@@ -176,7 +179,7 @@ export class Kb {
     }
 
     /* §6's `GET /documents/{id}/links`: "outgoing and incoming, resolved to
-     * rows". The command does not exist in the CLI yet (`argv.ts` says so). */
+     * rows". */
     async links(document: string, store?: StoreSelector | null): Promise<KbLinks> {
         return readLinks(await run(linksArgv(document, store), this.options));
     }
@@ -189,9 +192,14 @@ export class Kb {
         type: string,
         to: string,
         store?: "project" | "global" | null,
-    ): Promise<KbLink> {
-        const payload = await run(linkArgv(from, type, to, store), this.options);
-        return readLink(payload["link"] ?? payload);
+    ): Promise<KbLinkWritten> {
+        return readLinkWritten(await run(linkArgv(from, type, to, store), this.options));
+    }
+
+    /* §7's `GET /stats`. `collections` above answers the other half of the
+     * same question; `argv.ts` records why they are two commands. */
+    async stats(store?: StoreSelector | null): Promise<KbStats> {
+        return readStats(await run(statsArgv(store), this.options));
     }
 
     /* §5's `POST /refresh`: "refetch a whole scope, re-embedding only changed

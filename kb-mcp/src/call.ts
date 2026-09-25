@@ -245,6 +245,9 @@ async function search(kb: Kb, args: Record<string, unknown>): Promise<ToolResult
 const CHUNK_PREFIX = "C-";
 const DOCUMENT_PREFIX = "D-";
 
+/* §2's `?include=text,chunks,links`, whole. */
+const INCLUDES = ["text", "chunks", "links"];
+
 async function get(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
     const id = asString("kb_get", "id", args["id"]) ?? "";
     const store = asStore("kb_get", args["store"]);
@@ -263,8 +266,8 @@ async function get(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
          * collection, size and age before deciding to pull it in. */
         const include = asStrings("kb_get", "include", args["include"]);
         for (const name of include ?? []) {
-            if (name !== "text" && name !== "chunks") {
-                throw bad("kb_get", `"include" takes text and chunks, not "${name}".`);
+            if (!INCLUDES.includes(name)) {
+                throw bad("kb_get", `"include" takes ${INCLUDES.join(", ")}, not "${name}".`);
             }
         }
         const wanted = include ?? ["text"];
@@ -272,6 +275,7 @@ async function get(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
             await kb.get(id, {
                 text: wanted.includes("text"),
                 chunks: wanted.includes("chunks"),
+                links: wanted.includes("links"),
                 store,
             }),
         );
@@ -372,9 +376,33 @@ async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
     return rows({ filed: added.length, added });
 }
 
+/* §9's row for this tool is TWO routes, `GET /collections` and `GET /stats`,
+ * and the CLI prints them as two commands whose rows overlap and neither of
+ * which contains the other: `collections` carries §5's oldest fetch date and
+ * `stats` carries the chunk count and a store-wide total. Both are asked, and
+ * the answers are joined on the identity §1.3 already defines — a collection
+ * name within a tier.
+ *
+ * THAT JOIN IS NOT THIS LAYER COMPUTING A FIELD. Nothing is summed, ranked or
+ * inferred; two rows about the same thing become one row about it, and every
+ * number in it is a number the store printed. The alternative — picking one
+ * command and calling it the answer — would either report a chunk count of
+ * zero for a full topic or drop the one date that says whether a topic has
+ * been looked at this year. */
+function key(store: string, name: string): string {
+    return `${store} ${name}`;
+}
+
 async function collections(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
-    const list = await kb.collections(asStore("kb_collections", args["store"]));
-    return rows({ count: list.length, collections: list });
+    const store = asStore("kb_collections", args["store"]);
+    const list = await kb.collections(store);
+    const stats = await kb.stats(store);
+    const chunks = new Map(stats.collections.map((c) => [key(c.store, c.name), c.chunks]));
+    return rows({
+        count: list.length,
+        collections: list.map((c) => ({ ...c, chunks: chunks.get(key(c.store, c.name)) })),
+        totals: stats.totals,
+    });
 }
 
 const LINK_TYPES = ["supersedes", "cites", "analogue_of", "implements", "see_also"] as const;

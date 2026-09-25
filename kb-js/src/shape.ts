@@ -32,9 +32,11 @@ import {
     KbDocumentRead,
     KbHit,
     KbLink,
+    KbLinkWritten,
     KbLinks,
     KbScores,
     KbSource,
+    KbStats,
     KbStatus,
     KbTierStatus,
     Store,
@@ -157,13 +159,43 @@ export function readHit(v: unknown): KbHit {
 
 export function readCollection(v: unknown): KbCollection {
     const c = obj(v);
-    return {
+    const row: Record<string, unknown> = {
         name: str(c["name"]),
         store: readStore(c["store"]),
-        sources: num(c["sources"]),
         documents: num(c["documents"]),
-        chunks: num(c["chunks"]),
         bytes: num(c["bytes"]),
+    };
+    /* Each of these exactly when the store carried it. A zero here would be a
+     * claim about a count nobody asked this command for. */
+    if (typeof c["oldestFetchedAt"] === "string") {
+        row["oldestFetchedAt"] = c["oldestFetchedAt"];
+    }
+    for (const key of ["sources", "chunks"]) {
+        if (typeof c[key] === "number") {
+            row[key] = c[key];
+        }
+    }
+    return row as unknown as KbCollection;
+}
+
+export function readStats(payload: Record<string, unknown>): KbStats {
+    const totals = obj(payload["totals"]);
+    return {
+        collections: arr(payload["collections"]).map((v) => {
+            const c = obj(v);
+            return {
+                name: str(c["name"]),
+                store: readStore(c["store"]),
+                documents: num(c["documents"]),
+                chunks: num(c["chunks"]),
+                bytes: num(c["bytes"]),
+            };
+        }),
+        totals: {
+            documents: num(totals["documents"]),
+            chunks: num(totals["chunks"]),
+            bytes: num(totals["bytes"]),
+        },
     };
 }
 
@@ -240,6 +272,8 @@ export function readLink(v: unknown): KbLink {
         to: str(l["to"]),
         type: str(l["type"]),
         document: readLinkTarget(l["document"]),
+        resolved: bool(l["resolved"]),
+        createdAt: str(l["createdAt"]),
     };
 }
 
@@ -249,8 +283,21 @@ function readLinkTarget(v: unknown): KbDocument | null {
 
 export function readLinks(payload: Record<string, unknown>): KbLinks {
     return {
+        document: str(payload["document"]),
+        store: readStore(payload["store"]),
         outgoing: arr(payload["outgoing"]).map(readLink),
         incoming: arr(payload["incoming"]).map(readLink),
+    };
+}
+
+export function readLinkWritten(payload: Record<string, unknown>): KbLinkWritten {
+    return {
+        store: readStore(payload["store"]),
+        from: str(payload["from"]),
+        to: str(payload["to"]),
+        type: str(payload["type"]),
+        changed: bool(payload["changed"]),
+        at: str(payload["at"]),
     };
 }
 

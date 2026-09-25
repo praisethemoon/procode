@@ -1,11 +1,10 @@
-/* §6's layer, which is two commands the CLI does not have yet.
+/* §6's layer, and §7's second half.
  *
- * SO EVERYTHING HERE IS A CLAIM AND IS WRITTEN AS ONE. `argv.ts` records the
- * spelling each route takes in the CLI's idiom; these tests pin that spelling
- * and pin what this reader does with the answer, so that the day `kb links`
- * lands the reconciliation is one file of flags rather than a hunt through a
- * binding for assumptions nobody wrote down. `cli.test.ts` starts checking the
- * real binary the moment the command turns up in `kb --help`.
+ * THE SPELLINGS ARE THE CLI'S OWN AND WERE RECONCILED AGAINST IT. `kb links`
+ * takes its positional arguments directly rather than through the common
+ * parser, so — unlike `collections rename` — a `--` is a fourth argument to a
+ * command that takes three; `argv.ts` records why that is the one place this
+ * package writes a bare value.
  *
  * THE EDGE IS NOT THE ROW. §6 resolves a link "to rows", and the two facts a
  * caller needs are different: the edge says what the relationship is, and the
@@ -16,10 +15,10 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { linkArgv, linksArgv } from "../argv";
+import { linkArgv, linksArgv, statsArgv } from "../argv";
 import { Kb } from "../client";
 import { KbError } from "../errors";
-import { readLink, readLinks } from "../shape";
+import { readLink, readLinks, readStats } from "../shape";
 import { LINK_TYPES, isLinkType } from "../types";
 import { FakeAnswer, FakeKb, ok, refusal } from "./fake";
 import { DOCUMENT, DOCUMENT_OLD } from "./fixtures";
@@ -48,9 +47,9 @@ test("§6's five types are transcribed whole and in the document's order", () =>
     assert.equal(isLinkType(7), false);
 });
 
-test("a read names its document behind the end of the flags", () => {
-    assert.deepEqual(linksArgv("D-241"), ["links", "--", "D-241"]);
-    assert.deepEqual(linksArgv("D-241", "global"), ["links", "--store", "global", "--", "D-241"]);
+test("a read names its document positionally, the way the command reads it", () => {
+    assert.deepEqual(linksArgv("D-241"), ["links", "D-241"]);
+    assert.deepEqual(linksArgv("D-241", "global"), ["links", "D-241", "--store", "global"]);
 });
 
 test("a write reads as a sentence: from, type, to", () => {
@@ -60,7 +59,6 @@ test("a write reads as a sentence: from, type, to", () => {
     assert.deepEqual(linkArgv("D-241", "analogue_of", "D-88"), [
         "links",
         "add",
-        "--",
         "D-241",
         "analogue_of",
         "D-88",
@@ -68,12 +66,11 @@ test("a write reads as a sentence: from, type, to", () => {
     assert.deepEqual(linkArgv("D-241", "cites", "D-88", "project"), [
         "links",
         "add",
-        "--store",
-        "project",
-        "--",
         "D-241",
         "cites",
         "D-88",
+        "--store",
+        "project",
     ]);
 });
 
@@ -96,13 +93,35 @@ test("a read carries both directions, each resolved to the row at the far end", 
         [
             {
                 stdout: ok({
-                    outgoing: [{ from: "D-241", to: "D-88", type: "analogue_of", document: DOCUMENT_OLD }],
-                    incoming: [{ from: "D-88", to: "D-241", type: "cites", document: DOCUMENT_OLD }],
+                    document: "D-241",
+                    store: "project",
+                    outgoing: [
+                        {
+                            from: "D-241",
+                            to: "D-88",
+                            type: "analogue_of",
+                            resolved: true,
+                            document: DOCUMENT_OLD,
+                            createdAt: "2026-09-25T00:00:00Z",
+                        },
+                    ],
+                    incoming: [
+                        {
+                            from: "D-88",
+                            to: "D-241",
+                            type: "cites",
+                            resolved: true,
+                            document: DOCUMENT_OLD,
+                            createdAt: "2026-09-25T00:00:00Z",
+                        },
+                    ],
                 }),
             },
         ],
         async (kb, fake) => {
             const links = await kb.links("D-241");
+            assert.equal(links.document, "D-241");
+            assert.equal(links.store, "project");
             assert.equal(links.outgoing.length, 1);
             assert.equal(links.incoming.length, 1);
             assert.equal(links.outgoing[0].type, "analogue_of");
@@ -110,7 +129,9 @@ test("a read carries both directions, each resolved to the row at the far end", 
             assert.equal(links.outgoing[0].document?.title, "io_uring and you");
             assert.equal(links.outgoing[0].document?.store, "global");
             assert.equal(links.incoming[0].from, "D-88");
-            assert.deepEqual(fake.calls()[0].argv, ["links", "--", "D-241", "--json"]);
+            assert.equal(links.outgoing[0].createdAt, "2026-09-25T00:00:00Z");
+            assert.equal(links.outgoing[0].resolved, true);
+            assert.deepEqual(fake.calls()[0].argv, ["links", "D-241", "--json"]);
         },
     );
 });
@@ -119,8 +140,12 @@ test("an edge the store could not resolve arrives as an edge with no row", async
     /* A dangling link is a fact about the store. A reader that invented an
      * empty row for it would report a document that is not there, and the one
      * person who could go and fix it would never be told. */
-    const links = readLinks({ outgoing: [{ from: "D-241", to: "D-9999", type: "supersedes" }] });
+    const links = readLinks({
+        document: "D-241",
+        outgoing: [{ from: "D-241", to: "D-9999", type: "supersedes", resolved: false }],
+    });
     assert.equal(links.outgoing[0].document, null);
+    assert.equal(links.outgoing[0].resolved, false);
     assert.equal(links.outgoing[0].to, "D-9999");
     assert.deepEqual(links.incoming, []);
 });
@@ -134,19 +159,35 @@ test("a type this binding has never heard of is still the word the store used", 
     assert.equal(isLinkType(link.type), false);
 });
 
-test("a write answers the edge it made", async () => {
+test("a write answers the edge it made, and whether it changed anything", async () => {
+    /* `changed: false` is an edge that was already there. Stating a
+     * relationship twice costs nothing, which is the same posture §2 takes
+     * toward filing the same text twice. */
     await withKb(
-        [{ stdout: ok({ link: { from: "D-241", to: "D-88", type: "analogue_of", document: DOCUMENT_OLD } }) }],
+        [
+            {
+                stdout: ok({
+                    action: "add",
+                    store: "project",
+                    from: "D-241",
+                    type: "analogue_of",
+                    to: "D-88",
+                    changed: true,
+                    at: "2026-09-25T00:00:00Z",
+                }),
+            },
+        ],
         async (kb, fake) => {
             const link = await kb.link("D-241", "analogue_of", "D-88");
             assert.equal(link.from, "D-241");
             assert.equal(link.to, "D-88");
             assert.equal(link.type, "analogue_of");
-            assert.equal(link.document?.id, "D-88");
+            assert.equal(link.store, "project");
+            assert.equal(link.changed, true);
+            assert.equal(link.at, "2026-09-25T00:00:00Z");
             assert.deepEqual(fake.calls()[0].argv, [
                 "links",
                 "add",
-                "--",
                 "D-241",
                 "analogue_of",
                 "D-88",
@@ -156,15 +197,60 @@ test("a write answers the edge it made", async () => {
     );
 });
 
-test("a write that answered the edge at the top level is read the same way", async () => {
-    /* The command does not exist, so which of the two envelopes it will use is
-     * not yet settled. Reading either costs one `??` and removes a reason for
-     * the day it lands to be a day of edits. */
-    await withKb([{ stdout: ok({ from: "D-1", to: "D-2", type: "cites" }) }], async (kb) => {
-        const link = await kb.link("D-1", "cites", "D-2");
-        assert.equal(link.from, "D-1");
-        assert.equal(link.type, "cites");
-    });
+test("§7's stats are the counts collections does not carry", async () => {
+    /* The two commands answer overlapping questions and neither contains the
+     * other: `collections` has the oldest fetch date, `stats` has the chunk
+     * count and a store-wide total. */
+    await withKb(
+        [
+            {
+                stdout: ok({
+                    collections: [
+                        { name: "win32-iocp", store: "project", documents: 7, chunks: 41, bytes: 90210 },
+                    ],
+                    count: 1,
+                    totals: { documents: 7, chunks: 41, bytes: 90210 },
+                }),
+            },
+        ],
+        async (kb, fake) => {
+            const stats = await kb.stats("all");
+            assert.equal(stats.collections[0].chunks, 41);
+            assert.equal(stats.totals.documents, 7);
+            assert.deepEqual(fake.calls()[0].argv, ["stats", "--store", "all", "--json"]);
+            assert.deepEqual(statsArgv(), ["stats"]);
+        },
+    );
+});
+
+test("a count the store did not carry is absent rather than zero", async () => {
+    /* `kb collections` prints no chunk count. A reader that defaulted it to
+     * zero would report a full topic as confidently as an empty one. */
+    await withKb(
+        [
+            {
+                stdout: ok({
+                    collections: [
+                        {
+                            name: "win32-iocp",
+                            store: "project",
+                            documents: 7,
+                            bytes: 90210,
+                            oldestFetchedAt: "2024-01-02T00:00:00Z",
+                        },
+                    ],
+                }),
+            },
+        ],
+        async (kb) => {
+            const [row] = await kb.collections();
+            assert.equal(row.documents, 7);
+            assert.equal(row.oldestFetchedAt, "2024-01-02T00:00:00Z");
+            assert.equal("chunks" in row, false);
+            assert.equal("sources" in row, false);
+            assert.equal(readStats({}).totals.chunks, 0);
+        },
+    );
 });
 
 test("until the command exists the refusal reaches the caller as a refusal", async () => {

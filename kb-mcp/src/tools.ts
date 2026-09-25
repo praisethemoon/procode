@@ -117,9 +117,9 @@ const KB_GET: ToolDefinition = {
             },
             include: {
                 type: "array",
-                items: { type: "string", enum: ["text", "chunks"] },
+                items: { type: "string", enum: ["text", "chunks", "links"] },
                 description:
-                    "For a document: text returns the whole content (the default), chunks lists how it was split. Ignored for a chunk id.",
+                    "For a document: text returns the whole content (the default), chunks lists how it was split, links gives its relationships. Pass [] for the metadata alone. Ignored for a chunk id.",
             },
             expand: {
                 type: "integer",
@@ -197,9 +197,10 @@ const KB_ADD: ToolDefinition = {
 const KB_COLLECTIONS: ToolDefinition = {
     name: "kb_collections",
     description:
-        "List the collections in the knowledge base with their counts, so you can see what has already been " +
-        "researched and which scope to search or file into. A collection is a topic; a store is a tier. The " +
-        "same collection name can exist in both tiers and each row says which it counted.",
+        "List the collections in the knowledge base with their document, chunk and byte counts and when each " +
+        "was last added to, so you can see what has already been researched and which scope to search or file " +
+        "into. A collection is a topic; a store is a tier. The same collection name can exist in both tiers " +
+        "and each row says which it counted.",
     inputSchema: {
         type: "object",
         properties: { store: STORE },

@@ -136,10 +136,18 @@ export interface KbHit {
 export interface KbCollection {
     readonly name: string;
     readonly store: Store;
-    readonly sources: number;
     readonly documents: number;
-    readonly chunks: number;
     readonly bytes: number;
+    /* §5's freshness, per topic: when the oldest document in this collection
+     * was fetched. It is what makes a collection list answer "has this already
+     * been researched, and how long ago" rather than only "does it exist". */
+    readonly oldestFetchedAt?: string;
+    /* PRESENT ONLY WHEN THE STORE SAID SO, AND `kb collections` DOES NOT. The
+     * chunk count lives on `kb stats`, and a reader that defaulted it to zero
+     * would report an empty topic as confidently as a full one. Absent is the
+     * honest answer to a question this row was never asked. */
+    readonly sources?: number;
+    readonly chunks?: number;
 }
 
 /* §7's `GET /status`, per tier. `present: false` is a tier that has a path and
@@ -252,9 +260,51 @@ export interface KbLink {
     readonly to: DocumentId;
     readonly type: string;
     readonly document: KbDocument | null;
+    /* The store's own word for whether the far end is a document it still
+     * holds. Read rather than derived from `document === null`, because the
+     * two answer different questions — "the store could not resolve it" and
+     * "this answer did not carry it" — and deriving one from the other would
+     * make a row that omitted the document look like a dangling edge. */
+    readonly resolved: boolean;
+    readonly createdAt: string;
 }
 
 export interface KbLinks {
+    readonly document: DocumentId;
+    readonly store: Store;
     readonly outgoing: readonly KbLink[];
     readonly incoming: readonly KbLink[];
+}
+
+/* What `kb links add` answers. `changed` is false when the edge was already
+ * there: §2's ingest is idempotent by content hash and this is the same
+ * posture one layer along, so a caller can state a relationship twice without
+ * having to check first. */
+export interface KbLinkWritten {
+    readonly store: Store;
+    readonly from: DocumentId;
+    readonly to: DocumentId;
+    readonly type: string;
+    readonly changed: boolean;
+    readonly at: string;
+}
+
+/* §7's `GET /stats`. `KbCollection` is the row `kb collections` prints and
+ * this is the row `kb stats` prints; they overlap and neither contains the
+ * other, which is why both exist. */
+export interface KbCollectionStats {
+    readonly name: string;
+    readonly store: Store;
+    readonly documents: number;
+    readonly chunks: number;
+    readonly bytes: number;
+}
+
+export interface KbStats {
+    readonly collections: readonly KbCollectionStats[];
+    readonly totals: {
+        readonly documents: number;
+        readonly chunks: number;
+        readonly bytes: number;
+    };
 }

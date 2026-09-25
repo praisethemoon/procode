@@ -95,10 +95,31 @@ export const CHUNK = {
     text: DOCUMENT_TEXT,
 };
 
+/* `kb collections` prints these fields and no chunk count. */
 export const COLLECTIONS = [
-    { name: "win32-iocp", store: "project", sources: 2, documents: 7, chunks: 41, bytes: 90210 },
-    { name: "io-uring", store: "global", sources: 1, documents: 3, chunks: 19, bytes: 40000 },
+    {
+        name: "win32-iocp",
+        store: "project",
+        documents: 7,
+        bytes: 90210,
+        oldestFetchedAt: "2024-01-02T00:00:00Z",
+    },
+    {
+        name: "io-uring",
+        store: "global",
+        documents: 3,
+        bytes: 40000,
+        oldestFetchedAt: "2023-05-05T00:00:00Z",
+    },
 ];
+
+/* `kb stats` prints the chunk count and the store-wide total, and no date. */
+export const STATS = [
+    { name: "win32-iocp", store: "project", documents: 7, chunks: 41, bytes: 90210 },
+    { name: "io-uring", store: "global", documents: 3, chunks: 19, bytes: 40000 },
+];
+
+export const TOTALS = { documents: 10, chunks: 60, bytes: 130210 };
 
 export const ADDED = {
     store: "project",
@@ -118,6 +139,26 @@ export const ADDED = {
 };
 
 export const LINKS = {
-    outgoing: [{ from: "D-241", to: "D-88", type: "analogue_of", document: DOCUMENT_OLD }],
-    incoming: [{ from: "D-88", to: "D-241", type: "cites", document: DOCUMENT_OLD }],
+    document: "D-241",
+    store: "project",
+    outgoing: [
+        {
+            from: "D-241",
+            to: "D-88",
+            type: "analogue_of",
+            resolved: true,
+            document: DOCUMENT_OLD,
+            createdAt: "2026-09-25T00:00:00Z",
+        },
+    ],
+    incoming: [
+        {
+            from: "D-88",
+            to: "D-241",
+            type: "cites",
+            resolved: true,
+            document: DOCUMENT_OLD,
+            createdAt: "2026-09-25T00:00:00Z",
+        },
+    ],
 };

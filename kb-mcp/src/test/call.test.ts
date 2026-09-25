@@ -33,6 +33,8 @@ import {
     HIT_GLOBAL,
     LINKS,
     SNIPPET,
+    STATS,
+    TOTALS,
 } from "./fixtures";
 
 async function withKb<T>(
@@ -224,6 +226,16 @@ test("a caller that asked for the metadata alone does not get the text", async (
     });
 });
 
+test("a document's links are asked for when §2's third include names them", async () => {
+    await withKb(
+        [{ stdout: ok({ document: DOCUMENT, text: DOCUMENT_TEXT }) }],
+        async (kb, fake) => {
+            await callTool(kb, "kb_get", { id: "D-241", include: ["text", "links"] });
+            assert.equal(flag(fake.calls()[0].argv, "--include"), "text,links");
+        },
+    );
+});
+
 test("chunks are asked for only when they were asked for", async () => {
     await withKb(
         [{ stdout: ok({ document: DOCUMENT, text: DOCUMENT_TEXT, chunks: [CHUNK] }) }],
@@ -380,17 +392,64 @@ test("a document missing its collection is refused before anything is filed", as
 
 /* ---------------------------------------------------------- kb_collections */
 
-test("kb_collections answers the rows and their counts", async () => {
-    await withKb([{ stdout: ok({ collections: COLLECTIONS, count: 2 }) }], async (kb, fake) => {
-        const answer = body(await callTool(kb, "kb_collections", { store: "all" }));
-        const rows = answer["collections"] as Record<string, unknown>[];
-        assert.equal(answer["count"], 2);
-        assert.equal(rows[0]["name"], "win32-iocp");
-        assert.equal(rows[0]["documents"], 7);
-        assert.equal(rows[0]["store"], "project");
-        assert.equal(rows[1]["store"], "global");
-        assert.deepEqual(fake.calls()[0].argv, ["collections", "--store", "all", "--json"]);
-    });
+test("kb_collections answers both of §9's routes as one row per collection", async () => {
+    /* §9 puts `GET /collections` and `GET /stats` behind this one tool, and
+     * the CLI prints them as two commands whose rows overlap and neither of
+     * which contains the other. Picking one would either report a chunk count
+     * of zero for a full topic or drop the date that says whether it has been
+     * looked at this year. */
+    await withKb(
+        [
+            { stdout: ok({ collections: COLLECTIONS, count: 2 }) },
+            { stdout: ok({ collections: STATS, count: 2, totals: TOTALS }) },
+        ],
+        async (kb, fake) => {
+            const answer = body(await callTool(kb, "kb_collections", { store: "all" }));
+            const rows = answer["collections"] as Record<string, unknown>[];
+            assert.equal(answer["count"], 2);
+            assert.equal(rows[0]["name"], "win32-iocp");
+            assert.equal(rows[0]["documents"], 7);
+            assert.equal(rows[0]["store"], "project");
+            assert.equal(rows[0]["oldestFetchedAt"], "2024-01-02T00:00:00Z");
+            /* Joined on the name WITHIN a tier, because §1.3's scope exists in
+             * both and the two are different collections. */
+            assert.equal(rows[0]["chunks"], 41);
+            assert.equal(rows[1]["store"], "global");
+            assert.equal(rows[1]["chunks"], 19);
+            assert.deepEqual(answer["totals"], TOTALS);
+            assert.deepEqual(fake.calls().map((c) => c.argv[0]), ["collections", "stats"]);
+            assert.deepEqual(fake.calls()[1].argv, ["stats", "--store", "all", "--json"]);
+        },
+    );
+});
+
+test("a chunk count from the other tier is not attached to this one", async () => {
+    /* `win32-iocp` can exist in both stores and they are two collections. A
+     * join on the name alone would report the global tier's chunk count on the
+     * project tier's row. */
+    await withKb(
+        [
+            {
+                stdout: ok({
+                    collections: [{ name: "win32-iocp", store: "project", documents: 1, bytes: 10 }],
+                }),
+            },
+            {
+                stdout: ok({
+                    collections: [
+                        { name: "win32-iocp", store: "global", documents: 9, chunks: 99, bytes: 900 },
+                    ],
+                    totals: { documents: 9, chunks: 99, bytes: 900 },
+                }),
+            },
+        ],
+        async (kb) => {
+            const answer = body(await callTool(kb, "kb_collections", {}));
+            const rows = answer["collections"] as Record<string, unknown>[];
+            assert.equal(rows[0]["store"], "project");
+            assert.equal("chunks" in rows[0], false, "a count crossed between tiers");
+        },
+    );
 });
 
 /* --------------------------------------------------------------- kb_links */
@@ -400,13 +459,25 @@ test("kb_links reads both directions of a document's links", async () => {
         const answer = body(await callTool(kb, "kb_links", { op: "list", document: "D-241" }));
         assert.equal((answer["outgoing"] as unknown[]).length, 1);
         assert.equal((answer["incoming"] as unknown[]).length, 1);
-        assert.deepEqual(fake.calls()[0].argv, ["links", "--", "D-241", "--json"]);
+        assert.deepEqual(fake.calls()[0].argv, ["links", "D-241", "--json"]);
     });
 });
 
 test("kb_links writes an edge and names no tier to write it in", async () => {
     await withKb(
-        [{ stdout: ok({ link: { from: "D-241", to: "D-88", type: "analogue_of" } }) }],
+        [
+            {
+                stdout: ok({
+                    action: "add",
+                    store: "project",
+                    from: "D-241",
+                    type: "analogue_of",
+                    to: "D-88",
+                    changed: true,
+                    at: "2026-09-25T00:00:00Z",
+                }),
+            },
+        ],
         async (kb, fake) => {
             const answer = body(
                 await callTool(kb, "kb_links", {
@@ -417,10 +488,10 @@ test("kb_links writes an edge and names no tier to write it in", async () => {
                 }),
             );
             assert.equal(answer["type"], "analogue_of");
+            assert.equal(answer["changed"], true);
             assert.deepEqual(fake.calls()[0].argv, [
                 "links",
                 "add",
-                "--",
                 "D-241",
                 "analogue_of",
                 "D-88",
