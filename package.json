@@ -1,0 +1,22 @@
+{
+    "name": "lap-workspace",
+    "private": true,
+    "description": "lap and kb: the TypeScript packages under packages/ are npm workspaces; the C tools under cli/ build with make.",
+    "workspaces": [
+        "packages/kb-js",
+        "packages/kb-mcp",
+        "packages/index-vscode",
+        "packages/lap-vscode"
+    ],
+    "scripts": {
+        "setup": "npm install && npm run build",
+        "build": "npm run build:cli && npm run build:packages",
+        "build:cli": "make -C cli/lap-cli && make -C cli/kb-cli",
+        "build:packages": "npm run compile --workspaces --if-present",
+        "test": "npm run test:cli && npm run test:packages",
+        "test:cli": "make -C cli/lap-cli test && make -C cli/kb-cli test",
+        "test:packages": "npm test --workspaces --if-present",
+        "package": "npm run package --workspace packages/index-vscode",
+        "clean": "make -C cli/lap-cli clean && make -C cli/kb-cli clean"
+    }
+}

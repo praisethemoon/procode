@@ -1,7 +1,11 @@
 # Build outputs
-lap-cli/bin/
-lap-vscode/out/
-lap-vscode/node_modules/
+node_modules/
+cli/lap-cli/bin/
+cli/kb-cli/bin/
+packages/kb-js/out/
+packages/kb-mcp/out/
+packages/index-vscode/out/
+packages/lap-vscode/out/
 *.vsix
 *.o
 *.plist
@@ -10,7 +14,7 @@ build/
 # lap's own recorded history: the log is the truth, everything else in
 # .lap/ is a disposable cache (index, sidecars, snapshots, shadows,
 # state) that is native-endian and machine-local. Clone, then `lap
-# rebuild` — exactly the transport story in lap-cli/SPEC.md.
+# rebuild` — exactly the transport story in cli/lap-cli/SPEC.md.
 **/.lap/*
 !**/.lap/log.jsonl
 
@@ -25,11 +29,3 @@ feedback.md
 
 # macOS
 .DS_Store
-kb-cli/bin/
-kb-js/node_modules/
-kb-js/out/
-index-vscode/node_modules/
-index-vscode/out/
-kb-mcp/node_modules/
-kb-mcp/out/
-*.vsix

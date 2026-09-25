@@ -1,0 +1,18 @@
+# The extension host is bundled: scripts/bundle.mjs folds kb-js into
+# out/extension.js, so the installed extension requires nothing from
+# node_modules and none of it ships. `vsce package --no-dependencies` is what
+# stops vsce from walking the workspace's hoisted node_modules at all.
+.vscode/**
+src/**
+webview/**
+scripts/**
+assets/**
+out/test/**
+node_modules/**
+tsconfig.json
+tsconfig.webview.json
+.lapignore
+.lap/**
+.kb/**
+**/*.map
+**/.DS_Store

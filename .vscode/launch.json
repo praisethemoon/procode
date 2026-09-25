@@ -6,11 +6,11 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/lap-vscode",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/lap-vscode",
         "--disable-extensions",
-        "${workspaceFolder}/lap-vscode"
+        "${workspaceFolder}/packages/lap-vscode"
       ],
-      "outFiles": ["${workspaceFolder}/lap-vscode/out/**/*.js"],
+      "outFiles": ["${workspaceFolder}/packages/lap-vscode/out/**/*.js"],
       "preLaunchTask": "npm: compile - lap-vscode"
     }
   ]

@@ -1,0 +1,96 @@
+{
+  "name": "lap-vscode",
+  "displayName": "Lap History",
+  "description": "Visualizes lap fine-grained edit history: sessions, commits and their messages, live as the agent works.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "praisethemoon",
+  "author": {
+    "name": "Soulaymen Chouri",
+    "email": "doit@praisethemoon.org"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:.lap/log.jsonl"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "lap-explorer",
+          "title": "Lap",
+          "icon": "media/lap.svg"
+        }
+      ]
+    },
+    "views": {
+      "lap-explorer": [
+        {
+          "id": "lapHistory",
+          "name": "History",
+          "icon": "media/lap.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "lapHistory",
+        "contents": "No lap repository found in this workspace.\nCreate one from a terminal with `lap init`, then commits will appear here live."
+      }
+    ],
+    "commands": [
+      {
+        "command": "lap.refresh",
+        "title": "Lap: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "lap.toggleGrouping",
+        "title": "Lap: Toggle Session Grouping / Raw List",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "lap.showCommit",
+        "title": "Lap: Show Commit"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "lap.refresh",
+          "when": "view == lapHistory",
+          "group": "navigation@2"
+        },
+        {
+          "command": "lap.toggleGrouping",
+          "when": "view == lapHistory",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "lap.showCommit",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test \"out/test/*.test.js\"",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
