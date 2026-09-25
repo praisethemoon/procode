@@ -142,6 +142,8 @@ test("the log is plain JSONL, and a torn last line is ignored", () => {
     assert.deepEqual(b.all().map((i) => i.id), ["E-1"]);
     const lines = fs.readFileSync(b.logPath, "utf8").split("\n");
     assert.deepEqual(JSON.parse(lines[0]).op, "put");
+    assert.equal(fs.readFileSync(path.join(b.dir, ".gitignore"), "utf8"), "lock\n");
+    assert.ok(!fs.existsSync(path.join(b.dir, "lock")), "the lock is released after a write");
 });
 
 test("two boards over one directory never hand out the same id", () => {

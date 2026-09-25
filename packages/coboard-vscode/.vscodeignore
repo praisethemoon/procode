@@ -1,0 +1,13 @@
+# The host is bundled (scripts/build.mjs folds coboard into out/extension.js),
+# so nothing from node_modules ships.
+src/**
+webview/**
+scripts/**
+assets/**
+out/test/**
+node_modules/**
+tsconfig.json
+tsconfig.webview.json
+.coboard/**
+**/*.map
+**/.DS_Store

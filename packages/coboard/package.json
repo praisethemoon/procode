@@ -12,6 +12,24 @@
   "license": "MIT",
   "main": "./out/index.js",
   "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    },
+    "./model": {
+      "types": "./out/model.d.ts",
+      "default": "./out/model.js"
+    },
+    "./query": {
+      "types": "./out/query.d.ts",
+      "default": "./out/query.js"
+    },
+    "./lap": {
+      "types": "./out/lap.d.ts",
+      "default": "./out/lap.js"
+    }
+  },
   "bin": {
     "coboard-mcp": "./bin/coboard-mcp"
   },

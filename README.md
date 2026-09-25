@@ -2,7 +2,9 @@
 
 A set of tools for working alongside AI coding agents. **lap** records every
 small edit an agent makes, with the reason it made it. **kb** is a local
-knowledge base that agents and people can both search and cite.
+knowledge base that agents and people can both search and cite. **coboard**
+is a small board of epics, milestones and tickets that developers and agents
+work on together.
 
 ## The tools
 
@@ -15,6 +17,8 @@ knowledge base that agents and people can both search and cite.
 | **kb-js** | [packages/kb-js/](packages/kb-js/) | Typed TypeScript client for kb. It runs the CLI with an argument array, never a shell, and parses `--json`. |
 | **kb-mcp** | [packages/kb-mcp/](packages/kb-mcp/) | kb as MCP tools for agents (search, get, add, collections, links, stale), JSON-RPC 2.0 over stdio. |
 | **Knowledge** | [packages/index-vscode/](packages/index-vscode/) | VS Code extension that reads a kb store: search it, read a document, see where it came from. |
+| **coboard** | [packages/coboard/](packages/coboard/) | The board: epics (`E-1`) hold milestones (`M-1`); tickets (`T-1`) belong to an epic and optionally one of its milestones. An append-only `.coboard/log.jsonl` (commit it), a generic search, and an MCP server for agents (list, search, get, create, update, move, comment, sessions). |
+| **Board** | [packages/coboard-vscode/](packages/coboard-vscode/) | VS Code extension: a tree of the board in the activity bar, and one editor tab per item, rendered with baukasten, with Markdown descriptions and comments, editable in place. |
 
 The kb contract lives in [specs/](specs/): [index-api.md](specs/index-api.md)
 for the CLI and store, [index-ui.md](specs/index-ui.md) for the reader. The
@@ -24,7 +28,8 @@ name `kb` is provisional.
 
 ```
 cli/        lap-cli, kb-cli                       C11, make or CMake
-packages/   kb-js, kb-mcp, index-vscode, lap-vscode   TypeScript, one npm workspace
+packages/   kb-js, kb-mcp, index-vscode, lap-vscode,
+            coboard, coboard-vscode                   TypeScript, one npm workspace
 specs/      the kb contract
 ```
 
@@ -100,6 +105,24 @@ with `not_found` rather than filing anywhere else.
 `packages/index-vscode/index-vscode-0.1.0.vsix`. Install it with
 `code --install-extension <file>.vsix`. The setting `knowledge.cliPath`
 (default `kb`) tells it where the CLI is.
+
+**coboard (MCP).** Point your MCP client at `packages/coboard/bin/coboard-mcp`,
+started inside the project. It uses the `.coboard/` above its working directory;
+with none, the first write creates one at the git repository's root.
+
+```json
+{ "mcpServers": { "coboard": { "command": "/path/to/procode/packages/coboard/bin/coboard-mcp" } } }
+```
+
+Work on a ticket is linked through lap session metadata: start the session with
+`lap session start "T-12: fix the parser" --meta ticket=T-12`, and the ticket's
+tab (and `board_sessions`) lists that session and its commits. `COBOARD_AUTHOR`
+(else `LAP_USER`) signs an agent's comments.
+
+**Board (VS Code).** `npm run package --workspace coboard-vscode` builds a
+self-contained `.vsix`; install it like the others. The Board icon in the
+activity bar opens the tree; clicking an item opens its tab, where ids in
+Markdown link to other items.
 
 **Lap History (VS Code).** Package it with `npx @vscode/vsce package` inside
 `packages/lap-vscode`, then install the `.vsix` the same way. It reads

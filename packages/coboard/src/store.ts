@@ -181,6 +181,11 @@ export class Board {
      * `.coboard/lock`, and appends whatever records it returns. */
     private write<T>(fn: (st: State) => { records: object[]; result: T }): T {
         fs.mkdirSync(this.dir, { recursive: true });
+        // The log is meant to be committed; the lock never is.
+        const ignore = path.join(this.dir, ".gitignore");
+        if (!fs.existsSync(ignore)) {
+            fs.writeFileSync(ignore, "lock\n");
+        }
         const lock = path.join(this.dir, "lock");
         const deadline = Date.now() + 5000;
         for (;;) {
