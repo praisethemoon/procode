@@ -3,7 +3,7 @@
  * ONE CLIENT FOR THE WINDOW. `kb-js` spawns a process per call and holds
  * nothing between them, so a client is only a binary path, a working directory
  * and an environment — but those three are exactly what decides WHICH STORE is
- * being read (index-api.md §1.4 finds the project tier by walking up from the
+ * being read (index-api.md §1.4 finds the one `.kb/` by walking up from the
  * working directory, like `.git`), and a second client built somewhere else
  * would quietly answer about a different store.
  *
@@ -14,6 +14,13 @@
  * uses to find its board, and stating it here is what keeps two extensions in
  * one window from disagreeing about which project they are in.
  *
+ * NO FOLDER, NO CLIENT. Without a working directory to give it, `kb-js` would
+ * spawn in whatever directory the extension host happened to start in, and the
+ * walk up from there would find — or fail to find — a store that has nothing
+ * to do with this window. `makeClient` answers `undefined` instead, and the
+ * callers say that no folder is open rather than running `kb` somewhere
+ * arbitrary.
+ *
  * NOTHING HERE WRITES. Reading is every method but three, and those three are
  * the explicit actions §2's title bar and §4's rows offer — which go through
  * the CLI, because §10 makes the CLI the only code that writes.
@@ -21,7 +28,7 @@
 
 import * as vscode from "vscode";
 
-import { Kb, KbOptions } from "kb-js";
+import { Kb, KbError, KbOptions } from "kb-js";
 
 export const CONFIG_SECTION = "knowledge";
 
@@ -51,10 +58,22 @@ export function workspaceRoot(): string | undefined {
     return undefined;
 }
 
-export function clientOptions(settings: Settings): KbOptions {
-    return { bin: settings.cliPath, cwd: workspaceRoot() };
+export function clientOptions(settings: Settings, cwd: string): KbOptions {
+    return { bin: settings.cliPath, cwd };
 }
 
-export function makeClient(settings: Settings): Kb {
-    return new Kb(clientOptions(settings));
+export function makeClient(settings: Settings): Kb | undefined {
+    const root = workspaceRoot();
+    return root === undefined ? undefined : new Kb(clientOptions(settings, root));
+}
+
+/* What a reader is told when there is no folder to find a store from. */
+export const NO_FOLDER =
+    "No folder is open. Knowledge reads the .kb directory found by walking up from the workspace folder; open a folder first.";
+
+/* The same sentence as §11's `not_found`, which is what the CLI itself answers
+ * outside any store — so the webviews draw it as the refusal it is, with no
+ * branch of their own for a window without a folder. */
+export function noFolder(): KbError {
+    return new KbError("not_found", NO_FOLDER, []);
 }

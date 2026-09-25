@@ -6,11 +6,13 @@
  * and a claim that is only checked against a fixture is a claim that can be
  * wrong for as long as nobody runs the real thing.
  *
- * IT NEVER TOUCHES A STORE IT WAS NOT ASKED TO. `KB_STORE` is pointed inside a
- * throwaway directory and the working directory is inside it too, so the global
- * tier this exercises is the temporary one and the project tier is found by
- * walking up from a directory that only exists for the length of the run. A
- * test that wrote into `~/.kb` would be a test that files somebody's research
+ * IT NEVER TOUCHES A STORE IT WAS NOT ASKED TO. There is one store, the first
+ * `.kb/` found by walking up from the working directory, and every test that
+ * runs the binary runs it inside a throwaway directory where `kb init` has
+ * just made one — so the store it finds is the temporary one, and it exists
+ * only for the length of the run. The CLI reads neither `HOME` nor a
+ * `KB_STORE`, so there is no second place for a write to land: a test that
+ * wrote into somebody's own `.kb/` would be a test that files their research
  * under `win32-iocp` every time it ran.
  *
  * IT SKIPS RATHER THAN FAILS WHEN THE BINARY IS NOT BUILT. `kb-js` is
@@ -45,7 +47,7 @@ interface Work {
     dir: string;
     kb: Kb;
     /* The same environment the client was given, so a test that runs the
-     * binary directly points at the same throwaway global tier. */
+     * binary directly sees exactly what the client's child saw. */
     env: NodeJS.ProcessEnv;
     dispose(): void;
 }
@@ -54,16 +56,14 @@ function workspace(): Work {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-js-real-"));
     const project = path.join(dir, "project");
     fs.mkdirSync(project);
-    const kb = new Kb({
-        bin: BIN,
-        cwd: project,
-        /* The global tier, inside the throwaway. Never `~/.kb`. */
-        env: { ...process.env, KB_STORE: path.join(dir, "global") },
-    });
+    /* The working directory is inside the throwaway, and that is the whole
+     * of the store selection: §1.4 walks up from it and finds the `.kb/` that
+     * `kb.init()` creates there. */
+    const kb = new Kb({ bin: BIN, cwd: project, env: { ...process.env } });
     return {
         dir: project,
         kb,
-        env: { ...process.env, KB_STORE: path.join(dir, "global") },
+        env: { ...process.env },
         dispose: () => fs.rmSync(dir, { recursive: true, force: true }),
     };
 }
@@ -78,11 +78,11 @@ test("every flag this package spells for an implemented command is one the CLI n
      * separately, below, and only once they turn up — so the day they land,
      * this suite starts checking their flags without anybody editing it. */
     const argvs = [
-        lsArgv({ collection: "c", source: "S-1", mime: "m", since: "s", limit: 1, store: "all" }),
-        ["get", "D-1", "--include", "text,chunks", "--store", "all"],
-        ["collections", "--store", "all"],
+        lsArgv({ collection: "c", source: "S-1", mime: "m", since: "s", limit: 1 }),
+        ["get", "D-1", "--include", "text,chunks"],
+        ["collections"],
         ["status"],
-        ["init", "--store", "global"],
+        ["init"],
         ["add", "--title", "t", "--collection", "c", "--url", "u", "--mime", "m", "--meta", "{}", "--file", "-"],
     ];
     for (const argv of argvs) {
@@ -99,6 +99,9 @@ test("every flag this package spells for an implemented command is one the CLI n
     }
     /* And `--json`, which `run.ts` appends to every one of them. */
     assert.ok(text.includes("--json"));
+    /* And not `--store`: the tier selector is gone, and a help text that
+     * still named it would be advertising a flag every command refuses. */
+    assert.equal(text.includes("--store"), false, "kb --help still names --store");
 });
 
 test("search's flags are checked the moment the command exists", async (t) => {
@@ -116,7 +119,6 @@ test("search's flags are checked the moment the command exists", async (t) => {
         mode: "hybrid",
         k: 10,
         expand: 1,
-        store: "all",
         source: "S-1",
         mime: "m",
         since: "s",
@@ -135,8 +137,12 @@ test("a store filed into and read back through this package", async (t) => {
     }
     const work = workspace();
     try {
-        const created = await work.kb.init("project");
-        assert.equal(created.store, "project");
+        const created = await work.kb.init();
+        assert.equal(
+            fs.realpathSync(created.path),
+            fs.realpathSync(path.join(work.dir, ".kb")),
+            "init did not create the store in the working directory",
+        );
 
         const added = await work.kb.add("# IOCP\n\nCreateIoCompletionPort binds a handle.\n", {
             title: "I/O Completion Ports",
@@ -145,7 +151,6 @@ test("a store filed into and read back through this package", async (t) => {
             meta: { authors: ["MSDN"], year: 2026 },
         });
         assert.equal(added.created, true);
-        assert.equal(added.store, "project");
         assert.match(added.document, /^D-\d+$/);
 
         /* Every field `types.ts` claims a listed document has, off the real
@@ -155,7 +160,6 @@ test("a store filed into and read back through this package", async (t) => {
         assert.equal(row.id, added.document);
         assert.equal(row.collection, "win32-iocp");
         assert.equal(row.locator, "https://learn.microsoft.test/win32/iocp");
-        assert.equal(row.store, "project");
         /* `text/plain`, AND THAT IS THE CLI'S ANSWER RATHER THAN A DISAPPOINT-
          * MENT. `kb add` guesses the type from the locator's extension, and
          * `.../win32/iocp` has none — so a page that is markdown is filed as
@@ -208,14 +212,12 @@ test("a store filed into and read back through this package", async (t) => {
         const iocp = collections.find((c) => c.name === "win32-iocp");
         assert.ok(iocp !== undefined);
         assert.equal(iocp.documents, 1);
-        assert.equal(iocp.store, "project");
 
         const status = await work.kb.status();
-        assert.equal(status.defaultWrite, "project");
-        const project = status.tiers.find((s) => s.store === "project");
-        assert.equal(project?.present, true);
-        assert.equal(project?.documents, 2);
-        assert.equal(project?.chunking?.current, true);
+        assert.equal(status.present, true);
+        assert.equal(fs.realpathSync(status.path ?? ""), fs.realpathSync(created.path));
+        assert.equal(status.documents, 2);
+        assert.equal(status.chunking?.current, true);
     } finally {
         work.dispose();
     }
@@ -228,7 +230,7 @@ test("a real refusal arrives as a KbError carrying §11's code", async (t) => {
     }
     const work = workspace();
     try {
-        await work.kb.init("project");
+        await work.kb.init();
         const e = (await work.kb.get("D-9999").catch((x: unknown) => x)) as KbError;
         assert.ok(e instanceof KbError, `expected a KbError, got ${String(e)}`);
         assert.equal(e.code, "not_found");
@@ -251,7 +253,7 @@ test("a query full of shell metacharacters reaches the store as one argument", a
     }
     const work = workspace();
     try {
-        await work.kb.init("project");
+        await work.kb.init();
         const hostile = 'D-1; touch /tmp/kb-js-should-not-exist && echo "$(id)"';
         const e = (await work.kb.get(hostile).catch((x: unknown) => x)) as KbError;
         assert.ok(e instanceof KbError);
@@ -276,11 +278,76 @@ test("a collection name with a space survives the argument list", async (t) => {
     }
     const work = workspace();
     try {
-        await work.kb.init("project");
+        await work.kb.init();
         await work.kb.add("text\n", { title: "A title with spaces", collection: "two words" });
         const [row] = await work.kb.ls({ collection: "two words" });
         assert.equal(row.collection, "two words");
         assert.equal(row.title, "A title with spaces");
+    } finally {
+        work.dispose();
+    }
+});
+
+test("outside any store, a command is refused and says how to make one", async (t) => {
+    /* NO FALLBACK. With the global tier gone there is nowhere else to look:
+     * a directory with no `.kb/` at or above it is `not_found`, and the
+     * message names `kb init` because that is the one thing the reader can do
+     * about it. `status` is the exception, and answers "none" rather than
+     * refusing, because "is there a store here" is its whole question. */
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        const e = (await work.kb.ls().catch((x: unknown) => x)) as KbError;
+        assert.ok(e instanceof KbError, `expected a KbError, got ${String(e)}`);
+        assert.equal(e.code, "not_found");
+        assert.match(e.message, /kb init/);
+
+        const status = await work.kb.status();
+        assert.equal(status.path, null);
+        assert.equal(status.present, false);
+        assert.equal(status.documents, undefined);
+        assert.equal(typeof status.olderThan, "string");
+    } finally {
+        work.dispose();
+    }
+});
+
+test("--store is refused as an unknown option on every command", async (t) => {
+    /* The flag every builder used to be able to emit, and the one
+     * `argv.test.ts` now checks none of them does. Checked here against the
+     * binary so that the reason is the CLI's and not this package's opinion:
+     * a `kb` that quietly accepted and ignored it would let a caller believe
+     * it had narrowed a read that it had not. */
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await work.kb.init();
+        for (const argv of [
+            ["ls", "--store", "project"],
+            ["status", "--store", "all"],
+            ["collections", "--store", "global"],
+            ["search", "--store", "all", "q"],
+        ]) {
+            let refused: { status: number | null; stdout: string } | null = null;
+            try {
+                execFileSync(BIN, [...argv, "--json"], { cwd: work.dir, env: work.env, encoding: "utf8" });
+            } catch (x) {
+                const err = x as { status: number | null; stdout: string };
+                refused = { status: err.status, stdout: err.stdout };
+            }
+            assert.ok(refused !== null, `kb ${argv.join(" ")} was accepted`);
+            assert.equal(refused.status, 1, `kb ${argv.join(" ")} did not exit 1`);
+            const payload = JSON.parse(refused.stdout) as { ok: boolean; error: string; message: string };
+            assert.equal(payload.ok, false);
+            assert.equal(payload.error, "usage");
+            assert.match(payload.message, /unknown option/);
+        }
     } finally {
         work.dispose();
     }
@@ -336,7 +403,7 @@ test("the refresh reader answers exactly the keys the real binary prints", async
     }
     const work = workspace();
     try {
-        await work.kb.init("project");
+        await work.kb.init();
         await work.kb.add("# IOCP\n", { title: "IOCP", collection: "win32-iocp" });
         assert.deepEqual(
             answered(await work.kb.refresh({ olderThan: "1d" })),
@@ -367,10 +434,10 @@ test("refresh takes the two narrowings §5 gives it, and no invented ones", asyn
     }
     assert.deepEqual(refreshArgv(), ["refresh"]);
     assert.deepEqual(
-        refreshArgv({ collection: "win32-iocp", olderThan: "90d", store: "all" }),
-        ["refresh", "--collection", "win32-iocp", "--older-than", "90d", "--store", "all"],
+        refreshArgv({ collection: "win32-iocp", olderThan: "90d" }),
+        ["refresh", "--collection", "win32-iocp", "--older-than", "90d"],
     );
-    for (const flag of refreshArgv({ collection: "c", olderThan: "1d", store: "all" })) {
+    for (const flag of refreshArgv({ collection: "c", olderThan: "1d" })) {
         if (flag.startsWith("--")) {
             assert.ok(help().includes(flag), `kb refresh does not take ${flag}`);
         }
@@ -387,7 +454,7 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
     }
     const work = workspace();
     try {
-        await work.kb.init("project");
+        await work.kb.init();
         const added = await work.kb.add("# IOCP\n\nCreateIoCompletionPort binds a handle.\n", {
             title: "IOCP",
             collection: "win32-iocp",

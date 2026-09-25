@@ -4,8 +4,8 @@
  * preference: "a passage whose age and origin are unknown is a passage that
  * will eventually be trusted when it should not be." So the header is not a
  * collapsible, not a hover, and not behind a tab — it is the first thing in the
- * document and it carries the locator, the dates, the size, the type, the chunk
- * count and the tier.
+ * document and it carries the locator, the dates, the size, the type and the
+ * chunk count.
  *
  * ANYTHING ELSE IN `meta` IS A PLAIN KEY/VALUE LIST. index-api.md §1.2 makes it
  * free-form per document, so this shows what is there and asserts nothing about
@@ -263,10 +263,6 @@ export function SourceView(props: { reference: string }): JSX.Element {
                                     <div className="kb-fact">
                                         <dt>Bytes</dt>
                                         <dd>{bytes}</dd>
-                                    </div>
-                                    <div className="kb-fact">
-                                        <dt>Store</dt>
-                                        <dd>{first.store}</dd>
                                     </div>
                                 </dl>
                             </header>

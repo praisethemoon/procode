@@ -33,7 +33,6 @@ function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element 
     const row = props.row;
     const [renaming, setRenaming] = useState(false);
     const [draft, setDraft] = useState(row.name);
-    const tier = row.store === "project" ? "project" : "global";
 
     const problem = (e: unknown, what: string): void => {
         const message = e instanceof Error ? e.message : String(e);
@@ -51,7 +50,7 @@ function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element 
         if (next === "" || next === row.name) {
             return;
         }
-        call("renameCollection", { from: row.name, to: next, store: tier })
+        call("renameCollection", { from: row.name, to: next })
             .then(() => props.onChanged())
             .catch((e: unknown) => problem(e, "rename a collection"));
     };
@@ -62,13 +61,13 @@ function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element 
             /* The count is in the confirmation because it is the fact somebody
              * deciding needs, and §11's `collection_in_use` carries the same
              * number when the store refuses. */
-            `${row.documents} document${row.documents === 1 ? "" : "s"} in the ${row.store} store, ${formatBytes(row.bytes)}. The documents go with it.`,
+            `${row.documents} document${row.documents === 1 ? "" : "s"}, ${formatBytes(row.bytes)}. The documents go with it.`,
             "Forget",
         ).then((confirmed) => {
             if (!confirmed) {
                 return;
             }
-            call("deleteCollection", { name: row.name, store: tier })
+            call("deleteCollection", { name: row.name })
                 .then(() => props.onChanged())
                 .catch((e: unknown) => problem(e, "delete a collection"));
         });
@@ -109,7 +108,6 @@ function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element 
                         {row.name === "" ? "(no collection)" : row.name}
                     </button>
                 )}
-                <span className="kb-chip kb-chip-quiet">{row.store}</span>
                 <span className="kb-grow" />
                 <button
                     type="button"
@@ -151,7 +149,7 @@ export function Collections(): JSX.Element {
     /* The documents, for the one field §4 asks for that `GET /collections` does
      * not carry. The same limitless read the sidebar makes, so the two see the
      * same store. */
-    const documents = useQuery<KbDocument[]>("ls", { store: "all" });
+    const documents = useQuery<KbDocument[]>("ls", {});
 
     const refresh = (): void => {
         collections.refresh();
@@ -165,7 +163,6 @@ export function Collections(): JSX.Element {
                     <h1 className="kb-head-title">Collections</h1>
                     <div className="kb-small kb-muted">
                         A collection is a flat named scope and a document belongs to exactly one.
-                        The same name in both stores is two collections.
                     </div>
                 </header>
                 <Resolved state={collections.state} loading="Counting…">
@@ -185,7 +182,7 @@ export function Collections(): JSX.Element {
                                     <div className="kb-list">
                                         {list.map((row) => (
                                             <Row
-                                                key={`${row.store} ${row.name}`}
+                                                key={row.name}
                                                 row={row}
                                                 onChanged={refresh}
                                             />

@@ -3,9 +3,9 @@
  * "SIX TOOLS" IS A CEILING AND NOT A COUNT. The section is as much about what
  * is withheld as about what is offered: `rebuild`, `reindex`, `compact`,
  * `promote`, `demote` and every `DELETE` are absent because an agent files
- * knowledge into the project store and reads from both, while forgetting — and
- * deciding that something is general enough to outlive the project — are the
- * reader's decisions. A seventh tool is therefore a defect against the
+ * knowledge into the workspace store and reads from it, while forgetting — and
+ * deciding what the store is for and where it lives — are the reader's
+ * decisions. A seventh tool is therefore a defect against the
  * specification even when it is useful, and especially when it is: the useful
  * ones are exactly the ones somebody adds without reading §9.
  *
@@ -106,7 +106,6 @@ test("kb_search takes every filter §4 names", () => {
             "q",
             "since",
             "source",
-            "store",
         ].sort(),
     );
     assert.deepEqual(schema["required"], ["q"]);
@@ -126,15 +125,14 @@ test("kb_get takes one id and not a list of them", () => {
     assert.deepEqual(findTool("kb_get")?.inputSchema["required"], ["id"]);
 });
 
-test("kb_add offers no tier to write into", () => {
-    /* §1.4 sends an ingest to the project store when one exists; §9 withholds
-     * `promote` and `demote` because deciding something is general enough to
-     * outlive the project is a decision made after reading it. A
-     * `store: "global"` here would hand the caller that decision at the one
-     * moment it cannot be made well, in the direction that is hard to undo. */
+test("kb_add takes documents and nothing that names a destination", () => {
+    /* There is one store, the one the server's working directory finds, and a
+     * write lands in it or is refused. An argument that chose somewhere else —
+     * the `store` that once picked a tier — would be a second answer to a
+     * question the working directory already answered. */
     const schema = findTool("kb_add")?.inputSchema ?? {};
     const properties = schema["properties"] as Record<string, unknown>;
-    assert.equal("store" in properties, false, "kb_add lets the caller choose a tier");
+    assert.deepEqual(Object.keys(properties), ["documents"]);
     const item = (properties["documents"] as Record<string, unknown>)["items"] as Record<
         string,
         unknown
@@ -165,7 +163,7 @@ test("kb_stale reads and does not refetch", () => {
     const tool = findTool("kb_stale");
     assert.deepEqual(
         Object.keys((tool?.inputSchema["properties"] ?? {}) as Record<string, unknown>).sort(),
-        ["collection", "olderThan", "store"],
+        ["collection", "olderThan"],
     );
     /* And the description says so, because the one place a model is told what
      * a tool will not do is the sentence it reads before calling it. */
@@ -190,18 +188,14 @@ test("no schema offers an argument that would reach something §9 withholds", ()
     }
 });
 
-test("every read offers §1.4's three tiers and every write offers none", () => {
-    const reads = ["kb_search", "kb_get", "kb_collections", "kb_stale"];
-    for (const name of reads) {
-        const properties = (findTool(name)?.inputSchema["properties"] ?? {}) as Record<
-            string,
-            Record<string, unknown>
-        >;
-        assert.deepEqual(
-            properties["store"]["enum"],
-            ["all", "project", "global"],
-            `${name} does not offer §1.4's tiers`,
-        );
+test("no tool offers a store selector, because there is one store", () => {
+    /* The global tier and the `store` argument that chose between tiers are
+     * gone. A schema that still advertised it would invite a model to send a
+     * key the call then refuses, which is a tool that teaches its own misuse. */
+    for (const tool of TOOLS) {
+        const properties = (tool.inputSchema["properties"] ?? {}) as Record<string, unknown>;
+        assert.equal("store" in properties, false, `${tool.name} still offers "store"`);
+        assert.doesNotMatch(tool.description, /\btier|global/i, `${tool.name} still describes tiers`);
     }
-    assert.equal("store" in ((findTool("kb_add")?.inputSchema["properties"] ?? {}) as object), false);
+    assert.deepEqual(findTool("kb_collections")?.inputSchema["properties"], {});
 });

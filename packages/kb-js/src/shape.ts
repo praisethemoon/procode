@@ -11,13 +11,6 @@
  * out would hide the one row somebody needs to go and fix. The empty string is
  * visibly empty; a missing row is invisible.
  *
- * THE ONE PLACE THAT IS NOT MERELY A DEFAULT IS THE TIER. §1.4 makes a
- * document's tier part of its provenance, so an unrecognised one reads as
- * `global`: attributing an unnamed tier to the project would claim a
- * provenance nobody stated, and the two are not symmetric — `project` means
- * "this belongs to this codebase", which is a claim, and `global` is the
- * absence of it.
- *
  * NOTHING HERE VALIDATES SEMANTICS. `fetchedAt` is whatever string the store
  * wrote, `meta` is free-form per §1.2, and a code this package has not heard
  * of stays the word the store used. A binding that corrected the store would
@@ -40,8 +33,6 @@ import {
     KbStaleList,
     KbStats,
     KbStatus,
-    KbTierStatus,
-    Store,
 } from "./types";
 
 export function str(v: unknown, fallback = ""): string {
@@ -74,16 +65,11 @@ export function strOrNull(v: unknown): string | null {
     return typeof v === "string" && v.length > 0 ? v : null;
 }
 
-export function readStore(v: unknown): Store {
-    return v === "project" ? "project" : "global";
-}
-
 export function readDocument(v: unknown): KbDocument {
     const d = obj(v);
     return {
         id: str(d["id"]),
         source: str(d["source"]),
-        store: readStore(d["store"]),
         collection: str(d["collection"]),
         path: str(d["path"]),
         title: str(d["title"]),
@@ -103,7 +89,6 @@ export function readSource(v: unknown): KbSource {
     const s = obj(v);
     return {
         id: str(s["id"]),
-        store: readStore(s["store"]),
         kind: str(s["kind"]),
         locator: str(s["locator"]),
         title: str(s["title"]),
@@ -148,8 +133,6 @@ export function readHit(v: unknown): KbHit {
         heading: strOrNull(h["heading"]),
         snippet: str(h["snippet"]),
         collection: str(h["collection"]),
-        store: readStore(h["store"]),
-        alsoGlobal: bool(h["alsoGlobal"]),
         /* Every string the store named, in the order it named them. Not
          * filtered against the two §4 knows about: see `KbHit.matched`. */
         matched: arr(h["matched"]).filter((m): m is string => typeof m === "string"),
@@ -163,7 +146,6 @@ export function readCollection(v: unknown): KbCollection {
     const c = obj(v);
     const row: Record<string, unknown> = {
         name: str(c["name"]),
-        store: readStore(c["store"]),
         documents: num(c["documents"]),
         bytes: num(c["bytes"]),
     };
@@ -203,7 +185,6 @@ export function readRefresh(payload: Record<string, unknown>): KbRefresh {
             const s = obj(v);
             return {
                 id: str(s["id"]),
-                store: readStore(s["store"]),
                 kind: str(s["kind"]),
                 locator: str(s["locator"]),
                 collection: str(s["collection"]),
@@ -230,7 +211,6 @@ export function readStats(payload: Record<string, unknown>): KbStats {
             const c = obj(v);
             return {
                 name: str(c["name"]),
-                store: readStore(c["store"]),
                 documents: num(c["documents"]),
                 chunks: num(c["chunks"]),
                 bytes: num(c["bytes"]),
@@ -244,55 +224,47 @@ export function readStats(payload: Record<string, unknown>): KbStats {
     };
 }
 
-function readTier(v: unknown): KbTierStatus {
-    const t = obj(v);
-    const tier: Record<string, unknown> = {
-        store: readStore(t["store"]),
+export function readStatus(payload: Record<string, unknown>): KbStatus {
+    const t = payload;
+    const status: Record<string, unknown> = {
         path: typeof t["path"] === "string" ? t["path"] : null,
         present: bool(t["present"]),
         model: t["model"] ?? null,
+        olderThan: str(t["olderThan"]),
     };
-    /* Everything below is absent on a tier that is not there, and absent is
+    /* Everything below is absent when there is no store, and absent is
      * different from zero: "no store here" and "a store with no documents in
      * it" are two different things for a reader to be told. */
-    if (tier["present"] === true) {
-        tier["readable"] = bool(t["readable"]);
+    if (status["present"] === true) {
+        status["readable"] = bool(t["readable"]);
         if (typeof t["error"] === "string") {
-            tier["error"] = t["error"];
+            status["error"] = t["error"];
         }
         if (t["readable"] === true) {
-            tier["sources"] = num(t["sources"]);
-            tier["documents"] = num(t["documents"]);
-            tier["chunks"] = num(t["chunks"]);
-            tier["contentBytes"] = num(t["contentBytes"]);
-            tier["diskBytes"] = num(t["diskBytes"]);
-            tier["indexBytes"] = num(t["indexBytes"]);
+            status["sources"] = num(t["sources"]);
+            status["documents"] = num(t["documents"]);
+            status["chunks"] = num(t["chunks"]);
+            status["contentBytes"] = num(t["contentBytes"]);
+            status["diskBytes"] = num(t["diskBytes"]);
+            status["indexBytes"] = num(t["indexBytes"]);
             const ids = obj(t["nextIds"]);
-            tier["nextIds"] = {
+            status["nextIds"] = {
                 source: str(ids["source"]),
                 document: str(ids["document"]),
                 chunk: str(ids["chunk"]),
             };
             const ch = obj(t["chunking"]);
-            tier["chunking"] = {
+            status["chunking"] = {
                 recorded: bool(ch["recorded"]),
                 chunker: str(ch["chunker"]),
                 chunkTokens: num(ch["chunkTokens"]),
                 chunkOverlap: num(ch["chunkOverlap"]),
                 current: bool(ch["current"]),
             };
-            tier["torn"] = bool(t["torn"]);
+            status["torn"] = bool(t["torn"]);
         }
     }
-    return tier as unknown as KbTierStatus;
-}
-
-export function readStatus(payload: Record<string, unknown>): KbStatus {
-    const write = payload["defaultWrite"];
-    return {
-        tiers: arr(payload["tiers"]).map(readTier),
-        defaultWrite: write === "project" || write === "global" ? write : "none",
-    };
+    return status as unknown as KbStatus;
 }
 
 export function readDocumentRead(payload: Record<string, unknown>): KbDocumentRead {
@@ -329,7 +301,6 @@ function readLinkTarget(v: unknown): KbDocument | null {
 export function readLinks(payload: Record<string, unknown>): KbLinks {
     return {
         document: str(payload["document"]),
-        store: readStore(payload["store"]),
         outgoing: arr(payload["outgoing"]).map(readLink),
         incoming: arr(payload["incoming"]).map(readLink),
     };
@@ -337,7 +308,6 @@ export function readLinks(payload: Record<string, unknown>): KbLinks {
 
 export function readLinkWritten(payload: Record<string, unknown>): KbLinkWritten {
     return {
-        store: readStore(payload["store"]),
         from: str(payload["from"]),
         to: str(payload["to"]),
         type: str(payload["type"]),

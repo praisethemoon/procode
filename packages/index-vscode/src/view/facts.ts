@@ -109,8 +109,6 @@ export function documentFacts(document: KbDocument): Fact[] {
                 ? `C-${document.chunkBase}..C-${document.chunkBase + document.chunkCount - 1}`
                 : undefined,
     });
-    /* §1.4: which tier this came from is part of its provenance. */
-    facts.push({ label: "Store", value: document.store });
     return facts;
 }
 
@@ -159,7 +157,6 @@ export function metaEntries(meta: Readonly<Record<string, unknown>>): MetaEntry[
 
 export interface CollectionRow {
     readonly name: string;
-    readonly store: string;
     readonly documents: number;
     readonly bytes: number;
     /* §4 asks for the oldest fetch date. `kb collections` does not carry one —
@@ -177,12 +174,7 @@ export interface CollectionRow {
  * state, so folding it here costs nothing and asserts nothing the store does
  * not already say.
  *
- * KEYED BY NAME AND TIER TOGETHER. §1.4: "`win32-iocp` can exist in both
- * tiers", and they are different scopes with different contents — merging them
- * would report one date for two collections. */
-export function collectionKey(name: string, store: string): string {
-    return `${store} ${name}`;
-}
+ * KEYED BY NAME ALONE. There is one store, and a name is one collection in it. */
 
 export function oldestFetch(documents: readonly KbDocument[]): Map<string, string> {
     const out = new Map<string, string>();
@@ -190,7 +182,7 @@ export function oldestFetch(documents: readonly KbDocument[]): Map<string, strin
         if (d.fetchedAt.length === 0) {
             continue;
         }
-        const key = collectionKey(d.collection, d.store);
+        const key = d.collection;
         const held = out.get(key);
         if (held === undefined || fetchedAtKey(d.fetchedAt) < fetchedAtKey(held)) {
             out.set(key, d.fetchedAt);
@@ -205,15 +197,14 @@ export function collectionRows(
 ): CollectionRow[] {
     const oldest = oldestFetch(documents);
     return [...collections]
-        /* By name, then by tier. §4 offers no order to choose and the list is
+        /* By name. §4 offers no order to choose and the list is
          * a reference rather than a feed, so alphabetical is what lets a reader
          * find the one they are looking for. */
-        .sort((a, b) => a.name.localeCompare(b.name) || a.store.localeCompare(b.store))
+        .sort((a, b) => a.name.localeCompare(b.name))
         .map((c) => ({
             name: c.name,
-            store: c.store,
             documents: c.documents,
             bytes: c.bytes,
-            oldestFetch: oldest.get(collectionKey(c.name, c.store)) ?? "",
+            oldestFetch: oldest.get(c.name) ?? "",
         }));
 }

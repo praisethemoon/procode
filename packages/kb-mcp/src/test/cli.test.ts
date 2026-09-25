@@ -11,10 +11,12 @@
  * arrangement in practice as well: a reader makes a store, and an agent fills
  * it and reads it.
  *
- * IT NEVER TOUCHES A STORE IT WAS NOT ASKED TO. `KB_STORE` points inside a
- * throwaway directory and the working directory is inside it too, so the global
- * tier is the temporary one and the project tier is found by walking up from a
- * directory that exists for the length of the run.
+ * IT NEVER TOUCHES A STORE IT WAS NOT ASKED TO. There is one store, the first
+ * `.kb/` at or above the working directory, and the working directory is a
+ * throwaway one that `kb init` has just made a store in — so the store every
+ * call finds is the temporary one, and it exists for the length of the run.
+ * Nothing in the environment can redirect it: the CLI reads neither `HOME` nor
+ * any store variable.
  *
  * IT SKIPS RATHER THAN FAILS FOR A COMMAND THAT IS NOT THERE YET. §5's `stale`
  * and §6's `links` were built in parallel with this and landed during it, so
@@ -55,10 +57,9 @@ function hasCommand(name: string): boolean {
 
 interface Work {
     server: Server;
-    /* The same directory and environment the server was given, so a test that
-     * builds a second client points at the same throwaway store. */
+    /* The same directory the server was given, so a test that builds a second
+     * client points at the same throwaway store. */
     dir: string;
-    env: NodeJS.ProcessEnv;
     dispose(): void;
 }
 
@@ -66,12 +67,10 @@ function workspace(): Work {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-mcp-real-"));
     const project = path.join(dir, "project");
     fs.mkdirSync(project);
-    const env = { ...process.env, KB_STORE: path.join(dir, "global") };
-    execFileSync(BIN, ["init", "--store", "project", "--json"], { cwd: project, env });
+    execFileSync(BIN, ["init", "--json"], { cwd: project });
     return {
-        server: new Server(new Kb({ bin: BIN, cwd: project, env })),
+        server: new Server(new Kb({ bin: BIN, cwd: project })),
         dir: project,
-        env,
         dispose: () => fs.rmSync(dir, { recursive: true, force: true }),
     };
 }
@@ -142,9 +141,9 @@ test("a store filed into and searched through §9's tools", async (t) => {
         );
         assert.equal(added["filed"], 1);
         const rows = added["added"] as Record<string, unknown>[];
-        /* §1.4: a write goes to the project store when one exists, and this
-         * surface never named a tier. */
-        assert.equal(rows[0]["store"], "project");
+        /* §1.4: a write goes to the one store the working directory finds,
+         * and the row no longer says which store — there is only one. */
+        assert.equal("store" in rows[0], false);
         assert.match(String(rows[0]["document"]), /^D-\d+$/);
         const documentId = String(rows[0]["document"]);
 
@@ -153,7 +152,7 @@ test("a store filed into and searched through §9's tools", async (t) => {
         assert.ok(hits.length >= 1, "the document just filed was not found");
         assert.equal(hits[0]["document"], documentId);
         assert.equal(hits[0]["collection"], "win32-iocp");
-        assert.equal(hits[0]["store"], "project");
+        assert.equal("store" in hits[0], false);
         assert.ok(String(hits[0]["snippet"]).length > 0);
         assert.ok((hits[0]["matched"] as string[]).length >= 1);
 
@@ -214,7 +213,6 @@ test("a filter §4 names is one the real binary accepts", async (t) => {
             collection: ["io-uring"],
             k: 5,
             expand: 1,
-            store: "all",
             mime: "text/plain",
             since: "2000-01-01T00:00:00Z",
             minScore: 0,
@@ -244,6 +242,44 @@ test("a document that is not there is a refusal the model can read", async (t) =
         assert.equal(answer["error"], "not_found");
     } finally {
         work.dispose();
+    }
+});
+
+test("with no store to find, kb_add is a refusal that tells the agent to run kb init", async (t) => {
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    /* A throwaway directory with no `kb init` in it. If some ancestor of the
+     * temporary directory happens to hold a `.kb/`, the CLI would find it and
+     * this would file into somebody else's store — so that case is detected
+     * and skipped rather than written into. */
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-mcp-nostore-"));
+    try {
+        for (let up = path.dirname(dir); ; up = path.dirname(up)) {
+            if (fs.existsSync(path.join(up, ".kb"))) {
+                t.skip(`${up} holds a .kb store, so there is no store-less directory to test from`);
+                return;
+            }
+            if (path.dirname(up) === up) {
+                break;
+            }
+        }
+        const server = new Server(new Kb({ bin: BIN, cwd: dir }));
+        const result = await call({ server, dir, dispose: () => undefined }, "kb_add", {
+            documents: [{ title: "IOCP", content: IOCP, collection: "win32-iocp" }],
+        });
+        assert.equal(result.isError, true, "kb_add filed with no store to file into");
+        const answer = payload(result);
+        assert.equal(answer["filed"], 0);
+        const because = answer["because"] as Record<string, unknown>;
+        assert.equal(because["kind"], "refused");
+        assert.equal(because["error"], "not_found");
+        assert.match(String(because["message"]), /kb init/);
+        /* And nothing was created on the way to refusing. */
+        assert.equal(fs.existsSync(path.join(dir, ".kb")), false);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
     }
 });
 
@@ -385,7 +421,7 @@ test("a tool answers every field the reader it is built on answered", async (t) 
     }
     const work = workspace();
     try {
-        const kb = new Kb({ bin: BIN, cwd: work.dir, env: work.env });
+        const kb = new Kb({ bin: BIN, cwd: work.dir });
         await call(work, "kb_add", {
             documents: [
                 { title: "IOCP", content: IOCP, collection: "win32-iocp", mime: "text/markdown" },

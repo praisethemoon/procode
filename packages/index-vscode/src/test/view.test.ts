@@ -42,7 +42,6 @@ function doc(over: Partial<KbDocument> = {}): KbDocument {
     return {
         id: "D-1",
         source: "S-1",
-        store: "project",
         collection: "win32-iocp",
         path: "",
         title: "I/O Completion Ports",
@@ -68,8 +67,6 @@ function hit(over: Partial<KbHit> = {}): KbHit {
         heading: "Creating a completion port",
         snippet: "CreateIoCompletionPort associates an open file handle with a port.",
         collection: "win32-iocp",
-        store: "project",
-        alsoGlobal: false,
         matched: ["keyword", "semantic"],
         scores: { bm25: 11.25, vector: 0.82, fused: 0.031 },
         fetchedAt: "2026-06-01T09:15:00Z",
@@ -107,16 +104,12 @@ test("the browse list is newest first, and an undated row sorts last", () => {
     assert.deepEqual(rows.map((r) => r.reference), ["D-3", "D-1", "D-2"]);
 });
 
-test("the browse query asks both tiers and never sends a blank collection", () => {
-    /* §1.4: search spans both tiers by default, and the browse list is the
-     * same list without a question — a reader who can find a global document
-     * by searching and not by scrolling would reasonably conclude it was not
-     * there. A blank `collection=` filters for the empty-string collection,
-     * which is nobody's question. */
-    assert.deepEqual(browseQuery(""), { limit: BROWSE_LIMIT, store: "all" });
-    assert.deepEqual(browseQuery("   "), { limit: BROWSE_LIMIT, store: "all" });
+test("the browse query never sends a blank collection", () => {
+    /* A blank `collection=` filters for the empty-string collection, which is
+     * nobody's question. */
+    assert.deepEqual(browseQuery(""), { limit: BROWSE_LIMIT });
+    assert.deepEqual(browseQuery("   "), { limit: BROWSE_LIMIT });
     assert.equal(browseQuery(" papers ").collection, "papers");
-    assert.equal(searchQuery("").store, "all");
     assert.equal("collection" in searchQuery(""), false);
 });
 
@@ -127,7 +120,7 @@ test("a search row keeps the store's order, its verdict and its matched paths", 
     const rows = searchRows(
         [
             hit({ document: "D-9", fetchedAt: "2020-01-01T00:00:00Z", stale: false }),
-            hit({ document: "D-1", matched: ["semantic"], store: "global", stale: true }),
+            hit({ document: "D-1", matched: ["semantic"], stale: true }),
         ],
         NOW,
         90,
@@ -135,7 +128,6 @@ test("a search row keeps the store's order, its verdict and its matched paths", 
     assert.deepEqual(rows.map((r) => r.reference), ["D-9", "D-1"]);
     assert.equal(rows[0].stale, false, "the store said fresh and this overruled it");
     assert.deepEqual([...rows[1].matched], ["semantic"]);
-    assert.equal(rows[1].store, "global");
     assert.equal(rows[0].chunk, "C-99812", "a search row carries the chunk §3.2 scrolls to");
 });
 
@@ -226,7 +218,7 @@ test("the indexed date is shown only when it differs from the fetched one", () =
 test("every fact §3.1 names is in the strip", () => {
     const facts = documentFacts(doc());
     const labels = facts.map((f) => f.label);
-    for (const needed of ["Collection", "Fetched", "Size", "Type", "Chunks", "Store"]) {
+    for (const needed of ["Collection", "Fetched", "Size", "Type", "Chunks"]) {
         assert.ok(labels.includes(needed), `§3.1 asks for ${needed} and the strip has no row for it`);
     }
 });
@@ -298,27 +290,25 @@ test("an empty meta is an empty list rather than a heading with nothing under it
 
 /* ---------------------------------------------------- §4: the collections */
 
-test("the oldest fetch date is derived per collection AND per tier", () => {
-    /* §1.4: "`win32-iocp` can exist in both tiers", and they are different
-     * scopes. Merging them would report one date for two collections. */
+test("the oldest fetch date is derived per collection", () => {
     const oldest = oldestFetch([
-        doc({ collection: "a", store: "project", fetchedAt: "2026-01-01T00:00:00Z" }),
-        doc({ collection: "a", store: "project", fetchedAt: "2024-01-01T00:00:00Z" }),
-        doc({ collection: "a", store: "global", fetchedAt: "2025-01-01T00:00:00Z" }),
-        doc({ collection: "b", store: "project", fetchedAt: "" }),
+        doc({ collection: "a", fetchedAt: "2026-01-01T00:00:00Z" }),
+        doc({ collection: "a", fetchedAt: "2024-01-01T00:00:00Z" }),
+        doc({ collection: "c", fetchedAt: "2025-01-01T00:00:00Z" }),
+        doc({ collection: "b", fetchedAt: "" }),
     ]);
-    assert.equal(oldest.get("project a"), "2024-01-01T00:00:00Z");
-    assert.equal(oldest.get("global a"), "2025-01-01T00:00:00Z");
-    assert.equal(oldest.get("project b"), undefined, "an undated document invented a date");
+    assert.equal(oldest.get("a"), "2024-01-01T00:00:00Z");
+    assert.equal(oldest.get("c"), "2025-01-01T00:00:00Z");
+    assert.equal(oldest.get("b"), undefined, "an undated document invented a date");
 });
 
 test("a collection row carries the three facts §4 asks for", () => {
     const rows = collectionRows(
         [
-            { name: "io-uring", store: "global", sources: 1, documents: 3, chunks: 9, bytes: 4096 },
-            { name: "win32-iocp", store: "project", sources: 2, documents: 7, chunks: 41, bytes: 90210 },
+            { name: "io-uring", sources: 1, documents: 3, chunks: 9, bytes: 4096 },
+            { name: "win32-iocp", sources: 2, documents: 7, chunks: 41, bytes: 90210 },
         ],
-        [doc({ collection: "win32-iocp", store: "project", fetchedAt: "2024-05-05T00:00:00Z" })],
+        [doc({ collection: "win32-iocp", fetchedAt: "2024-05-05T00:00:00Z" })],
     );
     assert.deepEqual(rows.map((r) => r.name), ["io-uring", "win32-iocp"]);
     const iocp = rows[1];

@@ -2,9 +2,9 @@
  *
  * WRITTEN OFF THE SPECIFICATION AND WIDENED TO WHAT THE CLI ACTUALLY EMITS,
  * which is not the same set and the difference is deliberate. §1.2's `Document`
- * has no `store`, `locator` or `chunkBase`; `kb get --json` carries all three,
- * because §1.4 makes a hit's tier part of its provenance and a reader has to be
- * able to say which one a row came from. Nothing here narrows the CLI's answer
+ * has no `locator` or `chunkBase`; `kb get --json` carries both, because a
+ * reader has to be able to say where a row came from without a second call.
+ * Nothing here narrows the CLI's answer
  * — a field this file does not name is a field a caller cannot read, and a
  * reader that silently dropped provenance is the failure §3 of the UI spec is
  * written against.
@@ -20,21 +20,12 @@ export type SourceId = string;
 export type DocumentId = string;
 export type ChunkId = string;
 
-/* §1.4's two tiers. A hit carries which one it came from, so a result's
- * provenance includes the tier and not only the locator. */
-export type Store = "project" | "global";
-
-/* What `--store` accepts. `all` is the default for a read and is refused for a
- * write, which is the CLI's rule and not this layer's to soften. */
-export type StoreSelector = Store | "all";
-
 /* §1.2. `kind` is what was ingested from: a URL, a file, a directory walk, or
  * content handed in directly. */
 export type SourceKind = "url" | "file" | "dir" | "inline";
 
 export interface KbSource {
     readonly id: SourceId;
-    readonly store: Store;
     readonly kind: SourceKind | string;
     readonly locator: string;
     readonly title: string;
@@ -49,7 +40,6 @@ export interface KbSource {
 export interface KbDocument {
     readonly id: DocumentId;
     readonly source: SourceId;
-    readonly store: Store;
     readonly collection: string;
     readonly path: string;
     readonly title: string;
@@ -89,8 +79,7 @@ export interface KbChunk {
 /* §4's hit, verbatim:
  *
  *   { chunk, document, source, title, heading, snippet, collection,
- *     store, alsoGlobal, matched, scores: { bm25, vector, fused },
- *     fetchedAt, stale }
+ *     matched, scores: { bm25, vector, fused }, fetchedAt, stale }
  *
  * `matched` NAMES WHICH RETRIEVAL PATHS PRODUCED THE HIT, and §4 says why it
  * is on the wire at all: "a result found by both is a different kind of result
@@ -112,10 +101,6 @@ export interface KbHit {
     readonly heading: string | null;
     readonly snippet: string;
     readonly collection: string;
-    readonly store: Store;
-    /* §1.4: a document present in both tiers with the same content hash is
-     * returned once, attributed to the project tier, and flagged. */
-    readonly alsoGlobal: boolean;
     /* NOT NARROWED TO THE TWO §4 NAMES. Hybrid is two paths today and the
      * field exists to say which of them fired; a third path added later would
      * be dropped by a reader that only knew these two, and a row would then
@@ -130,12 +115,9 @@ export interface KbHit {
     readonly stale: boolean;
 }
 
-/* §7's `GET /collections` and `GET /stats`, which the CLI answers as one
- * command. §1.4: a collection name can exist in both tiers and the two are
- * different scopes, so each row says which tier it counted. */
+/* §7's `GET /collections`. */
 export interface KbCollection {
     readonly name: string;
-    readonly store: Store;
     readonly documents: number;
     readonly bytes: number;
     /* §5's freshness, per topic: when the oldest document in this collection
@@ -150,11 +132,11 @@ export interface KbCollection {
     readonly chunks?: number;
 }
 
-/* §7's `GET /status`, per tier. `present: false` is a tier that has a path and
- * nothing at it — which still tells a caller where `kb init` would put one —
- * and `path: null` is a tier with no path at all. */
-export interface KbTierStatus {
-    readonly store: Store;
+/* §7's `GET /status`. There is one store, the first `.kb/` at or above the
+ * working directory; `path: null` and `present: false` mean there is none, and
+ * everything else is absent then, because "no store here" and "a store with no
+ * documents in it" are different answers. */
+export interface KbStatus {
     readonly path: string | null;
     readonly present: boolean;
     readonly readable?: boolean;
@@ -175,7 +157,7 @@ export interface KbTierStatus {
         readonly chunker: string;
         readonly chunkTokens: number;
         readonly chunkOverlap: number;
-        /* Whether the parameters this tier was built with still match what
+        /* Whether the parameters the store was built with still match what
          * the running binary would produce. §8's question one layer down: a
          * store whose chunker differs owes a reindex exactly as one built
          * with another model would. */
@@ -184,20 +166,14 @@ export interface KbTierStatus {
     /* §8's model identity, or null where there is no model yet. */
     readonly model: unknown;
     readonly torn?: boolean;
-}
-
-export interface KbStatus {
-    readonly tiers: readonly KbTierStatus[];
-    /* Which tier an ingest would land in: §1.4's "project when one exists, and
-     * global otherwise". `none` when there is no store at all. */
-    readonly defaultWrite: Store | "none";
+    /* The staleness threshold the counts were taken against. */
+    readonly olderThan: string;
 }
 
 /* What `kb add` answers. One shape for every outcome — created, updated, or
  * unchanged with `fetchedAt` moved on — so a caller never has to work out
  * which keys are present before it can read the answer. */
 export interface KbAdded {
-    readonly store: Store;
     readonly document: DocumentId;
     readonly source: SourceId;
     readonly contentHash: string;
@@ -271,7 +247,6 @@ export interface KbLink {
 
 export interface KbLinks {
     readonly document: DocumentId;
-    readonly store: Store;
     readonly outgoing: readonly KbLink[];
     readonly incoming: readonly KbLink[];
 }
@@ -281,7 +256,6 @@ export interface KbLinks {
  * posture one layer along, so a caller can state a relationship twice without
  * having to check first. */
 export interface KbLinkWritten {
-    readonly store: Store;
     readonly from: DocumentId;
     readonly to: DocumentId;
     readonly type: string;
@@ -320,7 +294,6 @@ export interface KbStaleList {
  * one word would drop the one that changed. */
 export interface KbRefreshSource {
     readonly id: SourceId;
-    readonly store: Store;
     readonly kind: SourceKind | string;
     readonly locator: string;
     readonly collection: string;
@@ -349,7 +322,6 @@ export interface KbRefresh {
  * other, which is why both exist. */
 export interface KbCollectionStats {
     readonly name: string;
-    readonly store: Store;
     readonly documents: number;
     readonly chunks: number;
     readonly bytes: number;

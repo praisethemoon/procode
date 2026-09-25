@@ -79,7 +79,6 @@ export {
     readSource,
     readStaleList,
     readStats,
-    readStore,
     str,
     strOrNull,
 } from "./shape";
@@ -102,13 +101,10 @@ export {
     KbStaleList,
     KbStats,
     KbStatus,
-    KbTierStatus,
     LINK_TYPES,
     LinkType,
     RETRIEVAL_PATHS,
     RetrievalPath,
     SourceKind,
-    Store,
-    StoreSelector,
     isLinkType,
 } from "./types";

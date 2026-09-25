@@ -1,19 +1,20 @@
 /* The process.
  *
- * THE WORKING DIRECTORY DECIDES WHICH PROJECT THIS IS, and it is the one piece
- * of configuration that cannot be got wrong quietly. §1.4 finds the project
- * store by walking up from the working directory, like `.git` — so an agent
- * host that starts this server somewhere other than the workspace gets a
- * server that searches the global tier and files into it, and every answer it
- * gives is plausible. `cwd` is therefore passed explicitly rather than left to
+ * THE WORKING DIRECTORY DECIDES WHICH STORE THIS IS, and it is the one piece
+ * of configuration that cannot be got wrong quietly. §1.4 finds the store by
+ * walking up from the working directory, like `.git` — so an agent host that
+ * starts this server somewhere other than the workspace gets a server that
+ * either finds no store (every tool then answers `not_found`, which is at
+ * least loud) or finds some other workspace's, and every answer that one gives
+ * is plausible. `cwd` is therefore passed explicitly rather than left to
  * `Kb`'s default, so that there is a line to read when somebody asks which
  * store was being spoken to.
  *
  * `KB_BIN` NAMES THE BINARY AND NOTHING ELSE DOES. A bare `kb` is resolved
  * through PATH by the platform's own exec; there is no search here to get
- * wrong. `KB_STORE` is not read here at all — it is the CLI's own way of
- * moving the global tier and it reaches the child through the inherited
- * environment, which is where a variable the store owns belongs.
+ * wrong. No other variable is read: there is no environment override for
+ * where the store lives, on this side or the CLI's, so the working directory
+ * above is the whole of the answer.
  *
  * THE EXIT CODE IS ABOUT THIS PROCESS, NOT ABOUT THE STORE. A refused tool
  * call is a result; a stream that could not be framed is a failure to run.

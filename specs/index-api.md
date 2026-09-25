@@ -69,45 +69,30 @@ research topic out of another's results.
 
 Collections do not nest. A document belongs to exactly one.
 
-### 1.4 Stores
+### 1.4 The store
 
-Two tiers, and search spans both.
+One store, and it belongs to the workspace.
 
-| tier | path | holds |
-|---|---|---|
-| **project** | `.kb/` at the workspace root, found by walking up like `.git` | research belonging to this codebase |
-| **global** | `~/.kb/`, or `KB_STORE` | research that outlives any one project |
-
-**Ingest defaults to the project store** when one exists, and to global
-otherwise. The intent at the moment of filing is almost always project-scoped —
-*I am working on the Windows backend and I just read this* — and a document
-filed locally is easy to promote later, while one filed globally is easy never
-to notice again.
-
-| route | purpose |
+| path | holds |
 |---|---|
-| `POST /documents/{id}/promote` | move a document and its source from the project store to global |
-| `POST /documents/{id}/demote` | the reverse |
+| `.kb/` at the workspace root, found by walking up like `.git` | the research belonging to this codebase |
 
-Promotion is the answer to the tension in the content itself: io_uring's
-documentation is not a property of one codebase, but the decision that it is
-general is one made after reading it, not before filing it.
+There is no store in the home directory and no environment variable naming
+one. `kb init` creates `.kb/` in the current directory; every other command
+uses the first `.kb/` at or above it, and fails with `not_found` when there is
+none rather than filing or reading anywhere else. Research that should outlive
+a project is kept by committing its `.kb/` (§1.5), not by a second, shared
+tier.
 
-**Search reads both tiers by default.** `?store=project|global|all` narrows it;
-`all` is the default. Every hit carries `store`, so a result's provenance
-includes which tier it came from.
+A store outside the workspace was cut deliberately. It made every read span
+two corpora whose provenance a hit then had to carry, it made ingest's
+destination depend on whether a `.kb/` happened to exist, and it was the one
+place the tool computed a path in the user's home directory — which is where
+a test harness that got that path wrong would delete.
 
-A document present in both — the same content hash in each — is returned once,
-attributed to the project tier, and flagged `alsoGlobal: true`.
-
-The two tiers fuse by rank, not by score, so they tolerate having been built
-with different models (§8). A query is embedded once per distinct model
-configuration in scope; `GET /status` reports when the tiers disagree, because
-paying for two forward passes per search is a cost worth knowing about.
-
-Stores and collections are orthogonal and must not be conflated: a **store**
-decides where a document lives and whether it is shared, a **collection**
-decides what topic it belongs to. `win32-iocp` can exist in both tiers.
+Collections (§1.3) are the store's only subdivision. A **collection** decides
+what topic a document belongs to; which workspace the store sits in decides
+whose research it is.
 
 ### 1.5 What to commit
 
@@ -127,12 +112,10 @@ toward its own caches, for the same reason.
 
 A committed corpus of fetched third-party documentation does grow the
 repository and carries whatever licence the source did. `.kbignore` excludes
-paths from ingest; keeping a large or awkwardly licensed corpus in the global
-tier instead keeps it out of the repository entirely.
+paths from ingest; a corpus that should not be committed can be kept out of the
+repository by ignoring `.kb/` as a whole.
 
 ### 1.6 Storage shape
-
-Identical in both tiers.
 
 ```
 <store>/
@@ -149,8 +132,7 @@ Identical in both tiers.
 
 Everything under `index/` is a cache. `kb rebuild` reconstructs all of it from
 the logs and the blobs. Document text lives in content-addressed blobs rather
-than in the log, so re-ingesting an unchanged page writes nothing — and the
-same page filed in both tiers occupies one blob per tier, detected by hash.
+than in the log, so re-ingesting an unchanged page writes nothing.
 
 ## 2. Ingest
 
@@ -195,7 +177,6 @@ GET /search?q=<text>
     &mode=hybrid | semantic | keyword   default hybrid
     &k=10                               hits, max 100
     &expand=1                           also return N neighbouring chunks
-    &store=all | project | global       default all
     &source=S-3  &mime=  &since=<iso>   filters
     &minScore=
 ```
@@ -213,7 +194,6 @@ A hit:
 ```
 { chunk: "C-99812", document: "D-241", source: "S-3",
   title, heading, snippet, collection,
-  store: "project", alsoGlobal: false,
   matched: ["keyword", "semantic"],
   scores: { bm25, vector, fused },
   fetchedAt, stale }
@@ -273,7 +253,7 @@ will state that relationship.
 
 | route | purpose |
 |---|---|
-| `GET /status` | both tiers: paths, counts, index freshness, model identity, disk use, and whether the two agree on a model |
+| `GET /status` | the store's path (null when there is none), counts, index freshness, model identity, disk use |
 | `GET /stats` | per-collection document, chunk and byte counts |
 | `POST /rebuild` | reconstruct every derived structure from the logs and blobs |
 | `POST /reindex` | rechunk and re-embed. Required after a model or chunker change |
@@ -322,10 +302,9 @@ Six tools.
 | `kb_links` | `GET /documents/{id}/links`, `POST /links` |
 | `kb_stale` | `GET /stale` |
 
-Not exposed: `rebuild`, `reindex`, `compact`, `promote`, `demote`, every
-`DELETE`. An agent files knowledge into the project store and reads from both;
-forgetting, and deciding that something is general enough to outlive the
-project, are the reader's decisions.
+Not exposed: `rebuild`, `reindex`, `compact`, every `DELETE`. An agent files
+knowledge into the workspace's store and reads from it; forgetting is the
+reader's decision.
 
 ## 10. The JS layer
 

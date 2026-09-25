@@ -76,7 +76,6 @@ import {
     KbStaleList,
     KbStats,
     KbStatus,
-    StoreSelector,
 } from "./types";
 
 export interface KbSearchResult {
@@ -104,7 +103,7 @@ export interface KbSearchResult {
 export class Kb {
     constructor(private readonly options: KbOptions = {}) {}
 
-    /* A second client pointed at another directory — which is another project
+    /* A second client pointed at another directory — which may be another
      * store, because §1.4 finds one by walking up from the working directory.
      * Cheaper and clearer than a `cwd` argument on every call, and it keeps
      * `cwd` out of the per-call shape where a caller could forget it. */
@@ -114,8 +113,8 @@ export class Kb {
 
     /* ------------------------------------------------------------- reads */
 
-    /* §2's `GET /documents`. Rows in the store's own order, which is log order
-     * within each tier and project before global; §2 of the UI spec wants them
+    /* §2's `GET /documents`. Rows in the store's own order, which is log
+     * order; §2 of the UI spec wants them
      * newest first and does that where it draws them, because the order a list
      * is READ in is the store's and the order it is SHOWN in is the surface's. */
     async ls(options: LsOptions = {}): Promise<readonly KbDocument[]> {
@@ -129,12 +128,13 @@ export class Kb {
     }
 
     /* §7's `GET /collections` and `GET /stats`, which the CLI answers at once. */
-    async collections(store?: StoreSelector | null): Promise<readonly KbCollection[]> {
-        const payload = await run(collectionsArgv(store), this.options);
+    async collections(): Promise<readonly KbCollection[]> {
+        const payload = await run(collectionsArgv(), this.options);
         return arr(payload["collections"]).map(readCollection);
     }
 
-    /* §7's `GET /status`: both tiers, and which one a write would land in. */
+    /* §7's `GET /status`: the store this client's directory finds, or
+     * `path: null` when there is none. */
     async status(): Promise<KbStatus> {
         return readStatus(await run(statusArgv(), this.options));
     }
@@ -159,10 +159,7 @@ export class Kb {
     }
 
     /* §4's `GET /chunks/{id}`: "the full chunk text and its neighbours". */
-    async chunk(
-        id: string,
-        options: { expand?: number | null; store?: StoreSelector | null } = {},
-    ): Promise<KbChunkRead> {
+    async chunk(id: string, options: { expand?: number | null } = {}): Promise<KbChunkRead> {
         return readChunkRead(await run(chunkArgv(id, options), this.options));
     }
 
@@ -176,7 +173,6 @@ export class Kb {
     async add(content: string, options: AddOptions): Promise<KbAdded> {
         const payload = await run(addArgv(options), this.options, content);
         return {
-            store: payload["store"] === "global" ? "global" : "project",
             document: str(payload["document"]),
             source: str(payload["source"]),
             contentHash: str(payload["contentHash"]),
@@ -205,26 +201,21 @@ export class Kb {
 
     /* §6's `GET /documents/{id}/links`: "outgoing and incoming, resolved to
      * rows". */
-    async links(document: string, store?: StoreSelector | null): Promise<KbLinks> {
-        return readLinks(await run(linksArgv(document, store), this.options));
+    async links(document: string): Promise<KbLinks> {
+        return readLinks(await run(linksArgv(document), this.options));
     }
 
     /* §6's `POST /links`. `analogue_of` is the one that motivated the layer:
      * IOCP and io_uring and kqueue solve the same problem three ways, and no
      * amount of semantic similarity will state that relationship. */
-    async link(
-        from: string,
-        type: string,
-        to: string,
-        store?: "project" | "global" | null,
-    ): Promise<KbLinkWritten> {
-        return readLinkWritten(await run(linkArgv(from, type, to, store), this.options));
+    async link(from: string, type: string, to: string): Promise<KbLinkWritten> {
+        return readLinkWritten(await run(linkArgv(from, type, to), this.options));
     }
 
     /* §7's `GET /stats`. `collections` above answers the other half of the
      * same question; `argv.ts` records why they are two commands. */
-    async stats(store?: StoreSelector | null): Promise<KbStats> {
-        return readStats(await run(statsArgv(store), this.options));
+    async stats(): Promise<KbStats> {
+        return readStats(await run(statsArgv(), this.options));
     }
 
     /* §5's `POST /refresh`, which today REPORTS and does not act.
@@ -245,26 +236,22 @@ export class Kb {
     }
 
     /* §7's `PATCH /collections/{name}`. */
-    async renameCollection(
-        from: string,
-        to: string,
-        store?: "project" | "global" | null,
-    ): Promise<void> {
-        await run(renameCollectionArgv(from, to, store), this.options);
+    async renameCollection(from: string, to: string): Promise<void> {
+        await run(renameCollectionArgv(from, to), this.options);
     }
 
     /* §7's `DELETE /collections/{name}`. §11 has `collection_in_use` for the
      * case this refuses, carrying the document count — which is exactly what a
      * confirmation dialog needs to be able to say. */
-    async deleteCollection(name: string, store?: "project" | "global" | null): Promise<void> {
-        await run(deleteCollectionArgv(name, store), this.options);
+    async deleteCollection(name: string): Promise<void> {
+        await run(deleteCollectionArgv(name), this.options);
     }
 
-    /* §1.4's two tiers, created. `init` does not adopt a store that exists
-     * above the current directory — it creates one here — which is the CLI's
+    /* §1.4's store, created in this client's directory. `init` does not adopt
+     * a store that exists above it — it creates one here — which is the CLI's
      * rule and is why this takes no path. */
-    async init(store?: "project" | "global" | null): Promise<{ store: string; path: string }> {
-        const payload = await run(initArgv(store), this.options);
-        return { store: str(payload["store"]), path: str(payload["path"]) };
+    async init(): Promise<{ path: string }> {
+        const payload = await run(initArgv(), this.options);
+        return { path: str(payload["path"]) };
     }
 }

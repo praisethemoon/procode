@@ -58,6 +58,14 @@ function code(text: string): string {
     return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
+/* baukasten's built files. The npm workspace hoists dependencies to the
+ * repository root, so the package's own node_modules is only the first place
+ * to look. */
+function baukastenDist(): string {
+    const local = path.join(ROOT, "node_modules", "baukasten-ui", "dist");
+    return fs.existsSync(local) ? local : path.join(ROOT, "..", "..", "node_modules", "baukasten-ui", "dist");
+}
+
 function bundle(): string {
     const file = path.join(ROOT, "out", "media", "knowledge-webview.js");
     assert.ok(fs.existsSync(file), "the webview bundle has not been built");
@@ -424,7 +432,7 @@ test("every --bk-* token this package uses is one the shipped token layer define
      * Read out of the installed package rather than from a list here, so a
      * baukasten upgrade that renames a token fails this test instead of
      * quietly unstyling a surface. */
-    const dist = path.join(ROOT, "node_modules", "baukasten-ui", "dist");
+    const dist = baukastenDist();
     const layer = ["baukasten-vscode.css", "baukasten-base.css"]
         .map((f) => path.join(dist, f))
         .filter((f) => fs.existsSync(f))
@@ -583,7 +591,7 @@ test("the rail cancels the width floor baukasten's Select brings into it", () =>
      * still passes, because the cancel still works; a baukasten that DROPS it
      * fails, and whoever reads this can delete a rule that is now working
      * around nothing. */
-    const dist = path.join(ROOT, "node_modules", "baukasten-ui", "dist");
+    const dist = baukastenDist();
     const chunk = fs.readdirSync(dist).find((f) => /^Select-.*\.js$/.test(f));
     assert.ok(chunk !== undefined, "baukasten ships no Select chunk; run npm install");
 
@@ -1069,4 +1077,34 @@ test("the build outputs are gitignored rather than committed", () => {
             `.gitignore does not carry ${needed}, so a build would be committed`,
         );
     }
+});
+
+/* ------------------------------------------------------------ one store */
+
+test("nothing asks for a tier, because there is one store", () => {
+    /* index-api.md §1.4: the knowledge base is the one `.kb/` found by walking
+     * up from the working directory. A `store` selector, a global badge or a
+     * `KB_STORE` in this package would be vocabulary for a store that no
+     * longer exists — and `kb` refuses the option outright. */
+    const tiers = /\bstore:\s*["'`]|\balsoGlobal\b|\bdefaultWrite\b|\bKB_STORE\b|\btiers\b|~\/\.kb\b/;
+    const found = sources()
+        .filter((s) => !s.file.startsWith(path.join("src", "test")) && tiers.test(code(s.text)))
+        .map((s) => s.file);
+    assert.deepEqual(found, [], "a file still speaks of tiers");
+});
+
+test("the client only ever runs in the workspace folder, and not at all without one", () => {
+    /* Without a working directory `kb` would walk up from wherever the
+     * extension host started and answer about somebody else's store. */
+    const session = code(fs.readFileSync(path.join(ROOT, "src", "session.ts"), "utf8"));
+    assert.match(
+        session,
+        /return root === undefined \? undefined : new Kb\(clientOptions\(settings, root\)\)/,
+        "makeClient builds a client without a workspace folder to run it in",
+    );
+    assert.equal(
+        sources().filter((s) => !isChecker(s.file) && /new Kb\(/.test(code(s.text))).length,
+        1,
+        "a second place builds a kb client",
+    );
 });

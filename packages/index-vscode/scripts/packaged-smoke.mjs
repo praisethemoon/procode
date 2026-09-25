@@ -12,9 +12,9 @@
  * document read and an §11 refusal all go through the packaged extension host,
  * the kb-js bundled into it, and the `kb` binary.
  *
- * IT NEVER TOUCHES A STORE IT WAS NOT ASKED TO. `KB_STORE` points inside a
- * throwaway directory and the workspace folder is inside it too, so the global
- * tier this exercises is the temporary one.
+ * IT NEVER TOUCHES A STORE IT WAS NOT ASKED TO. The workspace folder is a
+ * throwaway directory with its own `.kb/`, and `kb` finds the store by walking
+ * up from there — so the nearest store is always the temporary one.
  */
 
 import { execFileSync } from "node:child_process";
@@ -43,15 +43,13 @@ execFileSync("unzip", ["-q", VSIX, "-d", tmp]);
 const EXT = path.join(tmp, "extension");
 console.log(`unpacked to ${EXT}`);
 
-/* A throwaway workspace with a real project store in it. */
+/* A throwaway workspace with a real store in it. */
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "knowledge-ws-"));
 const project = path.join(work, "project");
 fs.mkdirSync(project);
-const kbEnv = { ...process.env, KB_STORE: path.join(work, "global") };
-execFileSync(KB, ["init"], { cwd: project, env: kbEnv });
+execFileSync(KB, ["init"], { cwd: project });
 execFileSync(KB, ["add", "--title", "IOCP", "--collection", "win32-iocp", "--mime", "text/markdown", "--file", "-"], {
     cwd: project,
-    env: kbEnv,
     input: "# IOCP\n\nCreateIoCompletionPort binds a handle to a port.\n",
 });
 
@@ -357,7 +355,11 @@ const call = async (id, op, input) => {
 const status = await call(1, "status", {});
 if (!status || status.kind !== "result") {
     fail(`status did not come back: ${JSON.stringify(status)}`);
-} else if (status.value.defaultWrite !== "project") {
+} else if (
+    !status.value.present ||
+    typeof status.value.path !== "string" ||
+    fs.realpathSync(status.value.path) !== fs.realpathSync(path.join(project, ".kb"))
+) {
     fail(`the packaged extension read the wrong store: ${JSON.stringify(status.value)}`);
 }
 

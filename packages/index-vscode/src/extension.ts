@@ -35,18 +35,35 @@ import { Kb } from "kb-js";
 
 import { HostContext } from "./host";
 import { KnowledgeEditor } from "./editor";
-import { Settings, makeClient, readSettings, workspaceRoot } from "./session";
+import { NO_FOLDER, Settings, makeClient, noFolder, readSettings, workspaceRoot } from "./session";
 import { Sidebar } from "./sidebar";
 import { addCurrentFile, addUrl, refreshStale } from "./commands";
 import { quickSearch } from "./quickopen";
 
 export function activate(context: vscode.ExtensionContext): void {
     let settings: Settings = readSettings();
-    let client: Kb = makeClient(settings);
+    let client: Kb | undefined = makeClient(settings);
+
+    /* A command with no folder to run in says so and does nothing; see
+     * `session.ts`. The webviews get the same sentence as a refusal. */
+    const withClient =
+        (run: (kb: Kb) => unknown) =>
+        (): unknown => {
+            if (client === undefined) {
+                void vscode.window.showWarningMessage(NO_FOLDER);
+                return undefined;
+            }
+            return run(client);
+        };
 
     const ctx: HostContext = {
         extensionUri: context.extensionUri,
-        client: () => client,
+        client: () => {
+            if (client === undefined) {
+                throw noFolder();
+            }
+            return client;
+        },
         settings: () => settings,
         announce: () => announce(),
         open: (reference, chunk, preview) => void editors.provider.open(reference, chunk, preview),
@@ -65,11 +82,11 @@ export function activate(context: vscode.ExtensionContext): void {
         rail.sidebar.notify({ kind: "changed" });
     };
 
-    /* The two append-only logs of §1.6, in the project tier. The global tier is
-     * outside the workspace and cannot be watched by a workspace watcher — a
-     * reader whose global store changed under them sees it on the next refresh,
-     * which is the same answer they would get from a daemon that did not
-     * exist. */
+    /* The two append-only logs of §1.6, in the workspace folder's `.kb/`. A
+     * store found further up, above the folder, is outside the workspace and
+     * cannot be watched by a workspace watcher — a reader whose store changed
+     * under them there sees it on the next refresh, which is the same answer
+     * they would get from a daemon that did not exist. */
     const root = workspaceRoot();
     if (root !== undefined) {
         const watcher = vscode.workspace.createFileSystemWatcher(
@@ -129,28 +146,34 @@ export function activate(context: vscode.ExtensionContext): void {
                     value === undefined ? undefined : editors.provider.open(value, null, false),
                 );
         }),
-        vscode.commands.registerCommand("knowledge.search", () =>
-            quickSearch(client, (reference, chunk) =>
-                void editors.provider.open(reference, chunk, false),
+        vscode.commands.registerCommand(
+            "knowledge.search",
+            withClient((kb) =>
+                quickSearch(kb, (reference, chunk) =>
+                    void editors.provider.open(reference, chunk, false),
+                ),
             ),
         ),
         vscode.commands.registerCommand("knowledge.collections", () =>
             editors.provider.open("collections", null, false),
         ),
-        vscode.commands.registerCommand("knowledge.addCurrentFile", () =>
-            addCurrentFile(client, announce),
+        vscode.commands.registerCommand(
+            "knowledge.addCurrentFile",
+            withClient((kb) => addCurrentFile(kb, announce)),
         ),
-        vscode.commands.registerCommand("knowledge.addUrl", () => addUrl(client, announce)),
-        vscode.commands.registerCommand("knowledge.refreshStale", () =>
-            refreshStale(client, settings.staleAfterDays, announce),
+        vscode.commands.registerCommand(
+            "knowledge.addUrl",
+            withClient((kb) => addUrl(kb, announce)),
         ),
-        vscode.commands.registerCommand("knowledge.init", async () => {
-            if (workspaceRoot() === undefined) {
-                void vscode.window.showWarningMessage("Open a folder first.");
-                return;
-            }
+        vscode.commands.registerCommand(
+            "knowledge.refreshStale",
+            withClient((kb) => refreshStale(kb, settings.staleAfterDays, announce)),
+        ),
+        /* `kb init` creates `.kb/` in the client's directory, which is the
+         * workspace folder — there is no other place a store can go. */
+        vscode.commands.registerCommand("knowledge.init", withClient(async (kb) => {
             try {
-                const created = await client.init("project");
+                const created = await kb.init();
                 announce();
                 void vscode.window.showInformationMessage(
                     `Created ${created.path}. The logs and the blobs are the truth and are worth committing; index/ is derived and is gitignored for you.`,
@@ -160,7 +183,7 @@ export function activate(context: vscode.ExtensionContext): void {
                     e instanceof Error ? e.message : String(e),
                 );
             }
-        }),
+        })),
     );
 }
 

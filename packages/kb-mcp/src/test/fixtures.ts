@@ -26,18 +26,17 @@ export const HIT = {
     heading: "Creating a completion port",
     snippet: SNIPPET,
     collection: "win32-iocp",
-    store: "project",
-    alsoGlobal: false,
     matched: ["keyword", "semantic"],
     scores: { bm25: 11.25, vector: 0.82, fused: 0.031 },
     fetchedAt: "2026-06-01T09:15:00Z",
     stale: false,
 };
 
-/* The second tier, found by semantics alone, and old enough for §5's badge.
- * Two hits that differ in tier, in `matched` and in staleness, because a
- * fixture where every row is the same row proves nothing about the reader. */
-export const HIT_GLOBAL = {
+/* A second hit, in another collection, found by semantics alone, and old
+ * enough for §5's badge. Two hits that differ in collection, in `matched` and
+ * in staleness, because a fixture where every row is the same row proves
+ * nothing about the reader. */
+export const HIT_OLD = {
     chunk: "C-4101",
     document: "D-88",
     source: "S-1",
@@ -45,8 +44,6 @@ export const HIT_GLOBAL = {
     heading: null,
     snippet: "The submission queue is mapped once and written by the application.",
     collection: "io-uring",
-    store: "global",
-    alsoGlobal: false,
     matched: ["semantic"],
     scores: { bm25: 0, vector: 0.74, fused: 0.016 },
     fetchedAt: "2024-01-02T00:00:00Z",
@@ -56,7 +53,6 @@ export const HIT_GLOBAL = {
 export const DOCUMENT = {
     id: "D-241",
     source: "S-3",
-    store: "project",
     collection: "win32-iocp",
     path: "",
     title: "I/O Completion Ports",
@@ -75,7 +71,6 @@ export const DOCUMENT_OLD = {
     ...DOCUMENT,
     id: "D-88",
     source: "S-1",
-    store: "global",
     collection: "io-uring",
     title: "io_uring and you",
     locator: "https://kernel.test/io_uring.pdf",
@@ -99,14 +94,12 @@ export const CHUNK = {
 export const COLLECTIONS = [
     {
         name: "win32-iocp",
-        store: "project",
         documents: 7,
         bytes: 90210,
         oldestFetchedAt: "2024-01-02T00:00:00Z",
     },
     {
         name: "io-uring",
-        store: "global",
         documents: 3,
         bytes: 40000,
         oldestFetchedAt: "2023-05-05T00:00:00Z",
@@ -115,14 +108,13 @@ export const COLLECTIONS = [
 
 /* `kb stats` prints the chunk count and the store-wide total, and no date. */
 export const STATS = [
-    { name: "win32-iocp", store: "project", documents: 7, chunks: 41, bytes: 90210 },
-    { name: "io-uring", store: "global", documents: 3, chunks: 19, bytes: 40000 },
+    { name: "win32-iocp", documents: 7, chunks: 41, bytes: 90210 },
+    { name: "io-uring", documents: 3, chunks: 19, bytes: 40000 },
 ];
 
 export const TOTALS = { documents: 10, chunks: 60, bytes: 130210 };
 
 export const ADDED = {
-    store: "project",
     document: "D-242",
     source: "S-9",
     contentHash: "c".repeat(64),
@@ -140,7 +132,6 @@ export const ADDED = {
 
 export const LINKS = {
     document: "D-241",
-    store: "project",
     outgoing: [
         {
             from: "D-241",

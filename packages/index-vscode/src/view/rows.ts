@@ -67,9 +67,6 @@ export interface Row {
     /* The chunk the hit was in, so opening the row can scroll to its heading
      * (§3.2). Null on a browsed row: there is no matching chunk to scroll to. */
     readonly chunk: string | null;
-    /* §1.4: a document present in both tiers is returned once and flagged. */
-    readonly store: string;
-    readonly alsoGlobal: boolean;
 }
 
 /* How long a clamped line is before the ellipsis.
@@ -135,8 +132,6 @@ export function browseRows(
                 stale: isStale(d.fetchedAt, now, staleDays),
                 matched: [],
                 chunk: null,
-                store: d.store,
-                alsoGlobal: false,
             };
         });
 }
@@ -162,8 +157,6 @@ export function searchRows(hits: readonly KbHit[], now: number, staleDays: numbe
         stale: typeof h.stale === "boolean" ? h.stale : isStale(h.fetchedAt, now, staleDays),
         matched: h.matched,
         chunk: h.chunk,
-        store: h.store,
-        alsoGlobal: h.alsoGlobal,
     }));
 }
 
@@ -176,11 +169,6 @@ export function isSearching(q: string): boolean {
 
 /* What `GET /documents` is asked for in the browse state.
  *
- * `store: "all"` BECAUSE §1.4 SAYS SEARCH SPANS BOTH TIERS BY DEFAULT and the
- * browse list is the same list without a question — a reader who can find a
- * global document by searching for it and not by scrolling to it would
- * reasonably conclude it was not there.
- *
  * The limit is a ceiling on a sidebar and not a page: there is no paging in §2
  * and a rail that stopped at two hundred rows without saying so would be a
  * store that looked smaller than it is. The surface says how many it drew. */
@@ -188,7 +176,7 @@ export const BROWSE_LIMIT = 200;
 export const SEARCH_K = 50;
 
 export function browseQuery(collection: string): Record<string, unknown> {
-    const input: Record<string, unknown> = { limit: BROWSE_LIMIT, store: "all" };
+    const input: Record<string, unknown> = { limit: BROWSE_LIMIT };
     const scope = collection.trim();
     if (scope.length > 0) {
         input["collection"] = scope;
@@ -197,7 +185,7 @@ export function browseQuery(collection: string): Record<string, unknown> {
 }
 
 export function searchQuery(collection: string): Record<string, unknown> {
-    const input: Record<string, unknown> = { k: SEARCH_K, store: "all" };
+    const input: Record<string, unknown> = { k: SEARCH_K };
     const scope = collection.trim();
     if (scope.length > 0) {
         input["collection"] = scope;

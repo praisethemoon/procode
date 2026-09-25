@@ -8,8 +8,9 @@
  * flight. None of those are reachable from an import.
  *
  * `KB_BIN` POINTS AT THE FAKE AND THE WORKING DIRECTORY IS A THROWAWAY, so
- * nothing here can reach a real store. A test that filed into `~/.kb` would
- * put research under `win32-iocp` on somebody's machine every time it ran.
+ * nothing here can reach a real store. A test that filed into whatever `.kb/`
+ * sits above the checkout would put research under `win32-iocp` on somebody's
+ * machine every time it ran.
  */
 
 import * as assert from "node:assert/strict";
@@ -106,7 +107,7 @@ test("a request cut in half by the pipe is answered once and correctly", async (
             jsonrpc: "2.0",
             id: 11,
             method: "tools/call",
-            params: { name: "kb_collections", arguments: { store: "project" } },
+            params: { name: "kb_collections", arguments: {} },
         })}\n`;
         const { stdout } = await session(fake, (stdin) => {
             stdin.write(message.slice(0, 30));
@@ -116,7 +117,7 @@ test("a request cut in half by the pipe is answered once and correctly", async (
         assert.equal(answers.length, 1);
         assert.equal(answers[0]["id"], 11);
         assert.equal("error" in answers[0], false);
-        assert.deepEqual(fake.calls()[0].argv, ["collections", "--store", "project", "--json"]);
+        assert.deepEqual(fake.calls()[0].argv, ["collections", "--json"]);
     } finally {
         fake.dispose();
     }

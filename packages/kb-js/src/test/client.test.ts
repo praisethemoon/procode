@@ -3,7 +3,7 @@
  * `search` AND `chunk` ARE CHECKED AGAINST §4'S HIT AND NOTHING ELSE, because
  * the commands that serve them are being built in parallel with this package.
  * What is pinned here is what this reader does with a hit — every field
- * crosses, `matched` is not narrowed, the two tiers stay distinguishable — so
+ * crosses, `matched` is not narrowed, two hits stay distinguishable — so
  * that when the command lands the only thing left to reconcile is the flag
  * spelling, which `argv.ts` keeps in one place.
  */
@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { Kb } from "../client";
 import { KbError } from "../errors";
 import { FakeKb, FakeAnswer, ok, refusal } from "./fake";
-import { CHUNK, COLLECTIONS, DOCUMENT, DOCUMENT_OLD, HIT, HIT_GLOBAL, STATUS } from "./fixtures";
+import { CHUNK, COLLECTIONS, DOCUMENT, DOCUMENT_OLD, HIT, HIT_OLD, STATUS, STATUS_NONE } from "./fixtures";
 
 async function withKb<T>(
     answers: readonly FakeAnswer[],
@@ -37,8 +37,6 @@ test("a list is the store's rows, typed and in the store's own order", async () 
         assert.deepEqual(rows.map((r) => r.id), ["D-88", "D-241"]);
         assert.equal(rows[1].collection, "win32-iocp");
         assert.equal(rows[1].locator, "https://learn.microsoft.test/win32/iocp");
-        assert.equal(rows[1].store, "project");
-        assert.equal(rows[0].store, "global");
         assert.deepEqual(rows[1].meta, { authors: ["MSDN"], year: 2026, section: ["Win32", "IOCP"] });
     });
 });
@@ -87,8 +85,8 @@ test("a chunk with no heading says so rather than saying it has an empty one", a
 });
 
 test("a search answers §4's hits, field for field", async () => {
-    await withKb([{ stdout: ok({ hits: [HIT, HIT_GLOBAL], count: 2 }) }], async (kb, fake) => {
-        const result = await kb.search("completion port", { k: 10, store: "all" });
+    await withKb([{ stdout: ok({ hits: [HIT, HIT_OLD], count: 2 }) }], async (kb, fake) => {
+        const result = await kb.search("completion port", { k: 10 });
         assert.equal(result.count, 2);
         assert.deepEqual(result.hits[0], {
             chunk: "C-99812",
@@ -98,8 +96,6 @@ test("a search answers §4's hits, field for field", async () => {
             heading: "Creating a completion port",
             snippet: "CreateIoCompletionPort associates an open file handle with a port.",
             collection: "win32-iocp",
-            store: "project",
-            alsoGlobal: false,
             matched: ["keyword", "semantic"],
             scores: { bm25: 11.25, vector: 0.82, fused: 0.031 },
             fetchedAt: "2026-06-01T09:15:00Z",
@@ -109,21 +105,19 @@ test("a search answers §4's hits, field for field", async () => {
             "search",
             "--k",
             "10",
-            "--store",
-            "all",
             "completion port",
             "--json",
         ]);
     });
 });
 
-test("the two tiers stay apart, and so do the paths that found them", async () => {
+test("two hits stay apart, and so do the paths that found them", async () => {
     /* §4: "a result found by both is a different kind of result from one found
-     * by either", and §1.4 makes the tier part of a hit's provenance. Both are
-     * shown on the row, so both have to survive this layer. */
-    await withKb([{ stdout: ok({ hits: [HIT, HIT_GLOBAL], count: 2 }) }], async (kb) => {
+     * by either". The path is shown on the row, so it has to survive this
+     * layer, and so does everything else that tells one row from the next. */
+    await withKb([{ stdout: ok({ hits: [HIT, HIT_OLD], count: 2 }) }], async (kb) => {
         const { hits } = await kb.search("submission queue");
-        assert.deepEqual(hits.map((h) => h.store), ["project", "global"]);
+        assert.deepEqual(hits.map((h) => h.collection), ["win32-iocp", "io-uring"]);
         assert.deepEqual(hits.map((h) => [...h.matched]), [["keyword", "semantic"], ["semantic"]]);
         assert.deepEqual(hits.map((h) => h.stale), [false, true]);
         assert.equal(hits[1].heading, null);
@@ -141,14 +135,6 @@ test("a retrieval path this reader has never heard of still reaches the row", as
             assert.deepEqual([...hits[0].matched], ["keyword", "rerank"]);
         },
     );
-});
-
-test("a hit flagged alsoGlobal keeps the flag, because §1.4 folded two rows into it", async () => {
-    await withKb([{ stdout: ok({ hits: [{ ...HIT, alsoGlobal: true }] }) }], async (kb) => {
-        const { hits } = await kb.search("x");
-        assert.equal(hits[0].alsoGlobal, true);
-        assert.equal(hits[0].store, "project", "§1.4 attributes a doubled document to the project tier");
-    });
 });
 
 test("a count the store did not give is the number of hits and not a guess at a total", async () => {
@@ -178,30 +164,38 @@ test("a chunk read is the chunk and its neighbours", async () => {
     );
 });
 
-test("collections carry their tier, because one name can exist in both", async () => {
-    await withKb([{ stdout: ok({ collections: COLLECTIONS, count: 2 }) }], async (kb) => {
-        const rows = await kb.collections("all");
+test("collections are the store's rows, with the counts it gave", async () => {
+    await withKb([{ stdout: ok({ collections: COLLECTIONS, count: 2 }) }], async (kb, fake) => {
+        const rows = await kb.collections();
         assert.deepEqual(
-            rows.map((c) => [c.name, c.store, c.documents, c.bytes]),
+            rows.map((c) => [c.name, c.documents, c.bytes]),
             [
-                ["win32-iocp", "project", 7, 90210],
-                ["io-uring", "global", 3, 40000],
+                ["win32-iocp", 7, 90210],
+                ["io-uring", 3, 40000],
             ],
         );
+        assert.deepEqual(fake.calls()[0].argv, ["collections", "--json"]);
     });
 });
 
-test("status keeps a tier that is not there distinguishable from an empty one", async () => {
+test("status keeps a store that is not there distinguishable from an empty one", async () => {
     /* "no store here" and "a store with no documents in it" are two different
-     * things to tell a reader, and zero says the second one. */
-    await withKb([{ stdout: ok(STATUS) }], async (kb) => {
+     * things to tell a reader, and zero says the second one. There is one
+     * store — the `.kb/` found by walking up — so the answer is flat: its
+     * counts when it is there, `path: null` and nothing else when it is not. */
+    await withKb([{ stdout: ok(STATUS) }, { stdout: ok(STATUS_NONE) }], async (kb) => {
         const status = await kb.status();
-        assert.equal(status.defaultWrite, "project");
-        assert.equal(status.tiers[0].documents, 7);
-        assert.equal(status.tiers[0].chunking?.current, true);
-        assert.equal(status.tiers[1].present, false);
-        assert.equal(status.tiers[1].documents, undefined);
-        assert.equal(status.tiers[1].path, "/home/reader/.kb");
+        assert.equal(status.path, "/work/project/.kb");
+        assert.equal(status.present, true);
+        assert.equal(status.documents, 7);
+        assert.equal(status.chunking?.current, true);
+        assert.equal(status.olderThan, "90d");
+
+        const none = await kb.status();
+        assert.equal(none.path, null);
+        assert.equal(none.present, false);
+        assert.equal(none.documents, undefined);
+        assert.equal(none.olderThan, "90d");
     });
 });
 
@@ -210,7 +204,6 @@ test("add hands the content over on stdin and answers one shape", async () => {
         [
             {
                 stdout: ok({
-                    store: "project",
                     document: "D-242",
                     source: "S-4",
                     contentHash: "c".repeat(64),
@@ -250,9 +243,9 @@ test("a refusal reaches the caller as a KbError with the store's code", async ()
     });
 });
 
-test("`at` points a second client at another project store", async () => {
+test("`at` points a second client at another store", async () => {
     /* §1.4 walks up from the working directory, so the directory IS the store
-     * selection for the project tier. */
+     * selection: there is no other way to name one. */
     await withKb([{ stdout: ok({ documents: [] }) }], async (kb, fake) => {
         await kb.at(fake.dir).ls();
         const { realpathSync } = await import("node:fs");

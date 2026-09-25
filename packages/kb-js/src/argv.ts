@@ -21,8 +21,6 @@
  * NOTHING IN THIS FILE READS THE DISK OR SPAWNS ANYTHING.
  */
 
-import { StoreSelector } from "./types";
-
 /* An empty or whitespace-only value is not a filter and is dropped. `kb ls
  * --collection ""` asks for documents whose collection is the empty string,
  * which is nobody's question — the same rule coboard's filter bar follows. */
@@ -44,13 +42,6 @@ function putNumber(argv: string[], flag: string, value: number | null | undefine
     argv.push(flag, String(value));
 }
 
-function putStore(argv: string[], store: StoreSelector | null | undefined): void {
-    if (store === undefined || store === null) {
-        return;
-    }
-    argv.push("--store", store);
-}
-
 /* ------------------------------------------------------------ the reads */
 
 export interface LsOptions {
@@ -62,7 +53,6 @@ export interface LsOptions {
      * nothing rather than failing. */
     since?: string | null;
     limit?: number | null;
-    store?: StoreSelector | null;
 }
 
 export function lsArgv(options: LsOptions = {}): string[] {
@@ -72,7 +62,6 @@ export function lsArgv(options: LsOptions = {}): string[] {
     put(argv, "--mime", options.mime);
     put(argv, "--since", options.since);
     putNumber(argv, "--limit", options.limit);
-    putStore(argv, options.store);
     return argv;
 }
 
@@ -83,7 +72,6 @@ export interface GetOptions {
      * its content, so a reader following §6's layer does not pay a second call
      * for the one question that follows from the first. */
     links?: boolean;
-    store?: StoreSelector | null;
 }
 
 export function getArgv(id: string, options: GetOptions = {}): string[] {
@@ -104,14 +92,11 @@ export function getArgv(id: string, options: GetOptions = {}): string[] {
     if (include.length > 0) {
         argv.push("--include", include.join(","));
     }
-    putStore(argv, options.store);
     return argv;
 }
 
-export function collectionsArgv(store?: StoreSelector | null): string[] {
-    const argv = ["collections"];
-    putStore(argv, store);
-    return argv;
+export function collectionsArgv(): string[] {
+    return ["collections"];
 }
 
 export function statusArgv(): string[] {
@@ -150,7 +135,6 @@ export interface SearchOptions {
     k?: number | null;
     /* §4: "also return N neighbouring chunks". */
     expand?: number | null;
-    store?: StoreSelector | null;
     source?: string | null;
     mime?: string | null;
     since?: string | null;
@@ -166,7 +150,6 @@ export function searchArgv(query: string, options: SearchOptions = {}): string[]
     put(argv, "--mode", options.mode);
     putNumber(argv, "--k", options.k);
     putNumber(argv, "--expand", options.expand);
-    putStore(argv, options.store);
     put(argv, "--source", options.source);
     put(argv, "--mime", options.mime);
     put(argv, "--since", options.since);
@@ -182,10 +165,9 @@ export function searchArgv(query: string, options: SearchOptions = {}): string[]
     return argv;
 }
 
-export function chunkArgv(id: string, options: { expand?: number | null; store?: StoreSelector | null } = {}): string[] {
+export function chunkArgv(id: string, options: { expand?: number | null } = {}): string[] {
     const argv = ["chunk", id];
     putNumber(argv, "--expand", options.expand);
-    putStore(argv, options.store);
     return argv;
 }
 
@@ -206,7 +188,6 @@ export interface AddOptions {
     url?: string | null;
     mime?: string | null;
     meta?: Readonly<Record<string, unknown>> | null;
-    store?: Exclude<StoreSelector, "all"> | null;
 }
 
 export function addArgv(options: AddOptions): string[] {
@@ -218,7 +199,6 @@ export function addArgv(options: AddOptions): string[] {
     if (options.meta !== undefined && options.meta !== null) {
         argv.push("--meta", JSON.stringify(options.meta));
     }
-    putStore(argv, options.store);
     /* stdin, always. A caller handing over a path instead would be asking the
      * store to read a file this process has already read, which is one more
      * thing that can disagree about what was filed. */
@@ -243,14 +223,12 @@ export function addArgv(options: AddOptions): string[] {
 export interface StaleOptions {
     olderThan?: string | null;
     collection?: string | null;
-    store?: StoreSelector | null;
 }
 
 export function staleArgv(options: StaleOptions = {}): string[] {
     const argv = ["stale"];
     put(argv, "--older-than", options.olderThan);
     put(argv, "--collection", options.collection);
-    putStore(argv, options.store);
     return argv;
 }
 
@@ -271,21 +249,16 @@ export function staleArgv(options: StaleOptions = {}): string[] {
  * SO IT IS NOT BEING ASKED FOR HERE. If §3.1's action is built, the thing to
  * add is `kb refresh <S-n>` — §2's own route, spelled as its own subject —
  * and this function is not where it goes.
- *
- * `--store` IS REAL AND IS HONOURED (`cmd_stale.c`'s `REFRESH_FLAGS` lists
- * it), and it takes `all`: a report about what has gone stale spans both tiers
- * for the same reason a search does. */
+ */
 export interface RefreshOptions {
     collection?: string | null;
     olderThan?: string | null;
-    store?: StoreSelector | null;
 }
 
 export function refreshArgv(options: RefreshOptions = {}): string[] {
     const argv = ["refresh"];
     put(argv, "--collection", options.collection);
     put(argv, "--older-than", options.olderThan);
-    putStore(argv, options.store);
     return argv;
 }
 
@@ -293,13 +266,8 @@ export function refreshArgv(options: RefreshOptions = {}): string[] {
  * subcommands of the command that lists them — `kb collections rename a b`.
  * A top-level `kb rename-collection` would put two words for one noun at the
  * top of `kb --help`, where the noun already has a command. */
-export function renameCollectionArgv(
-    from: string,
-    to: string,
-    store?: Exclude<StoreSelector, "all"> | null,
-): string[] {
+export function renameCollectionArgv(from: string, to: string): string[] {
     const argv = ["collections", "rename"];
-    putStore(argv, store);
     /* Behind `--`, always: a collection name is a name somebody chose and
      * `-x` is a legal one. Unconditional here and conditional for a search
      * query, because there are two subjects rather than one and a `--` in
@@ -308,12 +276,8 @@ export function renameCollectionArgv(
     return argv;
 }
 
-export function deleteCollectionArgv(
-    name: string,
-    store?: Exclude<StoreSelector, "all"> | null,
-): string[] {
+export function deleteCollectionArgv(name: string): string[] {
     const argv = ["collections", "delete"];
-    putStore(argv, store);
     argv.push("--", name);
     return argv;
 }
@@ -334,21 +298,12 @@ export function deleteCollectionArgv(
  * for `--` is that a value must not reach a parser as a flag; the answer here
  * is that these values are ids the store itself issued (§1.1: `D-<n>`), and a
  * spelling the binary rejects protects nothing. */
-export function linksArgv(document: string, store?: StoreSelector | null): string[] {
-    const argv = ["links", document];
-    putStore(argv, store);
-    return argv;
+export function linksArgv(document: string): string[] {
+    return ["links", document];
 }
 
-export function linkArgv(
-    from: string,
-    type: string,
-    to: string,
-    store?: Exclude<StoreSelector, "all"> | null,
-): string[] {
-    const argv = ["links", "add", from, type, to];
-    putStore(argv, store);
-    return argv;
+export function linkArgv(from: string, type: string, to: string): string[] {
+    return ["links", "add", from, type, to];
 }
 
 /* §7's `GET /stats`: "per-collection document, chunk and byte counts".
@@ -358,14 +313,10 @@ export function linkArgv(
  * `oldestFetchedAt`, which is §5's freshness question, and `stats` carries
  * `chunks` and a store-wide total. A caller that wants the whole picture asks
  * both, and this is the second half. */
-export function statsArgv(store?: StoreSelector | null): string[] {
-    const argv = ["stats"];
-    putStore(argv, store);
-    return argv;
+export function statsArgv(): string[] {
+    return ["stats"];
 }
 
-export function initArgv(store?: Exclude<StoreSelector, "all"> | null): string[] {
-    const argv = ["init"];
-    putStore(argv, store);
-    return argv;
+export function initArgv(): string[] {
+    return ["init"];
 }

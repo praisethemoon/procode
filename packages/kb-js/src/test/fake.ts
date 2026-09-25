@@ -56,7 +56,7 @@ fs.appendFileSync(
         argv: process.argv.slice(2),
         stdin,
         cwd: process.cwd(),
-        env: { KB_STORE: process.env["KB_STORE"] ?? "" },
+        env: { KB_MODEL: process.env["KB_MODEL"] ?? "" },
     }) + "\\n",
 );
 const plan = JSON.parse(fs.readFileSync(path.join(dir, "plan.json"), "utf8"));

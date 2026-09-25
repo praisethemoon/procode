@@ -18,7 +18,6 @@ import {
     readDocument,
     readHit,
     readSource,
-    readStore,
     strOrNull,
 } from "../shape";
 
@@ -39,16 +38,6 @@ test("a field of the wrong type reads as absent rather than as itself", () => {
     assert.equal(d.bytes, 0);
     assert.equal(d.chunkCount, 0);
     assert.deepEqual(d.meta, {}, "an array is not a free-form object");
-});
-
-test("an unnamed tier reads as global, because project is a claim and global is not", () => {
-    /* §1.4 makes the tier part of provenance. Attributing an unnamed one to
-     * the project would say "this belongs to this codebase" on no authority. */
-    assert.equal(readStore("project"), "project");
-    assert.equal(readStore("global"), "global");
-    for (const odd of ["Project", "", null, undefined, 3, {}]) {
-        assert.equal(readStore(odd), "global", `${JSON.stringify(odd)} was read as the project tier`);
-    }
 });
 
 test("a heading is a string with something in it, or nothing at all", () => {
@@ -78,7 +67,6 @@ test("a hit with no scores reads as zeros, not as a missing object", () => {
     assert.deepEqual(h.scores, { bm25: 0, vector: 0, fused: 0 });
     assert.deepEqual([...h.matched], []);
     assert.equal(h.stale, false);
-    assert.equal(h.alsoGlobal, false);
 });
 
 test("matched keeps the store's order and drops only what is not a name", () => {

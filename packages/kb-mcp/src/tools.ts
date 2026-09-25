@@ -3,11 +3,11 @@
  * §9 IS A LIST OF WHAT IS EXPOSED AND A LIST OF WHAT IS NOT, AND THE SECOND
  * LIST IS THE LOAD-BEARING ONE. `rebuild`, `reindex`, `compact`, `promote`,
  * `demote` and every `DELETE` are absent on purpose: an agent files knowledge
- * into the project store and reads from both, while forgetting — and deciding
- * that something is general enough to outlive the project — are the reader's
- * decisions. A tool that let an agent drop a collection would be a defect
- * against this section rather than a feature, and it would be one that nobody
- * notices until the day it runs. `NOT_EXPOSED` names them so a test can refuse
+ * into the workspace store and reads from it, while forgetting — and deciding
+ * what the store is for and where it lives — are the reader's decisions. A
+ * tool that let an agent drop a collection would be a defect against this
+ * section rather than a feature, and it would be one that nobody notices until
+ * the day it runs. `NOT_EXPOSED` names them so a test can refuse
  * them by name, and `guards.test.ts` fails if a seventh tool of any kind
  * appears.
  *
@@ -23,15 +23,13 @@
  * costs nothing at the call and silently searches the whole store.
  */
 
-/* §1.4's selector, on every read. `all` is the default — search spans both
- * tiers — and it is left unstated rather than sent, so the store's default
- * stays the store's to change. */
-const STORE = {
-    type: "string",
-    enum: ["all", "project", "global"],
-    description:
-        "Which tier to read. Default: all, which spans the project store and the global one. Every row says which tier it came from.",
-} as const;
+/* THERE IS ONE STORE AND NO TOOL NAMES IT. §1.4's store is the first `.kb/`
+ * at or above the server's working directory, found by the CLI walking up, and
+ * that is the only store any tool below reads or writes. There was once a
+ * second, global tier and a `store` selector on every read; both are gone, and
+ * `store` is now what any other unknown key is — refused by `call.ts`, so a
+ * caller still sending it learns it is talking to a different server than the
+ * one it was written against instead of having the key silently ignored. */
 
 export interface ToolDefinition {
     readonly name: string;
@@ -44,7 +42,7 @@ const KB_SEARCH: ToolDefinition = {
     name: "kb_search",
     description:
         "Search the local knowledge base for passages. Returns ranked SNIPPETS only, never whole documents: " +
-        "each hit carries its chunk and document ids, title, heading, collection, which tier it came from, " +
+        "each hit carries its chunk and document ids, title, heading, collection, " +
         "how old it is, and which retrieval paths found it. Read a whole passage with kb_get. " +
         "Retrieval is hybrid by default — keyword and semantic fused — because this corpus is dense with exact " +
         "identifiers that embeddings place on top of their opposites.",
@@ -56,7 +54,7 @@ const KB_SEARCH: ToolDefinition = {
                 type: "array",
                 items: { type: "string" },
                 description:
-                    "Narrow to these collections. A collection is a flat topic scope such as win32-iocp or papers; it is not a tier.",
+                    "Narrow to these collections. A collection is a flat topic scope such as win32-iocp or papers.",
             },
             mode: {
                 type: "string",
@@ -75,7 +73,6 @@ const KB_SEARCH: ToolDefinition = {
                 minimum: 0,
                 description: "Also return this many neighbouring chunks around each hit.",
             },
-            store: STORE,
             source: { type: "string", description: "Only hits from this source, e.g. S-3." },
             mime: { type: "string", description: "Only hits from documents of this media type." },
             since: {
@@ -126,7 +123,6 @@ const KB_GET: ToolDefinition = {
                 minimum: 0,
                 description: "For a chunk id: how many neighbouring chunks to return either side.",
             },
-            store: STORE,
         },
         required: ["id"],
         additionalProperties: false,
@@ -135,22 +131,20 @@ const KB_GET: ToolDefinition = {
 
 /* §2's `POST /documents` and `POST /documents/batch` — the load-bearing route.
  *
- * NO `store` ARGUMENT, AND THAT IS §9 RATHER THAN AN OMISSION. §1.4 sends an
- * ingest to the project store when one exists and to global otherwise, because
- * the intent at the moment of filing is almost always project-scoped. §9 then
- * withholds `promote` and `demote` from agents entirely: deciding that
- * something is general enough to outlive the project is the reader's decision,
- * made after reading it. A `store: "global"` here would hand that decision to
- * the caller at the one moment §1.4 says it cannot be made well, and would do
- * it in the direction that is hard to undo — a document filed globally is easy
- * never to notice again. So the flag is not sent at all and the store's own
- * default decides. */
+ * IT FILES INTO THE STORE THE SERVER'S WORKING DIRECTORY FINDS, AND NOWHERE
+ * ELSE. When there is no `.kb/` at or above that directory the CLI refuses with
+ * `not_found` and the refusal reaches the agent as a tool error naming
+ * `kb init`. It does not create one: where a store lives, and whether a
+ * workspace has one at all, is the reader's decision (§9 withholds `init` for
+ * exactly that reason), and a store conjured by the first filing would land in
+ * whatever directory the server happened to be started from. */
 const KB_ADD: ToolDefinition = {
     name: "kb_add",
     description:
         "File content you have already read into the knowledge base, so the next question on the topic is " +
         "answered from disk instead of fetched again. Hand over the text you have; nothing is re-fetched. " +
-        "Filing is idempotent by content hash. Documents go to this project's store when it has one.",
+        "Filing is idempotent by content hash. Documents go to this workspace's store; if the workspace has " +
+        "none this fails, and creating one is the user's decision, not yours.",
     inputSchema: {
         type: "object",
         properties: {
@@ -199,11 +193,10 @@ const KB_COLLECTIONS: ToolDefinition = {
     description:
         "List the collections in the knowledge base with their document, chunk and byte counts and when each " +
         "was last added to, so you can see what has already been researched and which scope to search or file " +
-        "into. A collection is a topic; a store is a tier. The same collection name can exist in both tiers " +
-        "and each row says which it counted.",
+        "into. A collection is a topic within this workspace's store.",
     inputSchema: {
         type: "object",
-        properties: { store: STORE },
+        properties: {},
         additionalProperties: false,
     },
 };
@@ -235,7 +228,6 @@ const KB_LINKS: ToolDefinition = {
                 enum: ["supersedes", "cites", "analogue_of", "implements", "see_also"],
                 description: "For add: what the relationship is.",
             },
-            store: STORE,
         },
         required: ["op"],
         additionalProperties: false,
@@ -259,7 +251,6 @@ const KB_STALE: ToolDefinition = {
                 description: "A duration such as 90d. Default: the store's own threshold.",
             },
             collection: { type: "string", description: "Narrow to one collection." },
-            store: STORE,
         },
         additionalProperties: false,
     },

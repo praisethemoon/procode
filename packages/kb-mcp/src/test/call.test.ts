@@ -30,7 +30,7 @@ import {
     DOCUMENT_OLD,
     DOCUMENT_TEXT,
     HIT,
-    HIT_GLOBAL,
+    HIT_OLD,
     LINKS,
     SNIPPET,
     STATS,
@@ -71,7 +71,6 @@ test("kb_search passes every filter §4 names through to the store", async () =>
             mode: "keyword",
             k: 5,
             expand: 2,
-            store: "project",
             source: "S-3",
             mime: "text/markdown",
             since: "2026-01-01T00:00:00Z",
@@ -84,7 +83,6 @@ test("kb_search passes every filter §4 names through to the store", async () =>
         assert.equal(flag(argv, "--mode"), "keyword");
         assert.equal(flag(argv, "--k"), "5");
         assert.equal(flag(argv, "--expand"), "2");
-        assert.equal(flag(argv, "--store"), "project");
         assert.equal(flag(argv, "--source"), "S-3");
         assert.equal(flag(argv, "--mime"), "text/markdown");
         assert.equal(flag(argv, "--since"), "2026-01-01T00:00:00Z");
@@ -113,7 +111,7 @@ test("a search returns snippets and never the whole document", async () => {
      *   - the search cost exactly ONE process. A layer that enriched each hit
      *     with its document's text would be a second call per row, and that is
      *     how a well-meaning change would arrive. */
-    await withKb([{ stdout: ok({ hits: [HIT, HIT_GLOBAL], count: 2 }) }], async (kb, fake) => {
+    await withKb([{ stdout: ok({ hits: [HIT, HIT_OLD], count: 2 }) }], async (kb, fake) => {
         const result = await callTool(kb, "kb_search", { q: "iocp" });
         const text = result.content[0].text;
         assert.ok(text.includes(SNIPPET));
@@ -127,15 +125,18 @@ test("a search returns snippets and never the whole document", async () => {
     });
 });
 
-test("a hit keeps every field §4 puts on it, including which tier it came from", async () => {
-    await withKb([{ stdout: ok({ hits: [HIT, HIT_GLOBAL], count: 2 }) }], async (kb) => {
+test("a hit keeps every field §4 puts on it", async () => {
+    await withKb([{ stdout: ok({ hits: [HIT, HIT_OLD], count: 2 }) }], async (kb) => {
         const answer = body(await callTool(kb, "kb_search", { q: "iocp" }));
         const hits = answer["hits"] as Record<string, unknown>[];
         assert.equal(answer["count"], 2);
         assert.deepEqual(hits[0]["matched"], ["keyword", "semantic"]);
         assert.deepEqual(hits[1]["matched"], ["semantic"]);
-        assert.equal(hits[0]["store"], "project");
-        assert.equal(hits[1]["store"], "global");
+        assert.equal(hits[0]["collection"], "win32-iocp");
+        assert.equal(hits[1]["collection"], "io-uring");
+        assert.equal(hits[0]["heading"], "Creating a completion port");
+        assert.equal(hits[1]["heading"], null);
+        assert.equal(hits[1]["fetchedAt"], "2024-01-02T00:00:00Z");
         assert.equal(hits[1]["stale"], true);
         assert.deepEqual(hits[0]["scores"], { bm25: 11.25, vector: 0.82, fused: 0.031 });
         assert.equal(hits[0]["chunk"], "C-99812");
@@ -263,9 +264,9 @@ test("chunks are asked for only when they were asked for", async () => {
 
 test("a chunk read takes its neighbours and not an include list", async () => {
     await withKb([{ stdout: ok({ chunk: CHUNK, neighbours: [] }) }], async (kb, fake) => {
-        await callTool(kb, "kb_get", { id: "C-99812", expand: 2, store: "global" });
+        await callTool(kb, "kb_get", { id: "C-99812", expand: 2 });
         const argv = fake.calls()[0].argv;
-        assert.deepEqual(argv, ["chunk", "C-99812", "--expand", "2", "--store", "global", "--json"]);
+        assert.deepEqual(argv, ["chunk", "C-99812", "--expand", "2", "--json"]);
     });
 });
 
@@ -282,24 +283,51 @@ test("an id of a kind §9 has no route for is refused, and the message says whic
 
 /* ------------------------------------------------------------------ kb_add */
 
-test("kb_add never chooses a tier, so §1.4's default decides", async () => {
-    /* THE MUTATION THIS IS AIMED AT is a `--store global` on the write. §1.4
-     * makes the project store the default for an ingest when one exists, and
-     * §9 keeps the promote decision away from the agent entirely — so a write
-     * that named a tier would be filing research where the reader will never
-     * see it, and would be doing it silently. */
+test("kb_add names no destination, so the working directory's store decides", async () => {
+    /* There is one store, the `.kb/` the CLI finds by walking up from the
+     * server's working directory. A write that named anywhere else — the
+     * `--store` flag that once chose a tier — no longer exists on the CLI, and
+     * a surface that still sent it would fail every filing. */
     await withKb([{ stdout: ok(ADDED) }], async (kb, fake) => {
         await callTool(kb, "kb_add", {
             documents: [{ title: "IOCP", content: "# IOCP\n", collection: "win32-iocp" }],
         });
         const argv = fake.calls()[0].argv;
-        assert.equal(
-            argv.includes("--store"),
-            false,
-            "kb_add named a tier; §1.4 decides where a write lands",
-        );
-        assert.equal(argv.includes("global"), false);
+        assert.equal(argv.includes("--store"), false, "kb_add named a store");
     });
+});
+
+test("kb_add with no store to file into is a refusal the agent can read", async () => {
+    /* NOT CREATED, AND NOT A TRANSPORT ERROR. Where a store lives is the
+     * reader's decision and `kb init` is not one of §9's six, so the CLI's
+     * `not_found` is the answer — and it has to arrive as a result the model
+     * can read and relay ("there is no store here; run kb init"), with nothing
+     * claimed as filed, rather than as a broken tool it will call again. */
+    await withKb(
+        [
+            {
+                stdout: refusal(
+                    "not_found",
+                    'no kb store at or above the current directory (run "kb init")',
+                ),
+                exit: 1,
+            },
+        ],
+        async (kb, fake) => {
+            const result = await callTool(kb, "kb_add", {
+                documents: [{ title: "IOCP", content: "# IOCP\n", collection: "win32-iocp" }],
+            });
+            assert.equal(result.isError, true);
+            const answer = body(result);
+            assert.equal(answer["filed"], 0);
+            assert.deepEqual(answer["added"], []);
+            const because = answer["because"] as Record<string, unknown>;
+            assert.equal(because["kind"], "refused");
+            assert.equal(because["error"], "not_found");
+            assert.match(String(because["message"]), /kb init/);
+            assert.equal(fake.calls().length, 1);
+        },
+    );
 });
 
 test("the document's text goes down stdin and never through the argument list", async () => {
@@ -394,13 +422,6 @@ test("a document missing its collection is refused before anything is filed", as
             RpcError,
         );
         await assert.rejects(() => callTool(kb, "kb_add", { documents: [] }), RpcError);
-        await assert.rejects(
-            () =>
-                callTool(kb, "kb_add", {
-                    documents: [{ title: "t", content: "c", collection: "k", store: "global" }],
-                }),
-            RpcError,
-        );
         assert.equal(fake.calls().length, 0);
     });
 });
@@ -419,41 +440,38 @@ test("kb_collections answers both of §9's routes as one row per collection", as
             { stdout: ok({ collections: STATS, count: 2, totals: TOTALS }) },
         ],
         async (kb, fake) => {
-            const answer = body(await callTool(kb, "kb_collections", { store: "all" }));
+            const answer = body(await callTool(kb, "kb_collections", {}));
             const rows = answer["collections"] as Record<string, unknown>[];
             assert.equal(answer["count"], 2);
             assert.equal(rows[0]["name"], "win32-iocp");
             assert.equal(rows[0]["documents"], 7);
-            assert.equal(rows[0]["store"], "project");
             assert.equal(rows[0]["oldestFetchedAt"], "2024-01-02T00:00:00Z");
-            /* Joined on the name WITHIN a tier, because §1.3's scope exists in
-             * both and the two are different collections. */
+            /* Joined on the name, which §1.3 makes unique within the store. */
             assert.equal(rows[0]["chunks"], 41);
-            assert.equal(rows[1]["store"], "global");
+            assert.equal(rows[1]["name"], "io-uring");
             assert.equal(rows[1]["chunks"], 19);
             assert.deepEqual(answer["totals"], TOTALS);
             assert.deepEqual(fake.calls().map((c) => c.argv[0]), ["collections", "stats"]);
-            assert.deepEqual(fake.calls()[1].argv, ["stats", "--store", "all", "--json"]);
+            assert.deepEqual(fake.calls()[0].argv, ["collections", "--json"]);
+            assert.deepEqual(fake.calls()[1].argv, ["stats", "--json"]);
         },
     );
 });
 
-test("a chunk count from the other tier is not attached to this one", async () => {
-    /* `win32-iocp` can exist in both stores and they are two collections. A
-     * join on the name alone would report the global tier's chunk count on the
-     * project tier's row. */
+test("a collection stats does not list gets no chunk count rather than a borrowed one", async () => {
+    /* The join is on the name and nothing else. A row `kb stats` did not
+     * print is left without `chunks` — absent, the honest answer — rather than
+     * given zero, or given the count of whichever row happened to be nearest. */
     await withKb(
         [
             {
                 stdout: ok({
-                    collections: [{ name: "win32-iocp", store: "project", documents: 1, bytes: 10 }],
+                    collections: [{ name: "win32-iocp", documents: 1, bytes: 10 }],
                 }),
             },
             {
                 stdout: ok({
-                    collections: [
-                        { name: "win32-iocp", store: "global", documents: 9, chunks: 99, bytes: 900 },
-                    ],
+                    collections: [{ name: "io-uring", documents: 9, chunks: 99, bytes: 900 }],
                     totals: { documents: 9, chunks: 99, bytes: 900 },
                 }),
             },
@@ -461,8 +479,8 @@ test("a chunk count from the other tier is not attached to this one", async () =
         async (kb) => {
             const answer = body(await callTool(kb, "kb_collections", {}));
             const rows = answer["collections"] as Record<string, unknown>[];
-            assert.equal(rows[0]["store"], "project");
-            assert.equal("chunks" in rows[0], false, "a count crossed between tiers");
+            assert.equal(rows[0]["name"], "win32-iocp");
+            assert.equal("chunks" in rows[0], false, "a count crossed between collections");
         },
     );
 });
@@ -478,13 +496,12 @@ test("kb_links reads both directions of a document's links", async () => {
     });
 });
 
-test("kb_links writes an edge and names no tier to write it in", async () => {
+test("kb_links writes an edge into the one store", async () => {
     await withKb(
         [
             {
                 stdout: ok({
                     action: "add",
-                    store: "project",
                     from: "D-241",
                     type: "analogue_of",
                     to: "D-88",
@@ -553,16 +570,42 @@ test("the arguments of one operation are refused on the other", async () => {
                 }),
             RpcError,
         );
-        /* And a tier on a write, which §1.4 decides and which would otherwise
-         * be accepted and dropped. */
+        assert.equal(fake.calls().length, 0);
+    });
+});
+
+/* ------------------------------------------------------------ one store */
+
+test("`store` is an unknown key on every tool, and nothing reaches kb", async () => {
+    /* THERE IS ONE STORE AND NO SELECTOR FOR IT. The `store` argument that
+     * once chose between a project tier and a global one is gone, and a caller
+     * still sending it is refused like any other misspelt key — out loud, as a
+     * fault in the call — rather than having it dropped, which would let the
+     * caller believe it had narrowed a read or steered a write. */
+    const calls: Record<string, Record<string, unknown>> = {
+        kb_search: { q: "iocp" },
+        kb_get: { id: "D-241" },
+        kb_add: { documents: [{ title: "t", content: "c", collection: "k" }] },
+        kb_collections: {},
+        kb_links: { op: "list", document: "D-241" },
+        kb_stale: {},
+    };
+    await withKb([{ stdout: ok({}) }], async (kb, fake) => {
+        for (const [name, args] of Object.entries(calls)) {
+            for (const store of ["project", "global", "all"]) {
+                const e = (await callTool(kb, name, { ...args, store }).catch(
+                    (x: unknown) => x,
+                )) as RpcError;
+                assert.ok(e instanceof RpcError, `${name} accepted store: "${store}"`);
+                assert.equal(e.code, INVALID_PARAMS);
+                assert.match(e.message, /no argument called "store"/);
+            }
+        }
+        /* And inside a document to file, which has its own key list. */
         await assert.rejects(
             () =>
-                callTool(kb, "kb_links", {
-                    op: "add",
-                    from: "D-1",
-                    to: "D-2",
-                    type: "cites",
-                    store: "global",
+                callTool(kb, "kb_add", {
+                    documents: [{ title: "t", content: "c", collection: "k", store: "global" }],
                 }),
             RpcError,
         );
@@ -593,7 +636,6 @@ test("kb_stale passes §5's threshold in §5's own spelling, and answers it back
                 await callTool(kb, "kb_stale", {
                     olderThan: "90d",
                     collection: "io-uring",
-                    store: "all",
                 }),
             );
             assert.equal(answer["count"], 1);
@@ -606,8 +648,6 @@ test("kb_stale passes §5's threshold in §5's own spelling, and answers it back
                 "90d",
                 "--collection",
                 "io-uring",
-                "--store",
-                "all",
                 "--json",
             ]);
         },

@@ -101,10 +101,13 @@ test("the working directory is the child's, because it decides which store is fo
     });
 });
 
-test("the environment crosses, which is how KB_STORE reaches the global tier", async () => {
+test("the environment crosses, which is how KB_MODEL reaches the embedder", async () => {
+    /* The CLI reads one variable of its own, the path to §8's model file, and
+     * a binding that built a fresh environment would silently drop it — the
+     * store would then answer as if no model were configured. */
     await withFake([{ stdout: ok({}) }], async (fake) => {
-        await run(["status"], { bin: fake.bin, env: fake.env({ KB_STORE: "/elsewhere/.kb" }) });
-        assert.equal(fake.calls()[0].env.KB_STORE, "/elsewhere/.kb");
+        await run(["status"], { bin: fake.bin, env: fake.env({ KB_MODEL: "/elsewhere/model.gguf" }) });
+        assert.equal(fake.calls()[0].env.KB_MODEL, "/elsewhere/model.gguf");
     });
 });
 

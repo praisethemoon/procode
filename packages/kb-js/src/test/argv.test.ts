@@ -13,10 +13,17 @@ import {
     addArgv,
     chunkArgv,
     collectionsArgv,
+    deleteCollectionArgv,
     getArgv,
     initArgv,
+    linkArgv,
+    linksArgv,
     lsArgv,
+    refreshArgv,
+    renameCollectionArgv,
     searchArgv,
+    staleArgv,
+    statsArgv,
     statusArgv,
 } from "../argv";
 
@@ -35,7 +42,6 @@ test("every filter §2 names is a flag, and the value is trimmed", () => {
             mime: "text/markdown",
             since: "2026-01-01T00:00:00Z",
             limit: 50,
-            store: "all",
         }),
         [
             "ls",
@@ -49,8 +55,6 @@ test("every filter §2 names is a flag, and the value is trimmed", () => {
             "2026-01-01T00:00:00Z",
             "--limit",
             "50",
-            "--store",
-            "all",
         ],
     );
 });
@@ -72,22 +76,18 @@ test("get takes its subject positionally and one --include carrying a list", () 
     assert.deepEqual(getArgv("D-241"), ["get", "D-241"]);
     assert.deepEqual(getArgv("D-241", { text: true }), ["get", "D-241", "--include", "text"]);
     assert.deepEqual(getArgv("D-241", { chunks: true }), ["get", "D-241", "--include", "chunks"]);
-    assert.deepEqual(getArgv("D-241", { text: true, chunks: true, store: "project" }), [
+    assert.deepEqual(getArgv("D-241", { text: true, chunks: true }), [
         "get",
         "D-241",
         "--include",
         "text,chunks",
-        "--store",
-        "project",
     ]);
 });
 
 test("collections and status are the whole of their own command lines", () => {
     assert.deepEqual(collectionsArgv(), ["collections"]);
-    assert.deepEqual(collectionsArgv("global"), ["collections", "--store", "global"]);
     assert.deepEqual(statusArgv(), ["status"]);
     assert.deepEqual(initArgv(), ["init"]);
-    assert.deepEqual(initArgv("global"), ["init", "--store", "global"]);
 });
 
 /* ------------------------------------------------------------- the search */
@@ -99,7 +99,6 @@ test("§4's parameters are flags of the same name, and the query is the subject"
             mode: "hybrid",
             k: 10,
             expand: 1,
-            store: "all",
             source: "S-3",
             mime: "text/markdown",
             since: "2026-01-01T00:00:00Z",
@@ -115,8 +114,6 @@ test("§4's parameters are flags of the same name, and the query is the subject"
             "10",
             "--expand",
             "1",
-            "--store",
-            "all",
             "--source",
             "S-3",
             "--mime",
@@ -171,13 +168,11 @@ test("a collection list is one flag whether it arrives as a list or a string", (
 
 test("a chunk is read by id, with its neighbours asked for by number", () => {
     assert.deepEqual(chunkArgv("C-99812"), ["chunk", "C-99812"]);
-    assert.deepEqual(chunkArgv("C-99812", { expand: 2, store: "all" }), [
+    assert.deepEqual(chunkArgv("C-99812", { expand: 2 }), [
         "chunk",
         "C-99812",
         "--expand",
         "2",
-        "--store",
-        "all",
     ]);
 });
 
@@ -205,7 +200,6 @@ test("meta crosses as one argument of JSON, which is safe whatever is in it", ()
         url: "https://example.test/x",
         mime: "text/markdown",
         meta: { authors: ["a b"], note: 'he said "hi"; rm -rf ~/dummy' },
-        store: "global",
     });
     assert.deepEqual(argv, [
         "add",
@@ -219,8 +213,6 @@ test("meta crosses as one argument of JSON, which is safe whatever is in it", ()
         "text/markdown",
         "--meta",
         '{"authors":["a b"],"note":"he said \\"hi\\"; rm -rf ~/dummy"}',
-        "--store",
-        "global",
         "--file",
         "-",
     ]);
@@ -281,5 +273,51 @@ test("no builder ever produces an argument that is two arguments", () => {
                 `a value was altered on the way into the argv: ${JSON.stringify(element)}`,
             );
         }
+    }
+});
+
+/* ------------------------------------------------------- one store, no tier */
+
+test("no builder ever emits --store, because the CLI no longer has one", () => {
+    /* THERE IS ONE STORE: the first `.kb/` at or above the working directory
+     * (§1.4). The global tier and its `--store project|global|all` selector
+     * are gone from the CLI, and `kb` now refuses the flag as `usage: unknown
+     * option` on every command — so a builder that still spelled it would
+     * turn every call it made into a refusal. Stated over EVERY builder, each
+     * with every option it takes filled in, because the flag used to ride on
+     * the options object and the way it comes back is somebody re-adding it
+     * to one of them. */
+    const lines: string[][] = [
+        lsArgv({ collection: "c", source: "S-1", mime: "text/plain", since: "2026-01-01T00:00:00Z", limit: 5 }),
+        getArgv("D-1", { text: true, chunks: true }),
+        collectionsArgv(),
+        statusArgv(),
+        searchArgv("q", {
+            collection: ["a", "b"],
+            mode: "hybrid",
+            k: 3,
+            expand: 1,
+            source: "S-1",
+            mime: "text/plain",
+            since: "2026-01-01T00:00:00Z",
+            minScore: 0.1,
+        }),
+        chunkArgv("C-1", { expand: 2 }),
+        addArgv({ title: "t", collection: "c", url: "https://example.test", mime: "text/plain", meta: { a: 1 } }),
+        staleArgv({ olderThan: "30d", collection: "c" }),
+        refreshArgv({ collection: "c", olderThan: "30d" }),
+        renameCollectionArgv("a", "b"),
+        deleteCollectionArgv("a"),
+        linksArgv("D-1"),
+        linkArgv("D-1", "analogue_of", "D-2"),
+        statsArgv(),
+        initArgv(),
+    ];
+    for (const argv of lines) {
+        assert.ok(!argv.includes("--store"), `a builder emitted --store: ${JSON.stringify(argv)}`);
+        assert.ok(
+            !argv.some((a) => a.startsWith("--store=")),
+            `a builder emitted --store=: ${JSON.stringify(argv)}`,
+        );
     }
 });

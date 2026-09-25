@@ -11,7 +11,7 @@ knowledge base that agents and people can both search and cite.
 | **lap** | [cli/lap-cli/](cli/lap-cli/) | A fine-grained, git-like edit recorder for agents: one commit is one edit with its reason, grouped into sessions. It sits below git and never touches it. C11, no dependencies. |
 | **Lap History** | [packages/lap-vscode/](packages/lap-vscode/) | VS Code extension. A live, view-only tree of lap sessions and commits, with each commit shown as a diff. |
 | **lap skill** | [cli/lap-cli/skill/lap/](cli/lap-cli/skill/lap/) | Agent skill that teaches the lap workflow. This repository uses its own copy in `.claude/skills/lap/`. |
-| **kb** | [cli/kb-cli/](cli/kb-cli/) | A local knowledge base over docs, source and papers, with keyword search, provenance and links. It keeps a store per project (`.kb/`) and a global one (`~/.kb/`). C11, no runtime dependencies. |
+| **kb** | [cli/kb-cli/](cli/kb-cli/) | A local knowledge base over docs, source and papers, with keyword search, provenance and links. It keeps one store per workspace, `.kb/`, found by walking up like `.git`. C11, no runtime dependencies. |
 | **kb-js** | [packages/kb-js/](packages/kb-js/) | Typed TypeScript client for kb. It runs the CLI with an argument array, never a shell, and parses `--json`. |
 | **kb-mcp** | [packages/kb-mcp/](packages/kb-mcp/) | kb as MCP tools for agents (search, get, add, collections, links, stale), JSON-RPC 2.0 over stdio. |
 | **Knowledge** | [packages/index-vscode/](packages/index-vscode/) | VS Code extension that reads a kb store: search it, read a document, see where it came from. |
@@ -91,7 +91,10 @@ resolved through `PATH`:
 }
 ```
 
-Run `kb init` in a project to give agents a project store to file into.
+Run `kb init` at a project's root to give agents a store to file into. The
+server's `kb` finds it by walking up from its working directory, so start the
+MCP server from inside the project; with no `.kb/` above it, every tool refuses
+with `not_found` rather than filing anywhere else.
 
 **Knowledge (VS Code).** `npm run package` builds a self-contained
 `packages/index-vscode/index-vscode-0.1.0.vsix`. Install it with

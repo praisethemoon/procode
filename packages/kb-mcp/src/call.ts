@@ -33,7 +33,6 @@ import {
     Kb,
     SearchMode,
     SearchOptions,
-    StoreSelector,
     isKbCrash,
     isKbError,
 } from "kb-js";
@@ -119,7 +118,9 @@ function fields(tool: string, args: unknown, schema: Record<string, unknown>): R
         if (!allowed.includes(key)) {
             throw bad(
                 tool,
-                `there is no argument called "${key}". It takes: ${allowed.join(", ")}.`,
+                allowed.length === 0
+                    ? `there is no argument called "${key}". It takes no arguments.`
+                    : `there is no argument called "${key}". It takes: ${allowed.join(", ")}.`,
             );
         }
     }
@@ -204,12 +205,6 @@ function asStrings(tool: string, key: string, v: unknown): string[] | undefined 
     });
 }
 
-const STORES = ["all", "project", "global"] as const;
-
-function asStore(tool: string, v: unknown): StoreSelector | undefined {
-    return asEnum(tool, "store", v, STORES);
-}
-
 /* --------------------------------------------------------------- the six */
 
 async function search(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
@@ -227,7 +222,6 @@ async function search(kb: Kb, args: Record<string, unknown>): Promise<ToolResult
         ]) as SearchMode | undefined,
         k: asInteger("kb_search", "k", args["k"], 1, 100),
         expand: asInteger("kb_search", "expand", args["expand"], 0),
-        store: asStore("kb_search", args["store"]),
         source: asString("kb_search", "source", args["source"]),
         mime: asString("kb_search", "mime", args["mime"]),
         since: asString("kb_search", "since", args["since"]),
@@ -263,13 +257,12 @@ const INCLUDES = ["text", "chunks", "links"];
 
 async function get(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
     const id = asString("kb_get", "id", args["id"]) ?? "";
-    const store = asStore("kb_get", args["store"]);
     if (id.startsWith(CHUNK_PREFIX)) {
         /* `include` says nothing about a chunk — a chunk read is the text and
          * its neighbours, which is the whole of what there is — so it is
          * ignored rather than refused, the way the schema says. */
         const expand = asInteger("kb_get", "expand", args["expand"], 0);
-        return rows(await kb.chunk(id, { expand, store }));
+        return rows(await kb.chunk(id, { expand }));
     }
     if (id.startsWith(DOCUMENT_PREFIX)) {
         /* Text by default, because this is the tool a caller reaches for when
@@ -289,7 +282,6 @@ async function get(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
                 text: wanted.includes("text"),
                 chunks: wanted.includes("chunks"),
                 links: wanted.includes("links"),
-                store,
             }),
         );
     }
@@ -341,10 +333,13 @@ async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
                 url: asString("kb_add", `${where}.url`, d["url"]),
                 mime: asString("kb_add", `${where}.mime`, d["mime"]),
                 meta: (meta ?? undefined) as Readonly<Record<string, unknown>> | undefined,
-                /* NO `store`. §1.4 sends an ingest to the project store when
-                 * one exists; §9 keeps the decision to move it to global away
-                 * from the caller entirely. Sending nothing is how that stays
-                 * true. */
+                /* NO DESTINATION. The CLI files into the `.kb/` it finds by
+                 * walking up from the server's working directory, and when
+                 * there is none it refuses with `not_found` naming `kb init`.
+                 * That refusal comes back through the loop below as an
+                 * `isError` result the agent can read, with `filed: 0` — not
+                 * as a transport error, because the call was well formed and
+                 * the store is what said no. */
             },
         };
     });
@@ -394,7 +389,7 @@ async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
  * which contains the other: `collections` carries §5's oldest fetch date and
  * `stats` carries the chunk count and a store-wide total. Both are asked, and
  * the answers are joined on the identity §1.3 already defines — a collection
- * name within a tier.
+ * name, which is unique within the one store.
  *
  * THAT JOIN IS NOT THIS LAYER COMPUTING A FIELD. Nothing is summed, ranked or
  * inferred; two rows about the same thing become one row about it, and every
@@ -402,18 +397,13 @@ async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
  * command and calling it the answer — would either report a chunk count of
  * zero for a full topic or drop the one date that says whether a topic has
  * been looked at this year. */
-function key(store: string, name: string): string {
-    return `${store} ${name}`;
-}
-
-async function collections(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
-    const store = asStore("kb_collections", args["store"]);
-    const list = await kb.collections(store);
-    const stats = await kb.stats(store);
-    const chunks = new Map(stats.collections.map((c) => [key(c.store, c.name), c.chunks]));
+async function collections(kb: Kb): Promise<ToolResult> {
+    const list = await kb.collections();
+    const stats = await kb.stats();
+    const chunks = new Map(stats.collections.map((c) => [c.name, c.chunks]));
     return rows({
         count: list.length,
-        collections: list.map((c) => ({ ...c, chunks: chunks.get(key(c.store, c.name)) })),
+        collections: list.map((c) => ({ ...c, chunks: chunks.get(c.name) })),
         totals: stats.totals,
     });
 }
@@ -432,7 +422,7 @@ async function links(kb: Kb, args: Record<string, unknown>): Promise<ToolResult>
                 throw bad("kb_links", `"${key}" belongs to op "add", not to "list".`);
             }
         }
-        return rows(await kb.links(document, asStore("kb_links", args["store"])));
+        return rows(await kb.links(document));
     }
     const from = asString("kb_links", "from", args["from"]);
     const to = asString("kb_links", "to", args["to"]);
@@ -442,16 +432,6 @@ async function links(kb: Kb, args: Record<string, unknown>): Promise<ToolResult>
     }
     if (args["document"] !== undefined) {
         throw bad("kb_links", '"document" belongs to op "list", not to "add".');
-    }
-    /* A WRITE TAKES NO TIER, on the same terms as `kb_add`: §1.4 decides where
-     * a write lands and §9 keeps that decision away from the caller. A `store`
-     * here would be quietly ignored on a write, which is the shape of bug this
-     * package refuses everywhere else, so it is refused out loud instead. */
-    if (args["store"] !== undefined) {
-        throw bad(
-            "kb_links",
-            '"store" narrows a read; a link is written where the store\'s own default sends it.',
-        );
     }
     return rows(await kb.link(from, type, to));
 }
@@ -465,7 +445,6 @@ async function stale(kb: Kb, args: Record<string, unknown>): Promise<ToolResult>
         await kb.stale({
             olderThan: asString("kb_stale", "olderThan", args["olderThan"]),
             collection: asString("kb_stale", "collection", args["collection"]),
-            store: asStore("kb_stale", args["store"]),
         }),
     );
 }

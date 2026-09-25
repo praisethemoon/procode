@@ -49,7 +49,6 @@ test("§6's five types are transcribed whole and in the document's order", () =>
 
 test("a read names its document positionally, the way the command reads it", () => {
     assert.deepEqual(linksArgv("D-241"), ["links", "D-241"]);
-    assert.deepEqual(linksArgv("D-241", "global"), ["links", "D-241", "--store", "global"]);
 });
 
 test("a write reads as a sentence: from, type, to", () => {
@@ -62,15 +61,6 @@ test("a write reads as a sentence: from, type, to", () => {
         "D-241",
         "analogue_of",
         "D-88",
-    ]);
-    assert.deepEqual(linkArgv("D-241", "cites", "D-88", "project"), [
-        "links",
-        "add",
-        "D-241",
-        "cites",
-        "D-88",
-        "--store",
-        "project",
     ]);
 });
 
@@ -94,7 +84,6 @@ test("a read carries both directions, each resolved to the row at the far end", 
             {
                 stdout: ok({
                     document: "D-241",
-                    store: "project",
                     outgoing: [
                         {
                             from: "D-241",
@@ -121,13 +110,12 @@ test("a read carries both directions, each resolved to the row at the far end", 
         async (kb, fake) => {
             const links = await kb.links("D-241");
             assert.equal(links.document, "D-241");
-            assert.equal(links.store, "project");
             assert.equal(links.outgoing.length, 1);
             assert.equal(links.incoming.length, 1);
             assert.equal(links.outgoing[0].type, "analogue_of");
             assert.equal(links.outgoing[0].to, "D-88");
             assert.equal(links.outgoing[0].document?.title, "io_uring and you");
-            assert.equal(links.outgoing[0].document?.store, "global");
+            assert.equal(links.outgoing[0].document?.collection, "io-uring");
             assert.equal(links.incoming[0].from, "D-88");
             assert.equal(links.outgoing[0].createdAt, "2026-09-25T00:00:00Z");
             assert.equal(links.outgoing[0].resolved, true);
@@ -168,7 +156,6 @@ test("a write answers the edge it made, and whether it changed anything", async 
             {
                 stdout: ok({
                     action: "add",
-                    store: "project",
                     from: "D-241",
                     type: "analogue_of",
                     to: "D-88",
@@ -182,7 +169,6 @@ test("a write answers the edge it made, and whether it changed anything", async 
             assert.equal(link.from, "D-241");
             assert.equal(link.to, "D-88");
             assert.equal(link.type, "analogue_of");
-            assert.equal(link.store, "project");
             assert.equal(link.changed, true);
             assert.equal(link.at, "2026-09-25T00:00:00Z");
             assert.deepEqual(fake.calls()[0].argv, [
@@ -206,7 +192,7 @@ test("§7's stats are the counts collections does not carry", async () => {
             {
                 stdout: ok({
                     collections: [
-                        { name: "win32-iocp", store: "project", documents: 7, chunks: 41, bytes: 90210 },
+                        { name: "win32-iocp", documents: 7, chunks: 41, bytes: 90210 },
                     ],
                     count: 1,
                     totals: { documents: 7, chunks: 41, bytes: 90210 },
@@ -214,10 +200,10 @@ test("§7's stats are the counts collections does not carry", async () => {
             },
         ],
         async (kb, fake) => {
-            const stats = await kb.stats("all");
+            const stats = await kb.stats();
             assert.equal(stats.collections[0].chunks, 41);
             assert.equal(stats.totals.documents, 7);
-            assert.deepEqual(fake.calls()[0].argv, ["stats", "--store", "all", "--json"]);
+            assert.deepEqual(fake.calls()[0].argv, ["stats", "--json"]);
             assert.deepEqual(statsArgv(), ["stats"]);
         },
     );
@@ -233,7 +219,6 @@ test("a count the store did not carry is absent rather than zero", async () => {
                     collections: [
                         {
                             name: "win32-iocp",
-                            store: "project",
                             documents: 7,
                             bytes: 90210,
                             oldestFetchedAt: "2024-01-02T00:00:00Z",

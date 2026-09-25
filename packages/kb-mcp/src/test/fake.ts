@@ -2,7 +2,7 @@
  *
  * WHY A REAL PROCESS AND NOT A MOCKED `Kb`. What is being tested is the whole
  * path from a tool call to an argument list: that `collection` reaches the
- * store as `--collection`, that `kb_add` sends no `--store`, that a search
+ * store as `--collection`, that `kb_add` names no destination, that a search
  * costs exactly one process. A stubbed client would test that this package
  * calls a method — the half that cannot break — and would answer "yes"
  * throughout the entire class of bug these tests exist to catch. The recorded

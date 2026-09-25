@@ -9,7 +9,7 @@
  * ONE TABLE FOR THE OPERATIONS, AND IT IS THE WHOLE VOCABULARY. `protocol.ts`
  * lists what the surface may ask; this answers each of them with one `kb-js`
  * call and nothing else. There is no place here to filter a list the store
- * already filtered, to merge the tiers, or to compute a field the store emits —
+ * already filtered, or to compute a field the store emits —
  * index-api.md §10 makes the C the only implementation, and a convenience in
  * this file is the second one arriving a line at a time.
  *
@@ -133,8 +133,6 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
         typeof input[key] === "string" ? (input[key] as string) : undefined;
     const count = (key: string): number | undefined =>
         typeof input[key] === "number" ? (input[key] as number) : undefined;
-    const tier = (key: string): "project" | "global" | undefined =>
-        input[key] === "project" || input[key] === "global" ? input[key] : undefined;
 
     switch (op) {
         case "status":
@@ -146,18 +144,16 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
                 mime: text("mime"),
                 since: text("since"),
                 limit: count("limit"),
-                store: "all",
             });
         case "search":
             return kb.search(text("q") ?? "", {
                 collection: text("collection"),
                 k: count("k"),
-                store: "all",
             });
         case "get":
-            return kb.get(text("id") ?? "", { text: true, chunks: true, store: "all" });
+            return kb.get(text("id") ?? "", { text: true, chunks: true });
         case "collections":
-            return kb.collections("all");
+            return kb.collections();
         case "refresh":
             /* §5's route takes a scope and a threshold and nothing else. A
              * `document` was passed here and `kb refresh` refuses it with
@@ -167,12 +163,11 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
             return kb.refresh({
                 collection: text("collection"),
                 olderThan: text("olderThan"),
-                store: tier("store"),
             });
         case "renameCollection":
-            return kb.renameCollection(text("from") ?? "", text("to") ?? "", tier("store"));
+            return kb.renameCollection(text("from") ?? "", text("to") ?? "");
         default:
-            return kb.deleteCollection(text("name") ?? "", tier("store"));
+            return kb.deleteCollection(text("name") ?? "");
     }
 }
 

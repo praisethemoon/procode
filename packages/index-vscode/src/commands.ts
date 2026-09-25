@@ -103,7 +103,7 @@ function report(e: unknown, what: string): void {
 async function pickCollection(kb: Kb): Promise<string | undefined> {
     let existing: string[] = [];
     try {
-        existing = [...new Set((await kb.collections("all")).map((c) => c.name))].sort();
+        existing = (await kb.collections()).map((c) => c.name).sort();
     } catch {
         /* No store yet, or an unreadable one. The free-text path still works,
          * and the write below will report whatever is really wrong. */

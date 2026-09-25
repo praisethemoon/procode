@@ -29,12 +29,12 @@ interface HitItem extends vscode.QuickPickItem {
 
 /* One hit, as the three lines a picker has.
  *
- * THE MATCHED PATHS AND THE TIER ARE IN THE DETAIL LINE. §4 says a result found
+ * THE MATCHED PATHS ARE IN THE DETAIL LINE. §4 says a result found
  * by both paths is a different kind of result from one found by either, and §2
  * shows that on a row — so the picker shows it too rather than being the one
  * surface where the reader cannot see it. */
 function item(hit: KbHit): HitItem {
-    const marks = [hit.stale ? "$(warning) stale" : null, ...hit.matched, hit.store]
+    const marks = [hit.stale ? "$(warning) stale" : null, ...hit.matched]
         .filter((m): m is string => m !== null)
         .join(" · ");
     return {
@@ -72,7 +72,7 @@ export function quickSearch(
             return;
         }
         picker.busy = true;
-        kb.search(query, { k: 20, store: "all" })
+        kb.search(query, { k: 20 })
             .then((result) => {
                 /* Superseded: a later keystroke has already asked a better
                  * question and this answer is about a prefix of it. */

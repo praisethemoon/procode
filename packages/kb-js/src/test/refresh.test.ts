@@ -43,7 +43,6 @@ const REPORT = {
     sources: [
         {
             id: "S-3",
-            store: "project",
             kind: "url",
             locator: "https://learn.microsoft.test/win32/iocp",
             collection: "win32-iocp",
@@ -69,19 +68,12 @@ test("refresh sends §5's two narrowings and nothing it invented", () => {
      * had refetched it would be the worst of the three options. */
     assert.deepEqual(refreshArgv(), ["refresh"]);
     assert.deepEqual(
-        refreshArgv({ collection: "win32-iocp", olderThan: "90d", store: "all" }),
-        ["refresh", "--collection", "win32-iocp", "--older-than", "90d", "--store", "all"],
+        refreshArgv({ collection: "win32-iocp", olderThan: "90d" }),
+        ["refresh", "--collection", "win32-iocp", "--older-than", "90d"],
     );
-    const everything = refreshArgv({ collection: "c", olderThan: "1d", store: "project" });
+    const everything = refreshArgv({ collection: "c", olderThan: "1d" });
     assert.equal(everything.includes("--document"), false);
     assert.equal(everything.includes("--source"), false);
-});
-
-test("a report about both tiers is a thing refresh can be asked for", () => {
-    /* `--store` was typed to exclude `all`. A report about what has gone stale
-     * spans both tiers for the same reason a search does, and the CLI's
-     * `REFRESH_FLAGS` accepts it. */
-    assert.deepEqual(refreshArgv({ store: "all" }), ["refresh", "--store", "all"]);
 });
 
 /* -------------------------------------------------------------- the report */
@@ -107,7 +99,6 @@ test("a source row says which source, how stale, and how to fix it", async () =>
     await withKb([{ stdout: ok(REPORT) }], async (kb) => {
         const [source] = (await kb.refresh()).sources;
         assert.equal(source.id, "S-3");
-        assert.equal(source.store, "project");
         assert.equal(source.kind, "url");
         assert.equal(source.collection, "win32-iocp");
         assert.equal(source.staleDocuments, 2);

@@ -28,7 +28,7 @@
 import { useEffect, useState } from "react";
 import { Input, Select } from "baukasten-ui/core";
 
-import { KbCollection, KbDocument, KbHit } from "kb-js/pure";
+import { KbCollection, KbDocument, KbHit, KbStatus } from "kb-js/pure";
 
 import { Row, browseQuery, browseRows, isSearching, searchQuery, searchRows } from "../src/view/rows";
 import { formatDate } from "../src/view/facts";
@@ -42,13 +42,10 @@ const DEBOUNCE_MS = 180;
 /* §2's empty state, verbatim. */
 const NOTHING_INDEXED = "Nothing indexed yet. Research lands here when an agent files what it read.";
 
-interface Status {
-    tiers: { store: string; present: boolean; documents?: number }[];
-    defaultWrite: string;
-}
-
-function hasStore(status: Status): boolean {
-    return status.tiers.some((t) => t.present);
+/* §1.4's one store, found by walking up from the workspace folder. `path` is
+ * null when the walk found nothing, and `present` says the same thing. */
+function hasStore(status: KbStatus): boolean {
+    return status.present && status.path !== null;
 }
 
 /* ------------------------------------------------------------- the row */
@@ -98,18 +95,6 @@ function KnowledgeRow(props: { row: Row }): JSX.Element {
                         {m}
                     </span>
                 ))}
-                {/* §1.4: every hit carries its tier, and a document present in
-                  * both is returned once and flagged. */}
-                {row.store === "global" ? (
-                    <span className="kb-chip kb-chip-quiet" title="From the global store">
-                        global
-                    </span>
-                ) : null}
-                {row.alsoGlobal ? (
-                    <span className="kb-chip kb-chip-quiet" title="The same content is in the global store too">
-                        also global
-                    </span>
-                ) : null}
             </div>
         </div>
     );
@@ -182,7 +167,7 @@ export function Sidebar(): JSX.Element {
     const [q, setQ] = useState("");
     const [collection, setCollection] = useState("");
     const settled = useDebounced(q, DEBOUNCE_MS);
-    const status = useQuery<Status>("status");
+    const status = useQuery<KbStatus>("status");
     const collections = useQuery<KbCollection[]>("collections");
 
     /* §4: "a collection row opens the sidebar scoped to it." The host reveals
@@ -270,7 +255,8 @@ export function Sidebar(): JSX.Element {
                             return (
                                 <div className="kb-empty">
                                     <p>
-                                        <strong>No knowledge store here.</strong>
+                                        <strong>No knowledge store here.</strong> There is no{" "}
+                                        <code>.kb/</code> in this folder or in any folder above it.
                                     </p>
                                     <p>
                                         Run <code>Knowledge: Initialise A Store In This Workspace</code>{" "}

@@ -31,7 +31,7 @@ import { KbCrash, KbError } from "./errors";
 
 /* The binary, and where it should run.
  *
- * `cwd` IS LOAD-BEARING AND IS NOT A CONVENIENCE. §1.4 finds the project store
+ * `cwd` IS LOAD-BEARING AND IS NOT A CONVENIENCE. §1.4 finds the store
  * by walking up from the working directory, like `.git` — so the directory
  * this process happens to have been started in decides which store a read
  * spans. A binding that left it to chance would answer differently depending
