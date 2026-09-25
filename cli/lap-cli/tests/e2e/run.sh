@@ -490,12 +490,17 @@ t "a session carries metadata, and list filters by it"
 mkdir -p "$WORK/meta" && cd "$WORK/meta"
 "$LAP" init >/dev/null 2>&1
 expect_grep '"id":"S1"' "$LAP" session start "fix the parser" \
-    --meta ticket=T-12 --meta epic=E-1 --json
-expect_grep '"meta":{"ticket":"T-12","epic":"E-1"}' "$LAP" session current --json
+    --meta ticket=T-12 --meta epic=E-1 --meta tries=2 --json
+expect_grep '"meta":{"ticket":"T-12","epic":"E-1","tries":2}' \
+    "$LAP" session current --json
+expect_grep '"meta":{"ticket":"T-12","epic":"E-1","tries":2}' \
+    cat .lap/log.jsonl
 "$LAP" session end >/dev/null 2>&1
 "$LAP" session start "unrelated" >/dev/null 2>&1
 expect_grep '"meta":{}' "$LAP" session list --json
 expect_grep '"id":"S1"' "$LAP" session list --meta ticket=T-12 --json
+expect_grep '"id":"S1"' "$LAP" session list --meta tries=2 --json
+expect_not_grep '"id":"S1"' "$LAP" session list --meta tries=3 --json
 expect_not_grep '"id":"S2"' "$LAP" session list --meta ticket=T-12 --json
 expect_grep 'ticket=T-12' "$LAP" session list
 expect_grep 'chain ok' "$LAP" verify
@@ -505,7 +510,8 @@ expect_grep '"ticket":"T-12"' "$LAP" session list --json
 t "bad metadata is refused before anything is written"
 "$LAP" session end >/dev/null 2>&1
 expect_grep '"error":"bad_meta"' "$LAP" session start x --meta noequals --json
-expect_grep '"error":"bad_meta"' "$LAP" session start x --meta Up=1 --json
+expect_grep '"error":"bad_meta"' "$LAP" session start x --meta 1up=1 --json
+expect_grep '"error":"bad_meta"' "$LAP" session start x --meta a-b=1 --json
 expect_grep '"error":"bad_meta"' "$LAP" session start x \
     --meta a=1 --meta a=2 --json
 expect_grep 'no active session' "$LAP" session current

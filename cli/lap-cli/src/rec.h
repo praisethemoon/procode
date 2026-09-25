@@ -30,10 +30,12 @@ typedef struct {
     const char *ts;      /* ISO-8601 UTC */
     const char *op;      /* commit only: "edit" | "create" | "delete" */
     const char *msg;     /* commit + session_start */
-    /* session_start only: flat string key/value pairs, e.g. ticket=T-12, so
-     * a session can be found by what it was for. Absent (n == 0) in every
-     * record written before sessions carried metadata, and then not encoded
-     * at all, so old lines re-encode to the same bytes. */
+    /* session_start only: a flat object, e.g. {"ticket":"T-12","n":1}, so a
+     * session can be found by what it was for. Keys are identifiers; each
+     * value is held as its JSON text ("\"T-12\"", "1", "true") so it is
+     * written back exactly and compared as written. Every new session_start
+     * carries the object, empty or not; lines from before metadata existed
+     * have none and decode with meta_n == 0. */
     const char **meta_keys;
     const char **meta_vals;
     int32_t meta_n;
@@ -96,11 +98,18 @@ void rec_apply(Arena *a, Lines *cur, const Rec *rec);
  * filters with this, so they can never disagree. */
 uint32_t rec_session_no(const char *id);
 
-/* The value of one metadata key on a session_start record, or NULL. */
+/* The JSON text of one metadata value on a session_start record, or NULL. */
 const char *rec_meta(const Rec *rec, const char *key);
 
-/* Emits `"meta":{...}` (with a leading comma) for a session_start record, or
- * `,"meta":{}` when it has none, so JSON readers always find the key. */
+/* Emits `,"meta":{...}` for a session_start record — `{}` when it has none —
+ * so JSON readers always find the key. */
 void rec_meta_json(StrBuf *sb, const Rec *rec);
+
+/* `key=value` from a command line to a metadata pair. The key must be an
+ * identifier ([A-Za-z_][A-Za-z0-9_]*). The value becomes a JSON number when it
+ * is one, true/false when it is one of those, and a string otherwise; *val is
+ * its JSON text. Returns false with a message in err. */
+bool rec_meta_parse(Arena *a, const char *kv, const char **key,
+                    const char **val, char *err, size_t errsz);
 
 #endif /* LAP_REC_H */

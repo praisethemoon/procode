@@ -7,10 +7,9 @@ static const char *first_line(Arena *a, const char *s) {
     return arena_strndup(a, s, (size_t)(nl - s));
 }
 
-/* Every `--meta key=value` on the command line, in order. Keys are
- * [a-z0-9_.-]+ so they read the same in a filter as in the record; values are
- * any non-empty text. A repeated key is refused rather than last-wins: two
- * tickets on one session is a question, not an answer. */
+/* Every `--meta key=value` on the command line, in order. A repeated key is
+ * refused rather than last-wins: two tickets on one session is a question,
+ * not an answer. */
 static bool meta_args(Arena *a, int32_t argc, char **argv, Rec *rec,
                       char *err, size_t errsz) {
     int32_t cap = 0;
@@ -29,24 +28,10 @@ static bool meta_args(Arena *a, int32_t argc, char **argv, Rec *rec,
             break;
         if (strcmp(argv[i], "--meta") != 0)
             continue;
-        const char *kv = i + 1 < argc ? argv[++i] : NULL;
-        const char *eq = kv ? strchr(kv, '=') : NULL;
-        if (!eq || eq == kv || eq[1] == '\0') {
-            snprintf(err, errsz, "--meta expects key=value, e.g. --meta "
-                                 "ticket=T-12");
+        const char *kv = i + 1 < argc ? argv[++i] : "";
+        const char *key, *val;
+        if (!rec_meta_parse(a, kv, &key, &val, err, errsz))
             return false;
-        }
-        for (const char *p = kv; p < eq; p++) {
-            char c = *p;
-            if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-                  c == '_' || c == '.' || c == '-')) {
-                snprintf(err, errsz, "meta key \"%.*s\" must be lower-case "
-                                     "letters, digits, '_', '.' or '-'",
-                         (int)(eq - kv), kv);
-                return false;
-            }
-        }
-        const char *key = arena_strndup(a, kv, (size_t)(eq - kv));
         for (int32_t k = 0; k < rec->meta_n; k++) {
             if (strcmp(rec->meta_keys[k], key) == 0) {
                 snprintf(err, errsz, "meta key \"%s\" given twice", key);
@@ -54,7 +39,7 @@ static bool meta_args(Arena *a, int32_t argc, char **argv, Rec *rec,
             }
         }
         rec->meta_keys[rec->meta_n] = key;
-        rec->meta_vals[rec->meta_n] = eq + 1;
+        rec->meta_vals[rec->meta_n] = val;
         rec->meta_n++;
     }
     return true;
@@ -80,6 +65,7 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
     }
     StrBuf sb;
     sb_init(&sb, a);
+    char err_scratch[128];
     if (json)
         sb_puts(&sb, "{\"ok\":true,\"sessions\":[");
     int32_t printed = 0;
@@ -126,10 +112,21 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
             const char *fl = first_line(a, st->msg);
             sb_text(&sb, fl, strlen(fl));
             for (int32_t k = 0; k < st->meta_n; k++) {
+                /* Strings print without their quotes: ticket=T-12. */
+                const char *mv = st->meta_vals[k];
+                size_t ml = strlen(mv);
+                if (ml >= 2 && mv[0] == '"') {
+                    JVal *jv = json_parse(a, mv, ml, err_scratch,
+                                          sizeof err_scratch);
+                    if (jv && jv->t == J_STR) {
+                        mv = jv->s.ptr;
+                        ml = jv->s.len;
+                    }
+                }
                 sb_puts(&sb, "  ");
                 sb_field(&sb, S_MUTED, st->meta_keys[k], 0);
                 sb_putc(&sb, '=');
-                sb_text(&sb, st->meta_vals[k], strlen(st->meta_vals[k]));
+                sb_text(&sb, mv, ml);
             }
             if (active || !end_ts) {
                 sb_puts(&sb, "  ");

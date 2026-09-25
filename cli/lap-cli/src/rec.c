@@ -65,8 +65,7 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
         }
         sb_puts(&sb, ",\"msg\":");
         json_escape_c(&sb, rec->msg);
-        if (rec->meta_n > 0)
-            rec_meta_json(&sb, rec);
+        rec_meta_json(&sb, rec);
         break;
     case REC_SESSION_END:
         sb_printf(&sb, ",\"id\":\"%s\"", rec->id);
@@ -163,13 +162,24 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
             out->meta_keys = (const char **)arena_alloc(a, n * sizeof(char *));
             out->meta_vals = (const char **)arena_alloc(a, n * sizeof(char *));
             for (size_t i = 0; i < meta->obj.n; i++) {
-                if (meta->obj.vals[i]->t != J_STR) {
-                    snprintf(err, errsz, "session_start meta value is not a "
-                                         "string");
+                const JVal *mv = meta->obj.vals[i];
+                StrBuf vb;
+                sb_init(&vb, a);
+                if (mv->t == J_STR)
+                    json_escape(&vb, mv->s.ptr, mv->s.len);
+                else if (mv->t == J_BOOL)
+                    sb_puts(&vb, mv->b ? "true" : "false");
+                else if (mv->t == J_NUM && mv->is_int)
+                    sb_printf(&vb, "%lld", (long long)mv->i);
+                else if (mv->t == J_NUM)
+                    sb_printf(&vb, "%.17g", mv->num);
+                else {
+                    snprintf(err, errsz, "session_start meta value must be a "
+                                         "string, number or boolean");
                     return false;
                 }
                 out->meta_keys[i] = meta->obj.keys[i].ptr;
-                out->meta_vals[i] = meta->obj.vals[i]->s.ptr;
+                out->meta_vals[i] = sb_finish(&vb);
             }
             out->meta_n = (int32_t)meta->obj.n;
         }
@@ -332,7 +342,73 @@ void rec_meta_json(StrBuf *sb, const Rec *rec) {
             sb_putc(sb, ',');
         json_escape_c(sb, rec->meta_keys[i]);
         sb_putc(sb, ':');
-        json_escape_c(sb, rec->meta_vals[i]);
+        sb_puts(sb, rec->meta_vals[i]); /* already JSON text */
     }
     sb_putc(sb, '}');
+}
+
+/* JSON's own number grammar, so "1" and "-2.5e3" are numbers and "007",
+ * "1." and "0x10" stay strings exactly as typed. */
+static bool is_json_number(const char *s) {
+    const char *p = s;
+    if (*p == '-')
+        p++;
+    if (*p == '0')
+        p++;
+    else if (*p >= '1' && *p <= '9')
+        while (*p >= '0' && *p <= '9')
+            p++;
+    else
+        return false;
+    if (*p == '.') {
+        p++;
+        if (!(*p >= '0' && *p <= '9'))
+            return false;
+        while (*p >= '0' && *p <= '9')
+            p++;
+    }
+    if (*p == 'e' || *p == 'E') {
+        p++;
+        if (*p == '+' || *p == '-')
+            p++;
+        if (!(*p >= '0' && *p <= '9'))
+            return false;
+        while (*p >= '0' && *p <= '9')
+            p++;
+    }
+    return *p == '\0';
+}
+
+bool rec_meta_parse(Arena *a, const char *kv, const char **key,
+                    const char **val, char *err, size_t errsz) {
+    const char *eq = strchr(kv, '=');
+    if (!eq || eq == kv) {
+        snprintf(err, errsz, "--meta expects key=value, e.g. --meta "
+                             "ticket=T-12");
+        return false;
+    }
+    for (const char *p = kv; p < eq; p++) {
+        char c = *p;
+        bool alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                     c == '_';
+        if (!alpha && !(p > kv && c >= '0' && c <= '9')) {
+            snprintf(err, errsz, "meta key \"%.*s\" must be an identifier "
+                                 "(letters, digits, '_', not starting with a "
+                                 "digit)",
+                     (int)(eq - kv), kv);
+            return false;
+        }
+    }
+    *key = arena_strndup(a, kv, (size_t)(eq - kv));
+    const char *v = eq + 1;
+    if (is_json_number(v) || strcmp(v, "true") == 0 ||
+        strcmp(v, "false") == 0) {
+        *val = v;
+    } else {
+        StrBuf vb;
+        sb_init(&vb, a);
+        json_escape_c(&vb, v);
+        *val = sb_finish(&vb);
+    }
+    return true;
 }

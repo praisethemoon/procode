@@ -80,25 +80,48 @@ void test_rec(void) {
     ASSERT_EQ_S(back.user, "session-bot");
     ASSERT_EQ_S(back.msg, "fix the flaky test");
     ASSERT_EQ_I(back.meta_n, 0);
-    /* No metadata, no key: old lines must re-encode to their own bytes or
-     * the hash chain breaks. */
-    ASSERT_TRUE(strstr(line, "\"meta\"") == NULL);
+    /* Always an object on a new record, even an empty one. */
+    ASSERT_TRUE(strstr(line, "\"meta\":{}") != NULL);
 
     t_begin("rec: session metadata round-trips");
-    const char *mk[] = {"ticket", "epic"};
-    const char *mv[] = {"T-12", "E-\"1\""};
+    const char *mk[] = {"ticket", "n", "ok"};
+    const char *mv[] = {"\"T-12\"", "1", "true"};
     s.meta_keys = mk;
     s.meta_vals = mv;
-    s.meta_n = 2;
+    s.meta_n = 3;
     line = rec_encode(a, &s, &len);
+    ASSERT_TRUE(strstr(line, "\"meta\":{\"ticket\":\"T-12\",\"n\":1,"
+                             "\"ok\":true}") != NULL);
     ASSERT_TRUE(rec_decode(a, line, len, &back, err, sizeof err));
-    ASSERT_EQ_I(back.meta_n, 2);
-    ASSERT_EQ_S(rec_meta(&back, "ticket"), "T-12");
-    ASSERT_EQ_S(rec_meta(&back, "epic"), "E-\"1\"");
+    ASSERT_EQ_I(back.meta_n, 3);
+    ASSERT_EQ_S(rec_meta(&back, "ticket"), "\"T-12\"");
+    ASSERT_EQ_S(rec_meta(&back, "n"), "1");
+    ASSERT_EQ_S(rec_meta(&back, "ok"), "true");
     ASSERT_TRUE(rec_meta(&back, "milestone") == NULL);
     ASSERT_EQ_S(back.hash, s.hash);
+
+    t_begin("rec: a command-line value is typed the way JSON would read it");
+    const char *key, *val;
+    ASSERT_TRUE(rec_meta_parse(a, "xyz=1", &key, &val, err, sizeof err));
+    ASSERT_EQ_S(key, "xyz");
+    ASSERT_EQ_S(val, "1");
+    ASSERT_TRUE(rec_meta_parse(a, "x=-2.5e3", &key, &val, err, sizeof err));
+    ASSERT_EQ_S(val, "-2.5e3");
+    ASSERT_TRUE(rec_meta_parse(a, "x=false", &key, &val, err, sizeof err));
+    ASSERT_EQ_S(val, "false");
+    ASSERT_TRUE(rec_meta_parse(a, "x=007", &key, &val, err, sizeof err));
+    ASSERT_EQ_S(val, "\"007\"");
+    ASSERT_TRUE(rec_meta_parse(a, "ticket=T-12", &key, &val, err, sizeof err));
+    ASSERT_EQ_S(val, "\"T-12\"");
+    ASSERT_TRUE(rec_meta_parse(a, "empty=", &key, &val, err, sizeof err));
+    ASSERT_EQ_S(val, "\"\"");
+    ASSERT_TRUE(rec_meta_parse(a, "_A9=x", &key, &val, err, sizeof err));
+    ASSERT_TRUE(!rec_meta_parse(a, "9a=x", &key, &val, err, sizeof err));
+    ASSERT_TRUE(!rec_meta_parse(a, "a-b=x", &key, &val, err, sizeof err));
+    ASSERT_TRUE(!rec_meta_parse(a, "=x", &key, &val, err, sizeof err));
+    ASSERT_TRUE(!rec_meta_parse(a, "novalue", &key, &val, err, sizeof err));
     const char *bad_meta = "{\"type\":\"session_start\",\"id\":\"S1\","
-                           "\"msg\":\"m\",\"meta\":{\"k\":1},\"ts\":\"t\","
+                           "\"msg\":\"m\",\"meta\":{\"k\":[1]},\"ts\":\"t\","
                            "\"prev\":\"p\"}";
     ASSERT_TRUE(!rec_decode(a, bad_meta, strlen(bad_meta), &back, err,
                             sizeof err));

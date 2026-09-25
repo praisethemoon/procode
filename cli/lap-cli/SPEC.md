@@ -233,9 +233,12 @@ Asks the history questions; criteria AND together:
 One active session at a time; `start` requires a purpose message; a crashed
 session simply stays open. `list` shows every session with commit counts.
 
-`--meta key=value` (repeatable) on `start` tags the session with flat string
-metadata, stored on the `session_start` record. Keys are `[a-z0-9_.-]+`; a
-key given twice is refused. `list --meta key=value` keeps only the sessions
+`--meta key=value` (repeatable) on `start` tags the session with metadata,
+stored as a flat object on the `session_start` record — always present, `{}`
+when there is none. Keys are identifiers (`[A-Za-z_][A-Za-z0-9_]*`); a key
+given twice is refused. A value is written as a JSON number when it is one
+(`n=1` → `"n":1`), as `true`/`false` when it is one of those, and as a string
+otherwise (`ticket=T-12` → `"ticket":"T-12"`). `list --meta key=value` keeps only the sessions
 carrying every given pair, and `list --json` / `current --json` always carry
 a `meta` object. This is how other tools link work to a session: coboard
 starts sessions with `--meta ticket=T-12` and finds a ticket's sessions with
