@@ -195,6 +195,11 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         if (expand > KB_EXPAND_MAX)
             expand = KB_EXPAND_MAX;
     }
+    /* A floor on the keyword (BM25) score, applied before fusion, so a weak
+     * match never takes a rank. Not a floor on `fused`: that is
+     * 1/(k + rank), which says where a hit landed, not how well it matched —
+     * the best hit of a poor query scores the same as the best hit of a good
+     * one, and a floor on it would only be a second `k`. */
     double min_score = 0.0;
     const char *min_s = flag_value(argc, argv, VALUE_FLAGS, "--min-score");
     if (!min_s)
@@ -305,11 +310,13 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             json_escape_c(&sb, src ? src->collection : "");
             sb_puts(&sb, ",\"matched\":");
             put_matched(&sb, fused[i].tags);
-            /* Only the scores that were actually computed. §4's `vector` and
-             * `fused` are absent rather than zero, because a caller must be
-             * able to tell "the vector path found nothing" from "the vector
-             * path did not run". */
-            sb_printf(&sb, ",\"scores\":{\"bm25\":%.6f}", c->bm25);
+            /* The scores that were computed. `fused` is the reciprocal-rank
+             * sum the list is ordered by — fusion runs even over the one
+             * keyword list. `vector` is absent rather than zero, because a
+             * caller must be able to tell "the vector path found nothing"
+             * from "the vector path did not run". */
+            sb_printf(&sb, ",\"scores\":{\"bm25\":%.6f,\"fused\":%.6f}",
+                      c->bm25, fused[i].score);
             /* §5: every hit carries how old it is AND the verdict on that
              * age, from the one definition in cmd_common.c. */
             sb_printf(&sb, ",\"fetchedAt\":\"%s\",\"stale\":%s",

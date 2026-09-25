@@ -645,13 +645,23 @@ has "hit shape" "$out" '"matched":\["keyword"\]'
 has "hit shape" "$out" '"mode":"keyword"'
 
 t "an absent score is absent, not zero"
-# §4's vector and fused belong to a path that did not run. A caller must be
-# able to tell that from a path that ran and found nothing. `stale` is a
-# different case and is always present: §5 puts it on every hit, and a
-# freshly filed document answers "false" rather than saying nothing.
+# §4's vector belongs to a path that did not run. A caller must be able to
+# tell that from a path that ran and found nothing. `fused` did run — the
+# keyword list is fused on its own — so it is there. `stale` is a different
+# case and is always present: §5 puts it on every hit, and a freshly filed
+# document answers "false" rather than saying nothing.
 hasnt "scores" "$out" '"vector"'
-hasnt "scores" "$out" '"fused"'
+has "scores" "$out" '"fused":'
 has "scores" "$out" '"stale":false'
+
+t "every hit carries its fused score, and the list is ordered by it"
+fused=$(kbi search port --json | tr '}' '\n' | sed -n 's/.*"fused":\([0-9.]*\).*/\1/p')
+[ "$(printf '%s\n' "$fused" | wc -l | tr -d ' ')" -gt 1 ] || fail "expected several hits for port"
+# The best hit of one ranked list is 1/(60 + 1).
+[ "$(printf '%s\n' "$fused" | sed -n 1p)" = "0.016393" ] || \
+    fail "the top fused score is $(printf '%s\n' "$fused" | sed -n 1p), not 1/61"
+printf '%s\n' "$fused" | awk 'NR > 1 && $1 > prev { bad = 1 } { prev = $1 } END { exit bad }' || \
+    fail "hits are not in fused order: $fused"
 
 t "search returns snippets, never whole chunks"
 # The snippet is capped; the full passage is what kb chunk is for.
@@ -690,12 +700,29 @@ has "mime miss" "$out" '"count":0'
 out=$(kbi search port --since 2999-01-01T00:00:00Z --json)
 has "since" "$out" '"count":0'
 
-t "minScore is a floor on the bm25 score"
+t "minScore is a floor on the bm25 score, applied before fusion"
 out=$(kbi search port --min-score 0 --json)
 lo=$(printf '%s' "$out" | sed -n 's/.*"count":\([0-9]*\).*/\1/p')
 out=$(kbi search port --min-score 1000 --json)
 has "minScore" "$out" '"count":0'
 [ "$lo" -gt 0 ] || fail "expected hits without a minScore floor"
+# A floor between the strongest and the weakest bm25 drops the weak hits and
+# keeps the strong ones, and fusion then ranks what is left from the top: a
+# floor on the fused score could not do the first, and one applied after
+# fusion would not reset the second.
+bm=$(kbi search port --json | tr '}' '\n' | sed -n 's/.*"bm25":\([0-9.]*\).*/\1/p')
+hi=$(printf '%s\n' "$bm" | sed -n 1p)
+low=$(printf '%s\n' "$bm" | tail -n 1)
+floor=$(awk -v a="$hi" -v b="$low" 'BEGIN { printf "%.6f", (a + b) / 2 }')
+awk -v a="$hi" -v b="$low" 'BEGIN { exit !(a > b) }' || fail "expected port's hits to differ in bm25"
+out=$(kbi search port --min-score "$floor" --json)
+kept=$(printf '%s' "$out" | tr '}' '\n' | sed -n 's/.*"bm25":\([0-9.]*\).*/\1/p')
+[ -n "$kept" ] || fail "the floor $floor dropped every hit, including $hi"
+printf '%s\n' "$kept" | awk -v f="$floor" '$1 < f { bad = 1 } END { exit bad }' || \
+    fail "a hit below the floor $floor survived: $kept"
+[ "$(printf '%s\n' "$kept" | wc -l | tr -d ' ')" -lt "$(printf '%s\n' "$bm" | wc -l | tr -d ' ')" ] || \
+    fail "the floor $floor dropped nothing"
+has "minScore" "$out" '"fused":0.016393'
 
 t "k defaults to 10 and expand returns neighbouring snippets"
 out=$(kbi search port --expand 1 --json)

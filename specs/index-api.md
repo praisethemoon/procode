@@ -178,7 +178,7 @@ GET /search?q=<text>
     &k=10                               hits, max 100
     &expand=1                           also return N neighbouring chunks
     &source=S-3  &mime=  &since=<iso>   filters
-    &minScore=
+    &minScore=                          floor on the bm25 score, before fusion
 ```
 
 **Hybrid is the default and is not an optimization.** This corpus is dense with
