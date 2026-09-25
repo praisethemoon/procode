@@ -59,6 +59,26 @@ bool plat_is_dir(const char *path) {
 #endif
 }
 
+/* "Does this already exist as a directory?" — and that question must follow
+ * symlinks, which is why it cannot reuse `plat_is_dir`.
+ *
+ * `plat_is_dir` is deliberately `lstat`-based: a `.kb` that is itself a
+ * symlink is not a store, and treating it as one would let a link decide where
+ * the logs live. But `mkdir -p` asks a different question, and asking it with
+ * `lstat` made every directory under a symlinked ancestor fail to be created —
+ * on macOS both `/tmp` and `/var` are symlinks, so anything under `$TMPDIR`
+ * hit it, which is most of the test suite.
+ *
+ * lap-cli has the same bug and does not have this fix. */
+static bool exists_as_dir(const char *path) {
+#ifdef _WIN32
+    return plat_is_dir(path);
+#else
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+#endif
+}
+
 bool plat_mkdir(const char *path) {
 #ifdef _WIN32
     char wb[KB_PATH_MAX];
@@ -68,7 +88,7 @@ bool plat_mkdir(const char *path) {
 #else
     if (mkdir(path, 0777) == 0)
         return true;
-    return errno == EEXIST && plat_is_dir(path);
+    return errno == EEXIST && exists_as_dir(path);
 #endif
 }
 
@@ -506,5 +526,100 @@ void plat_unlock(PlatLock *l) {
 #else
     flock(l->fd, LOCK_UN);
     close(l->fd);
+#endif
+}
+
+/* ---- additions kb needs beyond lap's platform layer -------------------- */
+
+int64_t plat_pid(void) {
+#ifdef _WIN32
+    return (int64_t)GetCurrentProcessId();
+#else
+    return (int64_t)getpid();
+#endif
+}
+
+bool plat_remove_dir(const char *path) {
+#ifdef _WIN32
+    char wb[KB_PATH_MAX];
+    return _rmdir(winpath(wb, sizeof wb, path)) == 0;
+#else
+    return rmdir(path) == 0;
+#endif
+}
+
+/* A lock that REFUSES rather than waits, and names who holds it.
+ *
+ * lap's `plat_lock` blocks until it wins, which is right for a tool whose
+ * commands are short. It is wrong here: `index-api.md` §11 makes `store_locked`
+ * an error with "the holding process" as its detail, so the caller has to be
+ * able to fail and say who. A blocking lock can only ever hang.
+ *
+ * The pid is written into the lock file rather than inferred, because there is
+ * no portable way to ask the kernel who holds a flock. That makes the pid
+ * advisory: a stale file from a crashed writer still names a dead process. It
+ * is reported as a hint in an error message and nothing decides anything on
+ * it — the flock itself is the authority, and a crashed process releases that
+ * when its descriptors close.
+ *
+ * `*holder` distinguishes three outcomes the caller renders differently:
+ * negative, the lock file could not be opened at all; positive, held by that
+ * pid; zero, held but by whom we could not say. */
+PlatLock *plat_lock_try(Arena *a, const char *path, int64_t *holder) {
+    *holder = -1;
+    PlatLock *l = (PlatLock *)arena_alloc0(a, sizeof(PlatLock));
+#ifdef _WIN32
+    char wb[KB_PATH_MAX];
+    winpath(wb, sizeof wb, path);
+    HANDLE h = CreateFileA(wb, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+                           OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) {
+        /* Sharing violation means somebody has it; anything else means we
+         * could not even ask. */
+        *holder = GetLastError() == ERROR_SHARING_VIOLATION ? 0 : -1;
+        return NULL;
+    }
+    char buf[32];
+    int32_t n = snprintf(buf, sizeof buf, "%lld\n", (long long)plat_pid());
+    DWORD wrote = 0;
+    SetFilePointer(h, 0, NULL, FILE_BEGIN);
+    SetEndOfFile(h);
+    WriteFile(h, buf, (DWORD)n, &wrote, NULL);
+    l->h = h;
+    return l;
+#else
+    int fd = open(path, O_CREAT | O_RDWR, 0666);
+    if (fd < 0)
+        return NULL;
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        /* Held. Read the pid the holder stamped, if it left one. */
+        *holder = 0;
+        char buf[32];
+        ssize_t got = pread(fd, buf, sizeof buf - 1, 0);
+        if (got > 0) {
+            buf[got] = '\0';
+            long long pid = strtoll(buf, NULL, 10);
+            if (pid > 0)
+                *holder = (int64_t)pid;
+        }
+        close(fd);
+        return NULL;
+    }
+    /* Truncate before writing: a shorter pid must not leave a longer one's
+     * trailing digits behind, which would name a process that never held it. */
+    if (ftruncate(fd, 0) != 0) {
+        flock(fd, LOCK_UN);
+        close(fd);
+        return NULL;
+    }
+    char buf[32];
+    int32_t n = snprintf(buf, sizeof buf, "%lld\n", (long long)plat_pid());
+    if (n > 0 && write(fd, buf, (size_t)n) != n) {
+        flock(fd, LOCK_UN);
+        close(fd);
+        return NULL;
+    }
+    l->fd = fd;
+    return l;
 #endif
 }
