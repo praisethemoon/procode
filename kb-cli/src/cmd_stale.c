@@ -27,9 +27,14 @@
  * lock would block an ingest for nothing.
  */
 
-static const char *const VALUE_FLAGS[] = {
+/* Two tables, not one. `--limit` narrows a list of documents and means
+ * nothing to a report about sources, and a flag a command accepts and then
+ * ignores is worse than one it refuses: the caller believes it was heard. */
+static const char *const STALE_FLAGS[] = {
     "--older-than", "--olderThan", "--collection",
     "--store",      "--limit",     NULL};
+static const char *const REFRESH_FLAGS[] = {"--older-than", "--olderThan",
+                                            "--collection", "--store", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef struct {
@@ -63,15 +68,14 @@ static int row_cmp(const void *x, const void *y) {
 /* Shared by both routes: open every tier in scope, keep the stale documents
  * that pass the collection filter, and order them. Returns false having
  * already reported the failure. */
-static bool collect(Arena *a, int32_t argc, char **argv, bool json,
-                    const Staleness *st, Store *stores, size_t *nstores,
-                    Row **out, size_t *nout, int32_t *rc) {
-    const char *collection = flag_value(argc, argv, VALUE_FLAGS,
-                                        "--collection");
+static bool collect(Arena *a, int32_t argc, char **argv,
+                    const char *const *flags, bool json, const Staleness *st,
+                    Store *stores, size_t *nstores, Row **out, size_t *nout,
+                    int32_t *rc) {
+    const char *collection = flag_value(argc, argv, flags, "--collection");
     StoreSel sel;
     char err[512];
-    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
-                         &sel)) {
+    if (!store_sel_parse(flag_value(argc, argv, flags, "--store"), &sel)) {
         err_out(json, "usage", "--store expects project, global or all");
         *rc = KB_EXIT_ERR;
         return false;
@@ -125,20 +129,20 @@ static void close_all(Store *stores, size_t n) {
 }
 
 int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
+    bool json = has_flag(argc, argv, STALE_FLAGS, "--json");
+    const char *bad = unknown_flag(argc, argv, STALE_FLAGS, BOOL_FLAGS);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;
     }
     char err[512];
     Staleness st;
-    if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
+    if (!staleness_init(&st, older_than_arg(argc, argv, STALE_FLAGS), err,
                         sizeof err)) {
         err_out(json, "usage", "%s", err);
         return KB_EXIT_ERR;
     }
-    const char *limit_s = flag_value(argc, argv, VALUE_FLAGS, "--limit");
+    const char *limit_s = flag_value(argc, argv, STALE_FLAGS, "--limit");
     int64_t limit = limit_s ? strtoll(limit_s, NULL, 10) : 0;
     if (limit_s && limit <= 0) {
         err_out(json, "usage", "--limit expects a positive number");
@@ -150,7 +154,8 @@ int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
     Row *rows = NULL;
     size_t n = 0;
     int32_t rc = KB_EXIT_OK;
-    if (!collect(a, argc, argv, json, &st, stores, &nstores, &rows, &n, &rc)) {
+    if (!collect(a, argc, argv, STALE_FLAGS, json, &st, stores, &nstores,
+                 &rows, &n, &rc)) {
         close_all(stores, nstores);
         return rc;
     }
@@ -212,15 +217,15 @@ static const char *refetch_route(const char *kind) {
 }
 
 int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
+    bool json = has_flag(argc, argv, REFRESH_FLAGS, "--json");
+    const char *bad = unknown_flag(argc, argv, REFRESH_FLAGS, BOOL_FLAGS);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;
     }
     char err[512];
     Staleness st;
-    if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
+    if (!staleness_init(&st, older_than_arg(argc, argv, REFRESH_FLAGS), err,
                         sizeof err)) {
         err_out(json, "usage", "%s", err);
         return KB_EXIT_ERR;
@@ -231,7 +236,8 @@ int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
     Row *rows = NULL;
     size_t n = 0;
     int32_t rc = KB_EXIT_OK;
-    if (!collect(a, argc, argv, json, &st, stores, &nstores, &rows, &n, &rc)) {
+    if (!collect(a, argc, argv, REFRESH_FLAGS, json, &st, stores, &nstores,
+                 &rows, &n, &rc)) {
         close_all(stores, nstores);
         return rc;
     }

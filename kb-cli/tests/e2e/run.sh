@@ -1098,6 +1098,12 @@ has "refresh" "$out" '"id":"S-2"'
 hasnt "refresh" "$out" '"id":"S-3"'
 expect_grep 'fetched nothing' kbv refresh --store project
 
+t "refresh refuses a flag it would only ignore"
+# --limit narrows a list of documents and means nothing to a report about
+# sources. Accepting it silently would let a caller believe it was heard.
+expect_grep '"error":"usage"' kbv refresh --limit 1 --json
+expect_ok kbv stale --limit 1 --json
+
 t "kb refresh writes nothing at all"
 # A report is a read. It must not take the write lock, must not append, and
 # must not touch the index.

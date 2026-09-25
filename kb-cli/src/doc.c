@@ -279,8 +279,12 @@ bool doclog_load(Arena *a, const char *path, DocList *out, char *err,
                 continue;
             size_t at = nlk;
             for (size_t k = 0; k < nlk; k++) {
+                /* Compared as text, not by pointer. Both sides do come from
+                 * LINK_TYPES today, but link_find next door compares them as
+                 * text and one rule for "the same edge" is worth more than
+                 * one saved comparison. */
                 if (strcmp(lk[k].from, e.from) == 0 &&
-                    lk[k].rel == e.rel &&
+                    strcmp(lk[k].rel, e.rel) == 0 &&
                     strcmp(lk[k].to, e.to) == 0) {
                     at = k;
                     break;
