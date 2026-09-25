@@ -26,8 +26,8 @@ import { useEffect, useState } from "react";
 import { KbChunk, KbDocument, isStale } from "kb-js/pure";
 
 import { documentFacts, formatDate, metaEntries } from "../src/view/facts";
-import { headingId } from "../src/view/headings";
-import { mimeLabel } from "../src/view/mime";
+import { revealId } from "../src/view/headings";
+import { mimeLabel, renderingFor } from "../src/view/mime";
 import { RefreshOutcome, outcomeMessage } from "../src/refresh";
 import { Body } from "./Body";
 import { Codicon, Resolved, StaleBadge, useQuery } from "./parts";
@@ -39,20 +39,16 @@ interface Read {
     chunks?: KbChunk[] | null;
 }
 
-/* §3.2's scroll, and the two ways it can fail to land.
- *
- * THE HEADING MAY NOT BE IN THE DOCUMENT AS AN ELEMENT AT ALL. A chunk in a
- * plain-text document has no heading (index-api.md §1.2 writes it `heading?`),
- * and a sliding-window chunk in a PDF has one only by accident. So a target
- * that resolves to nothing leaves the document at the top — which is where it
- * would have been anyway — rather than throwing or scrolling somewhere
- * arbitrary.
+/* §3.2's scroll: to the chunk's heading where the document is drawn with
+ * headings, to its first line where it is drawn line by line (code, plain
+ * text). `revealId` in view/headings.ts decides which; a target that resolves
+ * to nothing leaves the document at the top, where it would have been anyway.
  *
  * IT WAITS FOR THE BODY. The reveal message can arrive before the text has come
  * back from the store, and `getElementById` on a document that has not rendered
- * answers null. The effect re-runs when the text changes, so the scroll happens
+ * answers null. The effect re-runs when the read changes, so the scroll happens
  * on whichever of the two arrives second. */
-function useReveal(ready: boolean): void {
+function useReveal(read: Read | null): void {
     const [pending, setPending] = useState<string | null>(null);
 
     useEffect(
@@ -66,14 +62,11 @@ function useReveal(ready: boolean): void {
     );
 
     useEffect(() => {
-        if (!ready || pending === null) {
+        if (read === null || typeof read.text !== "string" || pending === null) {
             return;
         }
-        /* The chunk id becomes a heading here rather than in the host: the
-         * document has already read its own chunk list, so the lookup is local
-         * and costs no second call into the store. */
-        const chunk = window.__KB_CHUNKS__?.find((c) => c.id === pending);
-        const id = chunk?.heading === undefined || chunk.heading === null ? "" : headingId(chunk.heading);
+        const chunk = (read.chunks ?? []).find((c) => c.id === pending);
+        const id = chunk === undefined ? "" : revealId(chunk, renderingFor(read.document.mime), read.text);
         const el = id === "" ? null : document.getElementById(id);
         if (el !== null) {
             el.scrollIntoView({ block: "start" });
@@ -82,18 +75,7 @@ function useReveal(ready: boolean): void {
          * re-scroll on every later render, which would fight a reader who had
          * scrolled somewhere else. */
         setPending(null);
-    }, [ready, pending]);
-}
-
-declare global {
-    interface Window {
-        /* The chunk list of the document currently rendered, so the reveal
-         * handler can turn a chunk id into a heading without threading it
-         * through every component between the two. It is set by the one
-         * component that has the list and read by the one hook that needs it;
-         * a context would be four files for one lookup. */
-        __KB_CHUNKS__?: readonly KbChunk[];
-    }
+    }, [read, pending]);
 }
 
 function Provenance(props: { document: KbDocument; onRefresh: () => void }): JSX.Element {
@@ -161,19 +143,14 @@ function Provenance(props: { document: KbDocument; onRefresh: () => void }): JSX
 
 export function DocumentView(props: { reference: string }): JSX.Element {
     const { state, refresh } = useQuery<Read>("get", { id: props.reference });
-    const ready = state.status === "ok" && typeof state.value.text === "string";
-    useReveal(ready);
+    useReveal(state.status === "ok" ? state.value : null);
 
     useEffect(() => {
         if (state.status === "ok") {
-            window.__KB_CHUNKS__ = state.value.chunks ?? [];
             /* §1 of UI.md's discipline, which §3 inherits: a tab's title is
              * read from the store rather than stored on the tab. */
             setTitle(props.reference, state.value.document.title);
         }
-        return () => {
-            window.__KB_CHUNKS__ = undefined;
-        };
     }, [state, props.reference]);
 
     /* §3.1's refresh: this document, from its own source. The outcome is

@@ -21,7 +21,7 @@
 
 import { Token, lines, tokenize } from "../src/view/code";
 import { HtmlNode, parseHtml } from "../src/view/html";
-import { headingId, headingText } from "../src/view/headings";
+import { headingId, headingText, lineId } from "../src/view/headings";
 import { languageFor, renderingFor } from "../src/view/mime";
 import { Markdown } from "./Markdown";
 import { link } from "./rpc";
@@ -37,7 +37,9 @@ import { link } from "./rpc";
  * them. */
 function CodeLine(props: { tokens: readonly Token[]; number: number }): JSX.Element {
     return (
-        <div className="kb-code-line">
+        /* The id is where a search hit in this file lands: code has no
+         * headings, so a chunk is found by the line its span starts on. */
+        <div className="kb-code-line" id={lineId(props.number)}>
             <span className="kb-code-gutter" aria-hidden="true">
                 {props.number}
             </span>
@@ -153,8 +155,21 @@ function Html(props: { source: string }): JSX.Element {
 
 /* --------------------------------------------------------------- plain */
 
+/* Line by line, for the same reason as code: plain text has no headings, and
+ * a search hit lands on the line its chunk starts on. Each row carries its own
+ * newline back, so what is selected and copied is the text exactly. */
 function Plain(props: { source: string }): JSX.Element {
-    return <pre className="kb-plain">{props.source}</pre>;
+    const rows = props.source.split("\n");
+    return (
+        <pre className="kb-plain">
+            {rows.map((row, i) => (
+                <span key={i} id={lineId(i + 1)}>
+                    {row}
+                    {i < rows.length - 1 ? "\n" : null}
+                </span>
+            ))}
+        </pre>
+    );
 }
 
 /* ------------------------------------------------------------ the body */
