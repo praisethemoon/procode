@@ -285,7 +285,20 @@ The prefixes are part of the configuration because these models are
 than on a document, and omitting it degrades retrieval while breaking nothing
 visibly.
 
-Weights load from `safetensors` or `GGUF`. Vectors are stored int8 and scanned
+Weights load from `safetensors` or `GGUF`, from `~/.kb/models/`: the one
+directory outside the workspace kb reads, holding exactly one model file,
+shared by every workspace and never written by kb. The binary downloads
+nothing (§12.2); a missing model is `model_missing`, and its message is the
+command that fetches it:
+
+```sh
+mkdir -p ~/.kb/models && curl -fL -o ~/.kb/models/nomic-embed-text-v1.5.Q4_K_M.gguf \
+  https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf
+```
+
+Which model a workspace was indexed with stays pinned in its own
+`index/model.json`, so a different file in `~/.kb/models/` is a
+`model_mismatch`, not a silent change. Vectors are stored int8 and scanned
 flat — at the scale a personal store reaches, an exact SIMD scan beats an
 approximate index that also has to be maintained.
 
