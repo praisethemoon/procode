@@ -39,9 +39,9 @@ static void test_single(Arena *a) {
 
 static void test_interleave(Arena *a) {
     t_begin("rank: two disjoint lists interleave by rank, not by score");
-    /* This is §1.4's rule made visible. The two tiers hold no item in
-     * common, so every item is worth 1/(60+rank) and the merge is an
-     * interleave — whatever the underlying BM25 numbers were. A merge that
+    /* Two lists holding no item in common: every item is worth
+     * 1/(60+rank) and the merge is an interleave — whatever the underlying
+     * scores were. A merge that
      * sorted by score would produce a different order here, and does. */
     static const uint64_t p[] = {1, 2, 3};
     static const uint64_t g[] = {11, 12};
@@ -62,8 +62,8 @@ static void test_interleave(Arena *a) {
     ASSERT_EQ_I(out[4].key, 3);
 
     t_begin("rank: a tie goes to the list that was handed in first");
-    /* §1.4 attributes a document present in both tiers to the project, and
-     * the tiers are passed project first, so ties resolve the same way. */
+    /* The order the lists are handed in is the only tie-break, so it is
+     * the caller's to choose and never a comparison of scores. */
     ASSERT_NEAR(out[0].score, out[1].score, TOL);
     ASSERT_EQ_I(out[0].list, 0);
     ASSERT_EQ_I(out[1].list, 1);
@@ -71,8 +71,8 @@ static void test_interleave(Arena *a) {
 
 static void test_agreement(Arena *a) {
     t_begin("rank: an item two lists agree on outranks one either found");
-    /* Nothing produces this case yet — a chunk lives in one tier — but it
-     * is what the semantic path will produce next, and the seam has to be
+    /* Nothing produces this case yet — there is only the keyword list —
+     * but it is what the semantic path will produce next, and the seam has to be
      * right before it arrives. */
     static const uint64_t x[] = {7, 1, 2};
     static const uint64_t y[] = {9, 7};

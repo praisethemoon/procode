@@ -422,7 +422,7 @@ static void test_digest(Arena *a) {
 
     Store s;
     ASSERT_TRUE(
-        store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err, &code));
+        store_open(a, &s, dir, true, err, sizeof err, &code));
     ASSERT_TRUE(store_write_chunk_params(&s, err, sizeof err));
     Document d;
     memset(&d, 0, sizeof d);
@@ -442,7 +442,7 @@ static void test_digest(Arena *a) {
     store_close(&s);
 
     ASSERT_TRUE(
-        store_open(a, &s, dir, TIER_PROJECT, false, err, sizeof err, &code));
+        store_open(a, &s, dir, false, err, sizeof err, &code));
     ChunkParams cp = store_chunk_params(a, &s);
     char digest_a[65], digest_b[65];
     fts_store_digest(&s, cp, digest_a);
@@ -457,12 +457,12 @@ static void test_digest(Arena *a) {
     /* §2: a touch updates fetchedAt and re-indexes nothing. If fetchedAt
      * were in the digest, every touch would demand a rebuild. */
     ASSERT_TRUE(
-        store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err, &code));
+        store_open(a, &s, dir, true, err, sizeof err, &code));
     char *touch = doc_encode_touch(a, "D-1", "2030-05-05T05:05:05Z", &len);
     ASSERT_TRUE(store_append(&s, STORE_DOCUMENTS, touch, len, err, sizeof err));
     store_close(&s);
     ASSERT_TRUE(
-        store_open(a, &s, dir, TIER_PROJECT, false, err, sizeof err, &code));
+        store_open(a, &s, dir, false, err, sizeof err, &code));
     ASSERT_EQ_S(s.documents.v[0].fetched_at, "2030-05-05T05:05:05Z");
     fts_store_digest(&s, store_chunk_params(a, &s), digest_b);
     ASSERT_EQ_S(digest_b, digest_a);
@@ -470,14 +470,14 @@ static void test_digest(Arena *a) {
 
     t_begin("fts: changed content does invalidate the index");
     ASSERT_TRUE(
-        store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err, &code));
+        store_open(a, &s, dir, true, err, sizeof err, &code));
     d.content_hash = "beef";
     d.chunk_base = 2;
     line = doc_encode_document(a, &d, &len);
     ASSERT_TRUE(store_append(&s, STORE_DOCUMENTS, line, len, err, sizeof err));
     store_close(&s);
     ASSERT_TRUE(
-        store_open(a, &s, dir, TIER_PROJECT, false, err, sizeof err, &code));
+        store_open(a, &s, dir, false, err, sizeof err, &code));
     fts_store_digest(&s, store_chunk_params(a, &s), digest_b);
     ASSERT_TRUE(strcmp(digest_b, digest_a) != 0);
 
@@ -490,7 +490,7 @@ static void test_digest(Arena *a) {
 
     t_begin("fts: changed chunking parameters invalidate the index");
     ASSERT_TRUE(
-        store_open(a, &s, dir, TIER_PROJECT, false, err, sizeof err, &code));
+        store_open(a, &s, dir, false, err, sizeof err, &code));
     ChunkParams other = store_chunk_params(a, &s);
     other.chunk_tokens += 1;
     fts_store_digest(&s, other, digest_b);

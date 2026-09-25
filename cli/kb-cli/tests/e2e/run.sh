@@ -99,13 +99,19 @@ utf8_state() {
         }'
 }
 
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/kb-e2e.XXXXXX")
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/kb-e2e.XXXXXX") || exit 1
+# Without a directory of its own the run would work in, and the trap would
+# delete, whatever the caller's current directory is.
+[ -n "$WORK" ] && [ -d "$WORK" ] || exit 1
 trap 'rm -rf "$WORK"' EXIT
 cd "$WORK" || exit 1
-# Keep the global tier inside the throwaway directory: a test run must never
-# touch the developer's own ~/.kb.
-KB_STORE="$WORK/globalstore"
-export KB_STORE
+# kb reads nothing from the home directory. HOME points into the throwaway
+# directory anyway, so a regression that started reading it again would find
+# the store planted there below, and never the developer's own.
+HOME="$WORK/home"
+export HOME
+mkdir -p "$HOME"
+unset KB_STORE
 
 # Neighbours that kb must never touch. lap owns its hash chain and coboard
 # owns its log; a knowledge base that wrote into either would corrupt them.
@@ -129,10 +135,15 @@ out=$(cat .kb/.gitignore)
 t "a second init in the same directory fails with exit 1"
 expect_code 1 "$KB" init
 
-t "init --json reports the tier and the path"
-out=$("$KB" init --store global --json)
-has "init global" "$out" '"store":"global"'
-has "init global" "$out" '"ok":true'
+t "init --json reports the path"
+mkdir -p initjson
+out=$( cd initjson && "$KB" init --json )
+has "init json" "$out" '"ok":true'
+has "init json" "$out" '/initjson/.kb"'
+hasnt "init json" "$out" '"store":'
+
+t "init takes no --store"
+expect_grep '"error":"usage"' "$KB" init --store global --json
 
 t "an unknown command exits 1 and says so"
 expect_code 1 "$KB" bogus
@@ -213,7 +224,7 @@ t "every add outcome reports the same set of keys"
 # read the answer.
 touch_out=$("$KB" add --title "Completion ports" --collection win32-iocp \
         --url https://example.test/iocp --file page.md --json)
-for k in store document source contentHash bytes collection mime splitter \
+for k in document source contentHash bytes collection mime splitter \
          chunkCount chunkBase created reindexed blobWritten fetchedAt; do
     has "touch shape" "$touch_out" "\"$k\":"
 done
@@ -273,11 +284,11 @@ expect_grep '"error":"usage"' sh -c \
     "printf 'x' | '$KB' add --title t --collection c --meta 'nope' --json"
 
 # ------------------------------------------------------------------- ls
-t "ls lists documents with their tier and collection"
+t "ls lists documents with their collection"
 out=$("$KB" ls --json)
 has "ls" "$out" '"id":"D-1"'
-has "ls" "$out" '"store":"project"'
 has "ls" "$out" '"collection":"win32-iocp"'
+hasnt "ls" "$out" '"store":'
 
 t "ls filters by collection, source and mime"
 out=$("$KB" ls --collection notes --json)
@@ -337,11 +348,12 @@ has "collections" "$out" '"name":"notes"'
 has "collections" "$out" '"documents":1'
 
 # --------------------------------------------------------------- status
-t "status reports both tiers and which one takes writes"
+t "status reports the one store it found"
 out=$("$KB" status --json)
-has "status" "$out" '"store":"project"'
-has "status" "$out" '"store":"global"'
-has "status" "$out" '"defaultWrite":"project"'
+has "status" "$out" "\"path\":\"$(pwd -P)/.kb\""
+has "status" "$out" '"present":true'
+hasnt "status" "$out" '"tiers"'
+hasnt "status" "$out" '"defaultWrite"'
 has "status" "$out" '"chunkTokens":400'
 has "status" "$out" '"chunkOverlap":60'
 has "status" "$out" '"model":null'
@@ -373,38 +385,49 @@ printf 'not a store' > decoy/.kb
 expect_grep '"id":"D-1"' cat lsout.txt
 rm -f decoy/.kb
 
+# --------------------------------------------------------- no global tier
+# There is one store, found by walking up from the current directory. A
+# `.kb` in the home directory is an ordinary store that only a command run
+# under the home directory can find, and nothing names a store any other way.
+( cd "$HOME" && "$KB" init --json ) > /dev/null
+# A sibling of $WORK, so no .kb exists anywhere above it, and outside $HOME.
+AWAY=$(mktemp -d "${TMPDIR:-/tmp}/kb-away.XXXXXX") || exit 1
+[ -n "$AWAY" ] && [ -d "$AWAY" ] || exit 1
+
 t "outside any store, a read says so and exits 1"
-# A sibling of $WORK, so no .kb exists anywhere above it.
-AWAY=$(mktemp -d "${TMPDIR:-/tmp}/kb-away.XXXXXX")
-( cd "$AWAY" && KB_STORE="$AWAY/nostore" "$KB" ls --json ) > away.txt 2>&1
+( cd "$AWAY" && "$KB" ls --json ) > away.txt 2>&1
 expect_grep '"error":"not_found"' cat away.txt
-( cd "$AWAY" && KB_STORE="$AWAY/nostore" "$KB" ls >/dev/null 2>&1 )
+expect_grep 'kb init' cat away.txt
+( cd "$AWAY" && "$KB" ls >/dev/null 2>&1 )
 [ $? -eq 1 ] || fail "expected exit 1 outside any store"
+
+t "a store in the home directory is not a fallback"
+( cd "$AWAY" && "$KB" search anything --json ) > away.txt 2>&1
+expect_grep '"error":"not_found"' cat away.txt
+( cd "$AWAY" && "$KB" status --json ) > away.txt 2>&1
+expect_grep '"path":null' cat away.txt
+
+t "KB_STORE is not read"
+( cd "$AWAY" && KB_STORE="$HOME/.kb" "$KB" ls --json ) > away.txt 2>&1
+expect_grep '"error":"not_found"' cat away.txt
+
+t "an add outside any store is refused, not filed somewhere else"
+( cd "$AWAY" && printf 'x\n' | \
+    "$KB" add --title t --collection c --json ) > away.txt 2>&1
+expect_grep '"error":"not_found"' cat away.txt
+[ ! -e "$AWAY/.kb" ] || fail "add created a store"
+[ ! -s "$HOME/.kb/documents.jsonl" ] || fail "add wrote to the home store"
 rm -rf "$AWAY"
 
-# ------------------------------------------------------------ both tiers
-t "--store global writes to the global tier"
-out=$(printf 'global note\n' | "$KB" add --title global --collection shared \
-        --store global --json)
-has "global add" "$out" '"store":"global"'
-has "global add" "$out" '"document":"D-1"'
-[ -f "$KB_STORE/documents.jsonl" ] || fail "global log missing"
-
-t "identifiers are per store, so D-1 exists in both tiers"
-out=$("$KB" ls --store all --json)
-has "both tiers" "$out" '"store":"project"'
-has "both tiers" "$out" '"store":"global"'
-
-t "get resolves the project tier first when both hold the id"
-out=$("$KB" get D-1 --json)
-has "get precedence" "$out" '"store":"project"'
-out=$("$KB" get D-1 --store global --json)
-has "get global" "$out" '"store":"global"'
-has "get global" "$out" '"collection":"shared"'
-
-t "--store all is refused as a write target"
+t "--store is not an option on any command"
+for c in "ls" "get D-1" "search port" "chunk C-1" "collections" "stats" \
+         "stale" "refresh" "links D-1" "rebuild" "reindex" "compact" \
+         "status"; do
+    # shellcheck disable=SC2086
+    expect_grep '"error":"usage"' "$KB" $c --store project --json
+done
 expect_grep '"error":"usage"' sh -c \
-    "printf 'x' | '$KB' add --title t --collection c --store all --json"
+    "printf 'x' | '$KB' add --title t --collection c --store project --json"
 
 # ------------------------------------------------------------- the lock
 if [ -n "$KB_TESTS" ]; then
@@ -573,15 +596,15 @@ kbi add --title "kqueue" --collection bsd --file kqueue.md --json > /dev/null
 
 t "an add leaves a keyword index that search can use immediately"
 [ -f iso/.kb/index/fts.db ] || fail "index/fts.db was not written by add"
-expect_grep '"keyword":{"current":true' kbi status --store project --json
+expect_grep '"keyword":{"current":true' kbi status --json
 
 t "search resolves an exact identifier, and its opposite ranks below it"
-out=$(kbi search io_uring_prep_recv --store project --json)
+out=$(kbi search io_uring_prep_recv --json)
 first=$(printf '%s' "$out" | sed -n 's/.*"hits":\[{"chunk":"\(C-[0-9]*\)".*/\1/p')
 has "exact" "$out" '"document":"D-2"'
 # The recv chunk must come first; the send chunk shares io, uring and prep
 # and is the one §4 says a vector index cannot separate from it.
-recv_line=$(kbi search io_uring_prep_recv --store project | head -n 1)
+recv_line=$(kbi search io_uring_prep_recv | head -n 1)
 in_str "$recv_line" "$first" || fail "human and json disagree on the top hit"
 n=$(printf '%s' "$out" | sed -n 's/.*"count":\([0-9]*\).*/\1/p')
 [ "$n" -ge 2 ] || fail "expected the send chunk to be a weaker hit too"
@@ -595,26 +618,29 @@ awk -v a="$top_score" -v b="$second" 'BEGIN{exit !(a>b)}' || \
 
 t "a query may be typed in any case"
 expect_grep '"document":"D-1"' kbi search createiocompletionport \
-    --store project --json
-out=$(kbi search CREATEIOCOMPLETIONPORT --store project --json)
+    --json
+out=$(kbi search CREATEIOCOMPLETIONPORT --json)
 has "case" "$out" '"document":"D-1"'
 
 t "a camelCase name is also found by the words inside it"
-out=$(kbi search "completion port" --store project --json)
+out=$(kbi search "completion port" --json)
 has "camel" "$out" '"document":"D-1"'
 
 t "an underscored identifier is not found by an unrelated document"
-out=$(kbi search EVFILT_READ --store project --json)
+out=$(kbi search EVFILT_READ --json)
 has "evfilt" "$out" '"document":"D-3"'
 first=$(printf '%s' "$out" | sed -n 's/.*"hits":\[{"chunk":"[^"]*","document":"\([^"]*\)".*/\1/p')
 [ "$first" = "D-3" ] || fail "EVFILT_READ ranked $first first"
 
 t "the hit shape is §4's, as far as this slice can fill it"
-out=$(kbi search io_uring_prep_recv --store project --json)
-for k in chunk document source title heading snippet collection store \
-         alsoGlobal matched scores fetchedAt stale; do
+out=$(kbi search io_uring_prep_recv --json)
+for k in chunk document source title heading snippet collection matched \
+         scores fetchedAt stale; do
     has "hit shape" "$out" "\"$k\":"
 done
+hasnt "hit shape" "$out" '"store":'
+hasnt "hit shape" "$out" '"alsoGlobal":'
+
 has "hit shape" "$out" '"matched":\["keyword"\]'
 has "hit shape" "$out" '"mode":"keyword"'
 
@@ -646,36 +672,36 @@ expect_code 1 kbi search
 expect_grep '"error":"usage"' kbi search --json
 
 t "the filters in §4 narrow the scope"
-out=$(kbi search ring --store project --collection io-uring --json)
+out=$(kbi search ring --collection io-uring --json)
 has "collection" "$out" '"collection":"io-uring"'
 hasnt "collection" "$out" '"collection":"win32-iocp"'
-out=$(kbi search port --store project --collection win32-iocp,io-uring --json)
+out=$(kbi search port --collection win32-iocp,io-uring --json)
 has "collection list" "$out" '"collection":"win32-iocp"'
-out=$(kbi search port --store project --collection bsd --json)
+out=$(kbi search port --collection bsd --json)
 has "collection miss" "$out" '"count":0'
-out=$(kbi search port --store project --source S-1 --json)
+out=$(kbi search port --source S-1 --json)
 has "source" "$out" '"document":"D-1"'
-out=$(kbi search port --store project --source S-3 --json)
+out=$(kbi search port --source S-3 --json)
 has "source miss" "$out" '"count":0'
-out=$(kbi search port --store project --mime text/markdown --json)
+out=$(kbi search port --mime text/markdown --json)
 hasnt "mime" "$out" '"count":0'
-out=$(kbi search port --store project --mime application/pdf --json)
+out=$(kbi search port --mime application/pdf --json)
 has "mime miss" "$out" '"count":0'
-out=$(kbi search port --store project --since 2999-01-01T00:00:00Z --json)
+out=$(kbi search port --since 2999-01-01T00:00:00Z --json)
 has "since" "$out" '"count":0'
 
 t "minScore is a floor on the bm25 score"
-out=$(kbi search port --store project --min-score 0 --json)
+out=$(kbi search port --min-score 0 --json)
 lo=$(printf '%s' "$out" | sed -n 's/.*"count":\([0-9]*\).*/\1/p')
-out=$(kbi search port --store project --min-score 1000 --json)
+out=$(kbi search port --min-score 1000 --json)
 has "minScore" "$out" '"count":0'
 [ "$lo" -gt 0 ] || fail "expected hits without a minScore floor"
 
 t "k defaults to 10 and expand returns neighbouring snippets"
-out=$(kbi search port --store project --expand 1 --json)
+out=$(kbi search port --expand 1 --json)
 has "expand" "$out" '"neighbours":\['
 hasnt "expand" "$out" '"text":'
-out=$(kbi search port --store project --json)
+out=$(kbi search port --json)
 hasnt "no expand" "$out" '"neighbours"'
 
 t "a bad k or expand is refused"
@@ -697,20 +723,20 @@ kbb init > /dev/null
 kbb add --title big --collection bulk --file k.txt --json > /dev/null
 
 t "k is clamped to 100 however many chunks match"
-out=$(kbb search kwzz --store project --k 5 --json)
+out=$(kbb search kwzz --k 5 --json)
 has "k 5" "$out" '"count":5'
-out=$(kbb search kwzz --store project --k 100 --json)
+out=$(kbb search kwzz --k 100 --json)
 has "k 100" "$out" '"count":100'
-out=$(kbb search kwzz --store project --k 5000 --json)
+out=$(kbb search kwzz --k 5000 --json)
 has "k clamp" "$out" '"count":100'
 # and there really are more than 100 chunks to be had, so the clamp binds
-chunks=$(kbb rebuild --store project --json | \
+chunks=$(kbb rebuild --json | \
     sed -n 's/.*"chunks":\([0-9]*\).*/\1/p')
 [ "$chunks" -gt 100 ] || fail "only $chunks chunks; the clamp proves nothing"
 
 # ------------------------------------------------------------ kb chunk (§4)
 t "kb chunk returns the whole passage and its neighbours"
-out=$(kbi chunk C-2 --store project --json)
+out=$(kbi chunk C-2 --json)
 has "chunk" "$out" '"id":"C-2"'
 has "chunk" "$out" '"document":"D-1"'
 has "chunk" "$out" '"text":'
@@ -719,7 +745,7 @@ has "chunk" "$out" '"id":"C-1"'
 has "chunk" "$out" '"span":{"start":'
 
 t "kb chunk --expand 0 returns the passage alone"
-out=$(kbi chunk C-2 --store project --expand 0 --json)
+out=$(kbi chunk C-2 --expand 0 --json)
 has "chunk alone" "$out" '"neighbours":\[\]'
 
 t "kb chunk rejects anything that is not a chunk id"
@@ -730,80 +756,26 @@ expect_grep '"error":"not_found"' kbi chunk C-99999 --json
 t "a chunk id names the same passage as the document's own chunk list"
 want=$(kbi get D-1 --include chunks --json | \
     sed -n 's/.*{"id":"C-2","document":"D-1","ordinal":1,"heading":"\([^"]*\)".*/\1/p')
-got=$(kbi chunk C-2 --store project --expand 0 --json | \
+got=$(kbi chunk C-2 --expand 0 --json | \
     sed -n 's/.*"heading":"\([^"]*\)".*/\1/p')
 [ -n "$want" ] && [ "$want" = "$got" ] || \
     fail "get says heading '$want', chunk says '$got'"
 
-# ------------------------------------------------------------- both tiers
-t "a document in both tiers is returned once, from the project tier"
-"$KB" add --title "io_uring" --collection io-uring --file iso/uring.md \
-    --store global --json > /dev/null
-out=$(kbi search io_uring_prep_recv --json)
-has "dedup" "$out" '"store":"project"'
-has "dedup" "$out" '"alsoGlobal":true'
-hasnt "dedup" "$out" '"store":"global"'
-
-t "a document only the global tier has is still found"
-printf 'zzunique a note that only the global store holds\n' | \
-    "$KB" add --title globalonly --collection shared --store global --json \
-    > /dev/null
-out=$(kbi search zzunique --json)
-has "global only" "$out" '"store":"global"'
-has "global only" "$out" '"alsoGlobal":false'
-
-t "--store narrows to one tier"
-out=$(kbi search zzunique --store project --json)
-has "project only" "$out" '"count":0'
-out=$(kbi search zzunique --store global --json)
-hasnt "global only" "$out" '"count":0'
-
-t "the tiers fuse by rank, not by score"
-# Rigged so the two answers disagree. The global tier's hit is a four-word
-# passage that is nothing but the query term, which scores high; the
-# project's is the same term once inside a long page, which scores low. A
-# merge that compared scores would lead with global. A merge that compares
-# ranks leads with project, because each is its own tier's best answer and
-# §1.4 gives the tie to the project.
-i=0
-: > iso/rankbait.md
-while [ $i -lt 60 ]; do
-    echo "padding words that mean nothing at all here." >> iso/rankbait.md
-    i=$((i + 1))
-done
-echo "a single zzrank mention buried in all of that." >> iso/rankbait.md
-kbi add --title bait --collection bait --file rankbait.md --json > /dev/null
-printf 'zzrank zzrank zzrank zzrank\n' | \
-    "$KB" add --title rank --collection shared --store global --json > /dev/null
-out=$(kbi search zzrank --json)
-lead=$(printf '%s' "$out" | \
-    sed -n 's/.*"hits":\[{[^}]*"store":"\([a-z]*\)".*/\1/p')
-[ "$lead" = "project" ] || fail "the fused list led with the $lead tier"
-scores=$(printf '%s' "$out" | tr '}' '\n' | \
-    sed -n 's/.*"bm25":\([0-9.]*\).*/\1/p')
-lead_score=$(printf '%s\n' "$scores" | sed -n 1p)
-next_score=$(printf '%s\n' "$scores" | sed -n 2p)
-[ -n "$next_score" ] || fail "expected a hit from the other tier as well"
-# The leading hit scores LOWER than the one behind it. That is only
-# possible because the two lists were merged by rank.
-awk -v a="$lead_score" -v b="$next_score" 'BEGIN{exit !(a<b)}' || \
-    fail "the leading hit scored $lead_score against $next_score behind it; \
-the merge looks like a sort by score"
 
 # --------------------------------------------------------- index staleness
 t "search refuses a stale index rather than answering without it"
 cp iso/.kb/index/fts.db iso/fts.db.bak
 head -c 64 iso/fts.db.bak > iso/.kb/index/fts.db
-expect_code 1 kbi search port --store project
-expect_grep '"error":"index_stale"' kbi search port --store project --json
-expect_grep 'rebuild' kbi search port --store project --json
+expect_code 1 kbi search port
+expect_grep '"error":"index_stale"' kbi search port --json
+expect_grep 'rebuild' kbi search port --json
 
 t "an index from another format version is refused, not misread"
 cp iso/fts.db.bak iso/.kb/index/fts.db
 printf '\071' | dd of=iso/.kb/index/fts.db bs=1 seek=8 conv=notrunc \
     > /dev/null 2>&1
-expect_grep '"error":"index_stale"' kbi search port --store project --json
-expect_grep 'format version' kbi search port --store project --json
+expect_grep '"error":"index_stale"' kbi search port --json
+expect_grep 'format version' kbi search port --json
 
 t "an index that no longer describes the logs is refused"
 cp iso/fts.db.bak iso/.kb/index/fts.db
@@ -811,33 +783,33 @@ printf 'a late note about ports\n' >> iso/.kb/blobs/scratch 2>/dev/null
 cp iso/.kb/documents.jsonl iso/docs.bak
 tail -n 1 iso/.kb/documents.jsonl | sed 's/"contentHash":"[0-9a-f]*"/"contentHash":"00000000000000000000000000000000000000000000000000000000000000ff"/' \
     >> iso/.kb/documents.jsonl
-expect_grep '"error":"index_stale"' kbi search port --store project --json
-expect_grep 'no longer describes' kbi search port --store project --json
+expect_grep '"error":"index_stale"' kbi search port --json
+expect_grep 'no longer describes' kbi search port --json
 cp iso/docs.bak iso/.kb/documents.jsonl
 rm -f iso/.kb/blobs/scratch
 
 t "status reports the same staleness search refuses on"
 cp iso/fts.db.bak iso/.kb/index/fts.db
-expect_grep '"current":true' kbi status --store project --json
+expect_grep '"current":true' kbi status --json
 head -c 64 iso/fts.db.bak > iso/.kb/index/fts.db
-expect_grep '"keyword":{"current":false' kbi status --store project --json
+expect_grep '"keyword":{"current":false' kbi status --json
 cp iso/fts.db.bak iso/.kb/index/fts.db
 
 # --------------------------------------------------------------- rebuild
 t "rebuild reconstructs the index from the logs and blobs alone"
-before_json=$(kbi search port --store project --json)
+before_json=$(kbi search port --json)
 before_sha=$(sha_of iso/.kb/index/fts.db)
 rm -rf iso/.kb/index
 [ -d iso/.kb/index ] && fail "index/ was not removed"
-expect_code 1 kbi search port --store project
-expect_ok kbi rebuild --store project
+expect_code 1 kbi search port
+expect_ok kbi rebuild
 [ -f iso/.kb/index/fts.db ] || fail "rebuild wrote no fts.db"
 after_sha=$(sha_of iso/.kb/index/fts.db)
 [ "$before_sha" = "$after_sha" ] || \
     fail "rebuild produced different bytes: $before_sha vs $after_sha"
 
 t "search returns byte-identical results after a rebuild from nothing"
-after_json=$(kbi search port --store project --json)
+after_json=$(kbi search port --json)
 [ "$before_json" = "$after_json" ] || fail "results changed across a rebuild
 --- before ---
 $before_json
@@ -846,40 +818,36 @@ $after_json"
 
 t "rebuild replaces a truncated index rather than reusing it"
 head -c 40 iso/.kb/index/fts.db > iso/trunc && mv iso/trunc iso/.kb/index/fts.db
-expect_ok kbi rebuild --store project
+expect_ok kbi rebuild
 [ "$(sha_of iso/.kb/index/fts.db)" = "$before_sha" ] || \
     fail "rebuild did not replace the truncated index"
-expect_ok kbi search port --store project
+expect_ok kbi search port
 
 t "rebuild replaces an index from another version"
 printf '\071' | dd of=iso/.kb/index/fts.db bs=1 seek=8 conv=notrunc \
     > /dev/null 2>&1
-expect_ok kbi rebuild --store project
+expect_ok kbi rebuild
 [ "$(sha_of iso/.kb/index/fts.db)" = "$before_sha" ] || \
     fail "rebuild did not replace the foreign index"
 
-t "rebuild reports what it wrote, per tier"
-out=$(kbi rebuild --store project --json)
-has "rebuild" "$out" '"store":"project"'
-has "rebuild" "$out" '"documents":4'
+t "rebuild reports what it wrote"
+out=$(kbi rebuild --json)
+has "rebuild" "$out" '"path":'
+hasnt "rebuild" "$out" '"stores":'
+has "rebuild" "$out" '"documents":3'
 has "rebuild" "$out" '"missingBlobs":0'
 has "rebuild" "$out" '"mismatched":0'
 has "rebuild" "$out" '"indexBytes":'
 
-t "rebuild spans every tier by default"
-out=$(kbi rebuild --json)
-has "rebuild all" "$out" '"store":"project"'
-has "rebuild all" "$out" '"store":"global"'
-
 t "a store with a missing blob still rebuilds, and says so"
 mv iso/.kb/blobs "$WORK/blobs.hidden"
 mkdir iso/.kb/blobs
-out=$(kbi rebuild --store project --json)
+out=$(kbi rebuild --json)
 has "missing blob" "$out" '"ok":true'
 hasnt "missing blob" "$out" '"missingBlobs":0'
 rmdir iso/.kb/blobs
 mv "$WORK/blobs.hidden" iso/.kb/blobs
-expect_ok kbi rebuild --store project
+expect_ok kbi rebuild
 
 t "re-filing unchanged content does not make the index stale"
 # §2: a touch updates fetchedAt and re-indexes nothing, so it must not cost
@@ -887,21 +855,21 @@ t "re-filing unchanged content does not make the index stale"
 sha_before=$(sha_of iso/.kb/index/fts.db)
 kbi add --title "kqueue" --collection bsd --file kqueue.md --json | \
     grep -q '"reindexed":false' || fail "expected a touch"
-expect_grep '"current":true' kbi status --store project --json
+expect_grep '"current":true' kbi status --json
 [ "$(sha_of iso/.kb/index/fts.db)" = "$sha_before" ] || \
     fail "a touch rewrote the index"
 
 t "changed content updates the index in the same locked write"
 printf '# EVFILT_READ\n\nzzfresh text about kevent filters.\n' > iso/kqueue.md
 kbi add --title "kqueue" --collection bsd --file kqueue.md --json > /dev/null
-expect_grep '"current":true' kbi status --store project --json
-out=$(kbi search zzfresh --store project --json)
+expect_grep '"current":true' kbi status --json
+out=$(kbi search zzfresh --json)
 has "reindex" "$out" '"document":"D-3"'
 
 t "a search writes nothing"
 sha_before=$(sha_of iso/.kb/index/fts.db)
 docs_before=$(wc -c < iso/.kb/documents.jsonl)
-kbi search port --store project --json > /dev/null
+kbi search port --json > /dev/null
 kbi search port --json > /dev/null
 [ "$(sha_of iso/.kb/index/fts.db)" = "$sha_before" ] || \
     fail "a search rewrote the index"
@@ -922,7 +890,7 @@ if [ -n "$KB_TESTS" ]; then
         i=$((i + 1))
     done
     if grep -q locked searchout.txt 2>/dev/null; then
-        expect_ok kbi search port --store project --json
+        expect_ok kbi search port --json
     else
         fail "the lock holder never started: $(cat searchout.txt)"
     fi
@@ -934,7 +902,7 @@ fi
 t "an empty store answers a search instead of demanding a rebuild"
 mkdir -p fresh
 ( cd "$WORK/fresh" && "$KB" init > /dev/null )
-out=$( cd "$WORK/fresh" && "$KB" search anything --store project --json )
+out=$( cd "$WORK/fresh" && "$KB" search anything --json )
 has "empty" "$out" '"ok":true'
 has "empty" "$out" '"count":0'
 
@@ -956,8 +924,7 @@ awk 'BEGIN{
     printf "\n";
 }' > u8/wide.md
 kbu add --title wide --collection utf8 --file wide.md --json > /dev/null
-for c in "search zzutf --store project" "chunk C-1 --store project" \
-         "get D-1 --include chunks --store project"; do
+for c in "search zzutf" "chunk C-1" "get D-1 --include chunks"; do
     # shellcheck disable=SC2086
     if [ "$(utf8_state "$(kbu $c --json)")" != "ok" ]; then
         fail "kb $c emitted invalid UTF-8"
@@ -990,12 +957,12 @@ done
 t "a touch carrying an old date does not stale the index"
 # §2: re-filing unchanged content re-indexes nothing, so fetchedAt is outside
 # the digest — which is what lets the ages above be planted at all.
-expect_grep '"current":true' kbv status --store project --json
+expect_grep '"current":true' kbv status --json
 
 t "the default threshold is §5's own 90d and is reported with the answer"
-out=$(kbv ls --store project --json)
+out=$(kbv ls --json)
 has "default" "$out" '"olderThan":"90d"'
-out=$(kbv status --store project --json)
+out=$(kbv status --json)
 has "default" "$out" '"olderThan":"90d"'
 
 # A document's verdict is matched through its own fetchedAt, which is unique
@@ -1009,43 +976,43 @@ OLD_B='"fetchedAt":"2023-06-15T12:00:00Z","indexedAt":"[^"]*"'
 t "ls and get agree with search about which documents are stale"
 # One definition of stale (§5): the same three documents, the same three
 # verdicts, whichever route asked.
-ls_out=$(kbv ls --store project --json)
+ls_out=$(kbv ls --json)
 has "ls old" "$ls_out" "$OLD_A,\"stale\":true"
 has "ls old" "$ls_out" "$OLD_B,\"stale\":true"
-has "get old" "$(kbv get D-1 --store project --json)" "$OLD_A,\"stale\":true"
-has "get old" "$(kbv get D-2 --store project --json)" "$OLD_B,\"stale\":true"
-has "get fresh" "$(kbv get D-3 --store project --json)" '"stale":false'
-srch=$(kbv search zzprov --store project --json)
+has "get old" "$(kbv get D-1 --json)" "$OLD_A,\"stale\":true"
+has "get old" "$(kbv get D-2 --json)" "$OLD_B,\"stale\":true"
+has "get fresh" "$(kbv get D-3 --json)" '"stale":false'
+srch=$(kbv search zzprov --json)
 has "search old" "$srch" '"fetchedAt":"2005-01-01T00:00:00Z","stale":true'
 has "search old" "$srch" '"fetchedAt":"2023-06-15T12:00:00Z","stale":true'
 has "search fresh" "$srch" '"stale":false'
-expect_grep '(stale)' kbv search zzprov --store project
-expect_grep '(stale)' kbv get D-1 --store project
+expect_grep '(stale)' kbv search zzprov
+expect_grep '(stale)' kbv get D-1
 
 t "the threshold moves the verdict, and the unit is part of it"
 # The same three documents under three thresholds. 5000 days is about
 # thirteen years and 20000 about fifty-five, so a parser that read the number
 # and dropped the unit would be comparing against seconds and would answer
 # "stale" to every one of them.
-out=$(kbv ls --store project --older-than 20000d --json)
+out=$(kbv ls --older-than 20000d --json)
 has "very wide" "$out" '"olderThan":"20000d"'
 hasnt "very wide" "$out" '"stale":true'
-out=$(kbv ls --store project --older-than 5000d --json)
+out=$(kbv ls --older-than 5000d --json)
 has "middle" "$out" "$OLD_A,\"stale\":true"
 has "middle" "$out" "$OLD_B,\"stale\":false"
-out=$(kbv ls --store project --json)
+out=$(kbv ls --json)
 has "default" "$out" "$OLD_B,\"stale\":true"
 
 t "olderThan accepts the query-string spelling too"
-out=$(kbv ls --store project --olderThan=20000d --json)
+out=$(kbv ls --olderThan=20000d --json)
 has "eq form" "$out" '"olderThan":"20000d"'
 
 t "a list route's answer is a function of the store, not of the clock"
 # `stale` is on every row, but the cutoff INSTANT is not in a list payload:
 # a search answer has to be reproducible, which is what makes "rebuild gives
 # the same answer" checkable at all.
-hasnt "no clock" "$(kbv ls --store project --json)" '"staleBefore"'
-hasnt "no clock" "$(kbv search zzprov --store project --json)" '"staleBefore"'
+hasnt "no clock" "$(kbv ls --json)" '"staleBefore"'
+hasnt "no clock" "$(kbv search zzprov --json)" '"staleBefore"'
 
 t "a duration without a unit is refused rather than guessed at"
 expect_code 1 kbv stale --older-than 90
@@ -1055,7 +1022,7 @@ expect_grep '"error":"usage"' kbv stale --older-than 1y --json
 expect_grep '"error":"usage"' kbv search zzprov --older-than nope --json
 
 t "kb stale returns the documents past the threshold and nothing else"
-out=$(kbv stale --store project --json)
+out=$(kbv stale --json)
 has "stale" "$out" '"id":"D-1"'
 has "stale" "$out" '"id":"D-2"'
 hasnt "stale" "$out" '"id":"D-3"'
@@ -1074,19 +1041,19 @@ order=$(printf '%s' "$out" | grep -o '"id":"D-[0-9]*"' | \
 has "stale key" "$out" '"sourceFetchedAt":"2023-06-15T12:00:00Z"'
 
 t "kb stale narrows by collection and by limit"
-out=$(kbv stale --store project --collection old-topic --json)
+out=$(kbv stale --collection old-topic --json)
 has "stale collection" "$out" '"count":2'
-out=$(kbv stale --store project --collection fresh-topic --json)
+out=$(kbv stale --collection fresh-topic --json)
 has "stale collection" "$out" '"count":0'
-out=$(kbv stale --store project --limit 1 --json)
+out=$(kbv stale --limit 1 --json)
 has "stale limit" "$out" '"count":1'
 has "stale limit" "$out" '"id":"D-2"'
-out=$(kbv stale --store project --older-than 20000d --json)
+out=$(kbv stale --older-than 20000d --json)
 has "stale wide" "$out" '"count":0'
-expect_grep 'nothing older than' kbv stale --store project --older-than 20000d
+expect_grep 'nothing older than' kbv stale --older-than 20000d
 
 t "kb refresh says plainly that it is a report and not an action"
-out=$(kbv refresh --store project --json)
+out=$(kbv refresh --json)
 has "refresh" "$out" '"action":"report"'
 has "refresh" "$out" '"refetched":0'
 has "refresh" "$out" '"reembedded":0'
@@ -1096,7 +1063,7 @@ has "refresh" "$out" '"staleDocuments":2'
 has "refresh" "$out" '"id":"S-1"'
 has "refresh" "$out" '"id":"S-2"'
 hasnt "refresh" "$out" '"id":"S-3"'
-expect_grep 'fetched nothing' kbv refresh --store project
+expect_grep 'fetched nothing' kbv refresh
 
 t "refresh refuses a flag it would only ignore"
 # --limit narrows a list of documents and means nothing to a report about
@@ -1110,8 +1077,8 @@ t "kb refresh writes nothing at all"
 before_docs=$(wc -c < prov/.kb/documents.jsonl)
 before_srcs=$(wc -c < prov/.kb/sources.jsonl)
 before_idx=$(sha_of prov/.kb/index/fts.db)
-kbv refresh --store project --json > /dev/null
-kbv refresh --store project --older-than 1s --json > /dev/null
+kbv refresh --json > /dev/null
+kbv refresh --older-than 1s --json > /dev/null
 [ "$(wc -c < prov/.kb/documents.jsonl)" = "$before_docs" ] || \
     fail "refresh appended to documents.jsonl"
 [ "$(wc -c < prov/.kb/sources.jsonl)" = "$before_srcs" ] || \
@@ -1133,16 +1100,16 @@ for d in D-4 D-5 D-6; do
     printf '{"type":"touch","id":"%s","fetchedAt":"2009-05-05T00:00:00Z"}\n' \
         "$d" >> prov/.kb/documents.jsonl
 done
-out=$(kbv refresh --store project --json)
+out=$(kbv refresh --json)
 has "route url" "$out" '"kind":"url","locator":"https://example.test/p","collection":"routes","staleDocuments":1,"fetchedAt":"2009-05-05T00:00:00Z","refetchBy":"post-documents"'
 has "route file" "$out" '"kind":"file","locator":"[^"]*page.md","collection":"routes","staleDocuments":1,"fetchedAt":"2009-05-05T00:00:00Z","refetchBy":"re-read"'
 has "route inline" "$out" '"kind":"inline".*"refetchBy":"none"'
 has "route count" "$out" '"count":5'
 
 t "status counts what is stale and says against which threshold"
-out=$(kbv status --store project --json)
+out=$(kbv status --json)
 has "status stale" "$out" '"stale":{"documents":5,"olderThan":"90d","before":"'
-out=$(kbv status --store project --older-than 20000d --json)
+out=$(kbv status --older-than 20000d --json)
 has "status wide" "$out" '"stale":{"documents":0'
 
 # ============================================================== §6 links
@@ -1154,8 +1121,8 @@ expect_grep 'supersedes, cites, analogue_of, implements or see_also' \
 expect_grep '"error":"usage"' kbv links add D-1 Supersedes D-2 --json
 expect_grep '"error":"usage"' kbv links add D-1 '' D-2 --json
 for ty in supersedes cites analogue_of implements see_also; do
-    expect_ok kbv links add D-1 "$ty" D-2 --store project --json
-    expect_ok kbv links delete D-1 "$ty" D-2 --store project --json
+    expect_ok kbv links add D-1 "$ty" D-2 --json
+    expect_ok kbv links delete D-1 "$ty" D-2 --json
 done
 
 t "a link to a document that does not exist is refused at write time"
@@ -1163,7 +1130,7 @@ expect_code 1 kbv links add D-1 cites D-9999
 expect_grep '"error":"not_found"' kbv links add D-1 cites D-9999 --json
 expect_grep '"error":"not_found"' kbv links add D-9999 cites D-1 --json
 # and nothing was written
-expect_grep '"outgoing":\[\]' kbv links D-1 --store project --json
+expect_grep '"outgoing":\[\]' kbv links D-1 --json
 
 t "both ends must be document ids, and they must differ"
 expect_grep '"error":"usage"' kbv links add S-1 cites D-2 --json
@@ -1173,53 +1140,53 @@ expect_grep '"error":"usage"' kbv links add D-1 cites --json
 expect_grep '"error":"usage"' kbv links --json
 
 t "a link is written once and reads from both ends"
-out=$(kbv links add D-1 analogue_of D-2 --store project --json)
+out=$(kbv links add D-1 analogue_of D-2 --json)
 has "link" "$out" '"action":"add"'
 has "link" "$out" '"changed":true'
 has "link" "$out" '"from":"D-1","type":"analogue_of","to":"D-2"'
-out=$(kbv links add D-1 analogue_of D-2 --store project --json)
+out=$(kbv links add D-1 analogue_of D-2 --json)
 has "link idempotent" "$out" '"changed":false'
-out=$(kbv links D-1 --store project --json)
+out=$(kbv links D-1 --json)
 has "outgoing" "$out" '"outgoing":\[{"type":"analogue_of","from":"D-1","to":"D-2","resolved":true'
 has "outgoing" "$out" '"incoming":\[\]'
-out=$(kbv links D-2 --store project --json)
+out=$(kbv links D-2 --json)
 has "incoming" "$out" '"incoming":\[{"type":"analogue_of","from":"D-1","to":"D-2","resolved":true'
 has "incoming" "$out" '"outgoing":\[\]'
 
 t "a link resolves to a row, not to an identifier"
 # §6: "outgoing and incoming, resolved to rows". A caller that had to fetch
 # each neighbour to learn its title would make one call per edge.
-out=$(kbv links D-1 --store project --json)
+out=$(kbv links D-1 --json)
 has "resolved" "$out" '"document":{"id":"D-2"'
 has "resolved" "$out" '"title":"B"'
 has "resolved" "$out" '"collection":"old-topic"'
 has "resolved" "$out" '"stale":true'
 
 t "the triple is the identity: type and direction both count"
-kbv links add D-1 cites D-2 --store project --json > /dev/null
-kbv links add D-2 cites D-1 --store project --json > /dev/null
-out=$(kbv links D-1 --store project --json)
+kbv links add D-1 cites D-2 --json > /dev/null
+kbv links add D-2 cites D-1 --json > /dev/null
+out=$(kbv links D-1 --json)
 has "triple" "$out" '"type":"analogue_of"'
 has "triple" "$out" '"type":"cites","from":"D-1","to":"D-2"'
 has "triple" "$out" '"type":"cites","from":"D-2","to":"D-1"'
-expect_grep '"links":3' kbv status --store project --json
+expect_grep '"links":3' kbv status --json
 
 t "get ?include=links returns both directions"
-out=$(kbv get D-1 --include links --store project --json)
+out=$(kbv get D-1 --include links --json)
 has "include links" "$out" '"links":{"outgoing":\['
 has "include links" "$out" '"incoming":\['
-out=$(kbv get D-1 --store project --json)
+out=$(kbv get D-1 --json)
 hasnt "no include" "$out" '"links"'
 
 t "removing a link removes exactly that edge"
-out=$(kbv links delete D-1 cites D-2 --store project --json)
+out=$(kbv links delete D-1 cites D-2 --json)
 has "unlink" "$out" '"action":"delete"'
 has "unlink" "$out" '"changed":true'
-out=$(kbv links D-1 --store project --json)
+out=$(kbv links D-1 --json)
 hasnt "unlink" "$out" '"type":"cites","from":"D-1"'
 has "unlink" "$out" '"type":"analogue_of"'
 has "unlink" "$out" '"type":"cites","from":"D-2"'
-expect_grep '"links":2' kbv status --store project --json
+expect_grep '"links":2' kbv status --json
 
 t "removing a link that is not there is not_found"
 expect_code 1 kbv links delete D-1 cites D-2
@@ -1231,35 +1198,35 @@ t "a link whose target is later forgotten does not break a read"
 # Backed up BEFORE the edge is added, so restoring puts the store back to
 # exactly the two links it had.
 cp prov/.kb/documents.jsonl prov/docs.bak
-kbv links add D-1 see_also D-3 --store project --json > /dev/null
+kbv links add D-1 see_also D-3 --json > /dev/null
 grep -v '"type":"document","id":"D-3"' prov/.kb/documents.jsonl > prov/d.tmp
 mv prov/d.tmp prov/.kb/documents.jsonl
-out=$(kbv links D-1 --store project --json)
+out=$(kbv links D-1 --json)
 has "dangling" "$out" '"to":"D-3","resolved":false,"document":null'
 has "dangling" "$out" '"ok":true'
-expect_grep '(forgotten)' kbv links D-1 --store project
+expect_grep '(forgotten)' kbv links D-1
 # and the dangling edge can still be removed
-expect_ok kbv links delete D-1 see_also D-3 --store project --json
+expect_ok kbv links delete D-1 see_also D-3 --json
 cp prov/docs.bak prov/.kb/documents.jsonl
 
 t "a link writes no index and costs no rebuild"
 sha_before=$(sha_of prov/.kb/index/fts.db)
-kbv links add D-1 implements D-2 --store project --json > /dev/null
-kbv links delete D-1 implements D-2 --store project --json > /dev/null
+kbv links add D-1 implements D-2 --json > /dev/null
+kbv links delete D-1 implements D-2 --json > /dev/null
 [ "$(sha_of prov/.kb/index/fts.db)" = "$sha_before" ] || \
     fail "a link rewrote the keyword index"
-expect_grep '"current":true' kbv status --store project --json
+expect_grep '"current":true' kbv status --json
 
 t "links survive losing index/ entirely"
 # §1.6: everything under index/ is a cache. The adjacency is folded from the
 # log, so there is nothing under index/ for it to lose.
-links_before=$(kbv links D-1 --store project --json)
-search_before=$(kbv search zzprov --store project --json)
+links_before=$(kbv links D-1 --json)
+search_before=$(kbv search zzprov --json)
 rm -rf prov/.kb/index
 [ -d prov/.kb/index ] && fail "index/ was not removed"
-expect_ok kbv rebuild --store project
-links_after=$(kbv links D-1 --store project --json)
-search_after=$(kbv search zzprov --store project --json)
+expect_ok kbv rebuild
+links_after=$(kbv links D-1 --json)
+search_after=$(kbv search zzprov --json)
 [ "$links_before" = "$links_after" ] || fail "links changed across a rebuild
 --- before ---
 $links_before
@@ -1276,19 +1243,19 @@ t "an older build reads a store with links in it and simply sees none"
 # into documents.jsonl beside documents and touches.
 printf '{"type":"from-a-later-build","from":"D-1","to":"D-2"}\n' \
     >> prov/.kb/documents.jsonl
-expect_grep '"ok":true' kbv ls --store project --json
-expect_grep '"links":2' kbv status --store project --json
+expect_grep '"ok":true' kbv ls --json
+expect_grep '"links":2' kbv status --json
 
 # ============================================================ §7 maintenance
 t "stats reports documents, chunks and bytes per collection"
-out=$(kbv stats --store project --json)
-has "stats" "$out" '"name":"old-topic","store":"project","documents":2'
+out=$(kbv stats --json)
+has "stats" "$out" '"name":"old-topic","documents":2'
 has "stats" "$out" '"chunks":'
 has "stats" "$out" '"bytes":'
 has "stats" "$out" '"totals":{"documents":'
 # the totals are the rows added up
 total=$(printf '%s' "$out" | sed -n 's/.*"totals":{"documents":\([0-9]*\).*/\1/p')
-rows=$(kbv ls --store project --json | \
+rows=$(kbv ls --json | \
     sed -n 's/.*"count":\([0-9]*\).*/\1/p')
 [ "$total" = "$rows" ] || fail "stats totals $total against $rows documents"
 
@@ -1302,29 +1269,29 @@ has "rename" "$out" '"action":"rename"'
 has "rename" "$out" '"renamedTo":"renamed"'
 has "rename" "$out" '"merged":false'
 has "rename" "$out" '"sources":2'
-expect_grep '"name":"renamed"' kbv collections --store project --json
-expect_not_grep '"name":"old-topic"' kbv collections --store project --json
-expect_grep '"collection":"renamed"' kbv ls --store project --json
-expect_grep '"collection":"renamed"' kbv search zzprov --store project --json
-out=$(kbv search zzprov --store project --collection renamed --json)
+expect_grep '"name":"renamed"' kbv collections --json
+expect_not_grep '"name":"old-topic"' kbv collections --json
+expect_grep '"collection":"renamed"' kbv ls --json
+expect_grep '"collection":"renamed"' kbv search zzprov --json
+out=$(kbv search zzprov --collection renamed --json)
 hasnt "rename search" "$out" '"count":0'
 
 t "a rename costs no rebuild"
 # A collection is a filter read live from the log; the digest covers what
 # decides a chunk's text and identity, and a collection is none of it.
-expect_grep '"current":true' kbv status --store project --json
+expect_grep '"current":true' kbv status --json
 
 t "renaming onto a name that already exists merges, and says so"
 out=$(kbv collections rename fresh-topic renamed --json)
 has "merge" "$out" '"merged":true'
-expect_not_grep '"name":"fresh-topic"' kbv collections --store project --json
+expect_not_grep '"name":"fresh-topic"' kbv collections --json
 
 t "a collection that still holds documents is not forgotten"
 expect_code 1 kbv collections delete renamed
 out=$(kbv collections delete renamed --json)
 has "in use" "$out" '"error":"collection_in_use"'
 has "in use" "$out" 'still holds 3 document'
-expect_grep '"name":"renamed"' kbv collections --store project --json
+expect_grep '"name":"renamed"' kbv collections --json
 expect_grep '"error":"not_found"' kbv collections delete nosuch --json
 
 t "a collection with no documents left is forgotten"
@@ -1340,11 +1307,11 @@ has "forget" "$out" '"action":"delete"'
 has "forget" "$out" '"sources":1'
 has "forget" "$out" '"documents":0'
 expect_grep '"error":"not_found"' kbv collections delete emptied --json
-expect_not_grep 'emptied' kbv collections --store project --json
+expect_not_grep 'emptied' kbv collections --json
 expect_grep '"type":"forget","id":"S-90"' cat prov/.kb/sources.jsonl
 
 t "an id is never reused after a source is forgotten"
-out=$(kbv status --store project --json)
+out=$(kbv status --json)
 has "forget ids" "$out" '"source":"S-91"'
 
 t "collections rejects a verb it does not have"
@@ -1353,7 +1320,7 @@ expect_grep '"error":"usage"' kbv collections bogus --json
 # ---------------------------------------------------------------- reindex
 t "reindex is a no-op when the store was built by this chunker"
 before_docs=$(wc -c < prov/.kb/documents.jsonl)
-out=$(kbv reindex --store project --json)
+out=$(kbv reindex --json)
 has "reindex noop" "$out" '"rechunked":0'
 has "reindex noop" "$out" '"reembedded":0'
 has "reindex noop" "$out" 'no embedding model'
@@ -1373,27 +1340,27 @@ while [ $i -lt 300 ]; do
     i=$((i + 1))
 done
 kbr add --title long --collection bulk --file long.txt --json > /dev/null
-base_before=$(kbr get D-1 --store project --json | \
+base_before=$(kbr get D-1 --json | \
     sed -n 's/.*"chunkBase":\([0-9]*\).*/\1/p')
-count_before=$(kbr get D-1 --store project --json | \
+count_before=$(kbr get D-1 --json | \
     sed -n 's/.*"chunkCount":\([0-9]*\).*/\1/p')
-next_before=$(kbr status --store project --json | \
+next_before=$(kbr status --json | \
     sed -n 's/.*"chunk":"C-\([0-9]*\)".*/\1/p')
 
 t "a store whose chunker moved is detected before a reindex fixes it"
 printf '{"chunker":"old","chunkTokens":128,"chunkOverlap":16}\n' \
     > rechunk/.kb/index/model.json
-expect_grep '"current":false' kbr status --store project --json
+expect_grep '"current":false' kbr status --json
 # The log's range no longer describes what the blob splits into.
-out=$(kbr rebuild --store project --json)
+out=$(kbr rebuild --json)
 hasnt "mismatch" "$out" '"mismatched":0'
 
 t "reindex takes a fresh chunk id range and never reuses the old one"
-out=$(kbr reindex --store project --json)
+out=$(kbr reindex --json)
 has "reindex" "$out" '"rechunked":1'
 has "reindex" "$out" '"wasChunkTokens":128'
 has "reindex" "$out" '"chunkTokens":400'
-base_after=$(kbr get D-1 --store project --json | \
+base_after=$(kbr get D-1 --json | \
     sed -n 's/.*"chunkBase":\([0-9]*\).*/\1/p')
 [ "$base_after" != "$base_before" ] || \
     fail "reindex kept chunk base $base_before"
@@ -1405,41 +1372,41 @@ base_after=$(kbr get D-1 --store project --json | \
 t "reindex rewrites index/model.json and rebuild then obeys it"
 expect_grep '"chunkTokens":400' cat rechunk/.kb/index/model.json
 expect_grep '"chunker":"structural-1"' cat rechunk/.kb/index/model.json
-expect_grep '"current":true' kbr status --store project --json
-out=$(kbr rebuild --store project --json)
+expect_grep '"current":true' kbr status --json
+out=$(kbr rebuild --json)
 has "after reindex" "$out" '"mismatched":0'
 
 t "the chunk ids the log records name the passages on disk again"
-expect_ok kbr chunk "C-$base_after" --store project --json
-out=$(kbr get D-1 --include chunks --store project --json)
+expect_ok kbr chunk "C-$base_after" --json
+out=$(kbr get D-1 --include chunks --json)
 has "chunk ids" "$out" "\"id\":\"C-$base_after\""
-expect_grep '"current":true' kbr status --store project --json
+expect_grep '"current":true' kbr status --json
 
 t "reindex leaves fetchedAt alone and moves indexedAt"
 # The text was not fetched again, it was cut up again. Resetting fetchedAt
 # would make a three-year-old page look freshly read (§5).
-fetched=$(kbr get D-1 --store project --json | \
+fetched=$(kbr get D-1 --json | \
     sed -n 's/.*"fetchedAt":"\([^"]*\)".*/\1/p')
 printf '{"type":"touch","id":"D-1","fetchedAt":"2019-01-01T00:00:00Z"}\n' \
     >> rechunk/.kb/documents.jsonl
 printf '{"chunker":"old","chunkTokens":150,"chunkOverlap":16}\n' \
     > rechunk/.kb/index/model.json
-kbr reindex --store project --json > /dev/null
-out=$(kbr get D-1 --store project --json)
+kbr reindex --json > /dev/null
+out=$(kbr get D-1 --json)
 has "fetchedAt kept" "$out" '"fetchedAt":"2019-01-01T00:00:00Z"'
 has "still stale" "$out" '"stale":true'
 hasnt "indexedAt moved" "$out" "\"indexedAt\":\"2019-01-01T00:00:00Z\""
 [ -n "$fetched" ] || fail "no fetchedAt to compare"
 
 t "search still answers correctly after a reindex"
-out=$(kbr search zzchunk --store project --json)
+out=$(kbr search zzchunk --json)
 hasnt "post reindex" "$out" '"count":0'
 has "post reindex" "$out" '"document":"D-1"'
 
-t "reindex spans every tier by default"
+t "reindex reports the one store it rechunked"
 out=$(kbr reindex --json)
-has "reindex all" "$out" '"store":"project"'
-has "reindex all" "$out" '"store":"global"'
+has "reindex" "$out" '"path":'
+hasnt "reindex" "$out" '"stores":'
 
 # ---------------------------------------------------------------- compact
 mkdir -p comp
@@ -1447,11 +1414,11 @@ kbc() { ( cd "$WORK/comp" && "$KB" "$@" ); }
 kbc init > /dev/null
 printf 'zzcomp the first version of this page\n' > comp/p.md
 kbc add --title P --collection c --file p.md --json > /dev/null
-live_before=$(kbc get D-1 --store project --json | \
+live_before=$(kbc get D-1 --json | \
     sed -n 's/.*"contentHash":"\([0-9a-f]*\)".*/\1/p')
 printf 'zzcomp the second version of this page, rewritten\n' > comp/p.md
 kbc add --title P --collection c --file p.md --json > /dev/null
-live=$(kbc get D-1 --store project --json | \
+live=$(kbc get D-1 --json | \
     sed -n 's/.*"contentHash":"\([0-9a-f]*\)".*/\1/p')
 
 t "a superseded blob is still on disk before a compact"
@@ -1461,18 +1428,18 @@ n=$(ls comp/.kb/blobs | wc -l | tr -d ' ')
 [ "$n" = "2" ] || fail "expected 2 blobs, found $n"
 
 t "compact drops the superseded blob and keeps the live one"
-out=$(kbc compact --store project --json)
+out=$(kbc compact --json)
 has "compact" "$out" '"dropped":1'
 has "compact" "$out" '"kept":1'
 hasnt "compact" "$out" '"bytesFreed":0'
 [ -f "comp/.kb/blobs/$live" ] || fail "compact removed a referenced blob"
 [ -f "comp/.kb/blobs/$live_before" ] && fail "the superseded blob survived"
 expect_grep 'zzcomp the second version' kbc get D-1 --include text \
-    --store project
-expect_ok kbc search zzcomp --store project --json
+   
+expect_ok kbc search zzcomp --json
 
 t "a second compact has nothing left to do"
-out=$(kbc compact --store project --json)
+out=$(kbc compact --json)
 has "compact again" "$out" '"dropped":0'
 has "compact again" "$out" '"kept":1'
 
@@ -1481,13 +1448,13 @@ t "compact never removes a blob a live document references"
 kbc add --title Q --collection c --json <<'EOT' > /dev/null
 zzcomp a second document with its own blob
 EOT
-kbc compact --store project --json > /dev/null
-for h in $(kbc ls --store project --json | \
+kbc compact --json > /dev/null
+for h in $(kbc ls --json | \
         grep -o '"contentHash":"[0-9a-f]*"' | \
         sed 's/.*"\([0-9a-f]*\)"/\1/'); do
     [ -f "comp/.kb/blobs/$h" ] || fail "compact removed live blob $h"
 done
-expect_ok kbc rebuild --store project
+expect_ok kbc rebuild
 
 t "compact leaves alone anything that is not a blob"
 # A crashed atomic write can leave a temp file behind, and a person can put
@@ -1495,7 +1462,7 @@ t "compact leaves alone anything that is not a blob"
 # cannot explain is not one.
 printf 'not a blob\n' > comp/.kb/blobs/README
 printf 'half a write\n' > comp/.kb/blobs/abc.tmp.999
-out=$(kbc compact --store project --json)
+out=$(kbc compact --json)
 has "skip" "$out" '"skipped":2'
 has "skip" "$out" '"dropped":0'
 [ -f comp/.kb/blobs/README ] || fail "compact deleted a file it cannot explain"
@@ -1516,14 +1483,14 @@ if [ -n "$KB_TESTS" ]; then
         i=$((i + 1))
     done
     if grep -q locked compout.txt 2>/dev/null; then
-        expect_grep '"error":"store_locked"' kbc compact --store project --json
-        expect_grep '"error":"store_locked"' kbc reindex --store project --json
+        expect_grep '"error":"store_locked"' kbc compact --json
+        expect_grep '"error":"store_locked"' kbc reindex --json
         expect_grep '"error":"store_locked"' kbc collections rename c d --json
         # A read is never blocked by a writer.
-        expect_ok kbc stale --store project --json
-        expect_ok kbc refresh --store project --json
-        expect_ok kbc links D-1 --store project --json
-        expect_ok kbc stats --store project --json
+        expect_ok kbc stale --json
+        expect_ok kbc refresh --json
+        expect_ok kbc links D-1 --json
+        expect_ok kbc stats --json
     else
         fail "the lock holder never started: $(cat compout.txt)"
     fi
@@ -1532,7 +1499,7 @@ if [ -n "$KB_TESTS" ]; then
     rm -f compctl
 fi
 
-t "kb still writes nothing outside its own stores"
+t "kb still writes nothing outside its own store"
 [ "$(cat .lap/log.jsonl)" = "lap log line" ] || fail ".lap was modified"
 [ "$(cat .coboard/log.jsonl)" = "coboard log line" ] || fail ".coboard was modified"
 n=$(ls -a .lap | wc -l | tr -d ' ')

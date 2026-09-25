@@ -123,32 +123,13 @@ void sb_puts_safe(StrBuf *sb, const char *s);
 /* Reads a whole file, or stdin for "-". */
 bool read_text_arg(Arena *a, const char *path, char **out, size_t *out_len);
 
-/* ---- tier selection ----
+/* ---- the store ----
  *
- * §1.4: the project store is `.kb/` found by walking up from the cwd, the
- * global store is ~/.kb or $KB_STORE. A write defaults to the project store
- * when one exists and to global otherwise, because the intent at the moment
- * of filing is almost always project-scoped. Reads default to both, because
- * a reader wants what is in the store, not a lecture about which tier it is
- * in — every row says which tier it came from.
+ * §1.4's store is `.kb/` found by walking up from the cwd. Fills dir and
+ * returns true, or fills err with the "run kb init" message and returns
+ * false; every command reports that as `not_found`.
  */
-typedef enum { SEL_DEFAULT, SEL_PROJECT, SEL_GLOBAL, SEL_ALL } StoreSel;
-
-typedef struct {
-    char dir[2][KB_PATH_MAX];
-    Tier tier[2];
-    size_t n;
-} TierSet;
-
-/* Parses --store. Returns false on an unrecognized value. */
-bool store_sel_parse(const char *v, StoreSel *out);
-
-/* Fills out with the store directories to use, project first. for_write
- * resolves to exactly one and refuses "all"; a read takes every tier in
- * scope that exists. Returns false with a message when nothing qualifies.
- */
-bool tiers_resolve(StoreSel sel, bool for_write, TierSet *out, char *err,
-                   size_t errsz);
+bool store_resolve(char *dir, size_t dirsz, char *err, size_t errsz);
 
 /* ---- shared JSON shapes ----
  *
@@ -156,8 +137,8 @@ bool tiers_resolve(StoreSel sel, bool for_write, TierSet *out, char *err,
  * cannot drift into describing the same thing three ways. Each emits the
  * field list WITHOUT enclosing braces.
  */
-void json_document(StrBuf *sb, const Store *s, const Document *d,
-                   const Source *src, const Staleness *st);
+void json_document(StrBuf *sb, const Document *d, const Source *src,
+                   const Staleness *st);
 void json_source(StrBuf *sb, const Store *s, const Source *src);
 
 /* §6's rows, resolved. `outgoing` selects which side of the adjacency; the

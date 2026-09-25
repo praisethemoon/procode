@@ -97,7 +97,7 @@ static bool at_filesystem_root(const char *dir) {
     return false;
 }
 
-bool store_find_project(char *out, size_t outsz) {
+bool store_find(char *out, size_t outsz) {
     char cwd[KB_PATH_MAX];
     if (!plat_getcwd(cwd, sizeof cwd))
         return false;
@@ -134,32 +134,6 @@ bool store_find_project(char *out, size_t outsz) {
     }
 }
 
-bool store_global_dir(char *out, size_t outsz) {
-    const char *env = getenv("KB_STORE");
-    if (env && env[0]) {
-        snprintf(out, outsz, "%s", env);
-        for (char *p = out; *p; p++) {
-            if (*p == '\\')
-                *p = '/';
-        }
-        return true;
-    }
-    const char *home = getenv("HOME");
-#ifdef _WIN32
-    if (!home || !home[0])
-        home = getenv("USERPROFILE");
-#endif
-    if (!home || !home[0])
-        return false;
-    if (snprintf(out, outsz, "%s/%s", home, KB_DIR) >= (int32_t)outsz)
-        return false;
-    for (char *p = out; *p; p++) {
-        if (*p == '\\')
-            *p = '/';
-    }
-    return true;
-}
-
 bool store_abs_path(const char *in, char *out, size_t outsz) {
     bool is_abs = in[0] == '/';
 #ifdef _WIN32
@@ -179,10 +153,6 @@ bool store_abs_path(const char *in, char *out, size_t outsz) {
             return false;
     }
     return normalize_path(joined, out, outsz);
-}
-
-const char *tier_name(Tier t) {
-    return t == TIER_PROJECT ? "project" : "global";
 }
 
 static void store_paths(Store *s, const char *dir) {
@@ -353,11 +323,10 @@ static bool repair_torn_tail(Arena *a, const char *path, char *err,
 
 /* ---- open / close ----------------------------------------------------- */
 
-bool store_open(Arena *a, Store *s, const char *dir, Tier tier, bool for_write,
-                char *err, size_t errsz, const char **code) {
+bool store_open(Arena *a, Store *s, const char *dir, bool for_write, char *err,
+                size_t errsz, const char **code) {
     memset(s, 0, sizeof(*s));
     s->a = a;
-    s->tier = tier;
     *code = "internal";
     if (!plat_is_dir(dir)) {
         snprintf(err, errsz, "no kb store at %s", dir);

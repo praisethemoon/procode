@@ -3,8 +3,8 @@
 /* GET /documents (§2) with its ?collection=&source=&mime=&since= filters. */
 
 static const char *const VALUE_FLAGS[] = {
-    "--collection", "--source", "--mime",  "--since",
-    "--limit",      "--store",  "--older-than", "--olderThan", NULL};
+    "--collection", "--source",     "--mime",      "--since",
+    "--limit",      "--older-than", "--olderThan", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef struct {
@@ -47,13 +47,6 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
         err_out(json, "usage", "--limit expects a positive number");
         return KB_EXIT_ERR;
     }
-    StoreSel sel;
-    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
-                         &sel)) {
-        err_out(json, "usage", "--store expects project, global or all");
-        return KB_EXIT_ERR;
-    }
-
     char err[512];
     Staleness st;
     if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
@@ -61,8 +54,8 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
         err_out(json, "usage", "%s", err);
         return KB_EXIT_ERR;
     }
-    TierSet tiers;
-    if (!tiers_resolve(sel, false, &tiers, err, sizeof err)) {
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
         return KB_EXIT_ERR;
     }
@@ -73,42 +66,39 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
         sb_puts(&sb, "{\"ok\":true,\"documents\":[");
     int64_t shown = 0;
     bool first = true;
-    for (size_t t = 0; t < tiers.n; t++) {
-        Store s;
-        const char *code;
-        /* A reader takes no lock and writes nothing: a stale read is
-         * recoverable, a reader that mutates the store is not. */
-        if (!store_open(a, &s, tiers.dir[t], tiers.tier[t], false, err,
-                        sizeof err, &code)) {
-            err_out(json, code, "%s", err);
-            return KB_EXIT_ERR;
-        }
-        for (size_t i = 0; i < s.documents.n; i++) {
-            const Document *d = &s.documents.v[i];
-            const Source *src = src_by_id(&s.sources, d->source);
-            if (!keep(&f, d, src))
-                continue;
-            if (limit && shown >= limit)
-                break;
-            shown++;
-            if (json) {
-                if (!first)
-                    sb_putc(&sb, ',');
-                first = false;
-                sb_putc(&sb, '{');
-                json_document(&sb, &s, d, src, &st);
-                sb_putc(&sb, '}');
-            } else {
-                sb_printf(&sb, "%-8s %-8s %-14s %-21s %-5s ", d->id,
-                          tier_name(s.tier), src ? src->collection : "-",
-                          d->fetched_at ? d->fetched_at : "-",
-                          doc_stale(&st, d) ? "stale" : "");
-                sb_puts_safe(&sb, d->title ? d->title : "");
-                sb_putc(&sb, '\n');
-            }
-        }
-        store_close(&s);
+    Store s;
+    const char *code;
+    /* A reader takes no lock and writes nothing: a stale read is
+     * recoverable, a reader that mutates the store is not. */
+    if (!store_open(a, &s, dir, false, err, sizeof err, &code)) {
+        err_out(json, code, "%s", err);
+        return KB_EXIT_ERR;
     }
+    for (size_t i = 0; i < s.documents.n; i++) {
+        const Document *d = &s.documents.v[i];
+        const Source *src = src_by_id(&s.sources, d->source);
+        if (!keep(&f, d, src))
+            continue;
+        if (limit && shown >= limit)
+            break;
+        shown++;
+        if (json) {
+            if (!first)
+                sb_putc(&sb, ',');
+            first = false;
+            sb_putc(&sb, '{');
+            json_document(&sb, d, src, &st);
+            sb_putc(&sb, '}');
+        } else {
+            sb_printf(&sb, "%-8s %-14s %-21s %-5s ", d->id,
+                      src ? src->collection : "-",
+                      d->fetched_at ? d->fetched_at : "-",
+                      doc_stale(&st, d) ? "stale" : "");
+            sb_puts_safe(&sb, d->title ? d->title : "");
+            sb_putc(&sb, '\n');
+        }
+    }
+    store_close(&s);
     if (json) {
         /* The threshold that produced every `stale` above, so a caller never
          * has to know which default it got (§5). Not the cutoff instant: a

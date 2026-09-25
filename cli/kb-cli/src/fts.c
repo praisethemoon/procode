@@ -496,8 +496,8 @@ bool fts_open_store(Arena *a, const Store *s, FtsIndex *out, const char **code,
     fts_path(s, path, sizeof path);
     char why[512];
     if (!fts_load(a, path, out, code, why, sizeof why)) {
-        snprintf(err, errsz, "%s store %s: fts.db %s (run \"kb rebuild\")",
-                 tier_name(s->tier), s->dir, why);
+        snprintf(err, errsz, "store %s: fts.db %s (run \"kb rebuild\")",
+                 s->dir, why);
         return false;
     }
     ChunkParams cp = store_chunk_params(a, s);
@@ -506,9 +506,9 @@ bool fts_open_store(Arena *a, const Store *s, FtsIndex *out, const char **code,
     if (strcmp(want, out->digest) != 0 || out->doc_count != s->documents.n) {
         *code = "index_stale";
         snprintf(err, errsz,
-                 "%s store %s: fts.db no longer describes the logs "
+                 "store %s: fts.db no longer describes the logs "
                  "(run \"kb rebuild\")",
-                 tier_name(s->tier), s->dir);
+                 s->dir);
         return false;
     }
     /* The digest covers the documents in log order, so record i of the index
@@ -518,9 +518,9 @@ bool fts_open_store(Arena *a, const Store *s, FtsIndex *out, const char **code,
         if (kb_id_num(s->documents.v[i].id, 'D') != out->docs[i].doc_num) {
             *code = "index_stale";
             snprintf(err, errsz,
-                     "%s store %s: fts.db and the log disagree about "
+                     "store %s: fts.db and the log disagree about "
                      "document %lu (run \"kb rebuild\")",
-                     tier_name(s->tier), s->dir, (unsigned long)i);
+                     s->dir, (unsigned long)i);
             return false;
         }
     }

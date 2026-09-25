@@ -30,15 +30,13 @@
 /* Two tables, not one. `--limit` narrows a list of documents and means
  * nothing to a report about sources, and a flag a command accepts and then
  * ignores is worse than one it refuses: the caller believes it was heard. */
-static const char *const STALE_FLAGS[] = {
-    "--older-than", "--olderThan", "--collection",
-    "--store",      "--limit",     NULL};
+static const char *const STALE_FLAGS[] = {"--older-than", "--olderThan",
+                                          "--collection", "--limit", NULL};
 static const char *const REFRESH_FLAGS[] = {"--older-than", "--olderThan",
-                                            "--collection", "--store", NULL};
+                                            "--collection", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef struct {
-    Store *s;
     const Document *d;
     const Source *src;
     /* The source's own date: the newest fetchedAt among its documents, or ""
@@ -48,84 +46,66 @@ typedef struct {
 } Row;
 
 /* Newest source first, then newest document, then a stable total order so the
- * same store always produces the same list. */
+ * same store always produces the same list. Two sources with the same date
+ * are told apart by id BEFORE their documents are compared: refresh groups a
+ * source's documents by adjacency, and letting two sources' documents
+ * interleave would report one source twice. */
 static int row_cmp(const void *x, const void *y) {
     const Row *a = (const Row *)x, *b = (const Row *)y;
     int c = strcmp(b->source_at, a->source_at);
     if (c)
         return c;
+    int64_t as = kb_id_num(a->d->source, 'S'), bs = kb_id_num(b->d->source, 'S');
+    if (as != bs)
+        return as < bs ? -1 : 1;
     const char *af = a->d->fetched_at ? a->d->fetched_at : "";
     const char *bf = b->d->fetched_at ? b->d->fetched_at : "";
     c = strcmp(bf, af);
     if (c)
         return c;
-    if (a->s->tier != b->s->tier)
-        return a->s->tier < b->s->tier ? -1 : 1;
     int64_t an = kb_id_num(a->d->id, 'D'), bn = kb_id_num(b->d->id, 'D');
     return an < bn ? -1 : (an > bn ? 1 : 0);
 }
 
-/* Shared by both routes: open every tier in scope, keep the stale documents
- * that pass the collection filter, and order them. Returns false having
- * already reported the failure. */
+/* Shared by both routes: open the store, keep the stale documents that pass
+ * the collection filter, and order them. Returns false having already
+ * reported the failure, with the store left closed. */
 static bool collect(Arena *a, int32_t argc, char **argv,
                     const char *const *flags, bool json, const Staleness *st,
-                    Store *stores, size_t *nstores, Row **out, size_t *nout,
-                    int32_t *rc) {
+                    Store *s, Row **out, size_t *nout) {
     const char *collection = flag_value(argc, argv, flags, "--collection");
-    StoreSel sel;
     char err[512];
-    if (!store_sel_parse(flag_value(argc, argv, flags, "--store"), &sel)) {
-        err_out(json, "usage", "--store expects project, global or all");
-        *rc = KB_EXIT_ERR;
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
+        err_out(json, "not_found", "%s", err);
         return false;
     }
-    TierSet tiers;
-    if (!tiers_resolve(sel, false, &tiers, err, sizeof err)) {
-        err_out(json, "not_found", "%s", err);
-        *rc = KB_EXIT_ERR;
+    const char *code;
+    if (!store_open(a, s, dir, false, err, sizeof err, &code)) {
+        err_out(json, code, "%s", err);
         return false;
     }
     Row *rows = NULL;
     size_t n = 0, cap = 0;
-    *nstores = 0;
-    for (size_t t = 0; t < tiers.n; t++) {
-        const char *code;
-        Store *s = &stores[*nstores];
-        if (!store_open(a, s, tiers.dir[t], tiers.tier[t], false, err,
-                        sizeof err, &code)) {
-            err_out(json, code, "%s", err);
-            *rc = KB_EXIT_ERR;
-            return false;
-        }
-        (*nstores)++;
-        for (size_t i = 0; i < s->documents.n; i++) {
-            const Document *d = &s->documents.v[i];
-            const Source *src = src_by_id(&s->sources, d->source);
-            if (collection &&
-                (!src || strcmp(src->collection, collection) != 0))
-                continue;
-            if (!doc_stale(st, d))
-                continue;
-            SourceFacts f = source_facts(a, s, d->source);
-            ARENA_GROW(a, rows, n, cap, Row);
-            rows[n].s = s;
-            rows[n].d = d;
-            rows[n].src = src;
-            rows[n].source_at = f.fetched_at ? f.fetched_at : "";
-            n++;
-        }
+    for (size_t i = 0; i < s->documents.n; i++) {
+        const Document *d = &s->documents.v[i];
+        const Source *src = src_by_id(&s->sources, d->source);
+        if (collection && (!src || strcmp(src->collection, collection) != 0))
+            continue;
+        if (!doc_stale(st, d))
+            continue;
+        SourceFacts f = source_facts(a, s, d->source);
+        ARENA_GROW(a, rows, n, cap, Row);
+        rows[n].d = d;
+        rows[n].src = src;
+        rows[n].source_at = f.fetched_at ? f.fetched_at : "";
+        n++;
     }
     if (n > 1)
         qsort(rows, n, sizeof *rows, row_cmp);
     *out = rows;
     *nout = n;
     return true;
-}
-
-static void close_all(Store *stores, size_t n) {
-    for (size_t i = 0; i < n; i++)
-        store_close(&stores[i]);
 }
 
 int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
@@ -149,16 +129,11 @@ int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
         return KB_EXIT_ERR;
     }
 
-    Store stores[2];
-    size_t nstores = 0;
+    Store s;
     Row *rows = NULL;
     size_t n = 0;
-    int32_t rc = KB_EXIT_OK;
-    if (!collect(a, argc, argv, STALE_FLAGS, json, &st, stores, &nstores,
-                 &rows, &n, &rc)) {
-        close_all(stores, nstores);
-        return rc;
-    }
+    if (!collect(a, argc, argv, STALE_FLAGS, json, &st, &s, &rows, &n))
+        return KB_EXIT_ERR;
     if (limit && (int64_t)n > limit)
         n = (size_t)limit;
 
@@ -173,7 +148,7 @@ int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
             if (i)
                 sb_putc(&sb, ',');
             sb_putc(&sb, '{');
-            json_document(&sb, rows[i].s, rows[i].d, rows[i].src, &st);
+            json_document(&sb, rows[i].d, rows[i].src, &st);
             /* The sort key, shown rather than implied: §5 orders by source
              * and a caller reading a flat list of documents cannot otherwise
              * see why they came in this order. */
@@ -187,8 +162,7 @@ int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
         printf("nothing older than %s\n", st.spec);
     } else {
         for (size_t i = 0; i < n; i++) {
-            sb_printf(&sb, "%-8s %-8s %-14s %-21s %-8s ", rows[i].d->id,
-                      tier_name(rows[i].s->tier),
+            sb_printf(&sb, "%-8s %-14s %-21s %-8s ", rows[i].d->id,
                       rows[i].src ? rows[i].src->collection : "-",
                       rows[i].d->fetched_at ? rows[i].d->fetched_at : "-",
                       rows[i].d->source);
@@ -197,7 +171,7 @@ int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
         }
         fputs(sb_finish(&sb), stdout);
     }
-    close_all(stores, nstores);
+    store_close(&s);
     return KB_EXIT_OK;
 }
 
@@ -231,16 +205,11 @@ int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
         return KB_EXIT_ERR;
     }
 
-    Store stores[2];
-    size_t nstores = 0;
+    Store s;
     Row *rows = NULL;
     size_t n = 0;
-    int32_t rc = KB_EXIT_OK;
-    if (!collect(a, argc, argv, REFRESH_FLAGS, json, &st, stores, &nstores,
-                 &rows, &n, &rc)) {
-        close_all(stores, nstores);
-        return rc;
-    }
+    if (!collect(a, argc, argv, REFRESH_FLAGS, json, &st, &s, &rows, &n))
+        return KB_EXIT_ERR;
 
     /* Grouped by source, because a refetch is a thing you do to a source.
      * The rows are already ordered newest source first, so a source's
@@ -253,16 +222,15 @@ int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
                      "\"reembedded\":0,\"sources\":[");
     for (size_t i = 0; i < n;) {
         size_t j = i;
-        while (j < n && rows[j].s == rows[i].s &&
-               strcmp(rows[j].d->source, rows[i].d->source) == 0)
+        while (j < n && strcmp(rows[j].d->source, rows[i].d->source) == 0)
             j++;
         const Source *src = rows[i].src;
         const char *kind = src ? src->kind : "";
         if (json) {
             if (nsources)
                 sb_putc(&sb, ',');
-            sb_printf(&sb, "{\"id\":\"%s\",\"store\":\"%s\",\"kind\":\"%s\"",
-                      rows[i].d->source, tier_name(rows[i].s->tier), kind);
+            sb_printf(&sb, "{\"id\":\"%s\",\"kind\":\"%s\"", rows[i].d->source,
+                      kind);
             sb_puts(&sb, ",\"locator\":");
             json_escape_c(&sb, src ? src->locator : "");
             sb_puts(&sb, ",\"collection\":");
@@ -271,8 +239,8 @@ int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
                            "\"refetchBy\":\"%s\"}",
                       j - i, rows[i].source_at, refetch_route(kind));
         } else {
-            sb_printf(&sb, "%-8s %-8s %-7s %-21s %zu stale  ",
-                      rows[i].d->source, tier_name(rows[i].s->tier), kind,
+            sb_printf(&sb, "%-8s %-7s %-21s %zu stale  ", rows[i].d->source,
+                      kind,
                       rows[i].source_at[0] ? rows[i].source_at : "-", j - i);
             sb_puts_safe(&sb, src ? src->locator : "");
             sb_putc(&sb, '\n');
@@ -303,6 +271,6 @@ int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
                "(kb has no HTTP client). Re-file with \"kb add\".\n",
                nsources, nsources == 1 ? "" : "s", n, n == 1 ? "" : "s");
     }
-    close_all(stores, nstores);
+    store_close(&s);
     return KB_EXIT_OK;
 }

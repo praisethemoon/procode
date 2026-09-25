@@ -20,19 +20,15 @@
  * a whole chunk and `kb get --include text` to a whole document, and both
  * are single-item requests by construction.
  *
- * TWO TIERS, FUSED BY RANK. Each tier is searched on its own index and the
- * two ranked lists are combined by reciprocal rank fusion (rank.h). A
- * document present in both with the same content hash is returned once,
- * from the project tier, flagged `alsoGlobal` — and the global copy is
- * removed before its tier is ranked, so it does not silently occupy a rank
- * that a different answer could have had.
+ * FUSED BY RANK. The keyword list goes through reciprocal rank fusion
+ * (rank.h) even though it is the only list today, so that the semantic list
+ * joins it without a second merge path when the model arrives.
  */
 
 static const char *const VALUE_FLAGS[] = {
-    "--collection", "--mode",      "--k",          "--expand",
-    "--store",      "--source",    "--mime",       "--since",
-    "--min-score",  "--minScore",  "--older-than", "--olderThan",
-    NULL};
+    "--collection", "--mode",       "--k",         "--expand",
+    "--source",     "--mime",       "--since",     "--min-score",
+    "--minScore",   "--older-than", "--olderThan", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef enum { MODE_KEYWORD, MODE_HYBRID, MODE_SEMANTIC } SearchMode;
@@ -64,9 +60,6 @@ typedef struct {
     const char *source;
     const char *mime;
     const char *since;
-    /* Content hashes held by the project tier. A global chunk whose document
-     * is one of these is not a second answer, it is the same answer (§1.4). */
-    const StrSet *exclude;
 } DocFilter;
 
 static bool doc_keep(uint32_t doc_index, void *ud) {
@@ -85,21 +78,10 @@ static bool doc_keep(uint32_t doc_index, void *ud) {
      * than" needs no calendar. */
     if (f->since && (!d->fetched_at || strcmp(d->fetched_at, f->since) < 0))
         return false;
-    if (f->exclude && strset_has(f->exclude, d->content_hash))
-        return false;
     return true;
 }
 
-/* ---- per-tier state ---------------------------------------------------- */
-
 typedef struct {
-    Store s;
-    FtsIndex ix;
-    bool open;
-} TierState;
-
-typedef struct {
-    size_t tier;
     uint32_t chunk_index;
     double bm25;
 } Cand;
@@ -107,7 +89,6 @@ typedef struct {
 /* Blob + chunk boundaries for one document, kept for the handful of hits
  * being rendered so several hits in the same document read it once. */
 typedef struct {
-    size_t tier;
     uint32_t doc_index;
     char *text;
     size_t len;
@@ -115,18 +96,17 @@ typedef struct {
     bool ok;
 } DocText;
 
-static DocText *doc_text(Arena *a, TierState *ts, size_t tier,
-                         uint32_t doc_index, DocText *cache, size_t *ncache) {
+static DocText *doc_text(Arena *a, Store *s, uint32_t doc_index,
+                         DocText *cache, size_t *ncache) {
     for (size_t i = 0; i < *ncache; i++) {
-        if (cache[i].tier == tier && cache[i].doc_index == doc_index)
+        if (cache[i].doc_index == doc_index)
             return &cache[i];
     }
     DocText *e = &cache[(*ncache)++];
     memset(e, 0, sizeof(*e));
-    e->tier = tier;
     e->doc_index = doc_index;
-    const Document *d = &ts->s.documents.v[doc_index];
-    e->ok = doc_chunks(a, &ts->s, d, &e->text, &e->len, &e->ch);
+    const Document *d = &s->documents.v[doc_index];
+    e->ok = doc_chunks(a, s, d, &e->text, &e->len, &e->ch);
     return e;
 }
 
@@ -227,13 +207,6 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             return KB_EXIT_ERR;
         }
     }
-    StoreSel sel;
-    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
-                         &sel)) {
-        err_out(json, "usage", "--store expects project, global or all");
-        return KB_EXIT_ERR;
-    }
-
     char err[512];
     Staleness st;
     if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
@@ -241,95 +214,54 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         err_out(json, "usage", "%s", err);
         return KB_EXIT_ERR;
     }
-    TierSet tiers;
-    if (!tiers_resolve(sel, false, &tiers, err, sizeof err)) {
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
         return KB_EXIT_ERR;
     }
 
-    TierState ts[2];
-    memset(ts, 0, sizeof ts);
-    for (size_t t = 0; t < tiers.n; t++) {
-        const char *code;
-        if (!store_open(a, &ts[t].s, tiers.dir[t], tiers.tier[t], false, err,
-                        sizeof err, &code)) {
-            err_out(json, code, "%s", err);
-            return KB_EXIT_ERR;
-        }
-        ts[t].open = true;
-        /* A stale tier fails the whole search rather than dropping out of
-         * it: a result list silently missing a store is a list the reader
-         * cannot tell from a store with nothing in it. */
-        if (!fts_open_store(a, &ts[t].s, &ts[t].ix, &code, err, sizeof err)) {
-            for (size_t u = 0; u < tiers.n; u++) {
-                if (ts[u].open)
-                    store_close(&ts[u].s);
-            }
-            err_out(json, code, "%s; or narrow the search with --store", err);
-            return KB_EXIT_ERR;
-        }
+    Store s;
+    FtsIndex ix;
+    const char *code;
+    if (!store_open(a, &s, dir, false, err, sizeof err, &code)) {
+        err_out(json, code, "%s", err);
+        return KB_EXIT_ERR;
     }
-
-    /* §1.4's dedup, decided before either tier is ranked. Only meaningful
-     * when both are in scope: a caller who asked for one tier is not asking
-     * about the other, and consulting it would be reading a store that was
-     * excluded. */
-    bool both = tiers.n == 2;
-    StrSet project_hashes, global_hashes;
-    strset_init(&project_hashes, a);
-    strset_init(&global_hashes, a);
-    if (both) {
-        /* Keyed off each store's own tier rather than its position, so the
-         * rule survives any future change to the order tiers arrive in. */
-        for (size_t t = 0; t < tiers.n; t++) {
-            StrSet *into = ts[t].s.tier == TIER_PROJECT ? &project_hashes
-                                                        : &global_hashes;
-            for (size_t i = 0; i < ts[t].s.documents.n; i++)
-                strset_add(into, ts[t].s.documents.v[i].content_hash);
-        }
+    if (!fts_open_store(a, &s, &ix, &code, err, sizeof err)) {
+        store_close(&s);
+        err_out(json, code, "%s", err);
+        return KB_EXIT_ERR;
     }
 
     TermList q = token_terms(a, query, strlen(query));
 
-    RankList lists[2];
-    RankEntry *entries[2];
-    Cand *cands[2];
-    memset(lists, 0, sizeof lists);
-    for (size_t t = 0; t < tiers.n; t++) {
-        DocFilter f;
-        memset(&f, 0, sizeof f);
-        f.s = &ts[t].s;
-        f.collection = flag_value(argc, argv, VALUE_FLAGS, "--collection");
-        f.source = flag_value(argc, argv, VALUE_FLAGS, "--source");
-        f.mime = flag_value(argc, argv, VALUE_FLAGS, "--mime");
-        f.since = flag_value(argc, argv, VALUE_FLAGS, "--since");
-        if (both && ts[t].s.tier == TIER_GLOBAL)
-            f.exclude = &project_hashes;
+    DocFilter f;
+    memset(&f, 0, sizeof f);
+    f.s = &s;
+    f.collection = flag_value(argc, argv, VALUE_FLAGS, "--collection");
+    f.source = flag_value(argc, argv, VALUE_FLAGS, "--source");
+    f.mime = flag_value(argc, argv, VALUE_FLAGS, "--mime");
+    f.since = flag_value(argc, argv, VALUE_FLAGS, "--since");
 
-        FtsHit *hits = NULL;
-        size_t n = fts_search(a, &ts[t].ix, &q, min_score, doc_keep, &f,
-                              (size_t)k, &hits);
-        cands[t] = (Cand *)arena_alloc(a, (n ? n : 1) * sizeof(Cand));
-        entries[t] =
-            (RankEntry *)arena_alloc(a, (n ? n : 1) * sizeof(RankEntry));
-        for (size_t i = 0; i < n; i++) {
-            cands[t][i].tier = t;
-            cands[t][i].chunk_index = hits[i].chunk_index;
-            cands[t][i].bm25 = hits[i].score;
-            /* The tier is part of the identity: project C-5 and global C-5
-             * are different chunks in different stores. */
-            entries[t][i].key =
-                ((uint64_t)(t + 1) << 40) | (uint64_t)hits[i].chunk_index;
-            entries[t][i].item = &cands[t][i];
-        }
-        lists[t].v = entries[t];
-        lists[t].n = n;
-        lists[t].tag = RANK_TAG_KEYWORD;
+    FtsHit *hits = NULL;
+    size_t n =
+        fts_search(a, &ix, &q, min_score, doc_keep, &f, (size_t)k, &hits);
+    Cand *cands = (Cand *)arena_alloc(a, (n ? n : 1) * sizeof(Cand));
+    RankEntry *entries =
+        (RankEntry *)arena_alloc(a, (n ? n : 1) * sizeof(RankEntry));
+    for (size_t i = 0; i < n; i++) {
+        cands[i].chunk_index = hits[i].chunk_index;
+        cands[i].bm25 = hits[i].score;
+        entries[i].key = (uint64_t)hits[i].chunk_index;
+        entries[i].item = &cands[i];
     }
+    RankList list;
+    list.v = entries;
+    list.n = n;
+    list.tag = RANK_TAG_KEYWORD;
 
     RankResult *fused = NULL;
-    size_t nfused =
-        rrf_fuse(a, lists, tiers.n, KB_RRF_K, (size_t)k, &fused);
+    size_t nfused = rrf_fuse(a, &list, 1, KB_RRF_K, (size_t)k, &fused);
 
     DocText *cache =
         (DocText *)arena_alloc0(a, ((size_t)k + 1) * sizeof(DocText));
@@ -341,11 +273,10 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         sb_puts(&sb, "{\"ok\":true,\"mode\":\"keyword\",\"hits\":[");
     for (size_t i = 0; i < nfused; i++) {
         Cand *c = (Cand *)fused[i].item;
-        TierState *t = &ts[c->tier];
-        const FtsChunk *fc = &t->ix.chunks[c->chunk_index];
-        const Document *d = &t->s.documents.v[fc->doc_index];
-        const Source *src = src_by_id(&t->s.sources, d->source);
-        DocText *dt = doc_text(a, t, c->tier, fc->doc_index, cache, &ncache);
+        const FtsChunk *fc = &ix.chunks[c->chunk_index];
+        const Document *d = &s.documents.v[fc->doc_index];
+        const Source *src = src_by_id(&s.sources, d->source);
+        DocText *dt = doc_text(a, &s, fc->doc_index, cache, &ncache);
         const char *heading = NULL;
         const char *snip = "";
         if (dt->ok && fc->ordinal < dt->ch.n) {
@@ -354,9 +285,6 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             snip = snippet_of(a, dt->text, ch->start, ch->end, &q);
         }
         int64_t chunk_num = d->chunk_base + (int64_t)fc->ordinal;
-        bool also_global =
-            both && t->s.tier == TIER_PROJECT &&
-            strset_has(&global_hashes, d->content_hash);
 
         if (json) {
             if (i)
@@ -375,8 +303,7 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             json_escape_c(&sb, snip);
             sb_puts(&sb, ",\"collection\":");
             json_escape_c(&sb, src ? src->collection : "");
-            sb_printf(&sb, ",\"store\":\"%s\",\"alsoGlobal\":%s,\"matched\":",
-                      tier_name(t->s.tier), also_global ? "true" : "false");
+            sb_puts(&sb, ",\"matched\":");
             put_matched(&sb, fused[i].tags);
             /* Only the scores that were actually computed. §4's `vector` and
              * `fused` are absent rather than zero, because a caller must be
@@ -415,8 +342,8 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             }
             sb_putc(&sb, '}');
         } else {
-            sb_printf(&sb, "C-%-8lld %-7s %-8s %9.4f  ", (long long)chunk_num,
-                      d->id, tier_name(t->s.tier), c->bm25);
+            sb_printf(&sb, "C-%-8lld %-7s %9.4f  ", (long long)chunk_num,
+                      d->id, c->bm25);
             sb_puts_safe(&sb, src ? src->collection : "-");
             sb_puts(&sb, "  ");
             sb_puts_safe(&sb, d->title ? d->title : "");
@@ -424,8 +351,6 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
                 sb_puts(&sb, " \xc2\xbb ");
                 sb_puts_safe(&sb, heading);
             }
-            if (also_global)
-                sb_puts(&sb, "  (also global)");
             if (doc_stale(&st, d))
                 sb_puts(&sb, "  (stale)");
             sb_puts(&sb, "\n    ");
@@ -461,7 +386,6 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
     } else {
         fputs(sb_finish(&sb), stdout);
     }
-    for (size_t t = 0; t < tiers.n; t++)
-        store_close(&ts[t].s);
+    store_close(&s);
     return KB_EXIT_OK;
 }

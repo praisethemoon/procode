@@ -1,6 +1,6 @@
 /* Store discovery, layout, locking, identifier allocation, blobs, appends.
  *
- * Layout, identical in both tiers (§1.6):
+ * Layout (§1.6):
  *
  *   <store>/
  *     .gitignore        ignores index/ and nothing else (§1.5)
@@ -38,17 +38,11 @@
 #include "doc.h"
 #include "platform.h"
 
-typedef enum { TIER_PROJECT, TIER_GLOBAL } Tier;
 typedef enum { STORE_SOURCES, STORE_DOCUMENTS } StoreLogId;
-
-/* The one spelling of a tier's name. Every hit, row and error that names a
- * tier goes through it, so "project" cannot become "local" in one message. */
-const char *tier_name(Tier t);
 
 typedef struct {
     Arena *a;
-    Tier tier;
-    char dir[KB_PATH_MAX];           /* <root>/.kb or ~/.kb */
+    char dir[KB_PATH_MAX];           /* <root>/.kb */
     char sources_path[KB_PATH_MAX];
     char documents_path[KB_PATH_MAX];
     char blobs_dir[KB_PATH_MAX];
@@ -68,10 +62,13 @@ typedef struct {
 /* Walks up from the current directory looking for a `.kb` DIRECTORY, the
  * way git finds `.git`. Stops after probing the filesystem root. A plain
  * file named `.kb` is not a store and does not stop the walk.
+ *
+ * This is the only way a store is found. There is no store in the home
+ * directory and no environment variable naming one: the knowledge base
+ * belongs to the workspace it sits in, and nothing here computes a path
+ * outside it.
  */
-bool store_find_project(char *out, size_t outsz);
-/* $KB_STORE when set and non-empty, else ~/.kb (§1.4). */
-bool store_global_dir(char *out, size_t outsz);
+bool store_find(char *out, size_t outsz);
 /* Absolute, '/'-separated, with "." and ".." collapsed. A locator has to be
  * the same string every time the same thing is filed, or idempotency by
  * locator means nothing. */
@@ -88,8 +85,8 @@ bool store_create(Arena *a, const char *dir, char *err, size_t errsz);
  * "store_locked" (with the holding pid in the message), "not_found" — and
  * "internal" otherwise.
  */
-bool store_open(Arena *a, Store *s, const char *dir, Tier tier, bool for_write,
-                char *err, size_t errsz, const char **code);
+bool store_open(Arena *a, Store *s, const char *dir, bool for_write, char *err,
+                size_t errsz, const char **code);
 void store_close(Store *s);
 
 /* Reserves contiguous id ranges and makes the counters durable before

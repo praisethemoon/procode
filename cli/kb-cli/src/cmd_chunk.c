@@ -15,17 +15,17 @@
  * after a rebuild (§1.1).
  */
 
-static const char *const VALUE_FLAGS[] = {"--store", "--expand", NULL};
+static const char *const VALUE_FLAGS[] = {"--expand", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
-static void chunk_json(StrBuf *sb, const Store *s, const Document *d,
-                       const Source *src, const Chunk *c, uint32_t ordinal,
-                       const char *text, bool with_text) {
+static void chunk_json(StrBuf *sb, const Document *d, const Source *src,
+                       const Chunk *c, uint32_t ordinal, const char *text,
+                       bool with_text) {
     sb_printf(sb,
               "{\"id\":\"C-%lld\",\"document\":\"%s\",\"source\":\"%s\","
-              "\"store\":\"%s\",\"ordinal\":%lu",
+              "\"ordinal\":%lu",
               (long long)(d->chunk_base + (int64_t)ordinal), d->id, d->source,
-              tier_name(s->tier), (unsigned long)ordinal);
+              (unsigned long)ordinal);
     sb_puts(sb, ",\"collection\":");
     json_escape_c(sb, src ? src->collection : "");
     sb_puts(sb, ",\"title\":");
@@ -55,14 +55,13 @@ static void put_text(const char *text, const Chunk *c) {
         fputc('\n', stdout);
 }
 
-static void chunk_human(Arena *a, const Store *s, const Document *d,
-                        const Source *src, const Chunk *c, uint32_t ordinal,
-                        const char *text) {
+static void chunk_human(Arena *a, const Document *d, const Source *src,
+                        const Chunk *c, uint32_t ordinal, const char *text) {
     StrBuf sb;
     sb_init(&sb, a);
-    sb_printf(&sb, "C-%lld  %s  %s  [%zu,%zu)  %lu tokens\n",
-              (long long)(d->chunk_base + (int64_t)ordinal), d->id,
-              tier_name(s->tier), c->start, c->end, (unsigned long)c->tokens);
+    sb_printf(&sb, "C-%lld  %s  [%zu,%zu)  %lu tokens\n",
+              (long long)(d->chunk_base + (int64_t)ordinal), d->id, c->start,
+              c->end, (unsigned long)c->tokens);
     sb_puts(&sb, "collection ");
     sb_puts_safe(&sb, src ? src->collection : "");
     sb_puts(&sb, "\ntitle      ");
@@ -105,89 +104,76 @@ int32_t cmd_chunk(Arena *a, int32_t argc, char **argv) {
         if (expand > KB_EXPAND_MAX)
             expand = KB_EXPAND_MAX;
     }
-    StoreSel sel;
-    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
-                         &sel)) {
-        err_out(json, "usage", "--store expects project, global or all");
-        return KB_EXIT_ERR;
-    }
-
     char err[512];
-    TierSet tiers;
-    if (!tiers_resolve(sel, false, &tiers, err, sizeof err)) {
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
         return KB_EXIT_ERR;
     }
 
-    /* Identifiers are allocated per store, so C-9 can exist in both tiers;
-     * project first, like `get` (§1.4). */
-    for (size_t t = 0; t < tiers.n; t++) {
-        Store s;
-        const char *code;
-        if (!store_open(a, &s, tiers.dir[t], tiers.tier[t], false, err,
-                        sizeof err, &code)) {
-            err_out(json, code, "%s", err);
-            return KB_EXIT_ERR;
-        }
-        uint32_t ordinal = 0;
-        const Document *d = doc_by_chunk(&s.documents, num, &ordinal);
-        if (!d) {
-            store_close(&s);
-            continue;
-        }
-        char *text;
-        size_t len;
-        Chunks ch;
-        if (!doc_chunks(a, &s, d, &text, &len, &ch)) {
-            store_close(&s);
-            err_out(json, "not_found", "%s has no blob for %s", d->id,
-                    d->content_hash);
-            return KB_EXIT_ERR;
-        }
-        if (ordinal >= ch.n) {
-            /* The log reserved a range this blob no longer fills, so the
-             * chunker has changed under the store (§7's reindex, not
-             * rebuild). §11's index_stale names the structure at fault. */
-            store_close(&s);
-            err_out(json, "index_stale",
-                    "%s records %lu chunks and its text now splits into %zu; "
-                    "the chunker changed (run \"kb reindex\" when it exists)",
-                    d->id, (unsigned long)d->chunk_count, ch.n);
-            return KB_EXIT_ERR;
-        }
-        const Source *src = src_by_id(&s.sources, d->source);
-        if (json) {
-            StrBuf sb;
-            sb_init(&sb, a);
-            sb_puts(&sb, "{\"ok\":true,\"chunk\":");
-            chunk_json(&sb, &s, d, src, &ch.v[ordinal], ordinal, text, true);
-            sb_puts(&sb, ",\"neighbours\":[");
-            bool first = true;
-            for (int64_t o = (int64_t)ordinal - expand;
-                 o <= (int64_t)ordinal + expand; o++) {
-                if (o == (int64_t)ordinal || o < 0 || o >= (int64_t)ch.n)
-                    continue;
-                if (!first)
-                    sb_putc(&sb, ',');
-                first = false;
-                chunk_json(&sb, &s, d, src, &ch.v[o], (uint32_t)o, text, true);
-            }
-            sb_puts(&sb, "]}");
-            puts(sb_finish(&sb));
-        } else {
-            chunk_human(a, &s, d, src, &ch.v[ordinal], ordinal, text);
-            for (int64_t o = (int64_t)ordinal - expand;
-                 o <= (int64_t)ordinal + expand; o++) {
-                if (o == (int64_t)ordinal || o < 0 || o >= (int64_t)ch.n)
-                    continue;
-                printf("--- C-%lld (%s)\n", (long long)(d->chunk_base + o),
-                       o < (int64_t)ordinal ? "before" : "after");
-                put_text(text, &ch.v[o]);
-            }
-        }
-        store_close(&s);
-        return KB_EXIT_OK;
+    Store s;
+    const char *code;
+    if (!store_open(a, &s, dir, false, err, sizeof err, &code)) {
+        err_out(json, code, "%s", err);
+        return KB_EXIT_ERR;
     }
-    err_out(json, "not_found", "no chunk %s", id);
-    return KB_EXIT_ERR;
+    uint32_t ordinal = 0;
+    const Document *d = doc_by_chunk(&s.documents, num, &ordinal);
+    if (!d) {
+        store_close(&s);
+        err_out(json, "not_found", "no chunk %s", id);
+        return KB_EXIT_ERR;
+    }
+    char *text;
+    size_t len;
+    Chunks ch;
+    if (!doc_chunks(a, &s, d, &text, &len, &ch)) {
+        store_close(&s);
+        err_out(json, "not_found", "%s has no blob for %s", d->id,
+                d->content_hash);
+        return KB_EXIT_ERR;
+    }
+    if (ordinal >= ch.n) {
+        /* The log reserved a range this blob no longer fills, so the
+         * chunker has changed under the store (§7's reindex, not
+         * rebuild). §11's index_stale names the structure at fault. */
+        store_close(&s);
+        err_out(json, "index_stale",
+                "%s records %lu chunks and its text now splits into %zu; "
+                "the chunker changed (run \"kb reindex\" when it exists)",
+                d->id, (unsigned long)d->chunk_count, ch.n);
+        return KB_EXIT_ERR;
+    }
+    const Source *src = src_by_id(&s.sources, d->source);
+    if (json) {
+        StrBuf sb;
+        sb_init(&sb, a);
+        sb_puts(&sb, "{\"ok\":true,\"chunk\":");
+        chunk_json(&sb, d, src, &ch.v[ordinal], ordinal, text, true);
+        sb_puts(&sb, ",\"neighbours\":[");
+        bool first = true;
+        for (int64_t o = (int64_t)ordinal - expand;
+             o <= (int64_t)ordinal + expand; o++) {
+            if (o == (int64_t)ordinal || o < 0 || o >= (int64_t)ch.n)
+                continue;
+            if (!first)
+                sb_putc(&sb, ',');
+            first = false;
+            chunk_json(&sb, d, src, &ch.v[o], (uint32_t)o, text, true);
+        }
+        sb_puts(&sb, "]}");
+        puts(sb_finish(&sb));
+    } else {
+        chunk_human(a, d, src, &ch.v[ordinal], ordinal, text);
+        for (int64_t o = (int64_t)ordinal - expand;
+             o <= (int64_t)ordinal + expand; o++) {
+            if (o == (int64_t)ordinal || o < 0 || o >= (int64_t)ch.n)
+                continue;
+            printf("--- C-%lld (%s)\n", (long long)(d->chunk_base + o),
+                   o < (int64_t)ordinal ? "before" : "after");
+            put_text(text, &ch.v[o]);
+        }
+    }
+    store_close(&s);
+    return KB_EXIT_OK;
 }

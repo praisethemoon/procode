@@ -10,7 +10,7 @@
 
 static const char *const VALUE_FLAGS[] = {
     "--title", "--collection", "--url",  "--mime",
-    "--file",  "--meta",       "--meta-file", "--store", NULL};
+    "--file",  "--meta",       "--meta-file", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 /* Extension to mime, for the common documentation and source types. The
@@ -109,17 +109,6 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
         err_out(json, "usage", "collection names do not nest");
         return KB_EXIT_ERR;
     }
-    StoreSel sel;
-    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
-                         &sel)) {
-        err_out(json, "usage", "--store expects project, global or all");
-        return KB_EXIT_ERR;
-    }
-    if (sel == SEL_ALL) {
-        err_out(json, "usage", "--store all cannot be a write target");
-        return KB_EXIT_ERR;
-    }
-
     char err[512];
     const char *meta = NULL;
     if (!meta_arg(a, argc, argv, &meta, err, sizeof err)) {
@@ -184,8 +173,8 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
     if (!mime)
         mime = "text/plain";
 
-    TierSet tiers;
-    if (!tiers_resolve(sel, true, &tiers, err, sizeof err)) {
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
         return KB_EXIT_ERR;
     }
@@ -195,8 +184,7 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
     /* Opened for write: the lock is taken, a torn tail from a previous crash
      * is truncated away, and the logs are loaded. Everything below decides
      * what to write from what it just read, inside that one locked section. */
-    if (!store_open(a, &s, tiers.dir[0], tiers.tier[0], true, err, sizeof err,
-                    &code)) {
+    if (!store_open(a, &s, dir, true, err, sizeof err, &code)) {
         err_out(json, code, "%s", err);
         return strcmp(code, "internal") == 0 ? KB_EXIT_FATAL : KB_EXIT_ERR;
     }
@@ -316,7 +304,7 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
     /* The keyword index is refreshed here, inside the same locked section
      * that just appended the record, so `kb search` answers correctly the
      * instant `kb add` returns and never asks a reader to run a maintenance
-     * command first. It is a FULL rebuild of this tier: the format is a
+     * command first. It is a FULL rebuild of the store: the format is a
      * sorted image and merging one document into it in place would be a
      * second, subtler index-writing path to get wrong. The cost is one pass
      * over the store per ingest, which is the price of `POST /documents`
@@ -349,9 +337,9 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
         StrBuf sb;
         sb_init(&sb, a);
         sb_printf(&sb,
-                  "{\"ok\":true,\"store\":\"%s\",\"document\":\"%s\","
+                  "{\"ok\":true,\"document\":\"%s\","
                   "\"source\":\"%s\",\"contentHash\":\"%s\",\"bytes\":%llu,",
-                  tier_name(s.tier), d.id, d.source, d.content_hash,
+                  d.id, d.source, d.content_hash,
                   (unsigned long long)d.bytes);
         sb_puts(&sb, "\"collection\":");
         json_escape_c(&sb, collection);

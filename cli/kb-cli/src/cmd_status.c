@@ -1,43 +1,37 @@
 #include "cmd.h"
 
-/* GET /status (§7) for both tiers: paths, counts, disk use, and which tier
- * is which.
+/* GET /status (§7): the store's path, counts and disk use.
  *
- * §7 also asks for index freshness, model identity and whether the tiers
- * agree on a model. None of that exists yet — there is no model and no
- * index — so this reports the chunking parameters each tier's index was
+ * §7 also asks for index freshness and model identity. There is no model
+ * yet, so this reports the chunking parameters the index was
  * built with instead, and whether they still match what this build would
  * produce. That is the same question one layer down: a store whose
  * chunkTokens or chunker differ from the running binary owes a reindex
  * exactly as a store built with another model would (§8).
  */
 
-static const char *const VALUE_FLAGS[] = {"--store", "--older-than",
-                                          "--olderThan", NULL};
+static const char *const VALUE_FLAGS[] = {"--older-than", "--olderThan",
+                                          NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
-/* dir is NULL when the tier has no path at all — no store above the current
- * directory, or neither KB_STORE nor HOME set. That is a different thing
- * from a known path with nothing at it yet, which still tells the caller
- * where `kb init` would put one. */
-static void tier_json(StrBuf *sb, Arena *a, const char *dir, Tier tier,
-                      bool present, const Staleness *st) {
-    sb_printf(sb, "{\"store\":\"%s\",\"path\":", tier_name(tier));
-    if (dir)
-        json_escape_c(sb, dir);
-    else
-        sb_puts(sb, "null");
-    if (!present) {
-        sb_puts(sb, ",\"present\":false}");
+/* Emits the fields without enclosing braces. dir is NULL when there is no
+ * store at or above the current directory: status still succeeds then,
+ * because "there is nothing here yet" is the answer, not a failure to get
+ * one. */
+static void store_json(StrBuf *sb, Arena *a, const char *dir,
+                       const Staleness *st) {
+    sb_puts(sb, "\"path\":");
+    if (!dir) {
+        sb_puts(sb, "null,\"present\":false");
         return;
     }
+    json_escape_c(sb, dir);
     Store s;
     char err[512];
     const char *code;
-    if (!store_open(a, &s, dir, tier, false, err, sizeof err, &code)) {
+    if (!store_open(a, &s, dir, false, err, sizeof err, &code)) {
         sb_puts(sb, ",\"present\":true,\"readable\":false,\"error\":");
         json_escape_c(sb, err);
-        sb_putc(sb, '}');
         return;
     }
     uint64_t index_bytes = 0;
@@ -105,25 +99,20 @@ static void tier_json(StrBuf *sb, Arena *a, const char *dir, Tier tier,
     sb_puts(sb, ",\"torn\":");
     sb_puts(sb, (s.sources.torn_tail || s.documents.torn_tail) ? "true"
                                                               : "false");
-    sb_putc(sb, '}');
     store_close(&s);
 }
 
-static void tier_human(Arena *a, const char *dir, Tier tier, bool present,
-                       bool is_default_write, const Staleness *st) {
-    printf("%-8s %s%s\n", tier_name(tier),
-           dir ? dir : (tier == TIER_PROJECT
-                            ? "(none above the current directory)"
-                            : "(no KB_STORE or HOME)"),
-           is_default_write ? "   (default for writes)" : "");
-    if (!present) {
-        puts("         not initialized");
+static void store_human(Arena *a, const char *dir, const Staleness *st) {
+    if (!dir) {
+        puts("no kb store at or above the current directory (run \"kb "
+             "init\")");
         return;
     }
+    printf("store    %s\n", dir);
     Store s;
     char err[512];
     const char *code;
-    if (!store_open(a, &s, dir, tier, false, err, sizeof err, &code)) {
+    if (!store_open(a, &s, dir, false, err, sizeof err, &code)) {
         printf("         unreadable: %s\n", err);
         return;
     }
@@ -184,32 +173,17 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         return KB_EXIT_ERR;
     }
 
-    char project[KB_PATH_MAX], global[KB_PATH_MAX];
-    /* The project store is only ever a path once it exists — it is found by
-     * walking up, not by construction. The global one has a path whether or
-     * not anything is there yet. */
-    const char *project_dir =
-        store_find_project(project, sizeof project) ? project : NULL;
-    const char *global_dir =
-        store_global_dir(global, sizeof global) ? global : NULL;
-    bool has_project = project_dir != NULL;
-    bool has_global = global_dir && plat_is_dir(global_dir);
-
+    char found[KB_PATH_MAX];
+    const char *dir = store_find(found, sizeof found) ? found : NULL;
     if (json) {
         StrBuf sb;
         sb_init(&sb, a);
-        sb_puts(&sb, "{\"ok\":true,\"tiers\":[");
-        tier_json(&sb, a, project_dir, TIER_PROJECT, has_project, &st);
-        sb_putc(&sb, ',');
-        tier_json(&sb, a, global_dir, TIER_GLOBAL, has_global, &st);
-        sb_printf(&sb, "],\"defaultWrite\":\"%s\",\"olderThan\":\"%s\"}",
-                  has_project ? "project" : (has_global ? "global" : "none"),
-                  st.spec);
+        sb_puts(&sb, "{\"ok\":true,");
+        store_json(&sb, a, dir, &st);
+        sb_printf(&sb, ",\"olderThan\":\"%s\"}", st.spec);
         puts(sb_finish(&sb));
     } else {
-        tier_human(a, project_dir, TIER_PROJECT, has_project, has_project, &st);
-        tier_human(a, global_dir, TIER_GLOBAL, has_global,
-                   !has_project && has_global, &st);
+        store_human(a, dir, &st);
     }
     return KB_EXIT_OK;
 }

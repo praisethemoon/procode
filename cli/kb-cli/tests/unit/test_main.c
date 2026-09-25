@@ -33,7 +33,7 @@ static int32_t hold_lock(const char *dir) {
     Store s;
     char err[512];
     const char *code;
-    if (!store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err, &code)) {
+    if (!store_open(a, &s, dir, true, err, sizeof err, &code)) {
         fprintf(stderr, "hold-lock: %s (%s)\n", err, code);
         return 1;
     }

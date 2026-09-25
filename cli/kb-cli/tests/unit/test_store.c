@@ -52,7 +52,7 @@ static void test_discovery(Arena *a) {
 
     ASSERT_EQ_I(chdir(deep), 0);
     char found[KB_PATH_MAX];
-    ASSERT_TRUE(store_find_project(found, sizeof found));
+    ASSERT_TRUE(store_find(found, sizeof found));
     /* The temp root may be reached through a symlink (macOS puts TMPDIR
      * under /var, which is a link to /private/var), so the path is matched
      * by the unique directory name rather than compared whole. */
@@ -72,7 +72,7 @@ static void test_discovery(Arena *a) {
     ASSERT_TRUE(plat_write_file_atomic(decoy, "not a store", 11));
     ASSERT_TRUE(plat_is_file(decoy));
     char found2[KB_PATH_MAX];
-    ASSERT_TRUE(store_find_project(found2, sizeof found2));
+    ASSERT_TRUE(store_find(found2, sizeof found2));
     ASSERT_EQ_S(found2, found);
 
     t_begin("store: discovery gives up at the filesystem root");
@@ -82,7 +82,7 @@ static void test_discovery(Arena *a) {
     tmp_dir(other, sizeof other);
     ASSERT_EQ_I(chdir(other), 0);
     char none[KB_PATH_MAX];
-    ASSERT_TRUE(!store_find_project(none, sizeof none));
+    ASSERT_TRUE(!store_find(none, sizeof none));
 
     chdir(cwd_before);
     tmp_rm(a, root);
@@ -112,7 +112,7 @@ static void test_ids(Arena *a) {
     ASSERT_TRUE(store_create(a, dir, err, sizeof err));
 
     Store s;
-    ASSERT_TRUE(store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err,
+    ASSERT_TRUE(store_open(a, &s, dir, true, err, sizeof err,
                            &code));
     int64_t src = 0, doc = 0, chunk = 0;
     t_begin("store: ids are monotonic and allocated in ranges");
@@ -145,7 +145,7 @@ static void test_ids(Arena *a) {
     while (cut > 0 && data[cut - 1] != '\n')
         cut--;
     ASSERT_TRUE(plat_truncate(docs_path, (uint64_t)cut));
-    ASSERT_TRUE(store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err,
+    ASSERT_TRUE(store_open(a, &s, dir, true, err, sizeof err,
                            &code));
     ASSERT_EQ_I(s.documents.n, 2);
     ASSERT_TRUE(store_reserve(&s, 0, 1, 0, &src, &doc, &chunk, err,
@@ -163,7 +163,7 @@ static void test_ids(Arena *a) {
         "\"path\":\"\",\"contentHash\":\"x\",\"chunkBase\":500,"
         "\"chunkCount\":7}\n";
     ASSERT_TRUE(tmp_append_raw(docs_path, planted, strlen(planted)));
-    ASSERT_TRUE(store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err,
+    ASSERT_TRUE(store_open(a, &s, dir, true, err, sizeof err,
                            &code));
     ASSERT_EQ_I(s.next_document, 100);
     ASSERT_EQ_I(s.next_chunk, 507);
@@ -184,12 +184,12 @@ static void test_lock(Arena *a) {
 
     t_begin("store: a second writer is refused and told who holds the lock");
     Store held;
-    ASSERT_TRUE(store_open(a, &held, dir, TIER_PROJECT, true, err, sizeof err,
+    ASSERT_TRUE(store_open(a, &held, dir, true, err, sizeof err,
                            &code));
     Store second;
     char err2[512];
     const char *code2 = "";
-    ASSERT_TRUE(!store_open(a, &second, dir, TIER_PROJECT, true, err2,
+    ASSERT_TRUE(!store_open(a, &second, dir, true, err2,
                             sizeof err2, &code2));
     ASSERT_EQ_S(code2, "store_locked");
     char pid[32];
@@ -198,7 +198,7 @@ static void test_lock(Arena *a) {
 
     t_begin("store: a reader is never blocked by a writer");
     Store reader;
-    ASSERT_TRUE(store_open(a, &reader, dir, TIER_PROJECT, false, err,
+    ASSERT_TRUE(store_open(a, &reader, dir, false, err,
                            sizeof err, &code));
 
     t_begin("store: an append without the lock is refused");
@@ -215,7 +215,7 @@ static void test_lock(Arena *a) {
 
     store_close(&held);
     t_begin("store: the lock is released when its holder closes");
-    ASSERT_TRUE(store_open(a, &second, dir, TIER_PROJECT, true, err,
+    ASSERT_TRUE(store_open(a, &second, dir, true, err,
                            sizeof err, &code));
     store_close(&second);
 
@@ -234,7 +234,7 @@ static void test_torn_append(Arena *a) {
     char *docs_path = jn(a, dir, KB_DOCUMENTS_NAME);
 
     Store s;
-    ASSERT_TRUE(store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err,
+    ASSERT_TRUE(store_open(a, &s, dir, true, err, sizeof err,
                            &code));
     int64_t src = 0, doc = 0, chunk = 0;
     ASSERT_TRUE(store_reserve(&s, 0, 1, 2, &src, &doc, &chunk, err,
@@ -255,14 +255,14 @@ static void test_torn_append(Arena *a) {
 
     t_begin("store: a reader survives a torn final line");
     Store r;
-    ASSERT_TRUE(store_open(a, &r, dir, TIER_PROJECT, false, err, sizeof err,
+    ASSERT_TRUE(store_open(a, &r, dir, false, err, sizeof err,
                            &code));
     ASSERT_EQ_I(r.documents.n, 2);
     ASSERT_TRUE(r.documents.torn_tail);
     store_close(&r);
 
     t_begin("store: the next writer truncates the fragment away");
-    ASSERT_TRUE(store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err,
+    ASSERT_TRUE(store_open(a, &s, dir, true, err, sizeof err,
                            &code));
     ASSERT_TRUE(!s.documents.torn_tail);
     ASSERT_EQ_I(s.documents.n, 2);
@@ -296,7 +296,7 @@ static void test_blobs(Arena *a) {
     const char *code;
     ASSERT_TRUE(store_create(a, dir, err, sizeof err));
     Store s;
-    ASSERT_TRUE(store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err,
+    ASSERT_TRUE(store_open(a, &s, dir, true, err, sizeof err,
                            &code));
 
     t_begin("store: a blob is stored under the hash of its own bytes");
@@ -387,7 +387,7 @@ static void test_layout(Arena *a) {
 
     t_begin("store: chunking parameters are recorded once and kept");
     Store s;
-    ASSERT_TRUE(store_open(a, &s, dir, TIER_PROJECT, true, err, sizeof err,
+    ASSERT_TRUE(store_open(a, &s, dir, true, err, sizeof err,
                            &code));
     ChunkParams before = store_chunk_params(a, &s);
     ASSERT_TRUE(!before.present);

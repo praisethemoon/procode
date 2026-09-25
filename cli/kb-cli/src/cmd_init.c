@@ -9,16 +9,16 @@
  * the blobs are committed so a collaborator can clone, run `kb rebuild`, and
  * have the corpus without re-fetching or re-embedding anything.
  *
- * INITIALISING IS THE ONE OPERATION THAT CANNOT DEFAULT TO THE PROJECT STORE.
- * Everywhere else, §1.4's rule is that a write goes to the project store when
- * one exists — but that rule is stated in terms of a store that already
- * exists, and here the question is where to make one. Defaulting to "walk up
- * and use whatever I find" would mean `kb init` in a subdirectory silently
- * doing nothing because an ancestor already had a `.kb`. So this creates in
- * the current directory unless told otherwise, and says plainly when a store
- * is already there. */
+ * INITIALISING IS THE ONE OPERATION THAT DOES NOT WALK UP. Every other
+ * command uses the first `.kb/` at or above the current directory — but that
+ * rule is stated in terms of a store that already exists, and here the
+ * question is where to make one. Walking up would mean `kb init` in a
+ * subdirectory silently doing nothing because an ancestor already had a
+ * `.kb`. So this creates in the current directory, always, and says plainly
+ * when a store is already there. It takes no path: there is no store outside
+ * the workspace for it to make. */
 
-static const char *const VALUE_FLAGS[] = {"--store", NULL};
+static const char *const VALUE_FLAGS[] = {NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 int32_t cmd_init(Arena *a, int32_t argc, char **argv) {
@@ -29,31 +29,16 @@ int32_t cmd_init(Arena *a, int32_t argc, char **argv) {
         return KB_EXIT_ERR;
     }
 
-    /* `--store global` targets `~/.kb` (or `$KB_STORE`); anything else makes
-     * the project store here. There is deliberately no `all`: creating two
-     * stores from one command would leave the caller unsure which one the next
-     * ingest lands in. */
-    const char *want = flag_value(argc, argv, VALUE_FLAGS, "--store");
     char dir[KB_PATH_MAX];
-    if (want && strcmp(want, "global") == 0) {
-        if (!store_global_dir(dir, sizeof dir)) {
-            err_out(json, "not_found", "cannot locate a global store path");
-            return KB_EXIT_ERR;
-        }
-    } else if (want && strcmp(want, "project") != 0) {
-        err_out(json, "usage", "--store expects project or global");
+    char here[KB_PATH_MAX];
+    if (!store_abs_path(".", here, sizeof here)) {
+        err_out(json, "internal", "cannot resolve the current directory");
+        return KB_EXIT_FATAL;
+    }
+    int32_t n = snprintf(dir, sizeof dir, "%s/%s", here, KB_DIR);
+    if (n < 0 || (size_t)n >= sizeof dir) {
+        err_out(json, "usage", "path is too long");
         return KB_EXIT_ERR;
-    } else {
-        char here[KB_PATH_MAX];
-        if (!store_abs_path(".", here, sizeof here)) {
-            err_out(json, "internal", "cannot resolve the current directory");
-            return KB_EXIT_FATAL;
-        }
-        int32_t n = snprintf(dir, sizeof dir, "%s/%s", here, KB_DIR);
-        if (n < 0 || (size_t)n >= sizeof dir) {
-            err_out(json, "usage", "path is too long");
-            return KB_EXIT_ERR;
-        }
     }
 
     /* AN EXISTING STORE IS AN ERROR, NOT A NO-OP. `kb init` is the one command
@@ -79,21 +64,15 @@ int32_t cmd_init(Arena *a, int32_t argc, char **argv) {
         return KB_EXIT_FATAL;
     }
 
-    /* `store` names the TIER, not the path: it is the same vocabulary every
-     * other route uses — §1.4's project and global, and the `store` field on
-     * every search hit — so a caller reading one response reads them all. The
-     * path is reported beside it, because the tier alone does not say where. */
-    const char *tier = (want && strcmp(want, "global") == 0) ? "global"
-                                                             : "project";
     if (json) {
         StrBuf sb;
         sb_init(&sb, a);
-        sb_printf(&sb, "{\"ok\":true,\"store\":\"%s\",\"path\":", tier);
+        sb_puts(&sb, "{\"ok\":true,\"path\":");
         json_escape_c(&sb, dir);
         sb_putc(&sb, '}');
         puts(sb_finish(&sb));
     } else {
-        printf("%s store created at %s\n", tier, dir);
+        printf("store created at %s\n", dir);
     }
     return KB_EXIT_OK;
 }

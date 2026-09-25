@@ -214,94 +214,14 @@ bool doc_stale(const Staleness *st, const Document *d) {
     return at < st->cutoff;
 }
 
-/* ---- tiers ------------------------------------------------------------ */
+/* ---- the store -------------------------------------------------------- */
 
-bool store_sel_parse(const char *v, StoreSel *out) {
-    if (!v) {
-        *out = SEL_DEFAULT;
+bool store_resolve(char *dir, size_t dirsz, char *err, size_t errsz) {
+    if (store_find(dir, dirsz))
         return true;
-    }
-    if (strcmp(v, "project") == 0)
-        *out = SEL_PROJECT;
-    else if (strcmp(v, "global") == 0)
-        *out = SEL_GLOBAL;
-    else if (strcmp(v, "all") == 0)
-        *out = SEL_ALL;
-    else
-        return false;
-    return true;
-}
-
-static void tier_add(TierSet *set, const char *dir, Tier t) {
-    if (set->n >= 2)
-        return;
-    snprintf(set->dir[set->n], KB_PATH_MAX, "%s", dir);
-    set->tier[set->n] = t;
-    set->n++;
-}
-
-bool tiers_resolve(StoreSel sel, bool for_write, TierSet *out, char *err,
-                   size_t errsz) {
-    memset(out, 0, sizeof(*out));
-    char project[KB_PATH_MAX], global[KB_PATH_MAX];
-    bool has_project = store_find_project(project, sizeof project);
-    bool has_global =
-        store_global_dir(global, sizeof global) && plat_is_dir(global);
-
-    if (for_write) {
-        if (sel == SEL_ALL) {
-            snprintf(err, errsz, "--store all cannot be a write target");
-            return false;
-        }
-        if (sel == SEL_PROJECT) {
-            if (!has_project) {
-                snprintf(err, errsz,
-                         "no project store above the current directory "
+    snprintf(err, errsz, "no kb store at or above the current directory "
                          "(run \"kb init\")");
-                return false;
-            }
-            tier_add(out, project, TIER_PROJECT);
-            return true;
-        }
-        if (sel == SEL_GLOBAL) {
-            if (!store_global_dir(global, sizeof global)) {
-                snprintf(err, errsz, "cannot locate a global store "
-                                     "(set KB_STORE or HOME)");
-                return false;
-            }
-            if (!has_global) {
-                snprintf(err, errsz,
-                         "no global store at %s (run \"kb init --store "
-                         "global\")",
-                         global);
-                return false;
-            }
-            tier_add(out, global, TIER_GLOBAL);
-            return true;
-        }
-        /* The default: filed where the work is. A document filed locally is
-         * easy to promote later; one filed globally is easy never to notice
-         * again (§1.4). */
-        if (has_project)
-            tier_add(out, project, TIER_PROJECT);
-        else if (has_global)
-            tier_add(out, global, TIER_GLOBAL);
-        else {
-            snprintf(err, errsz, "no kb store found (run \"kb init\")");
-            return false;
-        }
-        return true;
-    }
-
-    if (sel != SEL_GLOBAL && has_project)
-        tier_add(out, project, TIER_PROJECT);
-    if (sel != SEL_PROJECT && has_global)
-        tier_add(out, global, TIER_GLOBAL);
-    if (out->n == 0) {
-        snprintf(err, errsz, "no kb store found (run \"kb init\")");
-        return false;
-    }
-    return true;
+    return false;
 }
 
 /* ---- stored documents -------------------------------------------------- */
@@ -439,10 +359,9 @@ SourceFacts source_facts(Arena *a, const Store *s, const char *source_id) {
 
 /* ---- shared JSON shapes ----------------------------------------------- */
 
-void json_document(StrBuf *sb, const Store *s, const Document *d,
-                   const Source *src, const Staleness *st) {
-    sb_printf(sb, "\"id\":\"%s\",\"source\":\"%s\",\"store\":\"%s\"", d->id,
-              d->source, tier_name(s->tier));
+void json_document(StrBuf *sb, const Document *d, const Source *src,
+                   const Staleness *st) {
+    sb_printf(sb, "\"id\":\"%s\",\"source\":\"%s\"", d->id, d->source);
     sb_puts(sb, ",\"collection\":");
     /* A document's collection is its source's: §1.3 gives a document exactly
      * one, and §1.2 puts it on the Source. Storing it twice would let the
@@ -499,7 +418,7 @@ void json_links(StrBuf *sb, const Store *s, const char *id, bool outgoing,
         sb_printf(sb, ",\"resolved\":%s", d ? "true" : "false");
         if (d) {
             sb_puts(sb, ",\"document\":{");
-            json_document(sb, s, d, src_by_id(&s->sources, d->source), st);
+            json_document(sb, d, src_by_id(&s->sources, d->source), st);
             sb_putc(sb, '}');
         } else {
             sb_puts(sb, ",\"document\":null");
@@ -516,8 +435,7 @@ void json_links(StrBuf *sb, const Store *s, const char *id, bool outgoing,
 
 void json_source(StrBuf *sb, const Store *s, const Source *src) {
     SourceFacts f = source_facts(s->a, s, src->id);
-    sb_printf(sb, "\"id\":\"%s\",\"store\":\"%s\",\"kind\":\"%s\"", src->id,
-              tier_name(s->tier), src->kind);
+    sb_printf(sb, "\"id\":\"%s\",\"kind\":\"%s\"", src->id, src->kind);
     sb_puts(sb, ",\"locator\":");
     json_escape_c(sb, src->locator);
     sb_puts(sb, ",\"title\":");

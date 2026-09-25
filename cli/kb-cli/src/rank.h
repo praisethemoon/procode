@@ -1,18 +1,7 @@
-/* Reciprocal rank fusion (§1.4, §4).
+/* Reciprocal rank fusion (§4).
  *
- * Two places in this design merge result lists, and both merge by RANK
- * rather than by score.
- *
- *   §1.4, now: the project and global tiers are searched separately and
- *   their results combined. The tiers are separate corpora — different
- *   document counts, different average chunk lengths, and later different
- *   embedding models — so their BM25 scores are not on one scale. 12.4 in a
- *   nine-document project store and 12.4 in a four-thousand-document global
- *   store are not the same claim, and comparing them directly would let the
- *   larger store quietly dominate every search.
- *
- *   §4, next: keyword and semantic retrieval are fused. A cosine similarity
- *   and a BM25 score have no common unit at all.
+ * Keyword and semantic retrieval are fused by RANK rather than by score: a
+ * cosine similarity and a BM25 score have no common unit at all.
  *
  * Rank is the one thing every list agrees on: "this was my best answer" means
  * the same in all of them. So each list contributes 1/(k + rank) and the
@@ -24,19 +13,15 @@
  * difference between rank 1 and rank 2 enough that agreement between lists
  * matters more than the exact position within one.
  *
- * ITEMS ARE JOINED BY `key`. Today each chunk appears in exactly one list —
- * a chunk lives in one tier, and duplicates across tiers are removed before
- * fusion (§1.4) — so the sum has one term and fusion is an interleave. That
- * is the honest consequence of ranking by rank. When the semantic path
+ * ITEMS ARE JOINED BY `key`. Today there is one list, the keyword one, so
+ * the sum has one term and fusion preserves its order. When the semantic path
  * arrives, the same chunk will appear in two lists with the same key, the
  * two contributions will add, and a chunk found by both will rise above one
  * found by either. Nothing here has to change for that; `tags` is already
  * the bitmask that §4's `matched` is printed from.
  *
  * TIES ARE NOT BROKEN BY SCORE. Two lists' rank-1 entries tie, and the
- * tie-break is the order the lists were handed in — project before global,
- * matching §1.4's rule that a document in both tiers is attributed to the
- * project — then rank, then key. Reaching for the underlying scores to
+ * tie-break is the order the lists were handed in, then rank, then key. Reaching for the underlying scores to
  * break the tie would reintroduce exactly the cross-scale comparison this
  * whole mechanism exists to avoid.
  */

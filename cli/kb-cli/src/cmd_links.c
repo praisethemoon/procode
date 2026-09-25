@@ -16,13 +16,6 @@
  * traversal retrieval cannot answer, and nothing here invents one. Both ends
  * of an edge are document identifiers and there is no other kind of node.
  *
- * WITHIN ONE STORE. Identifiers are allocated per store (§1.4), so "D-1"
- * names a different document in each tier, and §1.2's Link carries no store
- * field. A cross-tier edge is therefore not representable, and rather than
- * invent a spelling for one, a link is written into the store both of its
- * ends live in. A read resolves an id the way `kb get` does: project first,
- * first match wins.
- *
  * A LINK TO A DOCUMENT THAT DOES NOT EXIST IS REFUSED AT WRITE TIME, and a
  * link whose target is later forgotten still reads — as a row with
  * `resolved: false`. Those two rules are not in tension: the first keeps a
@@ -32,8 +25,8 @@
  * gone is exactly the repair a reader would want.
  */
 
-static const char *const VALUE_FLAGS[] = {"--store", "--older-than",
-                                          "--olderThan", NULL};
+static const char *const VALUE_FLAGS[] = {"--older-than", "--olderThan",
+                                          NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 /* "supersedes, cites, analogue_of, implements or see_also" — built from the
@@ -87,27 +80,15 @@ static int32_t links_write(Arena *a, int32_t argc, char **argv, bool json,
                 rel_in, type_list(a));
         return KB_EXIT_ERR;
     }
-    StoreSel sel;
-    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
-                         &sel)) {
-        err_out(json, "usage", "--store expects project or global");
-        return KB_EXIT_ERR;
-    }
-    if (sel == SEL_ALL) {
-        err_out(json, "usage", "--store all cannot be a write target");
-        return KB_EXIT_ERR;
-    }
-
     char err[512];
-    TierSet tiers;
-    if (!tiers_resolve(sel, true, &tiers, err, sizeof err)) {
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
         return KB_EXIT_ERR;
     }
     Store s;
     const char *code;
-    if (!store_open(a, &s, tiers.dir[0], tiers.tier[0], true, err, sizeof err,
-                    &code)) {
+    if (!store_open(a, &s, dir, true, err, sizeof err, &code)) {
         err_out(json, code, "%s", err);
         return strcmp(code, "internal") == 0 ? KB_EXIT_FATAL : KB_EXIT_ERR;
     }
@@ -125,9 +106,9 @@ static int32_t links_write(Arena *a, int32_t argc, char **argv, bool json,
         if (missing) {
             store_close(&s);
             err_out(json, "not_found",
-                    "no document %s in the %s store; a link to a document "
-                    "that does not exist is a typo, not an edge",
-                    missing, tier_name(s.tier));
+                    "no document %s; a link to a document that does not "
+                    "exist is a typo, not an edge",
+                    missing);
             return KB_EXIT_ERR;
         }
     } else if (!present) {
@@ -165,10 +146,10 @@ static int32_t links_write(Arena *a, int32_t argc, char **argv, bool json,
          * has to work out which keys came back before it can read the
          * answer. */
         sb_printf(&sb,
-                  "{\"ok\":true,\"action\":\"%s\",\"store\":\"%s\","
-                  "\"from\":\"%s\",\"type\":\"%s\",\"to\":\"%s\","
-                  "\"changed\":%s,\"at\":\"%s\"}",
-                  verb, tier_name(s.tier), from, rel, to,
+                  "{\"ok\":true,\"action\":\"%s\",\"from\":\"%s\","
+                  "\"type\":\"%s\",\"to\":\"%s\",\"changed\":%s,"
+                  "\"at\":\"%s\"}",
+                  verb, from, rel, to,
                   changed ? "true" : "false", now);
         puts(sb_finish(&sb));
     } else {
@@ -184,12 +165,6 @@ static int32_t links_write(Arena *a, int32_t argc, char **argv, bool json,
 
 static int32_t links_read(Arena *a, int32_t argc, char **argv, bool json,
                           const char *id) {
-    StoreSel sel;
-    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
-                         &sel)) {
-        err_out(json, "usage", "--store expects project, global or all");
-        return KB_EXIT_ERR;
-    }
     char err[512];
     Staleness st;
     if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
@@ -197,65 +172,59 @@ static int32_t links_read(Arena *a, int32_t argc, char **argv, bool json,
         err_out(json, "usage", "%s", err);
         return KB_EXIT_ERR;
     }
-    TierSet tiers;
-    if (!tiers_resolve(sel, false, &tiers, err, sizeof err)) {
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
         return KB_EXIT_ERR;
     }
 
-    for (size_t t = 0; t < tiers.n; t++) {
-        Store s;
-        const char *code;
-        if (!store_open(a, &s, tiers.dir[t], tiers.tier[t], false, err,
-                        sizeof err, &code)) {
-            err_out(json, code, "%s", err);
-            return KB_EXIT_ERR;
-        }
-        if (!doc_by_id(&s.documents, id)) {
-            store_close(&s);
-            continue;
-        }
-        if (json) {
-            StrBuf sb;
-            sb_init(&sb, a);
-            sb_printf(&sb, "{\"ok\":true,\"document\":\"%s\",\"store\":\"%s\","
-                           "\"outgoing\":",
-                      id, tier_name(s.tier));
-            json_links(&sb, &s, id, true, &st);
-            sb_puts(&sb, ",\"incoming\":");
-            json_links(&sb, &s, id, false, &st);
-            sb_putc(&sb, '}');
-            puts(sb_finish(&sb));
-        } else {
-            StrBuf sb;
-            sb_init(&sb, a);
-            size_t shown = 0;
-            for (size_t i = 0; i < s.documents.nlinks; i++) {
-                const Link *l = &s.documents.links[i];
-                bool out = strcmp(l->from, id) == 0;
-                if (!out && strcmp(l->to, id) != 0)
-                    continue;
-                const char *far = out ? l->to : l->from;
-                const Document *fd = doc_by_id(&s.documents, far);
-                sb_printf(&sb, "%s %-11s %-8s ", out ? "->" : "<-", l->rel,
-                          far);
-                if (fd)
-                    sb_puts_safe(&sb, fd->title ? fd->title : "");
-                else
-                    sb_puts(&sb, "(forgotten)");
-                sb_putc(&sb, '\n');
-                shown++;
-            }
-            if (shown == 0)
-                printf("%s has no links\n", id);
-            else
-                fputs(sb_finish(&sb), stdout);
-        }
-        store_close(&s);
-        return KB_EXIT_OK;
+    Store s;
+    const char *code;
+    if (!store_open(a, &s, dir, false, err, sizeof err, &code)) {
+        err_out(json, code, "%s", err);
+        return KB_EXIT_ERR;
     }
-    err_out(json, "not_found", "no document %s", id);
-    return KB_EXIT_ERR;
+    if (!doc_by_id(&s.documents, id)) {
+        store_close(&s);
+        err_out(json, "not_found", "no document %s", id);
+        return KB_EXIT_ERR;
+    }
+    if (json) {
+        StrBuf sb;
+        sb_init(&sb, a);
+        sb_printf(&sb, "{\"ok\":true,\"document\":\"%s\",\"outgoing\":", id);
+        json_links(&sb, &s, id, true, &st);
+        sb_puts(&sb, ",\"incoming\":");
+        json_links(&sb, &s, id, false, &st);
+        sb_putc(&sb, '}');
+        puts(sb_finish(&sb));
+    } else {
+        StrBuf sb;
+        sb_init(&sb, a);
+        size_t shown = 0;
+        for (size_t i = 0; i < s.documents.nlinks; i++) {
+            const Link *l = &s.documents.links[i];
+            bool out = strcmp(l->from, id) == 0;
+            if (!out && strcmp(l->to, id) != 0)
+                continue;
+            const char *far = out ? l->to : l->from;
+            const Document *fd = doc_by_id(&s.documents, far);
+            sb_printf(&sb, "%s %-11s %-8s ", out ? "->" : "<-", l->rel,
+                      far);
+            if (fd)
+                sb_puts_safe(&sb, fd->title ? fd->title : "");
+            else
+                sb_puts(&sb, "(forgotten)");
+            sb_putc(&sb, '\n');
+            shown++;
+        }
+        if (shown == 0)
+            printf("%s has no links\n", id);
+        else
+            fputs(sb_finish(&sb), stdout);
+    }
+    store_close(&s);
+    return KB_EXIT_OK;
 }
 
 int32_t cmd_links(Arena *a, int32_t argc, char **argv) {

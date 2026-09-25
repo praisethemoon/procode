@@ -36,37 +36,31 @@
  * filter. So a rename cannot stale the index, and rebuilding after one would
  * be work for nothing. */
 
-static const char *const VALUE_FLAGS[] = {"--store", NULL};
+static const char *const VALUE_FLAGS[] = {NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef struct {
     const char *name;
-    Tier tier;
     int64_t documents;
     int64_t bytes;
     const char *oldest; /* ISO-8601 UTC, so oldest is a string minimum */
 } Row;
 
-/* Collections are per tier, not global: §1.4 is explicit that `win32-iocp` can
- * exist in both, and merging them here would claim a single topic where there
- * are two stores that happen to agree on a name. */
-static Row *find(Row *v, size_t n, const char *name, Tier tier) {
+static Row *find(Row *v, size_t n, const char *name) {
     for (size_t i = 0; i < n; i++)
-        if (v[i].tier == tier && strcmp(v[i].name, name) == 0)
+        if (strcmp(v[i].name, name) == 0)
             return &v[i];
     return NULL;
 }
 
 static int compare(const void *x, const void *y) {
     const Row *a = x, *b = y;
-    if (a->tier != b->tier)
-        return a->tier < b->tier ? -1 : 1;
     return strcmp(a->name, b->name);
 }
 
 /* The write half. `to` is NULL for a delete. */
-static int32_t collection_write(Arena *a, int32_t argc, char **argv, bool json,
-                                const char *from, const char *to) {
+static int32_t collection_write(Arena *a, bool json, const char *from,
+                                const char *to) {
     if (!from || !from[0]) {
         err_out(json, "usage", "kb collections %s expects a collection name",
                 to ? "rename" : "delete");
@@ -79,26 +73,15 @@ static int32_t collection_write(Arena *a, int32_t argc, char **argv, bool json,
                 "a collection name must be non-empty and must not nest");
         return KB_EXIT_ERR;
     }
-    StoreSel sel;
-    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
-                         &sel)) {
-        err_out(json, "usage", "--store expects project or global");
-        return KB_EXIT_ERR;
-    }
-    if (sel == SEL_ALL) {
-        err_out(json, "usage", "--store all cannot be a write target");
-        return KB_EXIT_ERR;
-    }
     char err[512];
-    TierSet tiers;
-    if (!tiers_resolve(sel, true, &tiers, err, sizeof err)) {
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
         return KB_EXIT_ERR;
     }
     Store s;
     const char *code;
-    if (!store_open(a, &s, tiers.dir[0], tiers.tier[0], true, err, sizeof err,
-                    &code)) {
+    if (!store_open(a, &s, dir, true, err, sizeof err, &code)) {
         err_out(json, code, "%s", err);
         return strcmp(code, "internal") == 0 ? KB_EXIT_FATAL : KB_EXIT_ERR;
     }
@@ -119,8 +102,7 @@ static int32_t collection_write(Arena *a, int32_t argc, char **argv, bool json,
     }
     if (nsources == 0) {
         store_close(&s);
-        err_out(json, "not_found", "no collection \"%s\" in the %s store",
-                from, tier_name(s.tier));
+        err_out(json, "not_found", "no collection \"%s\"", from);
         return KB_EXIT_ERR;
     }
     if (!to && ndocs > 0) {
@@ -164,8 +146,8 @@ static int32_t collection_write(Arena *a, int32_t argc, char **argv, bool json,
     if (json) {
         StrBuf sb;
         sb_init(&sb, a);
-        sb_printf(&sb, "{\"ok\":true,\"action\":\"%s\",\"store\":\"%s\",",
-                  to ? "rename" : "delete", tier_name(s.tier));
+        sb_printf(&sb, "{\"ok\":true,\"action\":\"%s\",",
+                  to ? "rename" : "delete");
         sb_puts(&sb, "\"collection\":");
         json_escape_c(&sb, from);
         if (to) {
@@ -214,70 +196,58 @@ int32_t cmd_collections(Arena *a, int32_t argc, char **argv) {
                     "kb collections rename expects <old> <new>");
             return KB_EXIT_ERR;
         }
-        return collection_write(a, argc, argv, json, from, to);
+        return collection_write(a, json, from, to);
     }
     if (verb && strcmp(verb, "delete") == 0)
-        return collection_write(a, argc, argv, json,
-                                positional_arg(argc, argv, VALUE_FLAGS, 1),
-                                NULL);
+        return collection_write(
+            a, json, positional_arg(argc, argv, VALUE_FLAGS, 1), NULL);
     if (verb) {
         err_out(json, "usage",
                 "kb collections takes no argument, or \"rename <old> <new>\", "
                 "or \"delete <name>\"");
         return KB_EXIT_ERR;
     }
-    StoreSel sel;
-    if (!store_sel_parse(flag_value(argc, argv, VALUE_FLAGS, "--store"),
-                         &sel)) {
-        err_out(json, "usage", "--store expects project, global or all");
-        return KB_EXIT_ERR;
-    }
-
     char err[512];
-    TierSet tiers;
-    if (!tiers_resolve(sel, false, &tiers, err, sizeof err)) {
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
         err_out(json, "not_found", "%s", err);
         return KB_EXIT_ERR;
     }
 
     Row *rows = NULL;
     size_t nrows = 0, cap = 0;
-    for (size_t t = 0; t < tiers.n; t++) {
-        Store s;
-        const char *code;
-        if (!store_open(a, &s, tiers.dir[t], tiers.tier[t], false, err,
-                        sizeof err, &code)) {
-            err_out(json, code, "%s", err);
-            return KB_EXIT_ERR;
-        }
-        for (size_t i = 0; i < s.documents.n; i++) {
-            const Document *d = &s.documents.v[i];
-            const Source *src = src_by_id(&s.sources, d->source);
-            if (!src || !src->collection)
-                continue;
-            Row *r = find(rows, nrows, src->collection, s.tier);
-            if (!r) {
-                if (nrows == cap) {
-                    size_t old_cap = cap;
-                    cap = cap ? cap * 2 : 8;
-                    rows = arena_realloc(a, rows, sizeof *rows * old_cap,
-                                        sizeof *rows * cap);
-                }
-                r = &rows[nrows++];
-                r->name = src->collection;
-                r->tier = s.tier;
-                r->documents = 0;
-                r->bytes = 0;
-                r->oldest = NULL;
-            }
-            r->documents++;
-            r->bytes += (int64_t)d->bytes;
-            if (d->fetched_at &&
-                (!r->oldest || strcmp(d->fetched_at, r->oldest) < 0))
-                r->oldest = d->fetched_at;
-        }
-        store_close(&s);
+    Store s;
+    const char *code;
+    if (!store_open(a, &s, dir, false, err, sizeof err, &code)) {
+        err_out(json, code, "%s", err);
+        return KB_EXIT_ERR;
     }
+    for (size_t i = 0; i < s.documents.n; i++) {
+        const Document *d = &s.documents.v[i];
+        const Source *src = src_by_id(&s.sources, d->source);
+        if (!src || !src->collection)
+            continue;
+        Row *r = find(rows, nrows, src->collection);
+        if (!r) {
+            if (nrows == cap) {
+                size_t old_cap = cap;
+                cap = cap ? cap * 2 : 8;
+                rows = arena_realloc(a, rows, sizeof *rows * old_cap,
+                                    sizeof *rows * cap);
+            }
+            r = &rows[nrows++];
+            r->name = src->collection;
+            r->documents = 0;
+            r->bytes = 0;
+            r->oldest = NULL;
+        }
+        r->documents++;
+        r->bytes += (int64_t)d->bytes;
+        if (d->fetched_at &&
+            (!r->oldest || strcmp(d->fetched_at, r->oldest) < 0))
+            r->oldest = d->fetched_at;
+    }
+    store_close(&s);
     /* Sorted, because the caller is a list and an order that depends on which
      * document happened to be filed first is one a reader cannot scan. */
     if (nrows > 1)
@@ -292,8 +262,8 @@ int32_t cmd_collections(Arena *a, int32_t argc, char **argv) {
                 sb_putc(&sb, ',');
             sb_puts(&sb, "{\"name\":");
             json_escape_c(&sb, rows[i].name);
-            sb_printf(&sb, ",\"store\":\"%s\",\"documents\":%lld,\"bytes\":%lld",
-                      tier_name(rows[i].tier), (long long)rows[i].documents,
+            sb_printf(&sb, ",\"documents\":%lld,\"bytes\":%lld",
+                      (long long)rows[i].documents,
                       (long long)rows[i].bytes);
             sb_puts(&sb, ",\"oldestFetchedAt\":");
             if (rows[i].oldest)
@@ -308,8 +278,8 @@ int32_t cmd_collections(Arena *a, int32_t argc, char **argv) {
         puts("no collections");
     } else {
         for (size_t i = 0; i < nrows; i++) {
-            sb_printf(&sb, "%-8s %6lld doc %10lld b  %-21s ",
-                      tier_name(rows[i].tier), (long long)rows[i].documents,
+            sb_printf(&sb, "%6lld doc %10lld b  %-21s ",
+                      (long long)rows[i].documents,
                       (long long)rows[i].bytes,
                       rows[i].oldest ? rows[i].oldest : "-");
             /* The name came out of a log line somebody else may have written,
