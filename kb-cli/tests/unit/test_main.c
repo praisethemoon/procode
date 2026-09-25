@@ -21,6 +21,8 @@ void test_token(void);
 void test_fts(void);
 void test_rank(void);
 void test_snippet(void);
+void test_stale(void);
+void test_link(void);
 
 /* Holds the write lock on a store until stdin closes, so the end-to-end
  * script can see what a *second* process meets: cross-process locking is
@@ -60,6 +62,8 @@ int main(int argc, char **argv) {
     test_fts();
     test_rank();
     test_snippet();
+    test_stale();
+    test_link();
     printf("unit tests: %d passed, %d failed\n", t_pass, t_fail);
     return t_fail == 0 ? 0 : 1;
 }

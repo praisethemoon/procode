@@ -445,9 +445,16 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         }
     }
     if (json) {
-        sb_printf(&sb, "],\"count\":%zu,\"olderThan\":\"%s\","
-                       "\"staleBefore\":\"%s\"}",
-                  nfused, st.spec, st.cutoff_iso);
+        /* The threshold that produced every `stale` above, so a caller never
+         * has to know which default it got (§5). The cutoff INSTANT is
+         * deliberately not here: it is a reading of the clock rather than a
+         * fact about the corpus, and a search answer has to be a function of
+         * the store and the query alone — that is what makes "rebuild
+         * reproduces the previous answer" a thing anyone can check. `kb
+         * stale` and `kb refresh` do carry it, because there the cutoff is
+         * the question rather than a footnote to it. */
+        sb_printf(&sb, "],\"count\":%zu,\"olderThan\":\"%s\"}", nfused,
+                  st.spec);
         puts(sb_finish(&sb));
     } else if (nfused == 0) {
         puts("no hits");

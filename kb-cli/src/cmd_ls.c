@@ -111,10 +111,12 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
     }
     if (json) {
         /* The threshold that produced every `stale` above, so a caller never
-         * has to know which default it got (§5). */
-        sb_printf(&sb, "],\"count\":%lld,\"olderThan\":\"%s\",\"staleBefore\":"
-                       "\"%s\"}",
-                  (long long)shown, st.spec, st.cutoff_iso);
+         * has to know which default it got (§5). Not the cutoff instant: a
+         * list of rows out of the log must stay a function of the log, and a
+         * reading of the clock in it would make two identical stores answer
+         * differently. */
+        sb_printf(&sb, "],\"count\":%lld,\"olderThan\":\"%s\"}",
+                  (long long)shown, st.spec);
         puts(sb_finish(&sb));
     } else if (shown == 0) {
         puts("no documents");
