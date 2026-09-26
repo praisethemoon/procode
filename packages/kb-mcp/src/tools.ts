@@ -82,12 +82,16 @@ const KB_SEARCH: ToolDefinition = {
                 type: "string",
                 description: "Only documents fetched at or after this ISO-8601 instant.",
             },
-            minScore: { type: "number", description: "Drop hits fused below this score." },
+            minScore: {
+                type: "number",
+                description:
+                    "Drop keyword hits whose BM25 score is below this, before fusion. Semantic hits are not affected.",
+            },
             rerank: {
                 type: "boolean",
                 description:
                     "Rescore the top 10 hits with a cross-encoder and reorder them by its score, which each rescored " +
-                    "hit carries as scores.rerank. Better ordering, but several seconds slower per search, and it " +
+                    "hit carries as scores.rerank. Clearly better ordering, but about a second slower per search, and it " +
                     "needs the reranker model file in ~/.kb/models (refused as model_missing without it). Default: false.",
             },
         },

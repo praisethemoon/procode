@@ -171,7 +171,7 @@
         "knowledge.rerank": {
           "type": "boolean",
           "default": false,
-          "description": "Rerank search results with a cross-encoder: slower (seconds per search) but better ordering. Needs the gte-reranker-modernbert-base model in the models folder under .kb in your home directory."
+          "description": "Rerank search results with a cross-encoder: about a second slower per search, but clearly better ordering. Needs the gte-reranker-modernbert-base model in the models folder under .kb in your home directory."
         }
       }
     }
