@@ -3,9 +3,16 @@
 Status: draft. Working name `kb`; the tool's name is undecided and every
 `kb`-prefixed identifier here is provisional.
 
-A local, offline knowledge base over documentation, source trees and papers.
-Research an agent has already done is indexed rather than discarded, and both
-the agent and the reader search it afterwards.
+A local, offline knowledge base over documentation, reference source and
+papers. Research an agent has already done is indexed rather than discarded,
+and both the agent and the reader search it afterwards.
+
+It holds what was **read**, never the code being **written**. Reference source
+— another project's API, a kernel's io_uring code at a pinned version — belongs
+here, because it is research. The workspace's own code does not: it changes
+with every edit, so an index of it is stale the moment it is built, and grep
+and the language server already answer questions about it exactly and
+currently. This is why there is no directory walk (§2).
 
 No service, no daemon, no container. Embeddings are produced in-process by a
 model loaded from disk (§8).
@@ -41,7 +48,7 @@ is self-describing in a search result, a citation, a log line or a prompt.
 ### 1.2 Entities
 
 ```
-Source    { id, kind: url | file | dir | inline, locator, title, collection,
+Source    { id, kind: url | file | inline, locator, title, collection,
             fetchedAt, contentHash, etag?, docCount, bytes, status }
 
 Document  { id, source, path, title, mime, contentHash, bytes,
@@ -53,8 +60,8 @@ Chunk     { id, document, ordinal, heading?, span: { start, end },
 Link      { from, to, type }
 ```
 
-`Source` is what was ingested from — a URL, a file, a directory walk, or
-content handed in directly. `Document` is one addressable item within it.
+`Source` is what was ingested from — a URL, a file, or content handed in
+directly. `Document` is one addressable item within it.
 `Chunk` is the retrieval unit.
 
 `meta` is free-form per-document: for a paper, its authors and year; for a
@@ -143,7 +150,7 @@ than in the log, so re-ingesting an unchanged page writes nothing.
 
 | route | purpose |
 |---|---|
-| `POST /sources` | ingest by locator. `{ kind, locator, collection, meta?, options? }`. `url` is fetched; `file` and `dir` are read and walked |
+| `POST /sources` | ingest by locator. `{ kind: file, locator, collection, meta? }`. A file is read, one at a time: a directory walk pointed at `.` would index the workspace itself. A `url` is not fetched by the binary (§12.2); whoever fetched the page files it through `POST /documents` |
 | `POST /documents` | **ingest content directly**: `{ url?, title, content, mime?, collection, meta? }`. The caller already has the text — an agent that has just read a page hands it over instead of causing a second fetch |
 | `POST /documents/batch` | many at once, one transaction |
 | `GET /sources` | rows. `?collection=&kind=&status=&q=` |
@@ -361,9 +368,12 @@ code has none to give.
 1. **Entity nodes.** §6 links documents only. Whether a symbol or concept
    deserves to be a node depends on a traversal query that has not yet been
    named.
-2. **Fetching.** `POST /sources` with `kind: url` requires an HTTP client in
-   the CLI. The alternative is to fetch nothing and accept content only through
-   `POST /documents`, keeping the binary free of TLS entirely.
+2. **Fetching — decided: the binary fetches nothing.** It has no HTTP client
+   and keeps free of TLS. An agent or a surface fetches a page with its own
+   tools and hands the text over through `POST /documents`, with the page's
+   `etag` if it saw one. Refreshing a `url` source is therefore the caller's
+   job (`index-vscode` asks before it fetches); `POST /sources/{id}/refresh`
+   on one is refused with `fetch_failed`, and on a `file` reads it again.
 3. **PDF.** Papers are a stated target and PDF text extraction is a dependency
    of real size. Ingesting pre-extracted text through `POST /documents` avoids
    it.

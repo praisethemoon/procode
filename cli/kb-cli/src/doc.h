@@ -53,7 +53,7 @@ char *kb_id_make(Arena *a, char prefix, int64_t n);
 
 typedef struct {
     const char *id;         /* "S-3" */
-    const char *kind;       /* url | file | dir | inline (§1.2) */
+    const char *kind;       /* url | file | inline (§1.2) */
     const char *locator;
     const char *title;
     const char *collection;

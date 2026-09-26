@@ -20,9 +20,10 @@ export type SourceId = string;
 export type DocumentId = string;
 export type ChunkId = string;
 
-/* §1.2. `kind` is what was ingested from: a URL, a file, a directory walk, or
- * content handed in directly. */
-export type SourceKind = "url" | "file" | "dir" | "inline";
+/* §1.2. `kind` is what was ingested from: a URL, a file, or content handed
+ * in directly. There is no directory walk: kb holds reference material, not
+ * the workspace's own code. */
+export type SourceKind = "url" | "file" | "inline";
 
 export interface KbSource {
     readonly id: SourceId;
