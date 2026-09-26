@@ -177,6 +177,16 @@ function asNumber(tool: string, key: string, v: unknown): number | undefined {
     return v;
 }
 
+function asBoolean(tool: string, key: string, v: unknown): boolean | undefined {
+    if (v === undefined || v === null) {
+        return undefined;
+    }
+    if (typeof v !== "boolean") {
+        throw bad(tool, `"${key}" must be true or false.`);
+    }
+    return v;
+}
+
 function asInteger(
     tool: string,
     key: string,
@@ -235,6 +245,7 @@ async function search(kb: Kb, args: Record<string, unknown>): Promise<ToolResult
         mime: asString("kb_search", "mime", args["mime"]),
         since: asString("kb_search", "since", args["since"]),
         minScore: asNumber("kb_search", "minScore", args["minScore"]),
+        rerank: asBoolean("kb_search", "rerank", args["rerank"]),
     };
     const answer = await kb.search(q, options);
     /* The hits as the store ranked them, and nothing fetched on top of them.
@@ -253,6 +264,10 @@ async function search(kb: Kb, args: Record<string, unknown>): Promise<ToolResult
         count: answer.count,
         mode: answer.mode,
         olderThan: answer.olderThan,
+        /* Present only when some chunks have no vector yet (§4): the
+         * semantic side did not see them, so a hit the caller expected may
+         * be missing from a semantic or hybrid answer. */
+        ...(answer.unembedded !== undefined ? { unembedded: answer.unembedded } : {}),
         hits: answer.hits,
     });
 }
@@ -382,8 +397,11 @@ async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
      * nothing is filed. The answer says so, so an agent never has to work out
      * which of its documents made it in. */
     try {
-        const added = await kb.addBatch(documents);
-        return rows({ filed: added.length, added });
+        /* No embedding budget is sent: the store's own default keeps an
+         * agent's call short, and whatever it did not reach is `pending` —
+         * searchable by keyword at once, and embedded later (§2). */
+        const batch = await kb.addBatch(documents);
+        return rows({ filed: batch.added.length, added: batch.added, pending: batch.pending });
     } catch (e) {
         return {
             content: [

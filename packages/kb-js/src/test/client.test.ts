@@ -235,6 +235,45 @@ test("add hands the content over on stdin and answers one shape", async () => {
     );
 });
 
+test("a search keeps unembedded when the store says some chunks have no vector, and only then", async () => {
+    await withKb(
+        [
+            { stdout: ok({ mode: "hybrid", hits: [HIT], unembedded: 812, count: 1, olderThan: "90d" }) },
+            { stdout: ok({ mode: "hybrid", hits: [HIT], count: 1, olderThan: "90d" }) },
+        ],
+        async (kb) => {
+            assert.equal((await kb.search("x")).unembedded, 812);
+            assert.equal("unembedded" in (await kb.search("x")), false);
+        },
+    );
+});
+
+test("add and a batch keep what was left to embed, and embed asks for exactly that", async () => {
+    await withKb(
+        [
+            { stdout: ok({ document: "D-9", chunkCount: 900, pending: 812 }) },
+            { stdout: ok({ added: [{ document: "D-10" }], count: 1, pending: 3 }) },
+            { stdout: ok({ embedded: 815, kept: 88, skipped: 2, pending: 0 }) },
+            { stdout: refusal("model_missing", "nothing to embed with"), exit: 1 },
+        ],
+        async (kb, fake) => {
+            const added = await kb.add("big\n", { title: "Big", collection: "c", embedBudget: 0 });
+            assert.equal(added.pending, 812);
+            const batch = await kb.addBatch([{ title: "t", collection: "c", content: "x" }], { wait: true });
+            assert.equal(batch.pending, 3);
+            assert.equal(batch.added[0].document, "D-10");
+            assert.deepEqual(await kb.embed(), { embedded: 815, kept: 88, skipped: 2, pending: 0 });
+            const refused = (await kb.embed().catch((x: unknown) => x)) as KbError;
+            assert.ok(refused instanceof KbError);
+            assert.equal(refused.code, "model_missing");
+            const calls = fake.calls();
+            assert.deepEqual(calls[0].argv, ["add", "--title", "Big", "--collection", "c", "--embed-budget", "0", "--file", "-", "--json"]);
+            assert.deepEqual(calls[1].argv, ["add", "--batch", "--wait", "--json"]);
+            assert.deepEqual(calls[2].argv, ["embed", "--json"]);
+        },
+    );
+});
+
 test("a refusal reaches the caller as a KbError with the store's code", async () => {
     await withKb([{ stdout: refusal("not_found", "no document D-9999"), exit: 1 }], async (kb) => {
         const e = (await kb.get("D-9999").catch((x: unknown) => x)) as KbError;

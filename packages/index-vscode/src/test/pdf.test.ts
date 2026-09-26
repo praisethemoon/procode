@@ -81,8 +81,16 @@ test("the document is a title, its author, and a section per page", () => {
 test("a PDF is read by pdf.js and filed so its pages are searchable", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
     const pdf = makePdf(
         [
-            ["Completion ports", "A completion port queues finished zzoverlapped I/O."],
-            ["Rings", "io_uring shares a zzsubmission ring with the kernel.", "", "A second paragraph."],
+            // Pages of real length: kb merges tiny sibling sections, and a page of one
+            // line would share a chunk (and a heading) with the next.
+            ["Completion ports", "A completion port queues finished zzoverlapped I/O.",
+             "Worker threads wait on the port and take one completion each,",
+             "so the number of threads running at once stays near the core count,",
+             "and a burst of finished requests wakes no more threads than can work."],
+            ["Rings", "io_uring shares a zzsubmission ring with the kernel.", "", "A second paragraph.",
+             "The application writes entries into the submission ring,",
+             "the kernel writes results into the completion ring, and a busy",
+             "program submits and reaps many requests without a call for each one."],
         ],
         { title: "Async IO notes", author: "Ana" },
     );

@@ -27,7 +27,7 @@ import { Kb, KbCrash, KbDirAdded, KbError, KbSourceRefreshed, isKbCrash, isKbErr
 
 import { refreshDocument } from "./commands";
 import { KNOWLEDGE_STYLESHEETS, knowledgePolicy } from "./policy";
-import { Operation, Request, Response, ViewTag, isRequest } from "./protocol";
+import { Operation, Request, Response, StoredPositions, ViewTag, isRequest } from "./protocol";
 import { Settings } from "./session";
 
 /* A CSP nonce, which is the whole of why this package's own script may run and
@@ -64,6 +64,38 @@ export interface HostContext {
     scope(collection: string): void;
     /* A tab's name, from the view that has just read the document. */
     retitle(reference: string, title: string): void;
+    /* Settled graph layouts, by `layoutKey`. */
+    layouts: LayoutShelf;
+}
+
+export interface LayoutShelf {
+    get(key: string): StoredPositions | null;
+    put(key: string, positions: StoredPositions): void;
+}
+
+/* How many layouts are kept: the whole store, a collection or two, and the
+ * same with unlinked documents shown. Two thousand positions are some 60 KB
+ * of JSON, so the shelf stays small. */
+const LAYOUTS_KEPT = 6;
+const LAYOUTS_STATE = "knowledge.graphLayouts";
+
+/* The graph's settled positions in the workspace's state, most recent first,
+ * so they outlive the tab — and the window — while the store they were
+ * computed from is unchanged. A changed store has a different key and simply
+ * misses. */
+export function layoutShelf(state: vscode.Memento): LayoutShelf {
+    type Kept = { key: string; positions: StoredPositions };
+    const all = (): Kept[] => {
+        const v = state.get<unknown>(LAYOUTS_STATE);
+        return Array.isArray(v) ? (v as Kept[]) : [];
+    };
+    return {
+        get: (key) => all().find((l) => l.key === key)?.positions ?? null,
+        put: (key, positions) => {
+            const rest = all().filter((l) => l.key !== key);
+            void state.update(LAYOUTS_STATE, [{ key, positions }, ...rest].slice(0, LAYOUTS_KEPT));
+        },
+    };
 }
 
 export function mediaUri(ctx: HostContext): vscode.Uri {
@@ -128,7 +160,7 @@ ${full.styles.map((s) => `<link rel="stylesheet" href="${s}">`).join("\n")}
  * webview through `postMessage` and is a claim rather than a fact; spreading it
  * into a `kb-js` options object would let a field this table has never heard of
  * reach the argv builder. */
-async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
+async function perform(kb: Kb, op: Operation, raw: unknown, settings: Settings): Promise<unknown> {
     const input = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
     const text = (key: string): string | undefined =>
         typeof input[key] === "string" ? (input[key] as string) : undefined;
@@ -147,9 +179,12 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
                 limit: count("limit"),
             });
         case "search":
+            /* `rerank` is the reader's setting and not the webview's to ask
+             * for: the same search from the sidebar and the picker. */
             return kb.search(text("q") ?? "", {
                 collection: text("collection"),
                 k: count("k"),
+                rerank: settings.rerank === true,
             });
         case "get":
             return kb.get(text("id") ?? "", { text: true, chunks: true });
@@ -222,6 +257,17 @@ export function handleRequest(ctx: HostContext, surface: Surface, raw: unknown):
         case "settings":
             void vscode.commands.executeCommand("workbench.action.openSettings", "knowledge.cliPath");
             return;
+        case "embed":
+            void vscode.commands.executeCommand("knowledge.embed");
+            return;
+        case "layoutGet":
+            reply(surface.webview, { kind: "result", id: request.id, value: ctx.layouts.get(String(request.key)) });
+            return;
+        case "layoutPut":
+            if (typeof request.key === "string" && Array.isArray(request.positions)) {
+                ctx.layouts.put(request.key, request.positions);
+            }
+            return;
         default:
             void vscode.window
                 .showWarningMessage(
@@ -252,7 +298,7 @@ async function answer(
     input: unknown,
 ): Promise<void> {
     try {
-        reply(webview, { kind: "result", id, value: await perform(ctx.client(), op, input) });
+        reply(webview, { kind: "result", id, value: await perform(ctx.client(), op, input, ctx.settings()) });
         /* A write is the only thing that can have changed the store under the
          * other views, and it is the only thing that announces. A read that
          * announced would put every view into a loop of re-asking. */

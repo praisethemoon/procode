@@ -179,6 +179,15 @@ as it goes — so the second question on the same topic is answered from disk.
 Ingest is idempotent by content hash: the same text at the same locator
 re-indexes nothing and updates `fetchedAt`.
 
+**Filing does not wait for every embedding.** A document is searchable by
+keyword the moment its add returns; its chunks are embedded within a time
+budget (20 seconds by default, `--embed-budget S` to change it, `--wait` for
+no limit), and whatever is left is `pending` in the answer. `kb embed`
+finishes pending embeddings (so do `rebuild` and the next add), and a search
+meanwhile uses the vectors that exist (§4). A chunk that is mostly digits,
+punctuation or markup, or has almost no whitespace (inline SVG, minified code,
+encoded data), is indexed for keyword search only and never embedded.
+
 ### 2.1 Folders
 
 `kb add --dir <folder> --collection <c>` files a folder as **one `dir`
@@ -215,6 +224,9 @@ first five lines), not text (a NUL byte, or not UTF-8), empty, or over 1 MiB
   "embedded": 14 }
 ```
 
+A code file's document carries its language and definitions in `meta`:
+`{"language": "c", "symbols": [{"name", "kind", "line"}, ...]}`, the first 500.
+
 The whole folder is one locked section, one keyword rebuild and one embedding
 pass. Progress goes to standard error when it is a terminal.
 
@@ -236,9 +248,16 @@ whose tree is more than 10% parse error is cut into line windows instead;
 code in a language without a grammar splits on top-level declarations found
 line by line.
 
-A code chunk is indexed and embedded under a header line, `<document title> >
-<heading>`, ahead of its text: the file and the function a passage is in are
-words a search should match, and the passage itself seldom says them.
+Every chunk, prose or code, is indexed and embedded under a header line, `<title>
+> <heading path> > <heading>`, ahead of its text: the file and the section or
+function a passage is in are words a search should match, and the passage
+itself seldom says them. The keyword index counts the title three times and the
+heading path and heading twice (BM25F by repetition). A code
+chunk's **symbols** — the names its grammar's tags query marks as definitions
+(functions, methods, classes, types, modules; labels in assembly) — count
+three times too, so a search for a name lands on its definition before its
+uses. A run of tiny sibling sections (each under an eighth of the budget,
+under the same parent heading) shares one chunk while it fits.
 
 Every chunk keeps `heading` and `span` back into its document, so a hit can be
 shown in place rather than as a floating fragment.
@@ -256,6 +275,7 @@ GET /search?q=<text>
     &expand=1                           also return N neighbouring chunks
     &source=S-3  &mime=  &since=<iso>   filters
     &minScore=                          floor on the bm25 score, before fusion
+    &rerank=true                        cross-encoder reorders the fused top 20
 ```
 
 **Hybrid is the default and is not an optimization.** This corpus is dense with
@@ -263,14 +283,31 @@ exact identifiers — `CreateIoCompletionPort`, `IORING_SETUP_SQPOLL`,
 `EVFILT_READ` — and embeddings place near-synonyms on top of each other:
 `io_uring_prep_recv` and `io_uring_prep_send` are neighbours in vector space
 and opposites in practice. Keyword retrieval resolves those exactly; semantic
-retrieval finds what the reader could not name. Results from both are fused
-with reciprocal rank fusion, each list taken to depth `max(3k, 50)` first.
+retrieval finds what the reader could not name. Each list is taken to depth
+`max(3k, 50)`, and the two are fused **by score**: each list's scores are
+min-max normalised over that list, so the best answer of each is 1, and a
+chunk scores `a · vector' + (1 − a) · bm25'`, 0 on a side that did not find
+it. `a` is 0.6, and 0.3 for a query that is one identifier-shaped word (an
+underscore, an inner capital, a digit, `::`, `->`, `.`, `()`, or a leading
+dash), which is looking for that exact name. Both weights were chosen by
+cross-validation on the benchmark (`cli/kb-cli/bench/tune_fusion.py`).
+Reciprocal rank fusion (k = 60) stays as `--fusion rrf`.
 
-A store without vectors — no model recorded, or chunks not yet embedded —
-answers a search that names no mode with keyword, and says so in the
-response's `mode`. Asking for `hybrid` or `semantic` by name is refused with
-the reason (§11). `bm25` and `vector` appear in `scores` only for the paths
-that found the hit.
+A store without vectors — no model recorded, or a vector file written under
+another model — answers a search that names no mode with keyword, and says so
+in the response's `mode`. Asking for `hybrid` or `semantic` by name is refused
+with the reason (§11). A store whose vectors are only partly there (an add
+that left its embedding pending, §2) searches with the vectors it has and says
+how many chunks the semantic side did not see, as `unembedded` in the answer.
+`bm25` and `vector` appear in `scores` only for the paths that found the hit.
+
+**Reranking is opt-in** (`--rerank` on the CLI). A cross-encoder rescores the
+fused top 20, reading each pair as the query against the chunk's header line
+and text, cut to 512 tokens per pair, and those hits are put in the order of
+its scores; the rest keep the fused order after them. It costs seconds a query
+on CPU and needs the reranker model file in `~/.kb/models`: without it the
+search is refused with `model_missing` rather than answered unreranked. Hits it
+rescored carry its logit as `scores.rerank`; the others do not.
 
 A hit:
 
@@ -278,7 +315,7 @@ A hit:
 { chunk: "C-99812", document: "D-241", source: "S-3",
   title, heading, snippet, collection,
   matched: ["keyword", "semantic"],
-  scores: { bm25, vector, fused },
+  scores: { bm25, vector, fused, rerank },
   fetchedAt, stale }
 ```
 
@@ -416,7 +453,7 @@ Six tools.
 
 | tool | routes |
 |---|---|
-| `kb_search` | `GET /search` with every filter |
+| `kb_search` | `GET /search` with every filter, `rerank` included (off by default: slower) |
 | `kb_get` | `GET /chunks/{id}`, `GET /documents/{id}` |
 | `kb_add` | `POST /documents`, `POST /documents/batch`; with `dir`, `POST /sources` of kind `dir` (§2.1), never forgetting: a file gone from the folder is reported as `missing` |
 | `kb_collections` | `GET /collections`, `GET /stats` |

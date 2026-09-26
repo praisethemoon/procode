@@ -37,12 +37,15 @@ import {
     browseQuery,
     browseRows,
     isSearching,
+    leftToEmbed,
+    pendingLine,
     searchQuery,
     searchRows,
+    unembeddedNote,
 } from "../src/view/rows";
 import { formatDate } from "../src/view/facts";
 import { Codicon, Resolved, StaleBadge, useDebounced, useQuery } from "./parts";
-import { onHostEvent, open, tag } from "./rpc";
+import { finishEmbedding, onHostEvent, open, tag } from "./rpc";
 
 /* §2's debounce. Short enough that the list feels like it is following the
  * typing and long enough that a word costs one search rather than five. */
@@ -152,7 +155,7 @@ function SearchList(props: {
     collection: string;
     staleDays: number;
 }): JSX.Element {
-    const { state } = useQuery<{ hits: KbHit[]; count: number }>("search", {
+    const { state } = useQuery<{ hits: KbHit[]; count: number; unembedded?: number }>("search", {
         ...searchQuery(props.collection),
         q: props.q,
     });
@@ -160,10 +163,26 @@ function SearchList(props: {
         <Resolved state={state} loading="Searching…">
             {(result) => {
                 const rows = searchRows(result.hits, Date.now(), props.staleDays);
-                if (rows.length === 0) {
-                    return <div className="kb-empty">Nothing matched “{props.q}”.</div>;
-                }
-                return <List rows={rows} />;
+                /* index-api §4: the store searched with the vectors it has.
+                 * Said above the rows, because a passage the reader expected
+                 * and does not see is explained by it. */
+                const note = unembeddedNote(result.unembedded);
+                const shown =
+                    rows.length === 0 ? (
+                        <div className="kb-empty">Nothing matched “{props.q}”.</div>
+                    ) : (
+                        <List rows={rows} />
+                    );
+                return note === null ? (
+                    shown
+                ) : (
+                    <>
+                        {/* No button of its own: the rail's line above the
+                          * list already offers the pass that finishes them. */}
+                        <div className="kb-notice kb-unembedded">{note}</div>
+                        {shown}
+                    </>
+                );
             }}
         </Resolved>
     );
@@ -291,14 +310,30 @@ export function Sidebar(): JSX.Element {
                                 </div>
                             );
                         }
-                        return isSearching(settled) ? (
-                            <SearchList
-                                q={settled.trim()}
-                                collection={collection}
-                                staleDays={tag.staleAfterDays}
-                            />
-                        ) : (
-                            <BrowseList collection={collection} staleDays={tag.staleAfterDays} />
+                        /* index-api §2: filings embed within a budget and leave
+                         * the rest pending. The rail says how many and offers
+                         * the pass that finishes them. */
+                        const pending = leftToEmbed(value);
+                        return (
+                            <>
+                                {pending > 0 ? (
+                                    <div className="kb-notice kb-pending">
+                                        {pendingLine(pending)}{" "}
+                                        <button type="button" className="kb-action" onClick={() => finishEmbedding()}>
+                                            Finish embedding
+                                        </button>
+                                    </div>
+                                ) : null}
+                                {isSearching(settled) ? (
+                                    <SearchList
+                                        q={settled.trim()}
+                                        collection={collection}
+                                        staleDays={tag.staleAfterDays}
+                                    />
+                                ) : (
+                                    <BrowseList collection={collection} staleDays={tag.staleAfterDays} />
+                                )}
+                            </>
                         );
                     }}
                 </Resolved>

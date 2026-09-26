@@ -27,7 +27,9 @@ import {
     AddDirOptions,
     AddOptions,
     BatchDocument,
+    EmbedBudgetOptions,
     addBatchArgv,
+    embedArgv,
     batchLines,
     GetOptions,
     LsOptions,
@@ -57,18 +59,19 @@ import {
     statsArgv,
     statusArgv,
 } from "./argv";
-import { DEFAULT_DIR_TIMEOUT_MS, KbOptions, run } from "./run";
+import { DEFAULT_DIR_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, KbOptions, run } from "./run";
 import {
     arr,
     num,
-    obj,
-    readAdded,
+    readBatchAdded,
     readChunkRead,
     readCollection,
     readDirAdded,
     readDocument,
     readDocumentRead,
     readEdges,
+    readEmbedded,
+    readFiled,
     readForgotten,
     readSource,
     readSourceRead,
@@ -83,13 +86,15 @@ import {
     str,
 } from "./shape";
 import {
-    KbAdded,
+    KbBatchAdded,
     KbChunkRead,
     KbCollection,
     KbDocument,
     KbDirAdded,
     KbDocumentRead,
     KbEdge,
+    KbEmbedded,
+    KbFiled,
     KbForgotten,
     KbHit,
     KbSource,
@@ -123,6 +128,32 @@ export interface KbSearchResult {
      * array does not have, and a binding that answered the array's length
      * would quietly redefine the field. */
     readonly count: number;
+    /* How many chunks the semantic side could not see because their
+     * embedding is still pending (§2, §4): present only when some are, so a
+     * caller can say that semantic results may be missing them. */
+    readonly unembedded?: number;
+}
+
+/* The CLI's own embedding budget when a filing names none (kb.h's
+ * KB_EMBED_BUDGET_S): an add may spend this long embedding before it answers. */
+export const CLI_EMBED_BUDGET_MS = 20_000;
+
+/* How long a filing may take: a caller's own limit; the folder's for one asked
+ * to embed everything; otherwise the embedding budget it will spend (its own,
+ * or the CLI's default) plus the ordinary limit for the rest of the work. */
+function filingTimeout(options: KbOptions, budget: EmbedBudgetOptions, fallback: number): number {
+    if (options.timeoutMs !== undefined) {
+        return options.timeoutMs;
+    }
+    if (budget.wait === true) {
+        return DEFAULT_DIR_TIMEOUT_MS;
+    }
+    const seconds = budget.embedBudget;
+    const spend =
+        typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 0
+            ? seconds * 1000
+            : CLI_EMBED_BUDGET_MS;
+    return Math.max(fallback, spend + DEFAULT_TIMEOUT_MS);
 }
 
 export class Kb {
@@ -175,12 +206,14 @@ export class Kb {
     async search(query: string, options: SearchOptions = {}): Promise<KbSearchResult> {
         const payload = await run(searchArgv(query, options), this.options);
         const hits = arr(payload["hits"]).map(readHit);
-        return {
+        const result: KbSearchResult = {
             hits,
             mode: str(payload["mode"]),
             olderThan: str(payload["olderThan"]),
             count: "count" in payload ? num(payload["count"]) : hits.length,
         };
+        const unembedded = num(payload["unembedded"]);
+        return unembedded > 0 ? { ...result, unembedded } : result;
     }
 
     /* §4's `GET /chunks/{id}`: "the full chunk text and its neighbours". */
@@ -194,17 +227,20 @@ export class Kb {
      * the text and hands it over instead of causing a second fetch.
      *
      * The content goes down stdin (`argv.ts` says why) and never through the
-     * argument list. */
-    async add(content: string, options: AddOptions): Promise<KbAdded> {
-        return readAdded(await run(addArgv(options), this.options, content));
+     * argument list. Embedding runs within the store's budget unless
+     * `embedBudget` or `wait` says otherwise, and what is left is `pending`. */
+    async add(content: string, options: AddOptions): Promise<KbFiled> {
+        const timed: KbOptions = { ...this.options, timeoutMs: filingTimeout(this.options, options, DEFAULT_TIMEOUT_MS) };
+        return readFiled(await run(addArgv(options), timed, content));
     }
 
     /* §2's `POST /documents/batch`: every document filed under one lock with
      * one index rebuild, or — when any of them is refused — none at all. The
-     * answers come back in the order the documents were given. */
-    async addBatch(documents: readonly BatchDocument[]): Promise<readonly KbAdded[]> {
-        const payload = await run(addBatchArgv(), this.options, batchLines(documents));
-        return arr(payload["added"]).map((row) => readAdded(obj(row)));
+     * answers come back in the order the documents were given, with what the
+     * embedding budget left pending across all of them. */
+    async addBatch(documents: readonly BatchDocument[], options: EmbedBudgetOptions = {}): Promise<KbBatchAdded> {
+        const timed: KbOptions = { ...this.options, timeoutMs: filingTimeout(this.options, options, DEFAULT_TIMEOUT_MS) };
+        return readBatchAdded(await run(addBatchArgv(options), timed, batchLines(documents)));
     }
 
     /* §2.1's folder, filed as one `dir` source with a document per file. The
@@ -213,8 +249,17 @@ export class Kb {
      * working directory. Forgetting files gone from the folder is on unless
      * `forget: false` asks for them to be reported as `missing` instead. */
     async addDir(dir: string, options: AddDirOptions): Promise<KbDirAdded> {
-        const patient: KbOptions = { ...this.options, timeoutMs: this.options.timeoutMs ?? DEFAULT_DIR_TIMEOUT_MS };
+        const patient: KbOptions = { ...this.options, timeoutMs: filingTimeout(this.options, options, DEFAULT_DIR_TIMEOUT_MS) };
         return readDirAdded(await run(addDirArgv(dir, options), patient));
+    }
+
+    /* §2's `kb embed`: the chunks a budgeted add left without a vector,
+     * embedded now. That is minutes for a large filing, so it waits as long as
+     * a folder does. Refused with `model_missing` when there is no model to
+     * embed with. */
+    async embed(): Promise<KbEmbedded> {
+        const patient: KbOptions = { ...this.options, timeoutMs: this.options.timeoutMs ?? DEFAULT_DIR_TIMEOUT_MS };
+        return readEmbedded(await run(embedArgv(), patient));
     }
 
     /* §5's `GET /stale`: "documents whose age exceeds a threshold, newest

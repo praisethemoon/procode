@@ -23,6 +23,8 @@ import * as vscode from "vscode";
 
 import { Kb, KbHit, isKbError } from "kb-js";
 
+import { unembeddedNote } from "./view/rows";
+
 interface HitItem extends vscode.QuickPickItem {
     readonly hit: KbHit;
 }
@@ -51,6 +53,7 @@ function item(hit: KbHit): HitItem {
 export function quickSearch(
     kb: Kb,
     open: (reference: string, chunk: string | null) => void,
+    rerank = false,
 ): void {
     const picker = vscode.window.createQuickPick<HitItem>();
     picker.title = "Knowledge";
@@ -72,7 +75,7 @@ export function quickSearch(
             return;
         }
         picker.busy = true;
-        kb.search(query, { k: 20 })
+        kb.search(query, { k: 20, rerank })
             .then((result) => {
                 /* Superseded: a later keystroke has already asked a better
                  * question and this answer is about a prefix of it. */
@@ -81,6 +84,12 @@ export function quickSearch(
                 }
                 picker.items = result.hits.map(item);
                 picker.busy = false;
+                /* index-api §4: the semantic side searched the vectors that
+                 * exist, and says how many chunks it could not see. Said in
+                 * the title, which is where this picker says anything, and
+                 * cleared by the next answer that saw them all. */
+                const note = unembeddedNote(result.unembedded);
+                picker.title = note === null ? "Knowledge" : `Knowledge — ${note}`;
             })
             .catch((e: unknown) => {
                 if (mine !== generation) {

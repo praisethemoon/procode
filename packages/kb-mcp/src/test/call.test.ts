@@ -76,6 +76,7 @@ test("kb_search passes every filter §4 names through to the store", async () =>
             mime: "text/markdown",
             since: "2026-01-01T00:00:00Z",
             minScore: 0.25,
+            rerank: true,
         });
         const argv = fake.calls()[0].argv;
         /* Each one named individually, so the failure says WHICH filter was
@@ -88,7 +89,21 @@ test("kb_search passes every filter §4 names through to the store", async () =>
         assert.equal(flag(argv, "--mime"), "text/markdown");
         assert.equal(flag(argv, "--since"), "2026-01-01T00:00:00Z");
         assert.equal(flag(argv, "--min-score"), "0.25");
+        assert.ok(argv.includes("--rerank"));
         assert.equal(argv[argv.length - 2], "CreateIoCompletionPort");
+    });
+});
+
+test("rerank is asked for only when it is true, and must be a boolean", async () => {
+    /* It costs seconds a search, so false is the store's own ordering and
+     * sends nothing; a string "true" is a caller's mistake, not a yes. */
+    await withKb([{ stdout: ok({ hits: [], count: 0 }) }], async (kb, fake) => {
+        await callTool(kb, "kb_search", { q: "io_uring", rerank: false });
+        assert.deepEqual(fake.calls()[0].argv, ["search", "io_uring", "--json"]);
+    });
+    await withKb([{ stdout: ok({ hits: [] }) }], async (kb) => {
+        await assert.rejects(() => callTool(kb, "kb_search", { q: "x", rerank: "true" }), RpcError);
+        await assert.rejects(() => callTool(kb, "kb_search", { q: "x", rerank: 1 }), RpcError);
     });
 });
 
@@ -157,6 +172,21 @@ test("a search says which retrieval path ran and what stale was measured against
             const answer = body(await callTool(kb, "kb_search", { q: "iocp" }));
             assert.equal(answer["mode"], "keyword");
             assert.equal(answer["olderThan"], "90d");
+        },
+    );
+});
+
+test("a search over partly embedded vectors says how many chunks the semantic side did not see", async () => {
+    /* §4: the store searches with the vectors it has and counts the rest. An
+     * agent told nothing would read a missing semantic hit as absence. */
+    await withKb(
+        [
+            { stdout: ok({ mode: "hybrid", olderThan: "90d", hits: [HIT], unembedded: 812, count: 1 }) },
+            { stdout: ok({ mode: "hybrid", olderThan: "90d", hits: [HIT], count: 1 }) },
+        ],
+        async (kb) => {
+            assert.equal(body(await callTool(kb, "kb_search", { q: "iocp" }))["unembedded"], 812);
+            assert.equal("unembedded" in body(await callTool(kb, "kb_search", { q: "iocp" })), false);
         },
     );
 });
@@ -372,6 +402,7 @@ test("several documents are filed as one batch, in the order they were given", a
                 }),
             );
             assert.equal(answer["filed"], 2);
+            assert.equal(answer["pending"], 0, "an older binary's answer has nothing pending");
             assert.equal(fake.calls().length, 1, "one call for the whole batch");
             assert.deepEqual(
                 fake.calls()[0].stdin.trimEnd().split("\n").map((l) => JSON.parse(l).content),
@@ -383,6 +414,44 @@ test("several documents are filed as one batch, in the order they were given", a
             );
         },
     );
+});
+
+test("a filing sends no embedding budget, and says what it left to embed", async () => {
+    /* The store's default budget keeps an agent's call short; what it did not
+     * reach is pending, searchable by keyword now and embedded later. */
+    await withKb(
+        [
+            { stdout: ok({ added: [{ ...ADDED, document: "D-1" }], count: 1, pending: 812 }) },
+            { stdout: ok({ ...DIR_ADDED, pending: 40 }) },
+        ],
+        async (kb, fake) => {
+            const filed = body(
+                await callTool(kb, "kb_add", { documents: [{ title: "big", content: "a", collection: "c" }] }),
+            );
+            assert.equal(filed["pending"], 812);
+            assert.deepEqual(fake.calls()[0].argv, ["add", "--batch", "--json"]);
+            const dir = body(await callTool(kb, "kb_add", { dir: "cli/kb-cli", collection: "code" }));
+            assert.equal(dir["pending"], 40);
+            for (const call of fake.calls()) {
+                assert.equal(call.argv.includes("--embed-budget"), false);
+                assert.equal(call.argv.includes("--wait"), false);
+            }
+        },
+    );
+});
+
+test("an agent cannot choose the embedding budget", async () => {
+    await withKb([{ stdout: ok(DIR_ADDED) }], async (kb, fake) => {
+        await assert.rejects(
+            () => callTool(kb, "kb_add", { documents: [{ title: "t", content: "c", collection: "c" }], wait: true }),
+            RpcError,
+        );
+        await assert.rejects(
+            () => callTool(kb, "kb_add", { dir: "/x", collection: "code", embedBudget: 0 }),
+            RpcError,
+        );
+        assert.equal(fake.calls().length, 0);
+    });
 });
 
 test("a refused batch files nothing, and the answer says so", async () => {

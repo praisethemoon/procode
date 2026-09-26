@@ -834,7 +834,7 @@ test("every operation the surface can ask is one the host answers", () => {
     /* And nothing else: a `case` naming an operation the protocol does not have
      * is dead code that reads as a feature. */
     for (const c of cases) {
-        if (["call", "open", "link", "scope", "title", "notify", "addFiles", "addFolder", "init", "settings"].includes(c)) {
+        if (["call", "open", "link", "scope", "title", "notify", "addFiles", "addFolder", "init", "settings", "embed", "layoutGet", "layoutPut"].includes(c)) {
             continue; /* the request kinds, which share the file */
         }
         assert.ok(
@@ -1058,6 +1058,19 @@ test("the .vsix ships no node_modules", () => {
     assert.ok(!/^!node_modules/m.test(ignore), ".vscodeignore brings part of node_modules back");
     assert.match(ignore, /^webview\/\*\*$/m);
     assert.match(ignore, /^out\/test\/\*\*$/m);
+});
+
+test("knowledge.rerank is a boolean that is off unless the reader turns it on", () => {
+    /* It costs seconds a search and needs a model file most machines do not
+     * have, so on by default would be every search slow or refused. */
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+        contributes: { configuration: { properties: Record<string, { type: string; default: unknown; description: string }> } };
+    };
+    const setting = pkg.contributes.configuration.properties["knowledge.rerank"];
+    assert.ok(setting !== undefined, "package.json does not contribute knowledge.rerank");
+    assert.equal(setting.type, "boolean");
+    assert.equal(setting.default, false);
+    assert.match(setting.description, /gte-reranker-modernbert-base/);
 });
 
 test("the extension host is bundled, so the .vsix needs no dependencies", () => {

@@ -160,6 +160,10 @@ export interface SearchOptions {
     since?: string | null;
     meta?: Readonly<Record<string, unknown>> | null;
     minScore?: number | null;
+    /* The cross-encoder rescores the fused top of the list and reorders it.
+     * Sent only when asked for: it costs seconds a query and needs the
+     * reranker model, so the default is the store's own ordering. */
+    rerank?: boolean | null;
 }
 
 export function searchArgv(query: string, options: SearchOptions = {}): string[] {
@@ -173,6 +177,9 @@ export function searchArgv(query: string, options: SearchOptions = {}): string[]
     put(argv, "--since", options.since);
     putMeta(argv, options.meta);
     putNumber(argv, "--min-score", options.minScore);
+    if (options.rerank === true) {
+        argv.push("--rerank");
+    }
     /* The subject last, behind `--` when it could be read as a flag. The query
      * is NOT trimmed away when it is blank: an empty search is the caller's
      * mistake to be told about by the store, not one this layer covers up by
@@ -201,7 +208,26 @@ export function chunkArgv(id: string, options: { expand?: number | null } = {}):
  * not where a page's text belongs. `meta` travels the same way it is spelled:
  * `--meta` takes a JSON object as one argument, and one argument is safe
  * whatever is in it. */
-export interface AddOptions {
+/* §2's embedding budget, which every form of `kb add` takes. The store files
+ * a document at once and embeds its chunks for at most `embedBudget` seconds
+ * (the CLI's own default when absent: 20); `0` embeds nothing now and `wait`
+ * embeds all of it before answering. Whatever is left is `pending` in the
+ * answer and `kb embed` finishes it. The two are alternatives and both are
+ * sent when both are given: the store refuses the pair with `usage`, which
+ * says so better than a binding that quietly preferred one. */
+export interface EmbedBudgetOptions {
+    embedBudget?: number | null;
+    wait?: boolean;
+}
+
+function putBudget(argv: string[], options: EmbedBudgetOptions): void {
+    putNumber(argv, "--embed-budget", options.embedBudget);
+    if (options.wait === true) {
+        argv.push("--wait");
+    }
+}
+
+export interface AddOptions extends EmbedBudgetOptions {
     title: string;
     collection: string;
     url?: string | null;
@@ -219,6 +245,7 @@ export function addArgv(options: AddOptions): string[] {
     put(argv, "--mime", options.mime);
     putMeta(argv, options.meta);
     put(argv, "--etag", options.etag);
+    putBudget(argv, options);
     /* stdin, always. A caller handing over a path instead would be asking the
      * store to read a file this process has already read, which is one more
      * thing that can disagree about what was filed. */
@@ -239,8 +266,10 @@ export interface BatchDocument {
     etag?: string | null;
 }
 
-export function addBatchArgv(): string[] {
-    return ["add", "--batch"];
+export function addBatchArgv(options: EmbedBudgetOptions = {}): string[] {
+    const argv = ["add", "--batch"];
+    putBudget(argv, options);
+    return argv;
 }
 
 /* The batch's stdin: one object a line. JSON.stringify escapes every newline
@@ -267,7 +296,7 @@ export function batchLines(documents: readonly BatchDocument[]): string {
  * the folder is forgotten; `forget: false` sends `--no-forget` and the store
  * reports it as `missing` instead. The MCP tool always turns it off (§9), and a
  * default spelled differently here than there would be a third opinion. */
-export interface AddDirOptions {
+export interface AddDirOptions extends EmbedBudgetOptions {
     collection: string;
     forget?: boolean;
 }
@@ -279,7 +308,14 @@ export function addDirArgv(dir: string, options: AddDirOptions): string[] {
     if (options.forget === false) {
         argv.push("--no-forget");
     }
+    putBudget(argv, options);
     return argv;
+}
+
+/* The chunks a budgeted add left without a vector, embedded now, however long
+ * that takes (§2). */
+export function embedArgv(): string[] {
+    return ["embed"];
 }
 
 /* §5's `GET /stale` and `POST /refresh`, and §7's two collection writes.

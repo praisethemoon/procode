@@ -6,15 +6,21 @@
  * its documents and what they link to outside it, shown faded. Documents with
  * no link are left out unless asked for: a graph of isolated dots says
  * nothing a list does not.
+ *
+ * A LARGE GRAPH SETTLES IN SLICES. The layout is advanced a few steps at a
+ * time, each slice a few milliseconds, with a frame drawn in between — so the
+ * tab stays responsive and the reader watches it settle instead of a frozen
+ * editor. Once settled, the positions are kept by the host under a key made
+ * from the graph, and reopening the tab over the same store draws at once.
  */
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 
 import type { KbDocument, KbEdge } from "kb-js/pure";
 
-import { buildGraph, layout } from "../src/view/graph";
+import { Graph as Shape, Point, buildGraph, layoutKey, restoredPositions, startLayout, storedPositions } from "../src/view/graph";
 import { Resolved, useQuery } from "./parts";
-import { open } from "./rpc";
+import { cachedLayout, open, rememberLayout } from "./rpc";
 
 const W = 960;
 const H = 620;
@@ -38,6 +44,72 @@ interface Data {
     edges: KbEdge[];
 }
 
+/* How long one slice of layout may hold the main thread. */
+const SLICE_MS = 12;
+
+/* Layouts settled in this tab, so a filter flipped back, or a store change
+ * that moved no link, draws without asking the host. A handful, newest last. */
+const settled = new Map<string, Map<string, Point>>();
+const SETTLED_KEPT = 6;
+
+function keep(key: string, pos: Map<string, Point>): void {
+    settled.delete(key);
+    settled.set(key, pos);
+    while (settled.size > SETTLED_KEPT) settled.delete(settled.keys().next().value as string);
+}
+
+interface Placed {
+    key: string;
+    pos: Map<string, Point>;
+    settling: boolean;
+}
+
+/* The graph's positions: kept ones when there are any, otherwise a layout
+ * run in slices, each slice's state drawn as it comes. Null until the first
+ * positions exist. */
+function useLayout(graph: Shape): Placed | null {
+    const key = useMemo(() => layoutKey(graph, W, H), [graph]);
+    const [placed, setPlaced] = useState<Placed | null>(null);
+    useLayoutEffect(() => {
+        const known = settled.get(key);
+        if (known !== undefined) {
+            setPlaced({ key, pos: known, settling: false });
+            return;
+        }
+        let stopped = false;
+        let frame = 0;
+        const run = startLayout(graph, W, H);
+        const slice = (): void => {
+            if (stopped) return;
+            const until = performance.now() + SLICE_MS;
+            do run.advance(1);
+            while (!run.done && performance.now() < until);
+            const pos = run.positions();
+            setPlaced({ key, pos, settling: !run.done });
+            if (run.done) {
+                keep(key, pos);
+                rememberLayout(key, storedPositions(graph, pos));
+            } else {
+                frame = requestAnimationFrame(slice);
+            }
+        };
+        cachedLayout(key).then(
+            (stored) => {
+                const pos = restoredPositions(graph, stored);
+                if (pos === null || stopped) return slice();
+                keep(key, pos);
+                setPlaced({ key, pos, settling: false });
+            },
+            () => slice(),
+        );
+        return () => {
+            stopped = true;
+            cancelAnimationFrame(frame);
+        };
+    }, [key, graph]);
+    return placed !== null && placed.key === key ? placed : null;
+}
+
 function GraphView(props: { data: Data }): JSX.Element {
     const [collection, setCollection] = useState("");
     const [unlinked, setUnlinked] = useState(false);
@@ -46,7 +118,7 @@ function GraphView(props: { data: Data }): JSX.Element {
     const collections = useMemo(() => [...new Set(props.data.documents.map((d) => d.collection))].sort(), [props.data]);
     const colour = (c: string) => PALETTE[collections.indexOf(c) % PALETTE.length];
     const graph = useMemo(() => buildGraph(props.data.documents, props.data.edges, { collection, unlinked }), [props.data, collection, unlinked]);
-    const pos = useMemo(() => layout(graph, W, H), [graph]);
+    const placed = useLayout(graph);
 
     const near = useMemo(() => {
         if (hover === null) return null;
@@ -84,6 +156,7 @@ function GraphView(props: { data: Data }): JSX.Element {
                 </button>
                 <span className="kb-muted">
                     {graph.nodes.length} documents, {graph.edges.length} links
+                    {placed === null || placed.settling ? " · laying out…" : ""}
                 </span>
             </div>
             {graph.nodes.length === 0 ? (
@@ -91,6 +164,8 @@ function GraphView(props: { data: Data }): JSX.Element {
                     No links {collection ? `in ${collection}` : "yet"}. Documents are linked with <code>kb links add</code> or an
                     agent's <code>kb_links</code>: supersedes, cites, analogue_of, implements, see_also.
                 </div>
+            ) : placed === null ? (
+                <div className="kb-empty">Laying out {graph.nodes.length} documents…</div>
             ) : (
                 <svg className="kb-graph-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Links between documents">
                     <defs>
@@ -99,8 +174,8 @@ function GraphView(props: { data: Data }): JSX.Element {
                         </marker>
                     </defs>
                     {graph.edges.map((e, i) => {
-                        const a = pos.get(e.from)!;
-                        const b = pos.get(e.to)!;
+                        const a = placed.pos.get(e.from)!;
+                        const b = placed.pos.get(e.to)!;
                         // Stop short of the target's circle so the arrow shows.
                         const d = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
                         const r = 9;
@@ -122,7 +197,7 @@ function GraphView(props: { data: Data }): JSX.Element {
                         );
                     })}
                     {graph.nodes.map((n) => {
-                        const p = pos.get(n.id)!;
+                        const p = placed.pos.get(n.id)!;
                         const lit = near === null || near.has(n.id);
                         return (
                             <g

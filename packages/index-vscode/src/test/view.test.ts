@@ -10,7 +10,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { KbDocument, KbHit } from "kb-js/pure";
+import { KbDocument, KbHit, KbStatus } from "kb-js/pure";
 
 import {
     BROWSE_LIMIT,
@@ -19,9 +19,12 @@ import {
     browseQuery,
     browseRows,
     isSearching,
+    leftToEmbed,
     oneLine,
+    pendingLine,
     searchQuery,
     searchRows,
+    unembeddedNote,
 } from "../view/rows";
 import {
     collectionRows,
@@ -640,4 +643,42 @@ test("a heading's text is followed through the elements inside it", () => {
     );
     assert.equal(headingText(null), "");
     assert.equal(headingText(undefined), "");
+});
+
+/* ------------------------------------------------------- left to embed */
+
+function status(vectors: KbStatus["vectors"], available: boolean, current: boolean | null): KbStatus {
+    return {
+        path: "/w/.kb",
+        present: true,
+        readable: true,
+        olderThan: "90d",
+        vectors,
+        model: {
+            recorded: null,
+            available: available ? ({ path: "/m", bytes: 1 } as never) : null,
+            current,
+        },
+    };
+}
+
+test("chunks are left to embed only when there is a model to embed them with", () => {
+    assert.equal(leftToEmbed(status({ count: 88, missing: 812, current: false }, true, true)), 812);
+    assert.equal(leftToEmbed(status({ count: 88, missing: 812, current: false }, true, null)), 812);
+    // A keyword-only store: every chunk is missing and none is owed.
+    assert.equal(leftToEmbed(status({ count: 0, missing: 900, current: false }, false, null)), 0);
+    // Another model than the one recorded is a reindex, not an embed pass.
+    assert.equal(leftToEmbed(status({ count: 88, missing: 812, current: false }, true, false)), 0);
+    assert.equal(leftToEmbed(status({ count: 900, missing: 0, current: true }, true, true)), 0);
+    // A kb that does not report vectors owes nothing it can be seen to owe.
+    assert.equal(leftToEmbed(status(undefined, true, true)), 0);
+});
+
+test("the rail and a search say how many chunks are not embedded, in words that count", () => {
+    assert.equal(pendingLine(1), "1 chunk is not embedded yet: searchable by keyword, not yet by meaning.");
+    assert.match(pendingLine(812), /^812 chunks are not embedded yet/);
+    assert.equal(unembeddedNote(undefined), null);
+    assert.equal(unembeddedNote(0), null);
+    assert.equal(unembeddedNote(812), "812 chunks are not embedded yet — semantic results may be missing them.");
+    assert.equal(unembeddedNote(1), "1 chunk is not embedded yet — semantic results may be missing it.");
 });

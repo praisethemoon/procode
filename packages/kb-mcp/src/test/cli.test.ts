@@ -147,6 +147,8 @@ test("a store filed into and searched through §9's tools", async (t) => {
             }),
         );
         assert.equal(added["filed"], 1);
+        /* No model in the throwaway home: a keyword-only store owes nothing. */
+        assert.equal(added["pending"], 0);
         const rows = added["added"] as Record<string, unknown>[];
         /* §1.4: a write goes to the one store the working directory finds,
          * and the row no longer says which store — there is only one. */
@@ -271,6 +273,31 @@ test("a filter §4 names is one the real binary accepts", async (t) => {
             `the CLI refused a filter §4 names: ${result.content[0].text}`,
         );
         assert.equal((payload(result)["hits"] as unknown[]).length, 1);
+    } finally {
+        work.dispose();
+    }
+});
+
+test("rerank without the reranker model is a model_missing refusal, not a quiet fused list", async (t) => {
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    if (!help().includes("--rerank")) {
+        t.skip("kb search does not take --rerank yet");
+        return;
+    }
+    /* HOME is the throwaway one, so ~/.kb/models holds no reranker. */
+    const work = workspace();
+    try {
+        await call(work, "kb_add", {
+            documents: [{ title: "Ring", content: "io_uring_prep_recv\n", collection: "io-uring" }],
+        });
+        const result = await call(work, "kb_search", { q: "io_uring_prep_recv", rerank: true });
+        assert.equal(result.isError, true, "a rerank with no reranker came back as hits");
+        const answer = payload(result);
+        assert.equal(answer["kind"], "refused");
+        assert.equal(answer["error"], "model_missing");
     } finally {
         work.dispose();
     }

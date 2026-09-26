@@ -33,14 +33,20 @@ function loadHost(): Host {
 }
 
 /* One call through the host, and the one message it posts back. */
-async function ask(dir: string, bin: string, op: string, input: unknown = {}): Promise<Record<string, unknown>> {
+async function ask(
+    dir: string,
+    bin: string,
+    op: string,
+    input: unknown = {},
+    settings: Record<string, unknown> = {},
+): Promise<Record<string, unknown>> {
     const host = loadHost();
     const posted: Record<string, unknown>[] = [];
     const client = new Kb({ bin, cwd: dir, env: TEST_ENV });
     const ctx = {
         extensionUri: {},
         client: () => client,
-        settings: () => ({ cliPath: bin }),
+        settings: () => ({ cliPath: bin, ...settings }),
         announce() {},
         open() {},
         scope() {},
@@ -82,4 +88,45 @@ test("a kb that is not there is reported as one that cannot start, with the comm
     assert.equal(r["kind"], "crash");
     assert.equal(r["cannotStart"], "binary");
     assert.equal(r["command"], "/nonexistent/kb");
+});
+
+test("knowledge.rerank is what makes a search ask for --rerank, and without the reranker it is refused", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+    /* The throwaway HOME holds no reranker, so a search that asked for it is
+     * refused as model_missing — which is how a test sees that it was asked
+     * for — and the same search with the setting off answers. */
+    const dir = tmp();
+    const kb = new Kb({ bin: KB, cwd: dir, env: TEST_ENV });
+    await kb.init();
+    await kb.add("io_uring_prep_recv queues a receive\n", { title: "Ring", collection: "io-uring" });
+    const off = await ask(dir, KB, "search", { q: "io_uring_prep_recv" });
+    assert.equal(off["kind"], "result");
+    const on = await ask(dir, KB, "search", { q: "io_uring_prep_recv" }, { rerank: true });
+    assert.equal(on["kind"], "failed");
+    assert.equal((on["error"] as { code: string }).code, "model_missing");
+});
+
+test("a webview cannot turn rerank on for itself", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+    /* The input is read field by field: a `rerank` in it reaches nothing. */
+    const dir = tmp();
+    const kb = new Kb({ bin: KB, cwd: dir, env: TEST_ENV });
+    await kb.init();
+    await kb.add("io_uring_prep_recv queues a receive\n", { title: "Ring", collection: "io-uring" });
+    const r = await ask(dir, KB, "search", { q: "io_uring_prep_recv", rerank: true });
+    assert.equal(r["kind"], "result");
+});
+
+test("a graph layout put by one view is what the next view asking for its key gets back", async () => {
+    const host = loadHost();
+    const kept = new Map<string, unknown>();
+    const memento = { get: (k: string) => kept.get(k), update: async (k: string, v: unknown) => void kept.set(k, v) };
+    const ctx = { layouts: host.layoutShelf(memento as never) } as unknown as Parameters<Host["handleRequest"]>[0];
+    const posted: Record<string, unknown>[] = [];
+    const surface = { webview: { postMessage: async (m: Record<string, unknown>) => posted.push(m) } } as never;
+    for (let i = 0; i < 8; i++) host.handleRequest(ctx, surface, { kind: "layoutPut", key: `k${i}`, positions: [["D-1", i, i]] });
+    host.handleRequest(ctx, surface, { kind: "layoutGet", id: 1, key: "k7" });
+    host.handleRequest(ctx, surface, { kind: "layoutGet", id: 2, key: "k0" });
+    assert.deepEqual(posted, [
+        { kind: "result", id: 1, value: [["D-1", 7, 7]] },
+        { kind: "result", id: 2, value: null }, // the oldest, dropped to keep the shelf small
+    ]);
 });

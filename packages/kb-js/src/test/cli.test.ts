@@ -35,7 +35,7 @@ import { test } from "node:test";
 import { Kb } from "../client";
 import { KbError, isKbError } from "../errors";
 import { obj } from "../shape";
-import { addBatchArgv, addDirArgv, batchLines, deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, refreshSourceArgv, searchArgv, sourceArgv, sourcesArgv } from "../argv";
+import { addArgv, addBatchArgv, addDirArgv, embedArgv, batchLines, deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, refreshSourceArgv, searchArgv, sourceArgv, sourcesArgv } from "../argv";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const BIN = path.resolve(ROOT, "..", "..", "cli", "kb-cli", "bin", "kb");
@@ -95,6 +95,11 @@ test("every flag this package spells for an implemented command is one the CLI n
         ["status"],
         ["init"],
         ["add", "--title", "t", "--collection", "c", "--url", "u", "--mime", "m", "--meta", "{}", "--file", "-"],
+        addArgv({ title: "t", collection: "c", embedBudget: 0 }),
+        addArgv({ title: "t", collection: "c", wait: true }),
+        addBatchArgv({ embedBudget: 5 }),
+        addDirArgv("d", { collection: "c", wait: true }),
+        embedArgv(),
         forgetArgv("D-1"),
         addBatchArgv(),
         addDirArgv("d", { collection: "c", forget: false }),
@@ -141,6 +146,7 @@ test("search's flags are checked the moment the command exists", async (t) => {
         mime: "m",
         since: "s",
         minScore: 0.2,
+        rerank: true,
     })) {
         if (element.startsWith("--") && element !== "--") {
             assert.ok(text.includes(element), `kb search does not take ${element}`);
@@ -389,11 +395,12 @@ test("--store is refused as an unknown option on every command", async (t) => {
  * adding to it is a visible act, and a key that turns up later still fails.
  */
 
-function raw(work: Work, argv: readonly string[]): Record<string, unknown> {
+function raw(work: Work, argv: readonly string[], input?: string): Record<string, unknown> {
     const out = execFileSync(BIN, [...argv, "--json"], {
         cwd: work.dir,
         env: work.env,
         encoding: "utf8",
+        input,
     });
     return JSON.parse(out) as Record<string, unknown>;
 }
@@ -549,9 +556,12 @@ test("a batch through this package: filed together, and refused together", async
             { title: "one", collection: "b", content: "zzone" },
             { title: "two", collection: "b", content: "# Two\n\nzztwo", mime: "text/markdown", meta: { year: 2026 } },
         ];
-        const added = await work.kb.addBatch(docs);
+        const batch = await work.kb.addBatch(docs);
+        const added = batch.added;
         assert.deepEqual(added.map((a) => a.created), [true, true]);
         assert.equal(added[1].splitter, "markdown");
+        assert.equal(batch.count, 2);
+        assert.equal(batch.pending, 0, "a store with no model has nothing pending");
         assert.equal((await work.kb.search("zztwo")).count, 1);
 
         // Each row carries exactly what the binary printed on it.
@@ -566,6 +576,10 @@ test("a batch through this package: filed together, and refused together", async
             ) as { added: Record<string, unknown>[] }
         ).added;
         assert.deepEqual(answered(added[0]), Object.keys(printedRows[0]).sort());
+        assert.deepEqual(
+            answered(await work.kb.addBatch(docs, { embedBudget: 0 })),
+            printed(raw(work, ["add", "--batch", "--embed-budget", "0"], batchLines(docs))),
+        );
 
         const before = fs.readFileSync(path.join(work.dir, ".kb", "documents.jsonl"), "utf8");
         await assert.rejects(
@@ -606,6 +620,7 @@ test("a folder through this package: filed, filed again, and a file gone kept or
         assert.equal(first.added, 2);
         assert.equal(first.skipped.vendored, 1);
         assert.equal(first.skipped.hidden, 1);
+        assert.equal(first.pending, 0, "a store with no model has nothing pending");
         assert.equal((await work.kb.search("zzring")).count, 1);
         const shown = await work.kb.source(first.source ?? "");
         assert.equal(shown.source.kind, "dir");
@@ -810,6 +825,47 @@ test("the whole graph through this package: every edge, both ends, and a forgott
         ]);
         await work.kb.forget(c.document);
         assert.equal((await work.kb.allLinks())[1].resolved, false);
+    } finally {
+        work.dispose();
+    }
+});
+
+test("filing now and embedding later: pending on every add, vectors on status, and embed refused without a model", async (t) => {
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await work.kb.init();
+        const filed = await work.kb.add("zzlater\n", { title: "later", collection: "l", embedBudget: 0 });
+        /* The throwaway home holds no model, so nothing is ever pending: the
+         * store is keyword-only and says so, rather than owing embeddings. */
+        assert.equal(filed.pending, 0);
+        assert.deepEqual(
+            answered(filed),
+            printed(raw(work, ["add", "--title", "again", "--collection", "l", "--file", "-", "--embed-budget", "0"], "zzagain\n")),
+            "the single-add reader and kb add do not agree about what the answer contains",
+        );
+        assert.equal((await work.kb.add("zzwait\n", { title: "wait", collection: "l", wait: true })).pending, 0);
+        await assert.rejects(
+            work.kb.add("zzboth\n", { title: "both", collection: "l", wait: true, embedBudget: 1 }),
+            (e: unknown) => isKbError(e) && e.code === "usage",
+        );
+
+        const status = await work.kb.status();
+        assert.equal(status.vectors?.count, 0);
+        assert.equal(status.vectors?.missing, status.chunks, "a keyword-only store has no vector for any chunk");
+        assert.equal(status.vectors?.current, false);
+        assert.equal(status.model?.available, null);
+
+        const found = await work.kb.search("zzlater");
+        assert.equal(found.count, 1);
+        assert.equal("unembedded" in found, false, "a keyword search says nothing about vectors");
+
+        const refused = (await work.kb.embed().catch((x: unknown) => x)) as KbError;
+        assert.ok(refused instanceof KbError, `expected a KbError, got ${String(refused)}`);
+        assert.equal(refused.code, "model_missing");
     } finally {
         work.dispose();
     }

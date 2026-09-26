@@ -93,11 +93,14 @@ export type RetrievalPath = (typeof RETRIEVAL_PATHS)[number];
 
 /* §4's scores. `bm25` and `vector` are each present only when that path found
  * the chunk: absent means "this path did not find it, or did not run", which
- * a zero would not say. `fused` is what the list is ordered by. */
+ * a zero would not say. `fused` is what the list is ordered by, unless the
+ * search asked for `rerank`: then the hits the cross-encoder rescored carry its
+ * logit as `rerank` and are ordered by it, ahead of the ones it did not reach. */
 export interface KbScores {
     readonly bm25?: number;
     readonly vector?: number;
     readonly fused: number;
+    readonly rerank?: number;
 }
 
 export interface KbHit {
@@ -203,6 +206,16 @@ export interface KbStatus {
     /* §8: the model the store recorded and the one this machine would load.
      * Absent when there is no readable store. */
     readonly model?: KbModelStatus;
+    /* The store's vectors: how many there are, how many live chunks have none
+     * under the recorded model, and whether every chunk has one. On a
+     * keyword-only store every chunk is missing, so `missing` means "left to
+     * embed" only when there is a model to embed with. Absent from a binary
+     * that does not report it. */
+    readonly vectors?: {
+        readonly count: number;
+        readonly missing: number;
+        readonly current: boolean;
+    };
     readonly torn?: boolean;
     /* The staleness threshold the counts were taken against. */
     readonly olderThan: string;
@@ -227,6 +240,35 @@ export interface KbAdded {
     readonly reindexed: boolean;
     readonly blobWritten: boolean;
     readonly fetchedAt: string;
+}
+
+/* What a single `kb add` answers: the document's row and how many of the
+ * store's chunks were left without a vector when the embedding budget ran out
+ * (§2). Such a document is searchable by keyword at once; `kb embed` finishes
+ * the rest. Zero from a binary that predates the budget, which embedded
+ * everything before answering. */
+export interface KbFiled extends KbAdded {
+    readonly pending: number;
+}
+
+/* What `kb add --batch` answers: one row per document in the order they were
+ * given, and the pending count once for the whole batch, since the budget was
+ * spent on all of them together. */
+export interface KbBatchAdded {
+    readonly added: readonly KbAdded[];
+    readonly count: number;
+    readonly pending: number;
+}
+
+/* What `kb embed` answers: the chunks it embedded, the ones that already had a
+ * vector, the ones never embedded because they are not prose (§2: markup,
+ * digits, encoded data), and what is still pending, which is zero once it
+ * has run. */
+export interface KbEmbedded {
+    readonly embedded: number;
+    readonly kept: number;
+    readonly skipped: number;
+    readonly pending: number;
 }
 
 /* What `kb add --dir` answers (§2.1): the folder's source and what the walk did
@@ -264,6 +306,9 @@ export interface KbDirAdded {
     readonly skipped: KbDirSkipped;
     /* Chunks embedded by this filing; zero on a keyword-only store. */
     readonly embedded: number;
+    /* Chunks left to embed when the budget ran out (§2); `kb embed` finishes
+     * them. Zero from a binary that predates the budget. */
+    readonly pending: number;
 }
 
 /* `kb get` with `--include text,chunks,links`. The document is always there;

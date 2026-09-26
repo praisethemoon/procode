@@ -15,6 +15,7 @@ import {
     addDirArgv,
     batchLines,
     chunkArgv,
+    embedArgv,
     collectionsArgv,
     deleteCollectionArgv,
     forgetArgv,
@@ -204,6 +205,15 @@ test("a collection list is one flag whether it arrives as a list or a string", (
     assert.deepEqual(searchArgv("q", { collection: [] }), ["search", "q"]);
 });
 
+test("--rerank is sent only when it is asked for", () => {
+    /* It costs seconds a query and needs the reranker model, so false, null
+     * and absent all leave the store's own ordering alone. */
+    assert.deepEqual(searchArgv("q", { rerank: true }), ["search", "--rerank", "q"]);
+    assert.deepEqual(searchArgv("q", { rerank: false }), ["search", "q"]);
+    assert.deepEqual(searchArgv("q", { rerank: null }), ["search", "q"]);
+    assert.deepEqual(searchArgv("-q", { rerank: true, k: 5 }), ["search", "--k", "5", "--rerank", "--", "-q"]);
+});
+
 test("a chunk is read by id, with its neighbours asked for by number", () => {
     assert.deepEqual(chunkArgv("C-99812"), ["chunk", "C-99812"]);
     assert.deepEqual(chunkArgv("C-99812", { expand: 2 }), [
@@ -299,6 +309,39 @@ test("a folder is one argument and the collection another, and forgetting is on 
     assert.equal(blank[blank.indexOf("--collection") + 1], "");
 });
 
+test("every add takes the embedding budget: seconds, or --wait for no limit", () => {
+    /* Absent means the store's own default of 20 seconds, so nothing is sent;
+     * 0 is a budget (embed nothing now), not an absence, and is sent. */
+    assert.deepEqual(addArgv({ title: "t", collection: "c", embedBudget: 0 }), [
+        "add", "--title", "t", "--collection", "c", "--embed-budget", "0", "--file", "-",
+    ]);
+    assert.deepEqual(addArgv({ title: "t", collection: "c", wait: true }), [
+        "add", "--title", "t", "--collection", "c", "--wait", "--file", "-",
+    ]);
+    assert.deepEqual(addArgv({ title: "t", collection: "c", embedBudget: null, wait: false }), [
+        "add", "--title", "t", "--collection", "c", "--file", "-",
+    ]);
+    assert.deepEqual(addArgv({ title: "t", collection: "c", embedBudget: Number.NaN }), [
+        "add", "--title", "t", "--collection", "c", "--file", "-",
+    ]);
+    assert.deepEqual(addBatchArgv(), ["add", "--batch"]);
+    assert.deepEqual(addBatchArgv({ embedBudget: 2.5 }), ["add", "--batch", "--embed-budget", "2.5"]);
+    assert.deepEqual(addBatchArgv({ wait: true }), ["add", "--batch", "--wait"]);
+    assert.deepEqual(addDirArgv("d", { collection: "c", forget: false, embedBudget: 0 }), [
+        "add", "--dir", "d", "--collection", "c", "--no-forget", "--embed-budget", "0",
+    ]);
+    assert.deepEqual(addDirArgv("d", { collection: "c", wait: true }), [
+        "add", "--dir", "d", "--collection", "c", "--wait",
+    ]);
+    /* Both at once is the caller's mistake, and the store's refusal says so:
+     * the binding sends both rather than choosing one. */
+    assert.deepEqual(addBatchArgv({ embedBudget: 1, wait: true }), ["add", "--batch", "--embed-budget", "1", "--wait"]);
+});
+
+test("embed is the whole of its command line", () => {
+    assert.deepEqual(embedArgv(), ["embed"]);
+});
+
 /* -------------------------------------------------- nothing is ever a line */
 
 test("no builder ever produces an argument that is two arguments", () => {
@@ -372,6 +415,7 @@ test("no builder ever emits --store, because the CLI no longer has one", () => {
             mime: "text/plain",
             since: "2026-01-01T00:00:00Z",
             minScore: 0.1,
+            rerank: true,
         }),
         chunkArgv("C-1", { expand: 2 }),
         addArgv({ title: "t", collection: "c", url: "https://example.test", mime: "text/plain", meta: { a: 1 } }),

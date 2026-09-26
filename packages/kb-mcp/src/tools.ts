@@ -45,7 +45,10 @@ const KB_SEARCH: ToolDefinition = {
         "each hit carries its chunk and document ids, title, heading, collection, " +
         "how old it is, and which retrieval paths found it. Read a whole passage with kb_get. " +
         "Retrieval is hybrid by default — keyword and semantic fused — because this corpus is dense with exact " +
-        "identifiers that embeddings place on top of their opposites.",
+        "identifiers that embeddings place on top of their opposites. " +
+        "When the answer carries unembedded: N, that many chunks (from a large document filed recently) have " +
+        "no embedding yet, so the semantic side did not see them; keyword matching still finds them, so for " +
+        "an exact name search with mode keyword.",
     inputSchema: {
         type: "object",
         properties: {
@@ -80,6 +83,13 @@ const KB_SEARCH: ToolDefinition = {
                 description: "Only documents fetched at or after this ISO-8601 instant.",
             },
             minScore: { type: "number", description: "Drop hits fused below this score." },
+            rerank: {
+                type: "boolean",
+                description:
+                    "Rescore the top 20 hits with a cross-encoder and reorder them by its score, which each rescored " +
+                    "hit carries as scores.rerank. Better ordering, but several seconds slower per search, and it " +
+                    "needs the reranker model file in ~/.kb/models (refused as model_missing without it). Default: false.",
+            },
         },
         required: ["q"],
         additionalProperties: false,
@@ -157,7 +167,10 @@ const KB_ADD: ToolDefinition = {
         "To file a whole folder of source or documentation instead, pass dir and collection and no documents: " +
         "each file the folder holds as git would track it becomes a document at its path, and filing the same " +
         "folder again re-indexes only what changed. Files gone from the folder since it was last filed are " +
-        "reported as missing, not forgotten; forgetting them is the user's call.",
+        "reported as missing, not forgotten; forgetting them is the user's call. " +
+        "A filing embeds for a limited time and answers pending: N for the chunks it did not reach. A large " +
+        "document is searchable by keyword at once; its embeddings finish later (on the next filing, or when " +
+        "the user runs Finish embedding in the Knowledge view), and until then semantic search may miss it.",
     inputSchema: {
         type: "object",
         properties: {

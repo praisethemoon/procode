@@ -14,6 +14,8 @@ export { Kb, KbSearchResult } from "./client";
 export {
     AddDirOptions,
     AddOptions,
+    EmbedBudgetOptions,
+    embedArgv,
     GetOptions,
     LsOptions,
     RefreshOptions,
@@ -84,7 +86,10 @@ export {
     obj,
     readChunk,
     readCollection,
+    readBatchAdded,
     readDirAdded,
+    readEmbedded,
+    readFiled,
     readDocument,
     readHit,
     readLink,
@@ -99,6 +104,9 @@ export {
 } from "./shape";
 export {
     KbAdded,
+    KbBatchAdded,
+    KbEmbedded,
+    KbFiled,
     KbChunk,
     KbChunkRead,
     KbCollection,

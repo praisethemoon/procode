@@ -18,7 +18,7 @@ reader must get the same answer to the same question.
 
 | tool | routes |
 |---|---|
-| `kb_search` | `GET /search` with every filter |
+| `kb_search` | `GET /search` with every filter, and `rerank` (opt-in: slower, better ordering) |
 | `kb_get` | `GET /chunks/{id}`, `GET /documents/{id}` |
 | `kb_add` | `POST /documents`, `POST /documents/batch`; with `dir`, a folder (§2.1) filed without forgetting |
 | `kb_collections` | `GET /collections`, `GET /stats` |
@@ -32,6 +32,12 @@ explicit about why: an agent files knowledge into the workspace's store and
 reads from it, while forgetting is the reader's decision. That is also why
 `kb_add` with a `dir` never forgets a file that is gone from the folder: it
 reports it as `missing`.
+
+Nor is `kb embed`. `kb_add` files within the CLI's default embedding budget, so
+an agent's call stays short, and answers `pending` with the chunks it did not
+reach: they are searchable by keyword at once, and the next filing or the
+Knowledge view's "Finish embedding" embeds them. Until then `kb_search` answers
+`unembedded` with how many chunks its semantic side could not see.
 
 A tool that let an agent drop a collection would be a defect against that
 section rather than a feature, and especially so when it is useful: the useful

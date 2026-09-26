@@ -10,7 +10,7 @@
  * type would tell a reader to fix input that was never the problem.
  */
 
-import { CannotStart, Operation, Request, Response, ViewTag, WireError, isResponse } from "../src/protocol";
+import { CannotStart, Operation, Request, Response, StoredPositions, ViewTag, WireError, isResponse } from "../src/protocol";
 
 interface VsCodeApi {
     postMessage(message: unknown): void;
@@ -127,6 +127,11 @@ export function initStore(): void {
     send({ kind: "init" });
 }
 
+/* Embed what filings left to embed, through the host's command. */
+export function finishEmbedding(): void {
+    send({ kind: "embed" });
+}
+
 export function openCliSetting(): void {
     send({ kind: "settings" });
 }
@@ -141,6 +146,15 @@ export function setTitle(reference: string, title: string): void {
 
 export function notify(level: "info" | "warning" | "error", message: string): void {
     send({ kind: "notify", level, message });
+}
+
+/* The graph's settled positions, kept by the host under a `layoutKey`. */
+export function cachedLayout(key: string): Promise<StoredPositions | null> {
+    return ask<StoredPositions | null>((id) => ({ kind: "layoutGet", id, key }));
+}
+
+export function rememberLayout(key: string, positions: StoredPositions): void {
+    send({ kind: "layoutPut", key, positions });
 }
 
 /* Every view re-asks its own questions when the store moves. There is nothing

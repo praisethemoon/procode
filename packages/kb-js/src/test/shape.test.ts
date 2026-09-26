@@ -15,11 +15,15 @@ import {
     obj,
     readChunk,
     readCollection,
+    readBatchAdded,
     readDirAdded,
+    readEmbedded,
+    readFiled,
     readDocument,
     readHit,
     readModelStatus,
     readSource,
+    readStatus,
     strOrNull,
 } from "../shape";
 import { KbError } from "../errors";
@@ -74,6 +78,19 @@ test("a path's score is absent when that path did not find the hit, never zero",
     assert.deepEqual(readHit({ scores: { bm25: 2.5, vector: "x", fused: 0.03 } }).scores, { bm25: 2.5, fused: 0.03 });
     assert.deepEqual([...h.matched], []);
     assert.equal(h.stale, false);
+});
+
+test("a rerank score is kept when the store sent a number, and absent otherwise", () => {
+    /* Only the hits the cross-encoder reached carry one; the rest keep their
+     * fused score alone. A logit can be negative and is kept as it is. */
+    assert.deepEqual(readHit({ scores: { bm25: 2.5, fused: 0.03, rerank: -1.25 } }).scores, {
+        bm25: 2.5,
+        fused: 0.03,
+        rerank: -1.25,
+    });
+    assert.equal("rerank" in readHit({ scores: { fused: 0.03 } }).scores, false);
+    assert.equal("rerank" in readHit({ scores: { fused: 0.03, rerank: "4" } }).scores, false);
+    assert.equal("rerank" in readHit({ scores: { fused: 0.03, rerank: null } }).scores, false);
 });
 
 test("matched keeps the store's order and drops only what is not a name", () => {
@@ -172,6 +189,8 @@ test("a folder's answer reads whole, and a folder with no source says null rathe
     assert.equal(filed.skipped.large, 1);
     assert.equal(filed.skipped.otherTypes, 0);
     assert.equal(filed.embedded, 14);
+    assert.equal(filed.pending, 0, "a binary that predates the budget embedded everything");
+    assert.equal(readDirAdded({ embedded: 3, pending: 120 }).pending, 120);
 
     /* An empty folder filed for the first time: there is no source, and ""
      * would be read by a caller as an id to look up. */
@@ -190,4 +209,45 @@ test("a folder's answer reads whole, and a folder with no source says null rathe
     });
     // Only names survive in either list.
     assert.deepEqual([...readDirAdded({ missing: ["a.c", 3, null, "b/c.h"] }).missing], ["a.c", "b/c.h"]);
+});
+
+test("pending is kept on every add's answer, and is zero from a binary that predates it", () => {
+    const single = readFiled({ ok: true, document: "D-7", chunkCount: 900, created: true, pending: 812 });
+    assert.equal(single.document, "D-7");
+    assert.equal(single.chunkCount, 900);
+    assert.equal(single.pending, 812);
+    assert.equal(readFiled({ document: "D-7" }).pending, 0);
+    assert.equal(readFiled({ document: "D-7", pending: "5" }).pending, 0);
+
+    const batch = readBatchAdded({ ok: true, added: [{ document: "D-1" }, { document: "D-2" }], count: 2, pending: 40 });
+    assert.deepEqual(batch.added.map((a) => a.document), ["D-1", "D-2"]);
+    assert.equal(batch.count, 2);
+    assert.equal(batch.pending, 40);
+    /* No count from the store: the rows' own number, not a guess at a total. */
+    const old = readBatchAdded({ added: [{ document: "D-1" }] });
+    assert.equal(old.count, 1);
+    assert.equal(old.pending, 0);
+    /* A batch's rows do not carry pending: it is the batch's, once. */
+    assert.equal("pending" in batch.added[0], false);
+});
+
+test("embed's answer reads whole, and a missing count is zero", () => {
+    assert.deepEqual(readEmbedded({ ok: true, embedded: 812, kept: 88, skipped: 3, pending: 0 }), {
+        embedded: 812,
+        kept: 88,
+        skipped: 3,
+        pending: 0,
+    });
+    assert.deepEqual(readEmbedded({}), { embedded: 0, kept: 0, skipped: 0, pending: 0 });
+});
+
+test("status carries the vectors when the store reports them, and leaves them out when it does not", () => {
+    const base = { ok: true, path: "/w/.kb", present: true, readable: true, olderThan: "90d" };
+    const withVectors = readStatus({
+        ...base,
+        index: { keyword: { current: true }, vectors: { count: 88, missing: 812, current: false } },
+    });
+    assert.deepEqual(withVectors.vectors, { count: 88, missing: 812, current: false });
+    assert.equal("vectors" in readStatus(base), false);
+    assert.equal("vectors" in readStatus({ ...base, readable: false }), false);
 });

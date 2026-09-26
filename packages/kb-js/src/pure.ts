@@ -35,7 +35,10 @@ export {
     obj,
     readChunk,
     readCollection,
+    readBatchAdded,
     readDirAdded,
+    readEmbedded,
+    readFiled,
     readDocument,
     readHit,
     readLink,
@@ -51,6 +54,9 @@ export {
 
 export {
     KbAdded,
+    KbBatchAdded,
+    KbEmbedded,
+    KbFiled,
     KbChunk,
     KbChunkRead,
     KbCollection,

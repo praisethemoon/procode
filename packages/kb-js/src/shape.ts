@@ -19,6 +19,9 @@
 
 import {
     KbAdded,
+    KbBatchAdded,
+    KbEmbedded,
+    KbFiled,
     KbChunk,
     KbChunkRead,
     KbCollection,
@@ -129,12 +132,15 @@ export function readChunk(v: unknown): KbChunk {
 
 function readScores(v: unknown): KbScores {
     const s = obj(v);
-    const out: { bm25?: number; vector?: number; fused: number } = { fused: num(s["fused"]) };
+    const out: { bm25?: number; vector?: number; fused: number; rerank?: number } = { fused: num(s["fused"]) };
     if (typeof s["bm25"] === "number" && Number.isFinite(s["bm25"])) {
         out.bm25 = s["bm25"];
     }
     if (typeof s["vector"] === "number" && Number.isFinite(s["vector"])) {
         out.vector = s["vector"];
+    }
+    if (typeof s["rerank"] === "number" && Number.isFinite(s["rerank"])) {
+        out.rerank = s["rerank"];
     }
     return out;
 }
@@ -320,6 +326,11 @@ export function readStatus(payload: Record<string, unknown>): KbStatus {
                 current: bool(ch["current"]),
             };
             status["model"] = readModelStatus(t["model"]);
+            const index = obj(t["index"]);
+            if (typeof index["vectors"] === "object" && index["vectors"] !== null) {
+                const v = obj(index["vectors"]);
+                status["vectors"] = { count: num(v["count"]), missing: num(v["missing"]), current: bool(v["current"]) };
+            }
             status["torn"] = bool(t["torn"]);
         }
     }
@@ -402,6 +413,31 @@ export function readAdded(payload: Record<string, unknown>): KbAdded {
     };
 }
 
+/* A single `kb add`: the document's fields and, beside them, what was left to
+ * embed. */
+export function readFiled(payload: Record<string, unknown>): KbFiled {
+    return { ...readAdded(payload), pending: num(payload["pending"]) };
+}
+
+/* `kb add --batch`: the rows, and the pending count once for all of them. */
+export function readBatchAdded(payload: Record<string, unknown>): KbBatchAdded {
+    const added = arr(payload["added"]).map((row) => readAdded(obj(row)));
+    return {
+        added,
+        count: "count" in payload ? num(payload["count"]) : added.length,
+        pending: num(payload["pending"]),
+    };
+}
+
+export function readEmbedded(payload: Record<string, unknown>): KbEmbedded {
+    return {
+        embedded: num(payload["embedded"]),
+        kept: num(payload["kept"]),
+        skipped: num(payload["skipped"]),
+        pending: num(payload["pending"]),
+    };
+}
+
 /* What `kb add --dir` answers. `source` stays null when the store said null:
  * see `KbDirAdded`. */
 export function readDirAdded(payload: Record<string, unknown>): KbDirAdded {
@@ -428,6 +464,7 @@ export function readDirAdded(payload: Record<string, unknown>): KbDirAdded {
             otherTypes: num(skipped["otherTypes"]),
         },
         embedded: num(payload["embedded"]),
+        pending: num(payload["pending"]),
     };
 }
 

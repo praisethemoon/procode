@@ -104,6 +104,7 @@ test("kb_search takes every filter §4 names", () => {
             "minScore",
             "mode",
             "q",
+            "rerank",
             "since",
             "source",
         ].sort(),
@@ -154,6 +155,16 @@ test("kb_add offers no way to forget, and says a folder's gone files are missing
     const keys = Object.keys((tool?.inputSchema["properties"] ?? {}) as Record<string, unknown>);
     assert.equal(keys.some((k) => /forget/i.test(k)), false);
     assert.match(String(tool?.description), /reported as missing, not forgotten/);
+});
+
+test("kb_add and kb_search say what pending and unembedded mean", () => {
+    /* The one place a model is told that a large filing is searchable by
+     * keyword at once and semantically only later, and what a count of chunks
+     * without a vector in a search answer is warning it about. */
+    assert.match(String(findTool("kb_add")?.description), /pending: N/);
+    assert.match(String(findTool("kb_add")?.description), /searchable by keyword at once/);
+    assert.match(String(findTool("kb_add")?.description), /Finish embedding/);
+    assert.match(String(findTool("kb_search")?.description), /unembedded: N/);
 });
 
 test("kb_links names §6's five relationship types and no sixth", () => {

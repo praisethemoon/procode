@@ -33,11 +33,11 @@ import * as vscode from "vscode";
 
 import { Kb } from "kb-js";
 
-import { HostContext } from "./host";
+import { HostContext, layoutShelf } from "./host";
 import { KnowledgeEditor } from "./editor";
 import { NO_FOLDER, Settings, makeClient, noFolder, readSettings, workspaceRoot } from "./session";
 import { Sidebar } from "./sidebar";
-import { addCurrentFile, addFiles, addFolder, addUrl, refreshStale } from "./commands";
+import { addCurrentFile, addFiles, addFolder, addUrl, finishEmbedding, refreshStale } from "./commands";
 import { quickSearch } from "./quickopen";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -69,6 +69,7 @@ export function activate(context: vscode.ExtensionContext): void {
         open: (reference, chunk, preview) => void editors.provider.open(reference, chunk, preview),
         scope: (collection) => void rail.sidebar.scope(collection),
         retitle: (reference, title) => editors.provider.retitle(reference, title),
+        layouts: layoutShelf(context.workspaceState),
     };
 
     const editors = KnowledgeEditor.register(ctx);
@@ -149,8 +150,10 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand(
             "knowledge.search",
             withClient((kb) =>
-                quickSearch(kb, (reference, chunk) =>
-                    void editors.provider.open(reference, chunk, false),
+                quickSearch(
+                    kb,
+                    (reference, chunk) => void editors.provider.open(reference, chunk, false),
+                    settings.rerank,
                 ),
             ),
         ),
@@ -177,6 +180,13 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand(
             "knowledge.addUrl",
             withClient((kb) => addUrl(kb, announce)),
+        ),
+        /* index-api §2's `kb embed`: the chunks a filing left to embed when
+         * its budget ran out. Offered after such a filing, from the rail when
+         * the store has any, and from the command palette. */
+        vscode.commands.registerCommand(
+            "knowledge.embed",
+            withClient((kb) => finishEmbedding(kb, announce)),
         ),
         vscode.commands.registerCommand(
             "knowledge.refreshStale",

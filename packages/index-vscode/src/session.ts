@@ -35,6 +35,10 @@ export const CONFIG_SECTION = "knowledge";
 export interface Settings {
     readonly cliPath: string;
     readonly staleAfterDays: number;
+    /* Whether a search asks the store to rerank its top hits. Off unless the
+     * reader turns it on: it costs seconds a search and needs the reranker
+     * model, and without it every search would be refused. */
+    readonly rerank: boolean;
 }
 
 export function readSettings(): Settings {
@@ -46,6 +50,7 @@ export function readSettings(): Settings {
          * everything: `kb-js`'s `isStale` refuses it, and this keeps the
          * number that reaches the webview honest about what it is. */
         staleAfterDays: Number.isFinite(days) && days >= 0 ? days : 90,
+        rerank: config.get<boolean>("rerank", false) === true,
     };
 }
 

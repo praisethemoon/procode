@@ -28,7 +28,7 @@
  * browser document cannot spawn anything, and the bundler refuses the import
  * by name. The pure entry is the shapes, the readers and §5's staleness, which
  * is the whole of what a renderer needs. */
-import { KbDocument, KbHit, fetchedAtKey, isStale } from "kb-js/pure";
+import { KbDocument, KbHit, KbStatus, fetchedAtKey, isStale } from "kb-js/pure";
 
 /* What the one-line snippet is actually a line OF.
  *
@@ -199,4 +199,37 @@ export function searchQuery(collection: string): Record<string, unknown> {
         input["collection"] = scope;
     }
     return input;
+}
+
+/* How many chunks a filing left to embed (index-api §2), off `kb status`.
+ *
+ * ONLY WHEN THERE IS A MODEL TO EMBED WITH. A keyword-only store has no
+ * vector for any chunk, and every one of them counts as missing; offering to
+ * "finish" that would be offering a pass that is refused with `model_missing`.
+ * A model that is not the one the store recorded is §8's mismatch, which a
+ * reindex answers and an embed pass does not, so that is not counted either. */
+export function leftToEmbed(status: KbStatus): number {
+    const missing = status.vectors?.missing ?? 0;
+    if (missing <= 0 || status.model === undefined || status.model.available === null) {
+        return 0;
+    }
+    return status.model.current === false ? 0 : missing;
+}
+
+function chunkCount(n: number): string {
+    return `${n} chunk${n === 1 ? "" : "s"}`;
+}
+
+/* The rail's line for a store with chunks left to embed. */
+export function pendingLine(n: number): string {
+    return `${chunkCount(n)} ${n === 1 ? "is" : "are"} not embedded yet: searchable by keyword, not yet by meaning.`;
+}
+
+/* A search's note when its semantic side could not see every chunk (§4's
+ * `unembedded`); null when it saw them all. */
+export function unembeddedNote(unembedded: number | undefined): string | null {
+    if (unembedded === undefined || unembedded <= 0) {
+        return null;
+    }
+    return `${chunkCount(unembedded)} ${unembedded === 1 ? "is" : "are"} not embedded yet — semantic results may be missing ${unembedded === 1 ? "it" : "them"}.`;
 }

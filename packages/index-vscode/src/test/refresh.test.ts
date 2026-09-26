@@ -43,6 +43,7 @@ test("a folder's filing is told as its totals, and a file gone is named by what 
         missing: [],
         skipped: { ignored: 2, hidden: 0, vendored: 1, generated: 0, binary: 0, large: 1, unreadable: 0, otherTypes: 0 },
         embedded: 14,
+        pending: 0,
     };
     assert.equal(
         folderMessage(filed),

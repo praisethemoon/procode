@@ -96,6 +96,60 @@ function report(e: unknown, what: string): void {
     );
 }
 
+/* "N chunks", for a count the reader is told. */
+function chunks(n: number): string {
+    return `${n} chunk${n === 1 ? "" : "s"}`;
+}
+
+export const FINISH_EMBEDDING = "Finish embedding";
+
+/* What a filing left to embed, as a sentence to append to the message that
+ * reports it: kb files at once and embeds within a budget (index-api §2), so
+ * a large document is searchable by keyword now and semantically once the
+ * rest is embedded. Empty when nothing is pending. */
+export function pendingNote(pending: number): string {
+    return pending > 0
+        ? ` ${chunks(pending)} left to embed: searchable by keyword now, and by meaning once embedded.`
+        : "";
+}
+
+/* The message that closes a filing. When the filing left embeddings pending
+ * it offers to finish them, which runs the same pass as the command. */
+function tell(kb: Kb, announce: () => void, message: string, pending: number): void {
+    if (pending <= 0) {
+        void vscode.window.showInformationMessage(message);
+        return;
+    }
+    void Promise.resolve(vscode.window.showInformationMessage(`${message}${pendingNote(pending)}`, FINISH_EMBEDDING)).then(
+        (chosen) => {
+            if (chosen === FINISH_EMBEDDING) {
+                return finishEmbedding(kb, announce);
+            }
+            return undefined;
+        },
+    );
+}
+
+/* `kb embed`: every chunk a budgeted filing left without a vector, embedded
+ * now, with progress shown because it can take minutes. */
+export async function finishEmbedding(kb: Kb, announce: () => void): Promise<void> {
+    try {
+        const done = await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: "Embedding the chunks left to embed…",
+            },
+            () => kb.embed(),
+        );
+        announce();
+        void vscode.window.showInformationMessage(
+            done.embedded === 0 ? "Nothing was left to embed." : `Embedded ${chunks(done.embedded)}.`,
+        );
+    } catch (e) {
+        report(e, "finish embedding");
+    }
+}
+
 /* The collection to file into: one of the ones that exist, or a new name.
  *
  * THE EXISTING VOCABULARY IS OFFERED BEFORE A NEW WORD IS COINED. §1.3 makes a
@@ -180,8 +234,11 @@ export async function addCurrentFile(kb: Kb, announce: () => void): Promise<void
             mime: mimeForLanguage(doc.languageId),
         });
         announce();
-        void vscode.window.showInformationMessage(
+        tell(
+            kb,
+            announce,
             `${added.created ? "Filed" : added.reindexed ? "Updated" : "Already filed"} ${added.document} in ${added.collection} (${added.chunkCount} chunk${added.chunkCount === 1 ? "" : "s"}).`,
+            added.pending,
         );
     } catch (e) {
         report(e, "file that document");
@@ -226,6 +283,9 @@ export async function addFiles(kb: Kb, announce: () => void, collection?: string
     }
     const filed: string[] = [];
     const skipped: string[] = [];
+    /* Each filing embeds what the one before it left, within its own budget,
+     * so the last answer is what the store as a whole has left to embed. */
+    let pending = 0;
     for (const uri of picked) {
         const name = path.basename(uri.path);
         const bytes = await vscode.workspace.fs.readFile(uri);
@@ -242,6 +302,7 @@ export async function addFiles(kb: Kb, announce: () => void, collection?: string
                     meta: paper.meta,
                 });
                 filed.push(added.document);
+                pending = added.pending;
             } catch (e) {
                 report(e, `file ${name}`);
             }
@@ -261,6 +322,7 @@ export async function addFiles(kb: Kb, announce: () => void, collection?: string
                 url: uri.fsPath,
             });
             filed.push(added.document);
+            pending = added.pending;
         } catch (e) {
             report(e, `file ${name}`);
         }
@@ -272,7 +334,7 @@ export async function addFiles(kb: Kb, announce: () => void, collection?: string
     if (filed.length > 0) parts.push(`Filed ${filed.join(", ")} in ${into}.`);
     if (skipped.length > 0) parts.push(`Skipped ${skipped.join(", ")}: empty or not text.`);
     if (parts.length > 0) {
-        void vscode.window.showInformationMessage(parts.join(" "));
+        tell(kb, announce, parts.join(" "), pending);
     }
 }
 
@@ -312,7 +374,7 @@ export async function addFolder(kb: Kb, announce: () => void, collection?: strin
             () => kb.addDir(folder.fsPath, { collection: into }),
         );
         announce();
-        void vscode.window.showInformationMessage(folderMessage(filed));
+        tell(kb, announce, folderMessage(filed), filed.pending);
     } catch (e) {
         report(e, `file ${name}`);
     }
@@ -376,9 +438,7 @@ export async function addUrl(kb: Kb, announce: () => void): Promise<void> {
             etag: fetched.etag,
         });
         announce();
-        void vscode.window.showInformationMessage(
-            `${added.created ? "Filed" : "Updated"} ${added.document} in ${added.collection}.`,
-        );
+        tell(kb, announce, `${added.created ? "Filed" : "Updated"} ${added.document} in ${added.collection}.`, added.pending);
     } catch (e) {
         report(e, "file that page");
     }

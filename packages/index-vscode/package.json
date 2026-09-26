@@ -100,6 +100,11 @@
         "icon": "$(sync)"
       },
       {
+        "command": "knowledge.embed",
+        "title": "Knowledge: Finish Embedding",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "knowledge.init",
         "title": "Knowledge: Initialise A Store In This Workspace"
       }
@@ -162,6 +167,11 @@
           "default": 90,
           "minimum": 0,
           "description": "How old a document may be before the sidebar badges it stale. A search hit carries the store's own verdict and this does not override it."
+        },
+        "knowledge.rerank": {
+          "type": "boolean",
+          "default": false,
+          "description": "Rerank search results with a cross-encoder: slower (seconds per search) but better ordering. Needs the gte-reranker-modernbert-base model in the models folder under .kb in your home directory."
         }
       }
     }

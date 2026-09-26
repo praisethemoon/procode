@@ -98,8 +98,20 @@ export type Request =
      * workspace folder, or open the setting that names the kb command. */
     | { kind: "init" }
     | { kind: "settings" }
+    /* Embed what filings left to embed (index-api §2's `kb embed`), as the
+     * command does, with its progress and its answer. */
+    | { kind: "embed" }
     /* §4's delete, whose text has to tell the truth about what it does. */
-    | { kind: "confirm"; id: number; title: string; detail: string; confirm: string };
+    | { kind: "confirm"; id: number; title: string; detail: string; confirm: string }
+    /* The graph's settled positions, kept by the host under `layoutKey`, so
+     * a graph tab reopened over an unchanged store draws at once rather than
+     * settling again. The host answers a `layoutGet` with a `result` whose
+     * value is what was put, or null. */
+    | { kind: "layoutGet"; id: number; key: string }
+    | { kind: "layoutPut"; key: string; positions: StoredPositions };
+
+/* Positions as they cross and are kept: [id, x, y] per node. */
+export type StoredPositions = [string, number, number][];
 
 /* ----------------------------------------------------- host -> webview */
 
@@ -138,7 +150,10 @@ export function isRequest(data: unknown): data is Request {
         kind === "addFolder" ||
         kind === "init" ||
         kind === "settings" ||
-        kind === "confirm"
+        kind === "embed" ||
+        kind === "confirm" ||
+        kind === "layoutGet" ||
+        kind === "layoutPut"
     );
 }
 
