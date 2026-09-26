@@ -9,6 +9,7 @@
  */
 
 import * as assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
@@ -590,26 +591,33 @@ test("the rail cancels the width floor baukasten's Select brings into it", () =>
      * here, which buys the two failures that matter: a baukasten that RAISES it
      * still passes, because the cancel still works; a baukasten that DROPS it
      * fails, and whoever reads this can delete a rule that is now working
-     * around nothing. */
+     * around nothing.
+     *
+     * The root's classes come from RENDERING the installed Select, not from
+     * reading its bundle: which chunk a bundler puts a component in changes
+     * from release to release, and the element `fullWidth` widens is simply
+     * the outermost one. It renders in a child process because the package is
+     * only whole as ES modules. */
     const dist = baukastenDist();
-    const chunk = fs.readdirSync(dist).find((f) => /^Select-.*\.js$/.test(f));
-    assert.ok(chunk !== undefined, "baukasten ships no Select chunk; run npm install");
-
-    /* The root recipe is the one with a `fullWidth` variant — that is the
-     * element `fullWidth` widens, and therefore the element whose own minimum
-     * overrides it. */
-    const js = fs.readFileSync(path.join(dist, chunk), "utf8");
-    const root = [
-        ...js.matchAll(
-            /defaultClassName:\s*"([A-Za-z0-9_]+)",\s*variantClassNames:\s*\{([\s\S]{0,400}?)defaultVariants/g,
-        ),
-    ]
-        .filter((m) => m[2].includes("fullWidth"))
-        .map((m) => m[1]);
-    assert.ok(
-        root.length > 0,
-        "baukasten's Select no longer has a fullWidth root recipe; re-read this test before trusting it",
+    const markup = execFileSync(
+        process.execPath,
+        [
+            "--input-type=module",
+            "-e",
+            `import { createRequire } from "node:module";
+             const require = createRequire(${JSON.stringify(path.join(ROOT, "package.json"))});
+             const React = require("react");
+             const { renderToStaticMarkup } = require("react-dom/server");
+             const { Select } = await import(${JSON.stringify(path.join(dist, "core.mjs"))});
+             process.stdout.write(renderToStaticMarkup(React.createElement(Select, {
+                 fullWidth: true, options: [{ value: "a", label: "A" }], value: "a", onChange: () => {},
+             })));`,
+        ],
+        { encoding: "utf8" },
     );
+    const outer = /^<[a-z]+ class="([^"]+)"/.exec(markup);
+    assert.ok(outer !== null, `baukasten's Select rendered no classed root: ${markup.slice(0, 200)}`);
+    const root = outer[1].split(/\s+/);
 
     const base = fs.readFileSync(path.join(dist, "baukasten-base.css"), "utf8");
     const tokens = new Map(
