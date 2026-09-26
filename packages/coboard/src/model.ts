@@ -29,6 +29,20 @@ export interface Comment {
     readonly at: string; // ISO-8601 UTC
 }
 
+/* Whether an item is archived, as the board reads it: never stored on the
+ * item (archive records are their own lines in the log), and present only
+ * when the item is archived. `via` is the milestone or epic it is archived
+ * with, or null when it was archived itself. */
+export interface Archived {
+    readonly at: string;
+    readonly via: string | null;
+}
+
+/* Which items a read returns: the default leaves archived ones out. */
+export type ArchivedMode = "exclude" | "include" | "only";
+
+export const ARCHIVED_MODES: readonly ArchivedMode[] = ["exclude", "include", "only"];
+
 interface Base {
     readonly id: string;
     readonly title: string;
@@ -36,6 +50,7 @@ interface Base {
     readonly status: string;
     readonly created: string;
     readonly updated: string;
+    readonly archived?: Archived;
 }
 
 export interface Epic extends Base {
@@ -70,6 +85,10 @@ export function kindOf(id: string): Kind | null {
 
 export function idNumber(id: string): number {
     return kindOf(id) ? Number(id.slice(2)) : 0;
+}
+
+export function keepArchived(item: { readonly archived?: unknown }, mode: ArchivedMode = "exclude"): boolean {
+    return mode === "include" || (mode === "only") === (item.archived !== undefined);
 }
 
 /* Tickets per status, for an epic's or a milestone's progress. */

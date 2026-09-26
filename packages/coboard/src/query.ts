@@ -4,7 +4,7 @@
  * same question the same way.
  */
 
-import { Counts, Epic, Item, Milestone, Ticket, countByStatus, idNumber, kindOf } from "./model";
+import { ArchivedMode, Counts, Epic, Item, Milestone, Ticket, countByStatus, idNumber, keepArchived, kindOf } from "./model";
 
 /* The one-line form of an item, for lists and for the far end of a link. */
 export interface Summary {
@@ -19,10 +19,19 @@ export interface Summary {
     readonly assignee?: string | null;
     readonly labels?: readonly string[];
     readonly updated: string;
+    /* Present, and true, only for an archived item. */
+    readonly archived?: true;
 }
 
 export function summarize(item: Item): Summary {
-    const s = { id: item.id, kind: item.kind, title: item.title, status: item.status, updated: item.updated };
+    const s = {
+        id: item.id,
+        kind: item.kind,
+        title: item.title,
+        status: item.status,
+        updated: item.updated,
+        ...(item.archived ? { archived: true as const } : {}),
+    };
     if (item.kind === "milestone") {
         return { ...s, epic: item.epic };
     }
@@ -68,8 +77,11 @@ export interface TicketView {
 
 export type View = EpicView | MilestoneView | TicketView;
 
-/* One item with what it contains and what contains it. */
-export function view(items: readonly Item[], id: string): View | null {
+/* One item with what it contains and what contains it. What it contains
+ * leaves out archived items unless asked for, except in an archived item,
+ * where everything is archived with it. `items` should include archived ones
+ * (`all({ archived: "include" })`), or an archived item has no view. */
+export function view(items: readonly Item[], id: string, options: { archived?: ArchivedMode } = {}): View | null {
     const key = id.trim().toUpperCase();
     const item = items.find((i) => i.id === key);
     if (!item) {
@@ -79,14 +91,15 @@ export function view(items: readonly Item[], id: string): View | null {
         const found = x ? items.find((i) => i.id === x) : undefined;
         return found ? summarize(found) : null;
     };
-    const tickets = items.filter((i): i is Ticket => i.kind === "ticket");
+    const inside = (i: Item) => (item.archived ? true : keepArchived(i, options.archived));
+    const tickets = items.filter((i): i is Ticket => i.kind === "ticket" && inside(i));
     if (item.kind === "epic") {
         const mine = tickets.filter((t) => t.epic === item.id);
         return {
             kind: "epic",
             epic: item,
             milestones: items
-                .filter((i): i is Milestone => i.kind === "milestone" && i.epic === item.id)
+                .filter((i): i is Milestone => i.kind === "milestone" && i.epic === item.id && inside(i))
                 .map((m) => ({ ...summarize(m), counts: countByStatus(mine.filter((t) => t.milestone === m.id)) })),
             tickets: mine.filter((t) => t.milestone === null).map(summarize),
             allTickets: mine.map(summarize),
@@ -109,6 +122,8 @@ export interface Filter {
     assignee?: string | null;
     label?: string | null;
     limit?: number | null;
+    /* Archived items are left out unless asked for. */
+    archived?: ArchivedMode | null;
 }
 
 export interface Hit extends Summary {
@@ -123,6 +138,7 @@ export interface Hit extends Summary {
 
 function keep(item: Item, f: Filter): boolean {
     const up = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
+    if (!keepArchived(item, f.archived ?? "exclude")) return false;
     if (f.kind && item.kind !== f.kind) return false;
     if (f.status && item.status !== f.status.trim().toLowerCase()) return false;
     if (f.epic) {

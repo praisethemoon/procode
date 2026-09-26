@@ -3,9 +3,18 @@
  *   {"op":"put","item":{...}}                    an epic, milestone or ticket, whole
  *   {"op":"comment","ticket":"T-3","author":..,"body":..,"at":..}
  *   {"op":"delete","id":"T-3","at":..}
+ *   {"op":"archive","id":"E-2","at":..}
+ *   {"op":"unarchive","id":"E-2","at":..}
  *
  * The board is the fold of the log: the last `put` of an id wins, a `delete`
- * removes it, comments attach to their ticket in order. Every write re-reads
+ * removes it, comments attach to their ticket in order.
+ *
+ * ARCHIVING IS ITS OWN RECORD, NOT A FIELD ON THE ITEM. A reader that predates
+ * it skips the records it does not know and sees the board as it was; and a
+ * writer that predates it — which puts back the whole item as it read it —
+ * cannot drop an archive it never saw. An item is archived with its milestone
+ * and epic: archiving an epic writes one record, and unarchiving it brings
+ * back everything under it. Archived ids stay taken. Every write re-reads
  * the log under a lock first, so the VS Code extension and any number of
  * agents can write to the same board without clobbering each other or
  * handing out the same id twice. The log is small text and is meant to be
@@ -16,6 +25,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import {
+    Archived,
+    ArchivedMode,
     Comment,
     Epic,
     Item,
@@ -26,6 +37,7 @@ import {
     SIZES,
     Ticket,
     idNumber,
+    keepArchived,
     kindOf,
     statusesOf,
 } from "./model";
@@ -87,7 +99,25 @@ export interface Placement {
 interface State {
     items: Map<string, Item>;
     comments: Map<string, Comment[]>;
+    /* The items archived themselves, with when. */
+    archived: Map<string, string>;
     next: Record<Kind, number>;
+}
+
+/* The item's own archive, or the one it inherits from its milestone or epic. */
+function archivedOf(st: State, item: Item): Archived | undefined {
+    const own = st.archived.get(item.id);
+    if (own !== undefined) {
+        return { at: own, via: null };
+    }
+    const up = item.kind === "ticket" ? [item.milestone, item.epic] : item.kind === "milestone" ? [item.epic] : [];
+    for (const id of up) {
+        const at = id ? st.archived.get(id) : undefined;
+        if (at !== undefined) {
+            return { at, via: id! };
+        }
+    }
+    return undefined;
 }
 
 function now(): string {
@@ -115,6 +145,7 @@ export class Board {
         const st: State = {
             items: new Map(),
             comments: new Map(),
+            archived: new Map(),
             next: { epic: 1, milestone: 1, ticket: 1 },
         };
         let text = "";
@@ -148,24 +179,42 @@ export class Board {
                 st.comments.set(t, list);
             } else if (rec["op"] === "delete") {
                 st.items.delete(String(rec["id"]));
+                st.archived.delete(String(rec["id"]));
+            } else if (rec["op"] === "archive") {
+                const id = String(rec["id"]);
+                if (st.items.has(id)) {
+                    st.archived.set(id, String(rec["at"] ?? ""));
+                }
+            } else if (rec["op"] === "unarchive") {
+                st.archived.delete(String(rec["id"]));
             }
+            // Any other op is from a newer coboard: skipped, as this one's
+            // records are skipped by older ones.
         }
         return st;
     }
 
+    /* The item as a reader sees it: a ticket with its comments, and any item
+     * with its archive when it has one. */
     private withComments(st: State, item: Item): Item {
-        return item.kind === "ticket" ? { ...item, comments: st.comments.get(item.id) ?? [] } : item;
+        const { archived: _stale, ...plain } = item as Item & { archived?: Archived };
+        const archived = archivedOf(st, plain as Item);
+        const full = (plain.kind === "ticket" ? { ...plain, comments: st.comments.get(plain.id) ?? [] } : plain) as Item;
+        return archived ? ({ ...full, archived } as Item) : full;
     }
 
-    /* Every item, epics then milestones then tickets, each in id order. */
-    all(): Item[] {
+    /* Every item, epics then milestones then tickets, each in id order.
+     * Archived items are left out unless asked for. */
+    all(options: { archived?: ArchivedMode } = {}): Item[] {
         const st = this.load();
         const order: Record<Kind, number> = { epic: 0, milestone: 1, ticket: 2 };
         return [...st.items.values()]
             .map((i) => this.withComments(st, i))
+            .filter((i) => keepArchived(i, options.archived))
             .sort((a, b) => order[a.kind] - order[b.kind] || idNumber(a.id) - idNumber(b.id));
     }
 
+    /* Any item by id, archived or not. */
     get(id: string): Item {
         const st = this.load();
         const item = st.items.get(id.trim().toUpperCase());
@@ -236,7 +285,7 @@ export class Board {
             if (input.kind === "epic") {
                 item = { ...base, kind: "epic" };
             } else if (input.kind === "milestone") {
-                const epic = need(st, input.epic, "epic", "a milestone needs an epic");
+                const epic = notArchived(st, need(st, input.epic, "epic", "a milestone needs an epic"));
                 item = { ...base, kind: "milestone", epic: epic.id };
             } else {
                 const place = resolvePlacement(st, input.epic ?? null, input.milestone ?? null);
@@ -306,9 +355,9 @@ export class Board {
                 if (to.milestone !== undefined && to.milestone !== null) {
                     throw new BoardError("invalid", "a milestone moves to an epic, not into another milestone");
                 }
-                const epic = need(st, to.epic, "epic", "moving a milestone needs the epic to move it to");
+                const epic = notArchived(st, need(st, to.epic, "epic", "moving a milestone needs the epic to move it to"));
                 const moved: Milestone = { ...item, epic: epic.id, updated: at };
-                const records: object[] = [{ op: "put", item: moved }];
+                const records: object[] = [{ op: "put", item: stored(moved) }];
                 for (const t of st.items.values()) {
                     if (t.kind === "ticket" && t.milestone === item.id && t.epic !== epic.id) {
                         records.push({ op: "put", item: stored({ ...t, epic: epic.id, updated: at }) });
@@ -342,6 +391,37 @@ export class Board {
         });
     }
 
+    /* Archive an item, and with it everything under it. Reversible, and
+     * nothing is written to the children. */
+    archive(id: string): Item {
+        return this.write((st) => {
+            const item = need(st, id, null, "");
+            if (st.archived.has(item.id)) {
+                throw new BoardError("invalid", `${item.id} is already archived`);
+            }
+            const at = now();
+            st.archived.set(item.id, at);
+            return { records: [{ op: "archive", id: item.id, at }], result: this.withComments(st, item) };
+        });
+    }
+
+    /* Unarchive an item archived itself. One archived with its milestone or
+     * epic comes back when that does. */
+    unarchive(id: string): Item {
+        return this.write((st) => {
+            const item = need(st, id, null, "");
+            if (!st.archived.has(item.id)) {
+                const inherited = archivedOf(st, item);
+                throw new BoardError(
+                    "invalid",
+                    inherited ? `${item.id} is archived with ${inherited.via}; unarchive ${inherited.via}` : `${item.id} is not archived`,
+                );
+            }
+            st.archived.delete(item.id);
+            return { records: [{ op: "unarchive", id: item.id, at: now() }], result: this.withComments(st, item) };
+        });
+    }
+
     /* An epic or milestone that still holds anything is refused rather than
      * taking its children with it; a deleted milestone's tickets would have
      * nowhere obvious to go, so empty it first. */
@@ -364,6 +444,16 @@ export class Board {
 
 /* ------------------------------------------------------------ validation */
 
+/* A container something is being put into must not be archived: the new
+ * item would be archived the moment it was made. */
+function notArchived<T extends Item>(st: State, container: T): T {
+    const a = archivedOf(st, container);
+    if (a) {
+        throw new BoardError("invalid", a.via ? `${container.id} is archived with ${a.via}` : `${container.id} is archived`);
+    }
+    return container;
+}
+
 function need(st: State, id: string | null | undefined, kind: Kind | null, missing: string): Item {
     if (!id || !id.trim()) {
         throw new BoardError("invalid", missing || "an id is required");
@@ -383,22 +473,24 @@ function need(st: State, id: string | null | undefined, kind: Kind | null, missi
  * implies its epic, and an epic given alongside it must be that one. */
 function resolvePlacement(st: State, epic: string | null, milestone: string | null): { epic: string; milestone: string | null } {
     if (milestone) {
-        const m = need(st, milestone, "milestone", "") as Milestone;
+        const m = notArchived(st, need(st, milestone, "milestone", "") as Milestone);
         if (epic && epic.trim().toUpperCase() !== m.epic) {
             throw new BoardError("invalid", `${m.id} belongs to ${m.epic}, not ${epic.trim().toUpperCase()}`);
         }
         return { epic: m.epic, milestone: m.id };
     }
-    const e = need(st, epic, "epic", "a ticket needs an epic (or a milestone, which implies one)");
+    const e = notArchived(st, need(st, epic, "epic", "a ticket needs an epic (or a milestone, which implies one)"));
     return { epic: e.id, milestone: null };
 }
 
 function stored(item: Item): Item {
-    if (item.kind !== "ticket") {
-        return item;
+    // Archives live in their own records; a put never carries them.
+    const { archived: _archived, ...plain } = item as Item & { archived?: Archived };
+    if (plain.kind !== "ticket") {
+        return plain as Item;
     }
-    // Comments live in their own records; a put never carries them.
-    const { comments: _comments, ...rest } = item;
+    // Nor comments.
+    const { comments: _comments, ...rest } = plain as Ticket;
     return rest as Ticket;
 }
 

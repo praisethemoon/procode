@@ -307,3 +307,122 @@ test("lap: a session tagged with a ticket is found through the board", { skip: !
     const created = await commitDiff(dir, "L1");
     assert.deepEqual([created.op, created.before, created.after], ["create", "", "hello\n"]);
 });
+
+/* ------------------------------------------------------------- archiving */
+
+function archivedBoard(): { b: Board; ids: Record<string, string> } {
+    const b = fresh();
+    const e1 = b.create({ kind: "epic", title: "Shipped" });
+    const e2 = b.create({ kind: "epic", title: "Current" });
+    const m1 = b.create({ kind: "milestone", title: "Beta", epic: e1.id });
+    const t1 = b.create({ kind: "ticket", title: "In the milestone", milestone: m1.id });
+    const t2 = b.create({ kind: "ticket", title: "Loose in the epic", epic: e1.id });
+    const t3 = b.create({ kind: "ticket", title: "Elsewhere", epic: e2.id });
+    return { b, ids: { e1: e1.id, e2: e2.id, m1: m1.id, t1: t1.id, t2: t2.id, t3: t3.id } };
+}
+
+test("archiving an epic hides it and everything under it, with one record, and unarchiving brings it all back", () => {
+    const { b, ids } = archivedBoard();
+    const before = fs.readFileSync(b.logPath, "utf8").split("\n").length;
+    const a = b.archive(ids.e1);
+    assert.deepEqual(a.archived && { via: a.archived.via }, { via: null });
+    const lines = fs.readFileSync(b.logPath, "utf8").trim().split("\n");
+    assert.equal(lines.length, before, "exactly one record was appended");
+    assert.equal(JSON.parse(lines[lines.length - 1]).op, "archive");
+
+    assert.deepEqual(b.all().map((i) => i.id), [ids.e2, ids.t3], "the default leaves them out");
+    assert.deepEqual(b.all({ archived: "only" }).map((i) => i.id), [ids.e1, ids.m1, ids.t1, ids.t2]);
+    assert.equal(b.all({ archived: "include" }).length, 6);
+    assert.deepEqual(b.get(ids.t1).archived && b.get(ids.t1).archived!.via, ids.e1, "get works and says what it is archived with");
+    assert.equal(b.get(ids.t3).archived, undefined);
+
+    b.unarchive(ids.e1);
+    assert.equal(b.all().length, 6);
+    assert.equal(b.get(ids.t1).archived, undefined);
+});
+
+test("a milestone archived on its own takes its tickets, and they come back with it", () => {
+    const { b, ids } = archivedBoard();
+    b.archive(ids.m1);
+    assert.deepEqual(b.all({ archived: "only" }).map((i) => i.id), [ids.m1, ids.t1]);
+    assert.equal(b.get(ids.t1).archived?.via, ids.m1);
+    assert.equal(b.get(ids.t2).archived, undefined, "a ticket loose in the epic is not in the milestone");
+});
+
+test("archive and unarchive refuse what they cannot do, with a reason", () => {
+    const { b, ids } = archivedBoard();
+    b.archive(ids.e1);
+    assert.equal(code(() => b.archive(ids.e1)), "invalid");
+    assert.equal(code(() => b.unarchive(ids.e2)), "invalid");
+    assert.throws(() => b.unarchive(ids.t1), /archived with E-1; unarchive E-1/);
+    assert.equal(code(() => b.archive("T-99")), "not_found");
+    // An item archived with its epic may still be archived itself, and then
+    // stays archived when the epic comes back.
+    b.archive(ids.t2);
+    b.unarchive(ids.e1);
+    assert.deepEqual(b.all({ archived: "only" }).map((i) => i.id), [ids.t2]);
+});
+
+test("nothing new goes into an archived epic or milestone", () => {
+    const { b, ids } = archivedBoard();
+    b.archive(ids.m1);
+    assert.throws(() => b.create({ kind: "ticket", title: "x", milestone: ids.m1 }), /M-1 is archived/);
+    assert.throws(() => b.move(ids.t3, { milestone: ids.m1 }), /M-1 is archived/);
+    b.unarchive(ids.m1);
+    b.archive(ids.e1);
+    assert.throws(() => b.create({ kind: "milestone", title: "x", epic: ids.e1 }), /E-1 is archived/);
+    assert.throws(() => b.create({ kind: "ticket", title: "x", milestone: ids.m1 }), /M-1 is archived with E-1/);
+    assert.throws(() => b.move(ids.t3, { epic: ids.e1 }), /E-1 is archived/);
+});
+
+test("an archive survives later writes to the item, and archived ids are never reused", () => {
+    const { b, ids } = archivedBoard();
+    b.archive(ids.t3);
+    const u = b.update(ids.t3, { title: "Renamed while archived" });
+    assert.ok(u.archived, "the update's answer is still archived");
+    b.comment(ids.t3, "a note", "agent");
+    assert.ok(b.get(ids.t3).archived);
+    // No put ever carries the archive: it lives in its own records only.
+    for (const line of fs.readFileSync(b.logPath, "utf8").trim().split("\n")) {
+        const r = JSON.parse(line);
+        if (r.op === "put") assert.equal("archived" in r.item, false);
+    }
+    assert.equal(b.create({ kind: "ticket", title: "next", epic: ids.e2 }).id, "T-4");
+});
+
+test("a log from a newer coboard loads: unknown records are skipped, as older readers skip archive records", () => {
+    const { b, ids } = archivedBoard();
+    fs.appendFileSync(b.logPath, JSON.stringify({ op: "someday", id: ids.t1, at: "2030-01-01T00:00:00Z" }) + "\n");
+    assert.equal(b.all().length, 6);
+    // What an older reader sees: the fold without the records it does not
+    // know. Every item is still there, unchanged.
+    b.archive(ids.e1);
+    const older = fs
+        .readFileSync(b.logPath, "utf8")
+        .trim()
+        .split("\n")
+        .map((l) => JSON.parse(l))
+        .filter((r) => r.op === "put");
+    assert.equal(new Set(older.map((r) => r.item.id)).size, 6);
+});
+
+test("search and view leave archived items out unless asked, and an archived item's view shows its contents", () => {
+    const { b, ids } = archivedBoard();
+    b.archive(ids.m1);
+    const all = b.all({ archived: "include" });
+    assert.deepEqual(search(all, "milestone").map((h) => h.id), [], "T-1 is in the archived milestone");
+    assert.deepEqual(search(all, "milestone", { archived: "include" }).map((h) => h.id), [ids.t1]);
+    assert.equal(search(all, "", { archived: "only" }).every((h) => h.archived === true), true);
+    assert.equal(search(all, "current")[0].archived, undefined, "the flag is absent, not false, on a live item");
+
+    const epic = view(all, ids.e1);
+    assert.ok(epic && epic.kind === "epic");
+    assert.deepEqual(epic.milestones.map((m) => m.id), [], "the live epic leaves its archived milestone out");
+    assert.deepEqual(epic.allTickets.map((t) => t.id), [ids.t2]);
+    const withArchived = view(all, ids.e1, { archived: "include" });
+    assert.ok(withArchived && withArchived.kind === "epic");
+    assert.deepEqual(withArchived.milestones.map((m) => m.id), [ids.m1]);
+    const ms = view(all, ids.m1);
+    assert.ok(ms && ms.kind === "milestone");
+    assert.deepEqual(ms.tickets.map((t) => t.id), [ids.t1], "an archived milestone shows what it holds");
+});
