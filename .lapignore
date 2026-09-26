@@ -1,0 +1,34 @@
+# lap ignore patterns (gitignore-like subset; see lap help)
+# .lap/, .git/, .hg/, .svn/ and .DS_Store are always ignored.
+
+# build output and dependencies: regenerated, never edited by hand
+node_modules/
+out/
+cli/lap-cli/bin/
+cli/kb-cli/bin/
+build/
+*.o
+*.tmp
+*.vsix
+*.dSYM/
+package-lock.json
+
+# the scratch folder the VS Code launch configs open
+.playground/
+
+# binary media
+*.png
+*.jpg
+*.gif
+*.ttf
+
+# the combined extension is assembled here by its build
+dist/
+
+# the board keeps its own append-only history; recording its log here would
+# be a second history of the same thing
+.coboard/
+
+# machine-local configuration, not project code
+.mcp.json
+.claude/settings.local.json

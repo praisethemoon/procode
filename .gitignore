@@ -27,6 +27,10 @@ build/
 .claude/settings.json
 .claude/settings.local.json
 
+# Written by "procode: Set Up MCP for Claude Code": absolute paths into this
+# machine's VS Code and its installed extension, so it cannot be shared.
+.mcp.json
+
 # Dogfooding notes: useful locally, not part of the project's record.
 feedback.md
 
