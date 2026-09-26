@@ -8,6 +8,13 @@
 
 /* ---- finding the weights ------------------------------------------------ */
 
+/* The one model kb knows how to get, and how to get it. kb never downloads
+ * anything (§12.2: no HTTP client in the binary); the user runs this. */
+#define KB_MODEL_URL                                                           \
+    "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/" \
+    "nomic-embed-text-v1.5.Q4_K_M.gguf"
+#define KB_MODEL_FILE "nomic-embed-text-v1.5.Q4_K_M.gguf"
+
 typedef struct {
     Arena *a;
     const char *dir;
@@ -18,7 +25,7 @@ typedef struct {
 static WalkAction gguf_visit(const char *rel, bool is_dir, void *ud) {
     GgufScan *s = (GgufScan *)ud;
     if (is_dir)
-        return WALK_CONT;
+        return WALK_SKIP_DIR; /* models/ is flat; a subdirectory is not ours */
     size_t n = strlen(rel);
     if (n < 6 || strcmp(rel + n - 5, ".gguf") != 0)
         return WALK_CONT;
@@ -28,53 +35,58 @@ static WalkAction gguf_visit(const char *rel, bool is_dir, void *ud) {
     return WALK_CONT;
 }
 
+/* ~/.kb/models: the machine's models, shared by every workspace and only ever
+ * READ. kb creates nothing there and deletes nothing there — the user puts
+ * the file in place with the command the error prints. There is no store
+ * under ~/.kb; this directory is the only thing kb looks at under the home
+ * directory, and which model a workspace was indexed with is still pinned in
+ * its own index/model.json. The model must be a regular file: like every
+ * walk in kb, this one skips symbolic links. */
+bool embed_models_dir(char *out, size_t outsz) {
+    const char *home = getenv("HOME");
+#ifdef _WIN32
+    if (!home || !home[0])
+        home = getenv("USERPROFILE");
+#endif
+    if (!home || !home[0])
+        return false;
+    if (snprintf(out, outsz, "%s/.kb/models", home) >= (int32_t)outsz)
+        return false;
+    for (char *p = out; *p; p++) {
+        if (*p == '\\')
+            *p = '/';
+    }
+    return true;
+}
+
 bool embed_find_model(Arena *a, char *out, size_t outsz, char *err,
                       size_t errsz) {
-    const char *env = getenv("KB_MODEL");
-    if (env && env[0]) {
-        /* An explicit path is taken at its word: if it is wrong, saying so
-         * is more use than searching somewhere the caller did not name. */
-        if (snprintf(out, outsz, "%s", env) >= (int32_t)outsz) {
-            snprintf(err, errsz, "KB_MODEL is longer than a path may be");
-            return false;
-        }
-        if (!plat_is_file(out)) {
-            snprintf(err, errsz, "KB_MODEL names %s, which is not a file",
-                     out);
-            return false;
-        }
-        return true;
-    }
-    char dir[KB_PATH_MAX];
-    if (!store_global_dir(dir, sizeof dir)) {
-        snprintf(err, errsz,
-                 "no KB_MODEL, and no KB_STORE or HOME to look under");
-        return false;
-    }
     char models[KB_PATH_MAX];
-    snprintf(models, sizeof models, "%s/models", dir);
-    if (!plat_is_dir(models)) {
-        snprintf(err, errsz,
-                 "no embedding model: set KB_MODEL to a .gguf file, or put "
-                 "one in %s",
-                 models);
+    if (!embed_models_dir(models, sizeof models)) {
+        snprintf(err, errsz, "no embedding model: HOME is not set, so there "
+                             "is no ~/.kb/models to look in");
         return false;
     }
     GgufScan s;
     memset(&s, 0, sizeof s);
     s.a = a;
     s.dir = models;
-    plat_walk(a, models, gguf_visit, &s);
+    if (plat_is_dir(models))
+        plat_walk(a, models, gguf_visit, &s);
     if (!s.found) {
-        snprintf(err, errsz, "no .gguf file in %s", models);
+        snprintf(err, errsz,
+                 "no embedding model in %s; download it with:\n"
+                 "  mkdir -p %s && curl -fL -o %s/" KB_MODEL_FILE " \\\n"
+                 "    " KB_MODEL_URL,
+                 models, models, models);
         return false;
     }
     /* More than one is ambiguous, and picking the alphabetically first would
      * make which model a store was built with depend on a directory listing. */
     if (s.n > 1) {
         snprintf(err, errsz,
-                 "%lu .gguf files in %s; set KB_MODEL to name one",
-                 (unsigned long)s.n, models);
+                 "%lu .gguf files in %s; keep exactly one", (unsigned long)s.n,
+                 models);
         return false;
     }
     if (snprintf(out, outsz, "%s", s.found) >= (int32_t)outsz) {
@@ -551,6 +563,23 @@ static bool forward(Embedder *e, const int32_t *ids, size_t T, float *out) {
     return true;
 }
 
+bool embed_tokens(Embedder *e, const int32_t *ids, size_t n, float *out) {
+    if (n == 0 || n > KB_EMBED_MAX_TOKENS)
+        return false;
+    /* The embedding lookup below is `data + id * row_bytes` straight into the
+     * mapping. wpm_encode cannot produce an id outside the vocabulary, but a
+     * caller handing ids in directly can, and an unchecked one is a read of
+     * whatever follows the weights. */
+    for (size_t i = 0; i < n; i++)
+        if (ids[i] < 0 || (uint64_t)ids[i] >= e->wpm.n)
+            return false;
+    if (!forward(e, ids, n, out))
+        return false;
+    e->n_embedded++;
+    e->n_tokens += n;
+    return true;
+}
+
 bool embed_text(Embedder *e, const char *text, size_t len, bool is_query,
                 float *out, bool *truncated) {
     if (truncated)
@@ -575,10 +604,8 @@ bool embed_text(Embedder *e, const char *text, size_t len, bool is_query,
                           cap, truncated);
     if (T == 0)
         return false;
-    if (!forward(e, e->ids, T, out))
+    if (!embed_tokens(e, e->ids, T, out))
         return false;
-    e->n_embedded++;
-    e->n_tokens += T;
 
     if (e->cfg.normalize) {
         double s = 0.0;

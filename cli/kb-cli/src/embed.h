@@ -91,10 +91,12 @@ typedef struct {
     uint64_t n_tokens;
 } Embedder;
 
-/* Where the weights are: $KB_MODEL if set, else the single *.gguf under
- * ~/.kb/models (or $KB_STORE/../models when KB_STORE is set). Returns false
- * with a message naming what it looked for — §11's model_missing wants "the
- * expected weights path" and this is it. */
+/* ~/.kb/models, the one place models live. Read-only to kb. */
+bool embed_models_dir(char *out, size_t outsz);
+
+/* Where the weights are: the single *.gguf in ~/.kb/models. Returns false
+ * with a message naming the path it looked in and the curl command that puts
+ * the model there — §11's model_missing wants "the expected weights path". */
 bool embed_find_model(Arena *a, char *out, size_t outsz, char *err,
                       size_t errsz);
 
@@ -108,6 +110,17 @@ void embed_close(Embedder *e);
  * different vectors detects a prefix that is not being applied. */
 bool embed_text(Embedder *e, const char *text, size_t len, bool is_query,
                 float *out, bool *truncated);
+
+/* The forward pass over a token sequence the caller chose, without the
+ * prefix, the tokenizer or the normalisation in front of it. `embed_text` is
+ * this with those three added; it is separate so the network can be driven
+ * with explicit ids — by a test, or by a comparison against another
+ * implementation of the same model, where the tokenizer must be taken out of
+ * the picture before the arithmetic can be judged. Every id is checked
+ * against the vocabulary, because unlike wpm_encode's output a caller's ids
+ * are not known to be in range and the embedding lookup is a raw offset into
+ * the mapping. `e->x` is left holding the n × dim final hidden states. */
+bool embed_tokens(Embedder *e, const int32_t *ids, size_t n, float *out);
 
 /* A stable fingerprint of a configuration: the sha256 of every field that
  * changes what a vector means, in a fixed order. Two stores whose vectors
