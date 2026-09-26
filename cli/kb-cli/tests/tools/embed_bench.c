@@ -1,9 +1,10 @@
 /* Times the embedder on real text, and checks that a faster build still
  * computes the same vectors.
  *
- *   kb-embed-bench <model.gguf> [--chunks N] [--save F | --check F] <file>...
+ *   kb-embed-bench <model.gguf> [--chunks N] [--piece B] [--save F | --check F] <file>...
  *
- * The files are cut into 1600-byte pieces (the size kb's chunker aims for),
+ * The files are cut into B-byte pieces (default 1600, the size kb's chunker
+ * aims for; smaller pieces show how the embedder copes with short chunks),
  * and the first N pieces (default 64) are embedded one after another, as
  * `kb add` does. It prints milliseconds per chunk and tokens per second.
  * --save writes the vectors to F; --check compares against a saved F and
@@ -20,7 +21,6 @@
 #include <string.h>
 #include <time.h>
 
-#define PIECE 1600
 
 static double now(void) {
     struct timespec t;
@@ -30,12 +30,14 @@ static double now(void) {
 
 int main(int argc, char **argv) {
     const char *model = NULL, *save = NULL, *check = NULL;
-    size_t want = 64;
+    size_t want = 64, piece = 1600;
     const char **files = (const char **)calloc((size_t)argc, sizeof(char *));
     size_t nfiles = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--chunks") == 0 && i + 1 < argc)
             want = (size_t)atoi(argv[++i]);
+        else if (strcmp(argv[i], "--piece") == 0 && i + 1 < argc)
+            piece = (size_t)atoi(argv[++i]);
         else if (strcmp(argv[i], "--save") == 0 && i + 1 < argc)
             save = argv[++i];
         else if (strcmp(argv[i], "--check") == 0 && i + 1 < argc)
@@ -46,7 +48,7 @@ int main(int argc, char **argv) {
             files[nfiles++] = argv[i];
     }
     if (!model || nfiles == 0) {
-        fprintf(stderr, "usage: kb-embed-bench <model.gguf> [--chunks N] "
+        fprintf(stderr, "usage: kb-embed-bench <model.gguf> [--chunks N] [--piece B] "
                         "[--save F | --check F] <file>...\n");
         return 2;
     }
@@ -65,9 +67,9 @@ int main(int argc, char **argv) {
         size_t dlen;
         if (!plat_read_file(a, files[f], &data, &dlen))
             continue;
-        for (size_t off = 0; off < dlen && n < want; off += PIECE) {
+        for (size_t off = 0; off < dlen && n < want; off += piece) {
             text[n] = data + off;
-            len[n] = dlen - off < PIECE ? dlen - off : PIECE;
+            len[n] = dlen - off < piece ? dlen - off : piece;
             n++;
         }
     }

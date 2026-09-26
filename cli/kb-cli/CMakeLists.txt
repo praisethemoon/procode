@@ -35,6 +35,7 @@ set(KB_LIB_SOURCES
     src/bpe.c
     src/gitignore.c
     src/dirscan.c
+    src/syntax.c
     src/third_party/utf8proc/utf8proc.c
     src/embed.c
     src/modelrec.c
@@ -56,6 +57,31 @@ set(KB_LIB_SOURCES
     src/cmd_forget.c
     src/cmd_sources.c
 )
+
+# tree-sitter and its grammars, vendored (src/third_party/TREE-SITTER.md).
+set(KB_TS_SOURCES
+    src/third_party/tree-sitter/lib/src/lib.c
+    src/third_party/tree-sitter-c/src/parser.c
+    src/third_party/tree-sitter-typescript/typescript/src/parser.c
+    src/third_party/tree-sitter-typescript/typescript/src/scanner.c
+    src/third_party/tree-sitter-typescript/tsx/src/parser.c
+    src/third_party/tree-sitter-typescript/tsx/src/scanner.c
+    src/third_party/tree-sitter-javascript/src/parser.c
+    src/third_party/tree-sitter-javascript/src/scanner.c
+    src/third_party/tree-sitter-python/src/parser.c
+    src/third_party/tree-sitter-python/src/scanner.c
+    src/third_party/tree-sitter-go/src/parser.c
+    src/third_party/tree-sitter-rust/src/parser.c
+    src/third_party/tree-sitter-rust/src/scanner.c
+    src/third_party/tree-sitter-asm/src/parser.c
+)
+list(APPEND KB_LIB_SOURCES ${KB_TS_SOURCES})
+
+# tree_sitter/api.h, for src/syntax.c and the runtime itself.
+include_directories(src/third_party/tree-sitter/lib/include)
+# The vendored sources are someone else's code: their warnings are not kb's.
+set_source_files_properties(${KB_TS_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<IF:$<C_COMPILER_ID:MSVC>,/w,-w>")
 
 add_executable(kb ${KB_LIB_SOURCES} src/main.c)
 # Embedding runs its matrix products on every core (plat_parallel).

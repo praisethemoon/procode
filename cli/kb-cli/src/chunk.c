@@ -47,7 +47,7 @@ Lang chunk_lang(const char *mime, const char *path) {
         ".go",  ".rs",   ".py",  ".rb",  ".php", ".cs",  ".swift", ".kt",
         ".zig", ".lua",  ".sh",  ".bash", ".sql", ".css", ".scss", ".tc",
         ".pl",  ".ex",   ".exs", ".hs",  ".ml",  ".scala", ".dart", ".s",
-        ".S",   ".asm",  ".mts", ".cts", NULL};
+        ".S",   ".asm",  ".nasm", ".mts", ".cts", ".pyi", NULL};
 
     /* Markdown and HTML are checked first because both have mime types that
      * would also satisfy the text/x- rule below. */
@@ -93,13 +93,15 @@ const char *chunk_mime_from_path(const char *path) {
                {".cpp", "text/x-c++"},          {".cxx", "text/x-c++"},
                {".hpp", "text/x-c++"},          {".hh", "text/x-c++"},
                {".m", "text/x-objc"},           {".mm", "text/x-objc"},
-               {".py", "text/x-python"},        {".rs", "text/x-rust"},
+               {".py", "text/x-python"},        {".pyi", "text/x-python"},
+               {".rs", "text/x-rust"},
                {".go", "text/x-go"},            {".java", "text/x-java"},
                {".kt", "text/x-kotlin"},        {".swift", "text/x-swift"},
                {".rb", "text/x-ruby"},          {".php", "text/x-php"},
                {".cs", "text/x-csharp"},        {".lua", "text/x-lua"},
                {".zig", "text/x-zig"},          {".s", "text/x-asm"},
                {".S", "text/x-asm"},            {".asm", "text/x-asm"},
+               {".nasm", "text/x-asm"},
                {".js", "text/javascript"},      {".mjs", "text/javascript"},
                {".cjs", "text/javascript"},     {".jsx", "text/javascript"},
                {".ts", "application/typescript"}, {".tsx", "application/typescript"},

@@ -2,6 +2,7 @@
 node_modules/
 cli/lap-cli/bin/
 cli/kb-cli/bin/
+cli/kb-cli/obj/
 packages/kb-js/out/
 packages/kb-mcp/out/
 packages/index-vscode/out/

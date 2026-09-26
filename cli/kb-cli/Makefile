@@ -26,9 +26,31 @@ LDLIBS := -lm -lpthread
 PREFIX ?= /usr/local
 DESTDIR ?=
 
+# tree-sitter and its grammars, vendored (src/third_party/TREE-SITTER.md).
+# Compiled once into objects under obj/, with warnings off — they are
+# someone else's code, and kb's -Wall -Wextra would bury kb's own warnings —
+# and linked into every binary below.
+TS := src/third_party/tree-sitter
+SRC_TS := $(TS)/lib/src/lib.c \
+          $(TS)-c/src/parser.c \
+          $(TS)-typescript/typescript/src/parser.c $(TS)-typescript/typescript/src/scanner.c \
+          $(TS)-typescript/tsx/src/parser.c $(TS)-typescript/tsx/src/scanner.c \
+          $(TS)-javascript/src/parser.c $(TS)-javascript/src/scanner.c \
+          $(TS)-python/src/parser.c $(TS)-python/src/scanner.c \
+          $(TS)-go/src/parser.c \
+          $(TS)-rust/src/parser.c $(TS)-rust/src/scanner.c \
+          $(TS)-asm/src/parser.c
+# Its own variable, so a CFLAGS given on the command line keeps it.
+INCLUDES := -I$(TS)/lib/include
+OBJ_TS := $(patsubst %.c,obj/%.o,$(SRC_TS))
+
+obj/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(INCLUDES) -w -c $< -o $@
+
 SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/errdet.c src/platform.c \
            src/doc.c src/store.c src/chunk.c src/token.c src/fts.c \
-           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/bpe.c src/gitignore.c src/dirscan.c src/embed.c src/modelrec.c src/vectors.c \
+           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/bpe.c src/gitignore.c src/dirscan.c src/syntax.c src/embed.c src/modelrec.c src/vectors.c \
            src/third_party/utf8proc/utf8proc.c \
            src/rank.c src/cmd_common.c \
            src/cmd_init.c src/cmd_add.c src/cmd_ls.c src/cmd_get.c \
@@ -44,25 +66,30 @@ TEST_BIN := bin/kb-unit-tests
 
 all: $(BIN)
 
-$(BIN): $(SRC_LIB) $(SRC_MAIN) src/*.h src/third_party/utf8proc/*
+$(BIN): $(SRC_LIB) $(SRC_MAIN) src/*.h src/third_party/utf8proc/* $(OBJ_TS)
 	@mkdir -p bin
-	$(CC) $(CFLAGS) -o $@ $(SRC_LIB) $(SRC_MAIN) $(LDFLAGS) $(LDLIBS)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(SRC_LIB) $(SRC_MAIN) $(OBJ_TS) $(LDFLAGS) $(LDLIBS)
 
-$(TEST_BIN): $(SRC_LIB) $(SRC_TESTS) src/*.h tests/unit/test.h
+$(TEST_BIN): $(SRC_LIB) $(SRC_TESTS) src/*.h tests/unit/test.h $(OBJ_TS)
 	@mkdir -p bin
-	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC_LIB) $(SRC_TESTS) $(LDFLAGS) $(LDLIBS)
+	$(CC) $(CFLAGS) $(INCLUDES) -Isrc -o $@ $(SRC_LIB) $(SRC_TESTS) $(OBJ_TS) $(LDFLAGS) $(LDLIBS)
 
 # A development tool: kb's BPE tokenizer over files, for the check against
 # the Hugging Face tokenizer (tools/modernbert/check_tokenizer.py).
-bin/kb-bpe-dump: $(SRC_LIB) tests/tools/bpe_dump.c src/*.h
+bin/kb-bpe-dump: $(SRC_LIB) tests/tools/bpe_dump.c src/*.h $(OBJ_TS)
 	@mkdir -p bin
-	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC_LIB) tests/tools/bpe_dump.c $(LDFLAGS) $(LDLIBS)
+	$(CC) $(CFLAGS) $(INCLUDES) -Isrc -o $@ $(SRC_LIB) tests/tools/bpe_dump.c $(OBJ_TS) $(LDFLAGS) $(LDLIBS)
 
 # A development tool: times the embedder, and compares its vectors with a
 # saved run, so a faster forward pass can show it computes the same thing.
-bin/kb-embed-bench: $(SRC_LIB) tests/tools/embed_bench.c src/*.h
+bin/kb-embed-bench: $(SRC_LIB) tests/tools/embed_bench.c src/*.h $(OBJ_TS)
 	@mkdir -p bin
-	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC_LIB) tests/tools/embed_bench.c $(LDFLAGS) $(LDLIBS)
+	$(CC) $(CFLAGS) $(INCLUDES) -Isrc -o $@ $(SRC_LIB) tests/tools/embed_bench.c $(OBJ_TS) $(LDFLAGS) $(LDLIBS)
+
+# A development tool: kb's grammars over files, to see how well each parses.
+bin/kb-syntax-dump: $(SRC_LIB) tests/tools/syntax_dump.c src/*.h $(OBJ_TS)
+	@mkdir -p bin
+	$(CC) $(CFLAGS) $(INCLUDES) -Isrc -o $@ $(SRC_LIB) tests/tools/syntax_dump.c $(OBJ_TS) $(LDFLAGS) $(LDLIBS)
 
 # The BPE and ModernBERT tests read gte-modernbert-base's model file
 # (read-only) and are skipped without it.
@@ -93,6 +120,6 @@ uninstall:
 	@echo "removed $(DESTDIR)$(PREFIX)/bin/kb"
 
 clean:
-	rm -rf bin
+	rm -rf bin obj
 
 .PHONY: all unit e2e test install uninstall clean
