@@ -41,6 +41,18 @@
       "preLaunchTask": "prepare: Board"
     },
     {
+      "name": "Run Artifacts",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/artifacts-vscode",
+        "--disable-extensions",
+        "${workspaceFolder}/.playground"
+      ],
+      "outFiles": ["${workspaceFolder}/packages/artifacts-vscode/out/**/*.js"],
+      "preLaunchTask": "prepare: Artifacts"
+    },
+    {
       "name": "Run All Extensions",
       "type": "extensionHost",
       "request": "launch",
@@ -48,6 +60,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/packages/lap-vscode",
         "--extensionDevelopmentPath=${workspaceFolder}/packages/index-vscode",
         "--extensionDevelopmentPath=${workspaceFolder}/packages/coboard-vscode",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/artifacts-vscode",
         "--disable-extensions",
         "${workspaceFolder}/.playground"
       ],
@@ -55,7 +68,8 @@
       "outFiles": [
         "${workspaceFolder}/packages/lap-vscode/out/**/*.js",
         "${workspaceFolder}/packages/index-vscode/out/**/*.js",
-        "${workspaceFolder}/packages/coboard-vscode/out/**/*.js"
+        "${workspaceFolder}/packages/coboard-vscode/out/**/*.js",
+        "${workspaceFolder}/packages/artifacts-vscode/out/**/*.js"
       ],
       "preLaunchTask": "prepare: all extensions"
     }

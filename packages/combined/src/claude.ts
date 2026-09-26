@@ -1,4 +1,4 @@
-/* Claude Code at user scope: coboard and kb registered once per machine with
+/* Claude Code at user scope: procode's MCP servers registered once per machine with
  * `claude mcp add-json --scope user`, so every project has them and nothing is
  * written into a repository. A user-scope stdio server is started in the
  * directory Claude Code runs in, which is where each server finds that

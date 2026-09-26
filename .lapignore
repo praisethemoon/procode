@@ -29,6 +29,10 @@ dist/
 # be a second history of the same thing
 .coboard/
 
+# published pages have their own store and their own dates; they are results,
+# not edits
+.artifact/
+
 # machine-local configuration, not project code
 .mcp.json
 .claude/settings.local.json

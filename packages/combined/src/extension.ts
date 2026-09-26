@@ -1,4 +1,4 @@
-/* procode: Lap History, Knowledge and the Board as one extension, with the
+/* procode: Lap History, Knowledge, the Board and Artifacts as one extension, with the
  * lap and kb CLIs inside it.
  *
  * Each part is the extension it always was — its own activate(), its own
@@ -29,6 +29,7 @@ const PARTS: readonly [string, Part][] = [
     ["Lap History", require("../../lap-vscode/out/extension.js") as Part],
     ["Knowledge", require("../../index-vscode/out/extension.js") as Part],
     ["Board", require("../../coboard-vscode/out/extension.js") as Part],
+    ["Artifacts", require("../../artifacts-vscode/out/extension.js") as Part],
 ];
 
 export function binDir(ctx: vscode.ExtensionContext): string {
@@ -37,7 +38,7 @@ export function binDir(ctx: vscode.ExtensionContext): string {
 
 /* ------------------------------------------------------------ MCP servers
  *
- * coboard's and kb's MCP servers, each bundled into one script under
+ * coboard's, kb's and artifacts' MCP servers, each bundled into one script under
  * out/mcp. They run on VS Code's own runtime (the extension host's
  * executable with ELECTRON_RUN_AS_NODE=1), so no separate Node is needed,
  * and they are handed the bundled CLIs by path. */
@@ -70,6 +71,13 @@ export function servers(ctx: vscode.ExtensionContext): Server[] {
             command: process.execPath,
             args: [script("kb")],
             env: { ...node, KB_BIN: path.join(bin, "kb") },
+        },
+        {
+            name: "artifacts",
+            label: "artifacts: pages agents publish",
+            command: process.execPath,
+            args: [script("artifacts")],
+            env: { ...node },
         },
     ];
 }
@@ -142,7 +150,7 @@ function setUpClaudeMcp(ctx: vscode.ExtensionContext): void {
     }
     fs.writeFileSync(file, JSON.stringify(withServers(current, servers(ctx).map(forClaude)), null, 2) + "\n");
     void vscode.window.showInformationMessage(
-        "procode: coboard and kb are in .mcp.json. Restart Claude Code in this project (or check /mcp) to pick them up.",
+        "procode: coboard, kb and artifacts are in .mcp.json. Restart Claude Code in this project (or check /mcp) to pick them up.",
     );
 }
 
@@ -211,14 +219,14 @@ async function registerClaudeMcp(ctx: vscode.ExtensionContext): Promise<void> {
             .join("\n");
         await vscode.env.clipboard.writeText(lines);
         void vscode.window.showInformationMessage(
-            "procode: the claude CLI was not found. The two commands that register coboard and kb for every project are on the clipboard; run them in a terminal.",
+            "procode: the claude CLI was not found. The commands that register coboard, kb and artifacts for every project are on the clipboard; run them in a terminal.",
         );
         return;
     }
     try {
         await registerUserScope(ctx, cli);
         void vscode.window.showInformationMessage(
-            "procode: coboard and kb are registered with Claude Code for every project. Start a new Claude Code session (or check /mcp) to pick them up.",
+            "procode: coboard, kb and artifacts are registered with Claude Code for every project. Start a new Claude Code session (or check /mcp) to pick them up.",
         );
     } catch (e) {
         void vscode.window.showErrorMessage(`procode: registering with Claude Code failed: ${(e as Error).message}`);
@@ -233,7 +241,7 @@ export async function refreshClaudeUserScope(ctx: vscode.ExtensionContext): Prom
     }
     if (state === undefined) {
         const choice = await vscode.window.showInformationMessage(
-            "procode: register the coboard and kb MCP servers with Claude Code, for every project on this machine?",
+            "procode: register the coboard, kb and artifacts MCP servers with Claude Code, for every project on this machine?",
             "Register",
             "No thanks",
         );
@@ -252,7 +260,7 @@ export async function refreshClaudeUserScope(ctx: vscode.ExtensionContext): Prom
         await registerUserScope(ctx, cli);
     } catch (e) {
         void vscode.window.showWarningMessage(
-            `procode: Claude Code still runs coboard and kb from an older procode, and updating them failed: ${(e as Error).message}`,
+            `procode: Claude Code still runs procode's MCP servers from an older procode, and updating them failed: ${(e as Error).message}`,
         );
     }
 }

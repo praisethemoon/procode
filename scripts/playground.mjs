@@ -1,10 +1,10 @@
 /* Fills .playground/ with a small project to look at in the test window:
  * a board with epics, milestones and tickets, lap sessions linked to those
- * tickets (with real edits), and a few kb documents.
+ * tickets (with real edits), a few kb documents, and two artifacts.
  *
  * Each part is seeded only when it is empty, so running this again changes
  * nothing, and work done in the playground is kept. It never deletes
- * anything. Needs the CLIs built and coboard compiled (the "playground" task
+ * anything. Needs the CLIs built and coboard and artifacts compiled (the "playground" task
  * in .vscode/tasks.json does both first).
  *
  *   node scripts/playground.mjs
@@ -21,6 +21,7 @@ const dir = path.join(repo, ".playground");
 const LAP = path.join(repo, "cli/lap-cli/bin/lap");
 const KB = path.join(repo, "cli/kb-cli/bin/kb");
 const { Board } = createRequire(import.meta.url)(path.join(repo, "packages/coboard/out/index.js"));
+const { Artifacts } = createRequire(import.meta.url)(path.join(repo, "packages/artifacts/out/index.js"));
 
 fs.mkdirSync(dir, { recursive: true });
 const env = { ...process.env, LAP_USER: "claude" };
@@ -35,10 +36,12 @@ const write = (file, text) => {
 
 if (!fs.existsSync(path.join(dir, ".lap"))) lap("init");
 if (!fs.existsSync(path.join(dir, ".kb"))) kb(["init"]);
-// The board and the knowledge base are not source; lap should not track them.
+// The board, the knowledge base and the artifacts are not source; lap should
+// not track them.
 const ignore = path.join(dir, ".lapignore");
 const ignored = fs.readFileSync(ignore, "utf8");
 if (!ignored.includes(".coboard/")) fs.appendFileSync(ignore, "\n# stores, not source\n.coboard/\n.kb/\n");
+if (!ignored.includes(".artifact/")) fs.appendFileSync(ignore, ".artifact/\n");
 
 /* ----------------------------------------------------------------- board */
 
@@ -148,6 +151,49 @@ if (JSON.parse(kb(["ls", "--json"])).count === 0) {
         kb(["add", "--title", title, "--collection", collection, "--mime", "text/markdown", "--json"], text);
     }
     console.log("kb: seeded 3 documents");
+}
+
+/* ------------------------------------------------------------- artifacts */
+
+const artifacts = new Artifacts(dir);
+if (artifacts.list().length === 0) {
+    artifacts.publish(
+        {
+            title: "Accepting connections: IOCP, io_uring, kqueue",
+            description: "How each API accepts a connection without blocking a thread, from the kb documents D-1 to D-3.",
+            html: `<h1>Accepting connections</h1>
+<p class="muted">From the knowledge base: D-1 (IOCP), D-2 (io_uring), D-3 (kqueue).</p>
+<p>All three let one thread wait on many sockets. Two report <strong>completion</strong>, one reports <strong>readiness</strong>.</p>
+<table>
+<thead><tr><th>API</th><th>Accept</th><th>Model</th></tr></thead>
+<tbody>
+<tr><td>IOCP</td><td><code>AcceptEx</code> into a socket made beforehand</td><td>completion</td></tr>
+<tr><td>io_uring</td><td><code>io_uring_prep_accept</code>, result as a CQE</td><td>completion</td></tr>
+<tr><td>kqueue</td><td><code>EVFILT_READ</code> on the listener, then <code>accept</code></td><td>readiness</td></tr>
+</tbody>
+</table>
+<h2>What it means for the server</h2>
+<blockquote>With completion APIs the buffer is committed when the request is made; with readiness the read happens after the wake-up.</blockquote>`,
+        },
+        new Date(Date.now() - 2 * 3600 * 1000),
+    );
+    artifacts.publish({
+        title: "T-2 progress",
+        description: "Where the overlapped-read ticket stands, with a small status chart.",
+        html: `<!doctype html><html><head><style>
+.bar { height: var(--bk-spacing-3); border-radius: var(--bk-radius-full); background: var(--bk-color-background-secondary); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--bk-color-primary); }
+.row { display: grid; grid-template-columns: 10rem 1fr 3rem; gap: var(--bk-gap-md); align-items: center; margin-bottom: var(--bk-spacing-2); }
+</style></head><body>
+<h1>T-2: overlapped reads</h1>
+<div class="row"><span>read arming</span><div class="bar"><span style="width:80%"></span></div><small>80%</small></div>
+<div class="row"><span>re-arm on completion</span><div class="bar"><span style="width:35%"></span></div><small>35%</small></div>
+<div class="row"><span>tests</span><div class="bar"><span style="width:10%"></span></div><small>10%</small></div>
+<p id="note" class="muted"></p>
+<script>document.getElementById("note").textContent = "Rendered " + new Date().toLocaleString() + " — scripts run inside the sandbox.";</script>
+</body></html>`,
+    });
+    console.log("artifacts: seeded A-1, A-2");
 }
 
 console.log(`playground ready: ${dir}`);

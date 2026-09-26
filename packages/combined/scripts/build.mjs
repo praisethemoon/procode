@@ -5,11 +5,13 @@
  *   npm run package --workspace combined     dist/ and procode-<version>-<target>.vsix
  *
  * dist/ holds:
- *   package.json   generated: the three extensions' contributions merged, plus
+ *   package.json   generated: the four extensions' contributions merged, plus
  *                  procode's own command and MCP provider
- *   out/extension.js   the entry, with Lap History, Knowledge and the Board bundled in
- *   out/media/         the webview assets of Knowledge and the Board
- *   out/mcp/coboard.js, out/mcp/kb.js   the MCP servers, one file each
+ *   out/extension.js   the entry, with Lap History, Knowledge, the Board and
+ *                      Artifacts bundled in
+ *   out/media/         the webview assets of Knowledge, the Board and Artifacts
+ *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/artifacts.js
+ *                      the MCP servers, one file each
  *   media/             Lap History's activity-bar icon
  *   bin/lap, bin/kb    the CLIs, built here for this platform
  */
@@ -24,7 +26,7 @@ const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repo = path.resolve(here, "..", "..");
 const dist = path.join(here, "dist");
 const VERSION = JSON.parse(fs.readFileSync(path.join(here, "package.json"), "utf8")).version;
-const PARTS = ["lap-vscode", "index-vscode", "coboard-vscode"];
+const PARTS = ["lap-vscode", "index-vscode", "coboard-vscode", "artifacts-vscode"];
 
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: repo, stdio: "inherit" });
 const readJson = (p) => JSON.parse(fs.readFileSync(p, "utf8"));
@@ -91,7 +93,7 @@ if (dup) {
 const manifest = {
     name: "procode",
     displayName: "procode",
-    description: "Lap History, Knowledge and the Board in one extension, with the lap and kb CLIs and the kb and coboard MCP servers.",
+    description: "Lap History, Knowledge, the Board and Artifacts in one extension, with the lap and kb CLIs and the kb, coboard and artifacts MCP servers.",
     version: VERSION,
     publisher: "praisethemoon",
     author: { name: "Soulaymen Chouri", email: "doit@praisethemoon.org" },
@@ -106,7 +108,7 @@ fs.writeFileSync(path.join(dist, "package.json"), JSON.stringify(manifest, null,
 
 /* ------------------------------------------------------------------ assets */
 
-for (const part of ["index-vscode", "coboard-vscode"]) {
+for (const part of ["index-vscode", "coboard-vscode", "artifacts-vscode"]) {
     const media = path.join(repo, "packages", part, "out", "media");
     for (const f of fs.readdirSync(media)) {
         if (!f.endsWith(".map")) fs.copyFileSync(path.join(media, f), path.join(dist, "out", "media", f));
@@ -123,9 +125,9 @@ fs.copyFileSync(path.join(repo, "LICENSE"), path.join(dist, "LICENSE"));
 fs.writeFileSync(path.join(dist, ".vscodeignore"), "**/*.map\n");
 fs.writeFileSync(
     path.join(dist, "README.md"),
-    "# procode\n\nLap History, Knowledge and the Board in one extension, with the `lap` and `kb` CLIs built in.\n\n" +
-        "The kb and coboard MCP servers are registered with VS Code's agent automatically. For Claude Code, run " +
-        "**procode: Set Up MCP for Claude Code** in a project; it writes the two servers into that project's `.mcp.json`.\n",
+    "# procode\n\nLap History, Knowledge, the Board and Artifacts in one extension, with the `lap` and `kb` CLIs built in.\n\n" +
+        "The kb, coboard and artifacts MCP servers are registered with VS Code's agent automatically. For Claude Code, " +
+        "procode offers to register them once for every project; **procode: Register MCP Servers with Claude Code** does it on demand.\n",
 );
 
 /* ----------------------------------------------------------------- bundles */
@@ -142,6 +144,7 @@ await esbuild.build({
 });
 for (const [name, entry] of [
     ["coboard", `require(${JSON.stringify(path.join(repo, "packages/coboard/out/mcp.js"))}).main();`],
+    ["artifacts", `require(${JSON.stringify(path.join(repo, "packages/artifacts/out/mcp.js"))}).main();`],
     [
         "kb",
         `require(${JSON.stringify(path.join(repo, "packages/kb-mcp/out/main.js"))}).main().then(` +

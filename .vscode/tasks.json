@@ -32,10 +32,16 @@
       "problemMatcher": "$tsc"
     },
     {
-      "label": "playground",
-      "detail": "Creates .playground/ (gitignored) and seeds it with a board, lap sessions linked to its tickets, and kb documents; each part only when it is empty. Never deletes anything.",
+      "label": "compile: artifacts-vscode",
       "type": "shell",
-      "command": "npm run compile --workspace coboard && node scripts/playground.mjs",
+      "command": "npm run compile --workspace artifacts-vscode",
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "playground",
+      "detail": "Creates .playground/ (gitignored) and seeds it with a board, lap sessions linked to its tickets, kb documents and artifacts; each part only when it is empty. Never deletes anything.",
+      "type": "shell",
+      "command": "npm run compile --workspace coboard && npm run compile --workspace artifacts && node scripts/playground.mjs",
       "dependsOn": [
         "build: lap-cli",
         "build: kb-cli"
@@ -71,12 +77,22 @@
       "problemMatcher": []
     },
     {
+      "label": "prepare: Artifacts",
+      "dependsOn": [
+        "playground",
+        "compile: artifacts-vscode"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
       "label": "prepare: all extensions",
       "dependsOn": [
         "playground",
         "compile: lap-vscode",
         "compile: index-vscode",
-        "compile: coboard-vscode"
+        "compile: coboard-vscode",
+        "compile: artifacts-vscode"
       ],
       "dependsOrder": "sequence",
       "problemMatcher": []

@@ -115,7 +115,7 @@ for (const c of manifest.contributes.commands) {
     assert.ok(registered.has(c.command), `${c.command} is contributed and registered`);
 }
 const defs = await mcpProvider.provideMcpServerDefinitions();
-assert.deepEqual(defs.map((d) => d.label), ["coboard: the board", "kb: the knowledge base"]);
+assert.deepEqual(defs.map((d) => d.label), ["coboard: the board", "kb: the knowledge base", "artifacts: pages agents publish"]);
 for (const d of defs) {
     assert.equal(d.command, process.execPath);
     assert.ok(fs.existsSync(d.args[0]), `${d.args[0]} exists`);
@@ -127,7 +127,7 @@ for (const d of defs) {
 // The Claude Code command writes our servers and keeps the other one.
 registered.get("procode.setUpClaudeMcp")();
 const written = JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8"));
-assert.deepEqual(Object.keys(written.mcpServers).sort(), ["coboard", "kb", "other"]);
+assert.deepEqual(Object.keys(written.mcpServers).sort(), ["artifacts", "coboard", "kb", "other"]);
 assert.equal(written.mcpServers.other.command, "x", "an unrelated server is kept as it was");
 assert.equal(written.mcpServers.kb.args[0], defs[1].args[0], "Claude Code runs the same script as VS Code's agent");
 assert.equal(written.mcpServers.coboard.env.COBOARD_AUTHOR, "claude", "Claude Code's board comments are signed");
@@ -152,6 +152,8 @@ assert.deepEqual(first.map((a) => a.slice(0, 5).join(" ")), [
     "mcp add-json --scope user coboard",
     "mcp remove --scope user kb",
     "mcp add-json --scope user kb",
+    "mcp remove --scope user artifacts",
+    "mcp add-json --scope user artifacts",
 ]);
 const coboardEntry = JSON.parse(first[1][5]);
 assert.equal(coboardEntry.type, "stdio");
@@ -160,10 +162,10 @@ assert.equal(coboardEntry.env.COBOARD_AUTHOR, "claude");
 assert.ok(fs.existsSync(JSON.parse(first[3][5]).env.KB_BIN), "user scope hands kb the bundled CLI");
 
 await ext.refreshClaudeUserScope(ctx2);
-assert.equal(asked().length, 4, "a current registration is left alone");
+assert.equal(asked().length, 6, "a current registration is left alone");
 state.set("procode.claude.userScope", "declined");
 await ext.refreshClaudeUserScope(ctx2);
-assert.equal(asked().length, 4, "a declined offer is not made again");
+assert.equal(asked().length, 6, "a declined offer is not made again");
 assert.equal(
     ext.shellLine(["mcp", "add-json", "kb", `{"a":"it's"}`]),
     `claude mcp add-json kb '{"a":"it'\\''s"}'`,
