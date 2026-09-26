@@ -256,9 +256,9 @@ static float dot256(const float *w, const float *x) {
 bool quant_matvec(uint32_t t, const uint8_t *w, uint64_t n, uint64_t rows,
                   const float *x, float *out) {
     if (t == GGML_F32 || t == GGML_F16) {
-        /* Neither appears as a weight matrix in this family of models — the
-         * norms are vectors, not matrices — but the path exists so an f32
-         * model is not a special case somewhere else. */
+        /* One vector through an F32 or F16 matrix. ModernBERT's matrices
+         * are F16, and quant_matmul gives them their own shared-row path;
+         * this one serves single vectors and F32 files. */
         const size_t width = t == GGML_F32 ? 4u : 2u;
         for (uint64_t r = 0; r < rows; r++) {
             const uint8_t *row = w + r * n * width;
@@ -321,8 +321,44 @@ static void matmul_rows(size_t begin, size_t end, void *ud) {
     }
 }
 
+/* F16 rows the same way: each row is widened once, a QK_K slice at a time,
+ * and every token's dot product reads the widened slice. The width need not
+ * be a multiple of QK_K (ModernBERT's MLP is 1152 wide), so the last slice
+ * may be short. */
+static void matmul_rows_f16(size_t begin, size_t end, void *ud) {
+    const MatmulJob *j = (const MatmulJob *)ud;
+    float buf[QK_K];
+    for (uint64_t r = begin; r < end; r++) {
+        const uint8_t *row = j->w + r * j->n * 2;
+        for (size_t tt = 0; tt < j->T; tt++)
+            j->out[tt * j->rows + r] = 0.0f;
+        for (uint64_t k = 0; k < j->n; k += QK_K) {
+            const uint64_t m = j->n - k < QK_K ? j->n - k : QK_K;
+            for (uint64_t i = 0; i < m; i++)
+                buf[i] = quant_f16(rd_u16(row + (k + i) * 2));
+            for (size_t tt = 0; tt < j->T; tt++) {
+                const float *xt = j->x + tt * j->n + k;
+                float s;
+                if (m == QK_K) {
+                    s = dot256(buf, xt);
+                } else {
+                    s = 0.0f;
+                    for (uint64_t i = 0; i < m; i++)
+                        s += buf[i] * xt[i];
+                }
+                j->out[tt * j->rows + r] += s;
+            }
+        }
+    }
+}
+
 bool quant_matmul(uint32_t t, const uint8_t *w, uint64_t n, uint64_t rows,
                   const float *x, size_t T, float *out) {
+    if (t == GGML_F16) {
+        MatmulJob job = {t, w, n, rows, x, T, out};
+        plat_parallel((size_t)rows, matmul_rows_f16, &job);
+        return true;
+    }
     if (t != GGML_Q4_K && t != GGML_Q5_K && t != GGML_Q6_K) {
         /* Not a weight format this family uses for its matrices; one vector
          * at a time is correct and there is nothing to share. */

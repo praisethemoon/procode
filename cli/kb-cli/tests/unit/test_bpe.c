@@ -28,7 +28,26 @@ static bool same_ids(const int32_t *got, size_t n, const JVal *want) {
     return true;
 }
 
+static bool stripped(const char *in, const char *want) {
+    const char *s = in;
+    size_t n = strlen(in);
+    bpe_strip(&s, &n);
+    return n == strlen(want) && memcmp(s, want, n) == 0;
+}
+
 void test_bpe(void) {
+    t_begin("bpe: strip cuts what Python's str.strip cuts, and nothing else");
+    ASSERT_TRUE(stripped("", ""));
+    ASSERT_TRUE(stripped(" \t\r\n ", ""));
+    ASSERT_TRUE(stripped("  a b  ", "a b"));
+    ASSERT_TRUE(stripped("\n    call _main\n", "call _main"));
+    ASSERT_TRUE(stripped("\xc2\xa0x\xe3\x80\x80", "x"));        /* NBSP, ideographic space */
+    ASSERT_TRUE(stripped("\x1fx\x1c", "x"));                      /* Python's separators */
+    ASSERT_TRUE(stripped("\xe2\x80\x8bx", "\xe2\x80\x8bx"));  /* ZWSP is not whitespace */
+    ASSERT_TRUE(stripped("x\xc3\xa9", "x\xc3\xa9"));
+    ASSERT_TRUE(stripped("x \xff", "x \xff"));                    /* invalid UTF-8 stops it */
+
+
     const char *model = getenv("KB_TEST_MODERNBERT");
     if (!model || !*model || !plat_is_file(model)) {
         t_begin("bpe: skipped (KB_TEST_MODERNBERT names no model file)");

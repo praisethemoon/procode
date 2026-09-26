@@ -8,19 +8,38 @@
 
 /* ---- finding the weights ------------------------------------------------ */
 
-/* The one model kb knows how to get, and how to get it. kb never downloads
- * anything (§12.2: no HTTP client in the binary); the user runs this. */
-#define KB_MODEL_URL                                                           \
+/* kb's default embedding model, and the fallback it can still run. kb never
+ * downloads anything (§12.2: no HTTP client in the binary). The default is
+ * converted from its Hugging Face weights with the script in the repository;
+ * nomic's GGUF can be fetched as it is. */
+#define KB_MODEL_FILE "gte-modernbert-base.F16.gguf"
+#define KB_MODEL_HOWTO                                                         \
+    "cli/kb-cli/tools/modernbert/convert.py (see MODERNBERT.md there)"
+#define KB_FALLBACK_URL                                                        \
     "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/" \
     "nomic-embed-text-v1.5.Q4_K_M.gguf"
-#define KB_MODEL_FILE "nomic-embed-text-v1.5.Q4_K_M.gguf"
 
 typedef struct {
     Arena *a;
     const char *dir;
-    char *found;
-    uint32_t n;
+    char *first;    /* the first embedding model seen */
+    char *preferred; /* KB_MODEL_FILE, when present */
+    uint32_t n;     /* embedding models seen */
 } GgufScan;
+
+/* Whether a GGUF is a reranker (convert.py writes kb.role), read from its
+ * header without running anything. An unreadable file is left for embed_open
+ * to report. */
+static bool is_reranker(Arena *a, const char *path) {
+    Gguf g;
+    char err[256];
+    if (!gguf_open(a, path, &g, err, sizeof err))
+        return false;
+    const char *role = gguf_str(&g, "kb.role", "");
+    bool r = strcmp(role, "reranker") == 0;
+    gguf_close(&g);
+    return r;
+}
 
 static WalkAction gguf_visit(const char *rel, bool is_dir, void *ud) {
     GgufScan *s = (GgufScan *)ud;
@@ -29,9 +48,14 @@ static WalkAction gguf_visit(const char *rel, bool is_dir, void *ud) {
     size_t n = strlen(rel);
     if (n < 6 || strcmp(rel + n - 5, ".gguf") != 0)
         return WALK_CONT;
+    char *path = arena_printf(s->a, "%s/%s", s->dir, rel);
+    if (is_reranker(s->a, path))
+        return WALK_CONT;
     s->n++;
-    if (!s->found)
-        s->found = arena_printf(s->a, "%s/%s", s->dir, rel);
+    if (!s->first)
+        s->first = path;
+    if (strcmp(rel, KB_MODEL_FILE) == 0)
+        s->preferred = path;
     return WALK_CONT;
 }
 
@@ -73,23 +97,26 @@ bool embed_find_model(Arena *a, char *out, size_t outsz, char *err,
     s.dir = models;
     if (plat_is_dir(models))
         plat_walk(a, models, gguf_visit, &s);
-    if (!s.found) {
+    if (!s.first) {
         snprintf(err, errsz,
-                 "no embedding model in %s; download it with:\n"
-                 "  mkdir -p %s && curl -fL -o %s/" KB_MODEL_FILE " \\\n"
-                 "    " KB_MODEL_URL,
-                 models, models, models);
+                 "no embedding model in %s; kb's default is %s, made with "
+                 KB_MODEL_HOWTO ", or fetch nomic-embed-text-v1.5 with:\n"
+                 "  mkdir -p %s && curl -fL -O --output-dir %s " KB_FALLBACK_URL,
+                 models, KB_MODEL_FILE, models, models);
         return false;
     }
-    /* More than one is ambiguous, and picking the alphabetically first would
-     * make which model a store was built with depend on a directory listing. */
-    if (s.n > 1) {
+    /* Several embedding models: the default when it is one of them, and
+     * otherwise a refusal — picking the alphabetically first would make
+     * which model a store was built with depend on a directory listing. */
+    const char *chosen = s.n == 1 ? s.first : s.preferred;
+    if (!chosen) {
         snprintf(err, errsz,
-                 "%lu .gguf files in %s; keep exactly one", (unsigned long)s.n,
-                 models);
+                 "%lu embedding models in %s and none is kb's default (%s); "
+                 "keep exactly one",
+                 (unsigned long)s.n, models, KB_MODEL_FILE);
         return false;
     }
-    if (snprintf(out, outsz, "%s", s.found) >= (int32_t)outsz) {
+    if (snprintf(out, outsz, "%s", chosen) >= (int32_t)outsz) {
         snprintf(err, errsz, "the model path is longer than a path may be");
         return false;
     }
@@ -180,6 +207,10 @@ static const char *file_type_name(uint64_t ft) {
     }
 }
 
+static void alloc_scratch(Arena *a, Embedder *e, uint32_t ff_width);
+static bool open_modernbert(Arena *a, const char *path, Embedder *e, char *err,
+                            size_t errsz);
+
 bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
                 size_t errsz) {
     memset(e, 0, sizeof(*e));
@@ -194,19 +225,28 @@ bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
         embed_close(e);
         return false;
     }
-    /* THE ONE ARCHITECTURE CHECK. Everything below reads shapes from the
-     * file, but the ORDER of the operations — post-norm, fused QKV, rotary
-     * positions, gated feed-forward — is written into the forward pass and
-     * cannot be read from anywhere. So the name is checked, and a file
-     * naming anything else is refused rather than run with this one's
-     * wiring. */
+    /* THE ARCHITECTURE CHECK. Everything below reads shapes from the file,
+     * but the ORDER of the operations — pre- or post-norm, where the
+     * activation goes, which layers see everything — is written into a
+     * forward pass and cannot be read from anywhere. So the name picks one
+     * of the two this build has, and a file naming anything else is refused
+     * rather than run with the wrong wiring. */
+    if (strcmp(gguf_str(&e->g, "kb.role", "embedder"), "reranker") == 0) {
+        snprintf(err, errsz, "%s is a reranker, not an embedding model", path);
+        embed_close(e);
+        return false;
+    }
+    if (strcmp(arch, "modernbert") == 0)
+        return open_modernbert(a, path, e, err, errsz);
     if (strcmp(arch, "nomic-bert") != 0) {
         snprintf(err, errsz,
-                 "%s: architecture \"%s\"; this build runs \"nomic-bert\"",
+                 "%s: architecture \"%s\"; this build runs \"modernbert\" "
+                 "and \"nomic-bert\"",
                  path, arch);
         embed_close(e);
         return false;
     }
+    e->kind = EMBED_NOMIC_BERT;
 
     char key[128];
 #define ARCH_KEY(suffix)                                                       \
@@ -267,6 +307,7 @@ bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
         embed_close(e);
         return false;
     }
+    e->n_vocab = e->wpm.n;
 
     bool ok = true;
     e->tok_embd = need(&e->g, "token_embd.weight", err, errsz, &ok);
@@ -337,7 +378,14 @@ bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
              file_type_name(gguf_u64(&e->g, "general.file_type", 0)));
     c->tokenizer = KB_WPM_VERSION;
 
-    /* ---- scratch ---- */
+    alloc_scratch(a, e, e->n_ff);
+    return true;
+}
+
+/* Scratch, sized once for KB_EMBED_MAX_TOKENS. `ff_width` is the widest
+ * feed-forward activation: n_ff for nomic's separate up and gate, 2 × n_ff
+ * for ModernBERT's fused GeGLU input. */
+static void alloc_scratch(Arena *a, Embedder *e, uint32_t ff_width) {
     const size_t T = KB_EMBED_MAX_TOKENS;
     const size_t D = e->n_embd;
     e->ids = (int32_t *)arena_alloc(a, T * sizeof(int32_t));
@@ -351,9 +399,109 @@ bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
     e->lw = (float *)arena_alloc(a, D * sizeof(float));
     e->lb = (float *)arena_alloc(a, D * sizeof(float));
     e->row = (float *)arena_alloc(a, 3 * D * sizeof(float));
-    e->ff1 = (float *)arena_alloc(a, T * e->n_ff * sizeof(float));
-    e->ff2 = (float *)arena_alloc(a, T * e->n_ff * sizeof(float));
+    e->ff1 = (float *)arena_alloc(a, T * ff_width * sizeof(float));
+    e->ff2 = (float *)arena_alloc(a, T * ff_width * sizeof(float));
     e->scores = (float *)arena_alloc(a, (size_t)e->n_head * T * sizeof(float));
+}
+
+/* ModernBERT (tools/modernbert/MODERNBERT.md): the shape and the attention
+ * pattern from the file's own keys, the tokenizer from its BPE vocabulary,
+ * and every tensor checked for its shape before the first forward pass. */
+static bool open_modernbert(Arena *a, const char *path, Embedder *e, char *err,
+                            size_t errsz) {
+    e->kind = EMBED_MODERNBERT;
+    const Gguf *g = &e->g;
+    e->n_embd = (uint32_t)gguf_u64(g, "modernbert.embedding_length", 0);
+    e->n_layer = (uint32_t)gguf_u64(g, "modernbert.block_count", 0);
+    e->n_head = (uint32_t)gguf_u64(g, "modernbert.attention.head_count", 0);
+    e->n_ff = (uint32_t)gguf_u64(g, "modernbert.feed_forward_length", 0);
+    e->n_ctx = (uint32_t)gguf_u64(g, "modernbert.context_length", 0);
+    e->eps = (float)gguf_f64(g, "modernbert.attention.layer_norm_epsilon", 1e-5);
+    e->rope_base = (float)gguf_f64(g, "modernbert.rope.freq_base", 160000.0);
+    e->rope_base_local = (float)gguf_f64(g, "modernbert.rope.freq_base_local", 10000.0);
+    e->window = (uint32_t)gguf_u64(g, "modernbert.attention.sliding_window", 128);
+    e->global_every = (uint32_t)gguf_u64(g, "modernbert.attention.global_every", 3);
+    const char *pooling = gguf_str(g, "modernbert.pooling", "cls");
+    const char *act = gguf_str(g, "modernbert.hidden_activation", "gelu");
+    if (!e->n_embd || !e->n_layer || !e->n_head || !e->n_ff || e->n_embd % e->n_head != 0 ||
+        (e->n_embd / e->n_head) % 2 != 0 || !e->global_every) {
+        snprintf(err, errsz, "%s: the metadata does not describe a usable ModernBERT", path);
+        embed_close(e);
+        return false;
+    }
+    if (strcmp(pooling, "cls") != 0 && strcmp(pooling, "mean") != 0) {
+        snprintf(err, errsz, "%s: pooling \"%s\"; this build pools by cls or mean", path, pooling);
+        embed_close(e);
+        return false;
+    }
+    if (strcmp(act, "gelu") != 0) {
+        snprintf(err, errsz, "%s: activation \"%s\"; this build runs gelu", path, act);
+        embed_close(e);
+        return false;
+    }
+    e->pool_mean = strcmp(pooling, "mean") == 0;
+    e->n_head_dim = e->n_embd / e->n_head;
+    if (!bpe_init(a, g, &e->bpe, err, errsz)) {
+        embed_close(e);
+        return false;
+    }
+
+    bool ok = true;
+    e->tok_embd = need(g, "token_embd.weight", err, errsz, &ok);
+    e->embd_norm_w = need(g, "token_embd_norm.weight", err, errsz, &ok);
+    e->final_norm_w = need(g, "output_norm.weight", err, errsz, &ok);
+    if (!ok || !shape2(e->tok_embd, e->n_embd, e->tok_embd->ne[1], "token_embd.weight", err, errsz)) {
+        embed_close(e);
+        return false;
+    }
+    e->n_vocab = e->tok_embd->ne[1];
+    const uint64_t D = e->n_embd, F = e->n_ff;
+    e->layer = (EmbedLayer *)arena_alloc0(a, e->n_layer * sizeof(EmbedLayer));
+    for (uint32_t l = 0; l < e->n_layer; l++) {
+        EmbedLayer *L = &e->layer[l];
+        char n[128];
+#define LAYER(field, suffix)                                                   \
+    (snprintf(n, sizeof n, "blk.%lu." suffix, (unsigned long)l),               \
+     L->field = need(g, n, err, errsz, &ok))
+        LAYER(qkv, "attn_qkv.weight");
+        LAYER(attn_out, "attn_output.weight");
+        LAYER(ffn_up, "ffn_up.weight");
+        LAYER(ffn_down, "ffn_down.weight");
+        LAYER(out_norm_w, "ffn_norm.weight");
+#undef LAYER
+        /* Layer 0 has no attention norm: its input is the embedding norm's
+         * output as it is. */
+        snprintf(n, sizeof n, "blk.%lu.attn_norm.weight", (unsigned long)l);
+        L->attn_norm_w = gguf_tensor(g, n);
+        if (l > 0 && !L->attn_norm_w)
+            L->attn_norm_w = need(g, n, err, errsz, &ok);
+        if (!ok || !shape2(L->qkv, D, 3 * D, "attn_qkv", err, errsz) ||
+            !shape2(L->attn_out, D, D, "attn_output", err, errsz) ||
+            !shape2(L->ffn_up, D, 2 * F, "ffn_up", err, errsz) ||
+            !shape2(L->ffn_down, F, D, "ffn_down", err, errsz)) {
+            embed_close(e);
+            return false;
+        }
+    }
+
+    ModelParams *c = &e->cfg;
+    c->present = true;
+    snprintf(c->model, sizeof c->model, "%s", gguf_str(g, "general.name", "unnamed"));
+    snprintf(c->arch, sizeof c->arch, "modernbert");
+    c->dim = e->n_embd;
+    snprintf(c->pooling, sizeof c->pooling, "%s", pooling);
+    c->max_tokens = KB_EMBED_MAX_TOKENS;
+    if (e->n_ctx && c->max_tokens > e->n_ctx)
+        c->max_tokens = e->n_ctx;
+    /* gte-modernbert-base is symmetric: no prefixes. */
+    c->query_prefix[0] = '\0';
+    c->doc_prefix[0] = '\0';
+    c->normalize = true;
+    snprintf(c->quantization, sizeof c->quantization, "int8");
+    snprintf(c->weights, sizeof c->weights, "%s",
+             file_type_name(gguf_u64(g, "general.file_type", 1)));
+    c->tokenizer = KB_BPE_VERSION;
+    alloc_scratch(a, e, 2 * e->n_ff);
     return true;
 }
 
@@ -409,7 +557,7 @@ static void layernorm(float *x, const float *w, const float *b, uint32_t n,
      * it and where this model's 1e-12 was calibrated. */
     const float inv = 1.0f / sqrtf(var + eps);
     for (uint32_t i = 0; i < n; i++)
-        x[i] = (x[i] - mean) * inv * w[i] + b[i];
+        x[i] = (x[i] - mean) * inv * w[i] + (b ? b[i] : 0.0f);
 }
 
 /* Rotary position embeddings, applied per head.
@@ -456,6 +604,8 @@ typedef struct {
     Embedder *e;
     size_t T;
     float kq_scale;
+    /* Tokens see only |t - u| <= half; negative means everything. */
+    int64_t half;
 } AttnJob;
 
 static void attend_heads(size_t begin, size_t end, void *ud) {
@@ -468,7 +618,16 @@ static void attend_heads(size_t begin, size_t end, void *ud) {
         for (size_t t = 0; t < T; t++) {
             const float *qh = e->q + t * D + h * HD;
             float max = -INFINITY;
-            for (size_t u = 0; u < T; u++) {
+            size_t u0 = 0, u1 = T;
+            if (j->half >= 0) {
+                u0 = t > (size_t)j->half ? t - (size_t)j->half : 0;
+                u1 = t + (size_t)j->half + 1 < T ? t + (size_t)j->half + 1 : T;
+            }
+            for (size_t u = 0; u < u0; u++)
+                scores[u] = 0.0f;
+            for (size_t u = u1; u < T; u++)
+                scores[u] = 0.0f;
+            for (size_t u = u0; u < u1; u++) {
                 const float *kh = e->k + u * D + h * HD;
                 float s = 0.0f;
                 for (uint32_t i = 0; i < HD; i++)
@@ -479,14 +638,14 @@ static void attend_heads(size_t begin, size_t end, void *ud) {
                     max = s;
             }
             float sum = 0.0f;
-            for (size_t u = 0; u < T; u++) {
+            for (size_t u = u0; u < u1; u++) {
                 scores[u] = expf(scores[u] - max);
                 sum += scores[u];
             }
             const float inv = 1.0f / sum;
             float *oh = e->attn + t * D + h * HD;
             memset(oh, 0, HD * sizeof(float));
-            for (size_t u = 0; u < T; u++) {
+            for (size_t u = u0; u < u1; u++) {
                 const float p = scores[u] * inv;
                 const float *vh = e->v + u * D + h * HD;
                 for (uint32_t i = 0; i < HD; i++)
@@ -534,7 +693,7 @@ static bool forward(Embedder *e, const int32_t *ids, size_t T, float *out) {
             rope(e->q + t * D, H, HD, (int32_t)t, e->rope_base);
             rope(e->k + t * D, H, HD, (int32_t)t, e->rope_base);
         }
-        AttnJob job = {e, T, kq_scale};
+        AttnJob job = {e, T, kq_scale, -1};
         plat_parallel(H, attend_heads, &job);
         if (!quant_row(L->attn_norm_w->type, L->attn_norm_w->data, D, e->lw) ||
             !quant_row(L->attn_norm_b->type, L->attn_norm_b->data, D, e->lb))
@@ -588,6 +747,141 @@ static bool forward(Embedder *e, const int32_t *ids, size_t T, float *out) {
     return true;
 }
 
+/* ---- the ModernBERT forward pass ----------------------------------------
+ *
+ *   embeddings  x = LayerNorm(token_embd[id])       (no bias, no positions)
+ *
+ *   per layer   PRE-norm, bias-free, and the reverse of nomic's order:
+ *
+ *                 x = x + W_o · Attention(LayerNorm(x, attn_norm))
+ *                       (layer 0 has no attn_norm: its input is x itself)
+ *                 [u ‖ g] = W_up · LayerNorm(x, ffn_norm)
+ *                 x = x + W_down · (gelu(u) * g)
+ *
+ *               gelu is the erf form, on the FIRST half; the second half is
+ *               the gate.
+ *
+ *   attention   every global_every-th layer (0, 3, …) sees all tokens and
+ *               rotates with rope.freq_base; the others see |t−u| ≤
+ *               window/2 and rotate with rope.freq_base_local.
+ *
+ *   final       x = LayerNorm(x, output_norm), then CLS or mean pooling.
+ */
+
+/* RoPE for one base, NeoX pairing (i with i + d/2) as transformers applies
+ * it: the angle for pair i is pos · base^(−2i/d), from a frequency computed
+ * once rather than by repeated multiplication, which is how transformers
+ * gets it. */
+static void rope_freqs(float *freq, uint32_t d, float base) {
+    for (uint32_t i = 0; i < d / 2; i++)
+        freq[i] = 1.0f / powf(base, (float)(2 * i) / (float)d);
+}
+
+static void rope_apply(float *vec, uint32_t n_head, uint32_t d, int32_t pos, const float *freq) {
+    for (uint32_t h = 0; h < n_head; h++) {
+        float *p = vec + (size_t)h * d;
+        for (uint32_t i = 0; i < d / 2; i++) {
+            const float ang = (float)pos * freq[i];
+            const float c = cosf(ang), s = sinf(ang);
+            const float x0 = p[i], x1 = p[i + d / 2];
+            p[i] = x0 * c - x1 * s;
+            p[i + d / 2] = x1 * c + x0 * s;
+        }
+    }
+}
+
+static float gelu(float x) {
+    return 0.5f * x * (1.0f + erff(x * 0.70710678118654752f));
+}
+
+static bool forward_modernbert(Embedder *e, const int32_t *ids, size_t T, float *out) {
+    const uint32_t D = e->n_embd, H = e->n_head, HD = e->n_head_dim, F = e->n_ff;
+    float freq_global[256], freq_local[256];
+    if (HD / 2 > 256)
+        return false;
+    rope_freqs(freq_global, HD, e->rope_base);
+    rope_freqs(freq_local, HD, e->rope_base_local);
+
+    if (!quant_row(e->embd_norm_w->type, e->embd_norm_w->data, D, e->lw))
+        return false;
+    uint64_t emb_row_bytes;
+    if (!quant_row_bytes(e->tok_embd->type, D, &emb_row_bytes))
+        return false;
+    for (size_t t = 0; t < T; t++) {
+        float *xt = e->x + t * D;
+        if (!quant_row(e->tok_embd->type, e->tok_embd->data + (uint64_t)ids[t] * emb_row_bytes, D, xt))
+            return false;
+        layernorm(xt, e->lw, NULL, D, e->eps);
+    }
+
+    const float kq_scale = 1.0f / sqrtf((float)HD);
+    for (uint32_t l = 0; l < e->n_layer; l++) {
+        const EmbedLayer *L = &e->layer[l];
+        const bool global = l % e->global_every == 0;
+        /* The attention input: x normalised, or x itself in layer 0. */
+        memcpy(e->tmp, e->x, T * D * sizeof(float));
+        if (L->attn_norm_w) {
+            if (!quant_row(L->attn_norm_w->type, L->attn_norm_w->data, D, e->lw))
+                return false;
+            for (size_t t = 0; t < T; t++)
+                layernorm(e->tmp + t * D, e->lw, NULL, D, e->eps);
+        }
+        if (!matmul(L->qkv, e->tmp, T, e->qkv))
+            return false;
+        const float *freq = global ? freq_global : freq_local;
+        for (size_t t = 0; t < T; t++) {
+            const float *qkv = e->qkv + t * 3 * D;
+            memcpy(e->q + t * D, qkv, D * sizeof(float));
+            memcpy(e->k + t * D, qkv + D, D * sizeof(float));
+            memcpy(e->v + t * D, qkv + 2 * D, D * sizeof(float));
+            rope_apply(e->q + t * D, H, HD, (int32_t)t, freq);
+            rope_apply(e->k + t * D, H, HD, (int32_t)t, freq);
+        }
+        AttnJob job = {e, T, kq_scale, global ? -1 : (int64_t)(e->window / 2)};
+        plat_parallel(H, attend_heads, &job);
+        if (!matmul(L->attn_out, e->attn, T, e->tmp))
+            return false;
+        for (size_t i = 0; i < T * D; i++)
+            e->x[i] += e->tmp[i];
+
+        memcpy(e->tmp, e->x, T * D * sizeof(float));
+        if (!quant_row(L->out_norm_w->type, L->out_norm_w->data, D, e->lw))
+            return false;
+        for (size_t t = 0; t < T; t++)
+            layernorm(e->tmp + t * D, e->lw, NULL, D, e->eps);
+        if (!matmul(L->ffn_up, e->tmp, T, e->ff1))
+            return false;
+        for (size_t t = 0; t < T; t++) {
+            const float *uv = e->ff1 + t * 2 * F;
+            float *a = e->ff2 + t * F;
+            for (uint32_t i = 0; i < F; i++)
+                a[i] = gelu(uv[i]) * uv[F + i];
+        }
+        if (!matmul(L->ffn_down, e->ff2, T, e->tmp))
+            return false;
+        for (size_t i = 0; i < T * D; i++)
+            e->x[i] += e->tmp[i];
+    }
+
+    if (!quant_row(e->final_norm_w->type, e->final_norm_w->data, D, e->lw))
+        return false;
+    for (size_t t = 0; t < T; t++)
+        layernorm(e->x + t * D, e->lw, NULL, D, e->eps);
+
+    if (e->pool_mean) {
+        for (uint32_t i = 0; i < D; i++)
+            out[i] = 0.0f;
+        for (size_t t = 0; t < T; t++)
+            for (uint32_t i = 0; i < D; i++)
+                out[i] += e->x[t * D + i];
+        for (uint32_t i = 0; i < D; i++)
+            out[i] /= (float)T;
+    } else {
+        memcpy(out, e->x, D * sizeof(float));
+    }
+    return true;
+}
+
 bool embed_tokens(Embedder *e, const int32_t *ids, size_t n, float *out) {
     if (n == 0 || n > KB_EMBED_MAX_TOKENS)
         return false;
@@ -596,9 +890,11 @@ bool embed_tokens(Embedder *e, const int32_t *ids, size_t n, float *out) {
      * caller handing ids in directly can, and an unchecked one is a read of
      * whatever follows the weights. */
     for (size_t i = 0; i < n; i++)
-        if (ids[i] < 0 || (uint64_t)ids[i] >= e->wpm.n)
+        if (ids[i] < 0 || (uint64_t)ids[i] >= e->n_vocab)
             return false;
-    if (!forward(e, ids, n, out))
+    bool ok = e->kind == EMBED_MODERNBERT ? forward_modernbert(e, ids, n, out)
+                                         : forward(e, ids, n, out);
+    if (!ok)
         return false;
     e->n_embedded++;
     e->n_tokens += n;
@@ -612,6 +908,11 @@ bool embed_text(Embedder *e, const char *text, size_t len, bool is_query,
     /* THE PREFIX. §8's asymmetry lives in this one line, and the two roles
      * must not be able to share a branch by accident. */
     const char *prefix = is_query ? e->cfg.query_prefix : e->cfg.doc_prefix;
+    /* ModernBERT reads the text as sentence-transformers hands it over,
+     * stripped: an indented first line or a trailing blank line otherwise
+     * becomes tokens the model never saw at the edges of an input. */
+    if (e->kind == EMBED_MODERNBERT)
+        bpe_strip(&text, &len);
     const size_t plen = strlen(prefix);
     if (plen + len + 1 > e->prefixed_cap) {
         size_t nc = (plen + len + 1) * 2;
@@ -625,8 +926,12 @@ bool embed_text(Embedder *e, const char *text, size_t len, bool is_query,
     size_t cap = e->cfg.max_tokens;
     if (cap > KB_EMBED_MAX_TOKENS)
         cap = KB_EMBED_MAX_TOKENS;
-    size_t T = wpm_encode(e->a, &e->wpm, e->prefixed, plen + len, true, e->ids,
-                          cap, truncated);
+    bool trunc = false;
+    size_t T = e->kind == EMBED_MODERNBERT
+                   ? bpe_encode(e->a, &e->bpe, e->prefixed, plen + len, true, e->ids, cap, &trunc)
+                   : wpm_encode(e->a, &e->wpm, e->prefixed, plen + len, true, e->ids, cap, &trunc);
+    if (truncated)
+        *truncated = trunc;
     if (T == 0)
         return false;
     if (!embed_tokens(e, e->ids, T, out))

@@ -291,12 +291,17 @@ will state that relationship.
 ## 8. The model
 
 ```json
-{ "model": "bge-small-en-v1.5", "dim": 384, "pooling": "cls",
-  "maxTokens": 512, "queryPrefix": "Represent this sentence for searching relevant passages: ",
-  "documentPrefix": "", "normalize": true,
+{ "model": "gte-modernbert-base", "arch": "modernbert", "dim": 768, "pooling": "cls",
+  "maxTokens": 1024, "queryPrefix": "", "documentPrefix": "", "normalize": true,
   "chunkTokens": 400, "chunkOverlap": 60,
-  "quantization": "int8" }
+  "quantization": "int8", "weights": "F16", "tokenizer": 1 }
 ```
+
+kb's default model is **gte-modernbert-base** (Alibaba-NLP, Apache-2.0), one
+embedder for prose and code alike, run in F16 from a GGUF that
+`cli/kb-cli/tools/modernbert/convert.py` makes from the Hugging Face weights
+(`MODERNBERT.md` there has the revisions, the checksums and every fact the
+port reproduces). nomic-embed-text-v1.5 is still supported.
 
 Recorded in `index/model.json` at first ingest, when there is a model to
 record, and again by `POST /reindex`. **Every embedding in the store was
@@ -312,21 +317,27 @@ A store with no model recorded is keyword-only.
 `model_mismatch` until `POST /reindex` completes. Silently mixing vectors from
 two models produces retrieval that is subtly, unaccountably bad.
 
-The prefixes are part of the configuration because these models are
+The prefixes are part of the configuration because some models are
 **asymmetric**: bge and e5 and nomic each want a different marker on a query
 than on a document, and omitting it degrades retrieval while breaking nothing
-visibly.
+visibly. gte-modernbert-base is symmetric and has none. It reads each text as
+sentence-transformers hands it over, with whitespace stripped from both ends.
 
-Weights load from `safetensors` or `GGUF`, from `~/.kb/models/`: the one
-directory outside the workspace kb reads, holding exactly one model file,
-shared by every workspace and never written by kb. The binary downloads
-nothing (§12.2); a missing model is `model_missing`, and its message is the
-command that fetches it:
+Weights load from `GGUF` files in `~/.kb/models/`: the one directory outside
+the workspace kb reads, shared by every workspace and never written by kb. A
+file whose `kb.role` is `reranker` is not an embedder and is passed over. Of
+the embedders, one alone is used; with several, `gte-modernbert-base.F16.gguf`
+is, and without it kb refuses rather than let a directory listing choose. The
+binary downloads nothing (§12.2); a missing model is `model_missing`, and its
+message says how to make the default, or fetch nomic's as it is:
 
 ```sh
 mkdir -p ~/.kb/models && curl -fL -o ~/.kb/models/nomic-embed-text-v1.5.Q4_K_M.gguf \
   https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf
 ```
+
+A store indexed with nomic, once gte-modernbert-base is in place, reports the
+mismatch until `kb reindex` embeds it again under the new model.
 
 Which model a workspace was indexed with stays pinned in its own
 `index/model.json`, so a different file in `~/.kb/models/` is a

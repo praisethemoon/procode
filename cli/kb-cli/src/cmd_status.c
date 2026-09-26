@@ -210,8 +210,10 @@ static void store_human(Arena *a, const char *dir, const Staleness *st) {
                recorded.model, recorded.weights, (unsigned long)recorded.dim);
     else
         puts("         model    none recorded: the store is keyword-only");
+    /* The finder's own reason: no model and several models are different
+     * fixes. */
     if (!probe.found)
-        printf("         no model in %s\n", probe.dir);
+        printf("         %s\n", probe.err);
     else if (!has_recorded)
         printf("         %s is available; kb reindex records it\n",
                probe.path);

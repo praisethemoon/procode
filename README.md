@@ -96,20 +96,27 @@ resolved through `PATH`:
 }
 ```
 
-Run `kb init` at a project's root to give agents a store to file into.
+Run `kb init` at a project's root to give agents a store to file into. The
+server's `kb` finds it by walking up from its working directory, so start the
+MCP server from inside the project; with no `.kb/` above it, every tool refuses
+with `not_found` rather than filing anywhere else.
 
-Semantic search (still being wired in) needs one embedding model, shared by all
-workspaces, in `~/.kb/models/`. kb only reads it and never downloads anything:
+Semantic search needs one embedding model, shared by all workspaces, in
+`~/.kb/models/`. kb only reads it and never downloads anything. The default is
+gte-modernbert-base, one model for prose and code, converted from its Hugging
+Face weights by `cli/kb-cli/tools/modernbert/convert.py` (the steps, revisions
+and checksums are in `MODERNBERT.md` beside it). nomic-embed-text-v1.5 also
+works and can be fetched as it is:
 
 ```sh
 mkdir -p ~/.kb/models && curl -fL -o ~/.kb/models/nomic-embed-text-v1.5.Q4_K_M.gguf \
   https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf
 shasum -a 256 ~/.kb/models/nomic-embed-text-v1.5.Q4_K_M.gguf
 # d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac
-``` The
-server's `kb` finds it by walking up from its working directory, so start the
-MCP server from inside the project; with no `.kb/` above it, every tool refuses
-with `not_found` rather than filing anywhere else.
+```
+
+With both in place kb uses gte-modernbert-base; a store indexed with the other
+says so until `kb reindex`.
 
 **Everything at once: procode (VS Code).** `npm run package --workspace
 combined` builds `packages/combined/procode-0.1.0-<platform>.vsix`: Lap

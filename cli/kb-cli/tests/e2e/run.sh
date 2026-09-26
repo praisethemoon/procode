@@ -1900,6 +1900,48 @@ if [ -n "${KB_TEST_MODEL:-}" ] && [ -f "$KB_TEST_MODEL" ]; then
     has "hybrid again" "$(kbm search zzmodel --json)" '"mode":"hybrid"'
 fi
 
+# ------------------------------------------------------------------ default model
+# Which embedder kb picks from ~/.kb/models, and the switch from nomic to
+# gte-modernbert-base. Each case has its own HOME, so the one above is left
+# as it was. Needs KB_TEST_MODEL and KB_TEST_MODERNBERT.
+if [ -n "${KB_TEST_MODEL:-}" ] && [ -f "$KB_TEST_MODEL" ] &&
+   [ -n "${KB_TEST_MODERNBERT:-}" ] && [ -f "$KB_TEST_MODERNBERT" ]; then
+    put_model() { # <home> <file> <name>
+        mkdir -p "$1/.kb/models"
+        ln "$2" "$1/.kb/models/$3" 2>/dev/null || cp "$2" "$1/.kb/models/$3"
+    }
+    mkdir -p sw
+    kbh() { h=$1; shift; ( cd "$WORK/sw" && HOME="$h" "$KB" "$@" ); }
+
+    t "two embedders and neither is the default: refused, not picked by name"
+    put_model "$WORK/h-two" "$KB_TEST_MODEL" a.gguf
+    put_model "$WORK/h-two" "$KB_TEST_MODEL" b.gguf
+    mkdir -p two
+    ( cd "$WORK/two" && HOME="$WORK/h-two" "$KB" init > /dev/null )
+    out=$( cd "$WORK/two" && HOME="$WORK/h-two" "$KB" status 2>&1 )
+    has "refused" "$out" "2 embedding models"
+    has "refused" "$out" "gte-modernbert-base.F16.gguf"
+
+    t "a nomic store sees gte-modernbert-base as a mismatch, and reindex moves it over"
+    put_model "$WORK/h-sw" "$KB_TEST_MODEL" nomic-embed-text-v1.5.Q4_K_M.gguf
+    kbh "$WORK/h-sw" init > /dev/null
+    printf '# IOCP\n\nWorker threads wait on a completion port.\n' |
+        kbh "$WORK/h-sw" add --title iocp --collection io > /dev/null
+    has "nomic recorded" "$(cat sw/.kb/index/model.json)" '"model":"nomic-embed-text-v1.5"'
+    put_model "$WORK/h-sw" "$KB_TEST_MODERNBERT" gte-modernbert-base.F16.gguf
+    out=$(kbh "$WORK/h-sw" search "completion port" --mode hybrid --json)
+    has "mismatch" "$out" '"error":"model_mismatch"'
+    has "mismatch" "$out" '"loaded":{"model":"gte-modernbert-base"'
+    kbh "$WORK/h-sw" reindex > /dev/null 2>&1
+    out=$(cat sw/.kb/index/model.json)
+    has "gte recorded" "$out" '"model":"gte-modernbert-base"'
+    has "gte recorded" "$out" '"arch":"modernbert"'
+    has "no prefixes" "$out" '"queryPrefix":"","documentPrefix":""'
+    has "the file's hash" "$out" "\"sha256\":\"$(sha_of "$KB_TEST_MODERNBERT")\""
+    out=$(kbh "$WORK/h-sw" search "which threads wait for completions" --mode hybrid --json)
+    has "hybrid under gte" "$out" '"count":1'
+fi
+
 t "kb still writes nothing outside its own store"
 [ "$(cat .lap/log.jsonl)" = "lap log line" ] || fail ".lap was modified"
 [ "$(cat .coboard/log.jsonl)" = "coboard log line" ] || fail ".coboard was modified"

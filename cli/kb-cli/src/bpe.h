@@ -71,4 +71,11 @@ size_t bpe_encode_pair(Arena *a, const Bpe *b, const char *x, size_t xlen,
                        const char *y, size_t ylen, int32_t *out, size_t cap,
                        bool *truncated);
 
+/* Python's str.strip(), which sentence-transformers applies to every text
+ * before tokenising it, and so the text the model was trained and evaluated
+ * on: leading and trailing codepoints that Python calls whitespace (Unicode
+ * White_Space, plus the separators U+001C to U+001F) are cut. Narrows
+ * [*s, *s + *n) in place; stops at the first invalid UTF-8 from either end. */
+void bpe_strip(const char **s, size_t *n);
+
 #endif /* KB_BPE_H */

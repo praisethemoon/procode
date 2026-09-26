@@ -26,6 +26,7 @@
 #ifndef KB_EMBED_H
 #define KB_EMBED_H
 
+#include "bpe.h"
 #include "gguf.h"
 #include "wpm.h"
 
@@ -52,9 +53,14 @@ typedef struct {
     bool normalize;
     char quantization[16]; /* how VECTORS are stored: "int8" */
     char weights[16];      /* how the MODEL is stored: "Q4_K" */
-    uint32_t tokenizer;    /* KB_WPM_VERSION */
+    uint32_t tokenizer;    /* KB_WPM_VERSION or KB_BPE_VERSION, by arch */
 } ModelParams;
 
+/* nomic-bert uses every field (post-norm: attn_norm after attention,
+ * out_norm after the feed-forward). ModernBERT is pre-norm and bias-free:
+ * attn_norm_w before attention (NULL in layer 0, which has none), out_norm_w
+ * before the feed-forward, ffn_up is its fused GeGLU input, and there is no
+ * gate tensor and no bias. */
 typedef struct {
     const GgufTensor *qkv, *attn_out;
     const GgufTensor *attn_norm_w, *attn_norm_b;
@@ -62,16 +68,26 @@ typedef struct {
     const GgufTensor *out_norm_w, *out_norm_b;
 } EmbedLayer;
 
+typedef enum { EMBED_NOMIC_BERT, EMBED_MODERNBERT } EmbedArch;
+
 typedef struct {
     Arena *a;
     Gguf g;
-    Wpm wpm;
+    EmbedArch kind;
+    Wpm wpm; /* nomic-bert */
+    Bpe bpe; /* ModernBERT */
+    uint64_t n_vocab; /* rows of the token embedding */
     ModelParams cfg;
     char path[KB_PATH_MAX];
 
     uint32_t n_embd, n_layer, n_head, n_ff, n_ctx, n_head_dim;
     float eps, rope_base;
     bool pool_mean;
+    /* ModernBERT: local layers see |i - j| <= window / 2 and rotate with
+     * rope_base_local; every global_every-th layer (0, 3, ...) sees all. */
+    float rope_base_local;
+    uint32_t window, global_every;
+    const GgufTensor *final_norm_w;
 
     const GgufTensor *tok_embd, *type_embd, *embd_norm_w, *embd_norm_b;
     EmbedLayer *layer;
@@ -95,9 +111,11 @@ typedef struct {
 /* ~/.kb/models, the one place models live. Read-only to kb. */
 bool embed_models_dir(char *out, size_t outsz);
 
-/* Where the weights are: the single *.gguf in ~/.kb/models. Returns false
- * with a message naming the path it looked in and the curl command that puts
- * the model there — §11's model_missing wants "the expected weights path". */
+/* Where the embedding model's weights are, in ~/.kb/models: the one
+ * embedding model there, or kb's default (gte-modernbert-base) when there are
+ * several; files a GGUF marks as a reranker are never chosen. Returns false
+ * with a message naming the path it looked in and how to put a model there —
+ * §11's model_missing wants "the expected weights path". */
 bool embed_find_model(Arena *a, char *out, size_t outsz, char *err,
                       size_t errsz);
 

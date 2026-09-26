@@ -42,6 +42,12 @@ copy kb's tests read is `tests/fixtures/modernbert/reference.json`.
   - `[unused0]`–`[unused82]` (50285–50367);
   - the specials: `<|padding|>` 1, `<|endoftext|>` 50279, `[UNK]` 50280, `[CLS]` 50281, `[SEP]` 50282, `[PAD]` 50283, `[MASK]` 50284.
   They are `normalized: true` and neither lstrip nor rstrip.
+- **Stripping:** sentence-transformers calls `str.strip()` on every text
+  before tokenising it, so the reference *embeddings* are of stripped texts,
+  while the fixture's *tokens* are of the texts as written (they test the
+  tokenizer). kb strips the same way (`bpe_strip`) before embedding. Without
+  it, a text with an indented first line or a trailing newline embeds
+  differently (cosine 0.97–0.997 on the fixture).
 - **Template:** `[CLS] A [SEP]` for one text, `[CLS] A [SEP] B [SEP]` for a
   pair. The reranker's pair is (query, passage).
 - **Length:** the models accept 8,192 positions (the reranker's own tokenizer

@@ -307,7 +307,7 @@ int32_t cmd_reindex(Arena *a, int32_t argc, char **argv) {
                                  "recorded the model and re-embedded every "
                                  "chunk."
                                : "rechunked and re-indexed for keyword "
-                                 "retrieval; there is no model in "
+                                 "retrieval; there is no usable model in "
                                  "~/.kb/models, so the store stays "
                                  "keyword-only.");
         sb_putc(&sb, '}');

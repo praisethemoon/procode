@@ -53,8 +53,8 @@ bin/kb-bpe-dump: $(SRC_LIB) tests/tools/bpe_dump.c src/*.h
 	@mkdir -p bin
 	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC_LIB) tests/tools/bpe_dump.c $(LDFLAGS) $(LDLIBS)
 
-# The BPE tests read the ModernBERT model file's vocabulary (read-only) and
-# are skipped without it.
+# The BPE and ModernBERT tests read gte-modernbert-base's model file
+# (read-only) and are skipped without it.
 KB_TEST_MODERNBERT ?= $(firstword $(wildcard $(HOME)/.kb/models/gte-modernbert-base*.gguf))
 
 unit: $(TEST_BIN)
@@ -67,7 +67,8 @@ KB_TEST_MODEL ?= $(firstword $(wildcard $(HOME)/.kb/models/nomic-embed-text*.ggu
 
 e2e: $(BIN) $(TEST_BIN)
 	KB="$(abspath $(BIN))" KB_TESTS="$(abspath $(TEST_BIN))" \
-	  KB_TEST_MODEL="$(KB_TEST_MODEL)" sh tests/e2e/run.sh
+	  KB_TEST_MODEL="$(KB_TEST_MODEL)" KB_TEST_MODERNBERT="$(KB_TEST_MODERNBERT)" \
+	  sh tests/e2e/run.sh
 
 test: unit e2e
 

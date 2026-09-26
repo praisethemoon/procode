@@ -286,6 +286,31 @@ static bool is_space(utf8proc_int32_t c) {
            c == 0x3000;
 }
 
+void bpe_strip(const char **s, size_t *n) {
+    const utf8proc_uint8_t *p = (const utf8proc_uint8_t *)*s;
+    size_t lo = 0, hi = *n;
+    while (lo < hi) {
+        utf8proc_int32_t c;
+        utf8proc_ssize_t k = utf8proc_iterate(p + lo, (utf8proc_ssize_t)(hi - lo), &c);
+        if (k <= 0 || !(is_space(c) || (c >= 0x1C && c <= 0x1F)))
+            break;
+        lo += (size_t)k;
+    }
+    while (hi > lo) {
+        /* Back up to the start of the last codepoint. */
+        size_t b = hi - 1;
+        while (b > lo && (p[b] & 0xC0) == 0x80 && hi - b < 4)
+            b--;
+        utf8proc_int32_t c;
+        utf8proc_ssize_t k = utf8proc_iterate(p + b, (utf8proc_ssize_t)(hi - b), &c);
+        if (k != (utf8proc_ssize_t)(hi - b) || !(is_space(c) || (c >= 0x1C && c <= 0x1F)))
+            break;
+        hi = b;
+    }
+    *s += lo;
+    *n = hi - lo;
+}
+
 static bool is_other(utf8proc_int32_t c) {
     return !is_space(c) && !is_letter(c) && !is_number(c);
 }
