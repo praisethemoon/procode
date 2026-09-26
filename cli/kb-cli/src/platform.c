@@ -767,3 +767,88 @@ PlatLock *plat_lock_try(Arena *a, const char *path, int64_t *holder) {
     return l;
 #endif
 }
+
+/* ---- parallel work ---- */
+
+#define PLAT_MAX_THREADS 64
+
+typedef struct {
+    PlatRangeFn fn;
+    void *ud;
+    size_t begin, end;
+} PlatRange;
+
+#ifdef _WIN32
+size_t plat_cpus(void) {
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return si.dwNumberOfProcessors > 0 ? (size_t)si.dwNumberOfProcessors : 1;
+}
+
+static DWORD WINAPI range_main(LPVOID p) {
+    PlatRange *r = (PlatRange *)p;
+    r->fn(r->begin, r->end, r->ud);
+    return 0;
+}
+#else
+#include <pthread.h>
+
+size_t plat_cpus(void) {
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    return n > 0 ? (size_t)n : 1;
+}
+
+static void *range_main(void *p) {
+    PlatRange *r = (PlatRange *)p;
+    r->fn(r->begin, r->end, r->ud);
+    return NULL;
+}
+#endif
+
+void plat_parallel(size_t n, PlatRangeFn fn, void *ud) {
+    size_t k = plat_cpus();
+    if (k > PLAT_MAX_THREADS)
+        k = PLAT_MAX_THREADS;
+    if (k > n)
+        k = n;
+    if (k <= 1) {
+        fn(0, n, ud);
+        return;
+    }
+    PlatRange ranges[PLAT_MAX_THREADS];
+    for (size_t i = 0; i < k; i++) {
+        ranges[i].fn = fn;
+        ranges[i].ud = ud;
+        ranges[i].begin = n * i / k;
+        ranges[i].end = n * (i + 1) / k;
+    }
+    /* Range 0 runs on this thread; a range whose thread would not start
+     * runs here too, so every range is done exactly once either way. */
+#ifdef _WIN32
+    HANDLE th[PLAT_MAX_THREADS];
+    for (size_t i = 1; i < k; i++) {
+        th[i] = CreateThread(NULL, 0, range_main, &ranges[i], 0, NULL);
+        if (!th[i])
+            range_main(&ranges[i]);
+    }
+    fn(ranges[0].begin, ranges[0].end, ud);
+    for (size_t i = 1; i < k; i++) {
+        if (th[i]) {
+            WaitForSingleObject(th[i], INFINITE);
+            CloseHandle(th[i]);
+        }
+    }
+#else
+    pthread_t th[PLAT_MAX_THREADS];
+    bool started[PLAT_MAX_THREADS];
+    for (size_t i = 1; i < k; i++) {
+        started[i] = pthread_create(&th[i], NULL, range_main, &ranges[i]) == 0;
+        if (!started[i])
+            range_main(&ranges[i]);
+    }
+    fn(ranges[0].begin, ranges[0].end, ud);
+    for (size_t i = 1; i < k; i++)
+        if (started[i])
+            pthread_join(th[i], NULL);
+#endif
+}

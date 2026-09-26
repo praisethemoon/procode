@@ -11,6 +11,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(kb VERSION 0.1.0 LANGUAGES C)
 
+find_package(Threads REQUIRED)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
@@ -32,6 +34,7 @@ set(KB_LIB_SOURCES
     src/wpm.c
     src/embed.c
     src/modelrec.c
+    src/vectors.c
     src/rank.c
     src/cmd_common.c
     src/cmd_init.c
@@ -51,6 +54,8 @@ set(KB_LIB_SOURCES
 )
 
 add_executable(kb ${KB_LIB_SOURCES} src/main.c)
+# Embedding runs its matrix products on every core (plat_parallel).
+target_link_libraries(kb PRIVATE Threads::Threads)
 
 if(MSVC)
     target_compile_options(kb PRIVATE /W4)
@@ -67,6 +72,7 @@ enable_testing()
 file(GLOB KB_UNIT_SOURCES tests/unit/*.c)
 add_executable(kb-unit-tests ${KB_LIB_SOURCES} ${KB_UNIT_SOURCES})
 target_include_directories(kb-unit-tests PRIVATE src)
+target_link_libraries(kb-unit-tests PRIVATE Threads::Threads)
 if(MSVC)
     target_compile_options(kb-unit-tests PRIVATE /W4)
 else()

@@ -91,9 +91,12 @@ export interface KbChunk {
 export const RETRIEVAL_PATHS = ["keyword", "semantic"] as const;
 export type RetrievalPath = (typeof RETRIEVAL_PATHS)[number];
 
+/* §4's scores. `bm25` and `vector` are each present only when that path found
+ * the chunk: absent means "this path did not find it, or did not run", which
+ * a zero would not say. `fused` is what the list is ordered by. */
 export interface KbScores {
-    readonly bm25: number;
-    readonly vector: number;
+    readonly bm25?: number;
+    readonly vector?: number;
     readonly fused: number;
 }
 

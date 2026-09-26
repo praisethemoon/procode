@@ -127,7 +127,14 @@ export function readChunk(v: unknown): KbChunk {
 
 function readScores(v: unknown): KbScores {
     const s = obj(v);
-    return { bm25: num(s["bm25"]), vector: num(s["vector"]), fused: num(s["fused"]) };
+    const out: { bm25?: number; vector?: number; fused: number } = { fused: num(s["fused"]) };
+    if (typeof s["bm25"] === "number" && Number.isFinite(s["bm25"])) {
+        out.bm25 = s["bm25"];
+    }
+    if (typeof s["vector"] === "number" && Number.isFinite(s["vector"])) {
+        out.vector = s["vector"];
+    }
+    return out;
 }
 
 export function readHit(v: unknown): KbHit {

@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "vectors.h"
 
 /* POST /rebuild (§7): reconstruct every derived structure from the logs and
  * the blobs.
@@ -57,6 +58,16 @@ int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
     }
+    /* The vectors too, when the recorded model is the one on disk. Chunk ids
+     * are immutable, so a vector already in the file is still right and only
+     * chunks without one are embedded. */
+    VecSync vs;
+    bool embedded = false;
+    if (!vec_update(a, &s, false, !json, &vs, &embedded, err, sizeof err)) {
+        store_close(&s);
+        err_out(json, "internal", "%s", err);
+        return KB_EXIT_FATAL;
+    }
     uint64_t bytes = 0;
     char path[KB_PATH_MAX];
     fts_path(&s, path, sizeof path);
@@ -70,15 +81,23 @@ int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
         sb_printf(&sb,
                   ",\"documents\":%lu,\"chunks\":%lu,\"terms\":%lu,"
                   "\"indexBytes\":%llu,\"missingBlobs\":%lu,"
-                  "\"mismatched\":%lu}",
+                  "\"mismatched\":%lu,\"vectors\":",
                   (unsigned long)ndocs, (unsigned long)stats.chunks,
                   (unsigned long)stats.terms, (unsigned long long)bytes,
                   (unsigned long)missing, (unsigned long)stats.mismatched);
+        if (embedded)
+            sb_printf(&sb, "{\"kept\":%zu,\"embedded\":%zu,\"dropped\":%zu}}",
+                      vs.kept, vs.embedded, vs.dropped);
+        else
+            sb_puts(&sb, "null}");
         puts(sb_finish(&sb));
     } else {
         sb_printf(&sb, "%lu documents, %lu chunks, %lu terms, %llu bytes\n",
                   (unsigned long)ndocs, (unsigned long)stats.chunks,
                   (unsigned long)stats.terms, (unsigned long long)bytes);
+        if (embedded)
+            sb_printf(&sb, "vectors: %zu kept, %zu embedded, %zu dropped\n",
+                      vs.kept, vs.embedded, vs.dropped);
         if (missing)
             sb_printf(&sb, "%lu document%s blob is missing\n",
                       (unsigned long)missing, missing == 1 ? "'s" : "s'");

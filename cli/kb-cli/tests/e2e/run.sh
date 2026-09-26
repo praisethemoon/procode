@@ -1807,8 +1807,38 @@ if [ -n "${KB_TEST_MODEL:-}" ] && [ -f "$KB_TEST_MODEL" ]; then
     has "reindex records" "$(kbm reindex --json)" '"model":"nomic-embed-text-v1.5"'
     has "status current again" "$(kbm status --json)" '"current":true}'
 
-    t "with the model current, vector search says there are no vectors yet"
-    has "no vectors" "$(kbm search zzmodel --mode hybrid --json)" '"structures":\["vectors"\]'
+    t "every chunk has a vector, and hybrid is what a plain search runs"
+    [ -f mdl/.kb/index/vectors.bin ] || fail "no vectors.bin after reindex"
+    printf '# Sourdough\n\nFeed the starter flour and water, then let the dough rise overnight.\n' |
+        kbm add --title bread --collection food > /dev/null
+    printf '# io_uring\n\nThe kernel shares a submission ring and a completion ring with the process.\n' |
+        kbm add --title uring --collection io > /dev/null
+    out=$(kbm search zzmodel --json)
+    has "default hybrid" "$out" '"mode":"hybrid"'
+    has "both paths" "$out" '"matched":\["keyword","semantic"\]'
+    has "both scores" "$out" '"scores":{"bm25":[0-9.]*,"vector":[0-9.-]*,"fused"'
+
+    t "the vector path finds what shares no word with the query"
+    out=$(kbm search "how do I bake bread at home" --mode semantic --json)
+    has "semantic" "$out" '"mode":"semantic"'
+    first=$(printf '%s' "$out" | grep -o '"title":"[^"]*"' | head -1)
+    [ "$first" = '"title":"bread"' ] || fail "semantic search ranked $first first for baking bread"
+    hasnt "no bm25" "$out" '"bm25"'
+    has "filtered" "$(kbm search "how do I bake bread at home" --mode semantic --collection io --json)" '"title":"uring"'
+    hasnt "filtered" "$(kbm search "how do I bake bread at home" --mode semantic --collection io --json)" '"title":"bread"'
+
+    t "rebuild keeps every vector it already has, and a forgotten chunk's goes"
+    has "rebuild keeps" "$(kbm rebuild --json)" '"vectors":{"kept":3,"embedded":0,"dropped":0}'
+    kbm forget D-2 > /dev/null
+    has "rebuild drops" "$(kbm rebuild --json)" '"vectors":{"kept":2,"embedded":0,"dropped":1}'
+
+    t "chunks without vectors make vector search refuse until rebuild embeds them"
+    rm mdl/.kb/index/vectors.bin
+    out=$(kbm search baking --mode hybrid --json)
+    has "stale" "$out" '"structures":\["vectors"\],"missing":2'
+    has "fallback" "$(kbm search zzmodel --json)" '"mode":"keyword"'
+    has "rebuild embeds" "$(kbm rebuild --json)" '"embedded":2'
+    has "hybrid again" "$(kbm search zzmodel --json)" '"mode":"hybrid"'
 fi
 
 t "kb still writes nothing outside its own store"

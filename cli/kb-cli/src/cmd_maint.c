@@ -1,5 +1,6 @@
 #include "cmd.h"
 #include "modelrec.h"
+#include "vectors.h"
 
 /* §7 — maintenance: GET /stats, POST /reindex, POST /compact.
  *
@@ -264,7 +265,12 @@ int32_t cmd_reindex(Arena *a, int32_t argc, char **argv) {
      * model in ~/.kb/models the store is left keyword-only and says so. */
     ModelProbe model;
     model_probe(a, &model);
-    if (model.found && !model_record(a, &s, &model, err, sizeof err)) {
+    /* Every vector again: the model or the chunk ranges may have changed
+     * under them, and reindex is the one command that re-derives it all. */
+    VecSync vs;
+    bool embedded = false;
+    if ((model.found && !model_record(a, &s, &model, err, sizeof err)) ||
+        !vec_update(a, &s, true, !json, &vs, &embedded, err, sizeof err)) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
@@ -281,27 +287,25 @@ int32_t cmd_reindex(Arena *a, int32_t argc, char **argv) {
                   "\"chunker\":\"%s\",\"chunkTokens\":%lu,"
                   "\"chunkOverlap\":%lu,\"wasChunker\":\"%s\","
                   "\"wasChunkTokens\":%lu,\"wasChunkOverlap\":%lu,"
-                  "\"reembedded\":0",
+                  "\"reembedded\":%zu",
                   (unsigned long)ndocs, (unsigned long)changed,
                   (unsigned long)missing, (unsigned long)stats.chunks,
                   (unsigned long)stats.terms, KB_CHUNKER_ID,
                   (unsigned long)KB_CHUNK_TOKENS,
                   (unsigned long)KB_CHUNK_OVERLAP, old.chunker,
                   (unsigned long)old.chunk_tokens,
-                  (unsigned long)old.chunk_overlap);
+                  (unsigned long)old.chunk_overlap, vs.embedded);
         sb_puts(&sb, ",\"model\":");
         if (model.found)
             json_escape_c(&sb, model.params.model);
         else
             sb_puts(&sb, "null");
-        /* Vectors are not stored yet, so a reindex re-chunks, re-indexes
-         * keywords and records the model, and re-embeds nothing. Said in the
-         * payload rather than implied by an absent field. */
+        /* Said in the payload rather than implied by an absent field. */
         sb_puts(&sb, ",\"note\":");
         json_escape_c(&sb, model.found
-                               ? "rechunked, re-indexed for keyword retrieval "
-                                 "and recorded the model; no vectors are "
-                                 "stored yet, so nothing was re-embedded."
+                               ? "rechunked, re-indexed for keyword retrieval, "
+                                 "recorded the model and re-embedded every "
+                                 "chunk."
                                : "rechunked and re-indexed for keyword "
                                  "retrieval; there is no model in "
                                  "~/.kb/models, so the store stays "

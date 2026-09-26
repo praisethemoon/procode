@@ -346,14 +346,14 @@ bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
     e->k = (float *)arena_alloc(a, T * D * sizeof(float));
     e->v = (float *)arena_alloc(a, T * D * sizeof(float));
     e->attn = (float *)arena_alloc(a, T * D * sizeof(float));
-    e->qkv = (float *)arena_alloc(a, 3 * D * sizeof(float));
-    e->tmp = (float *)arena_alloc(a, D * sizeof(float));
+    e->qkv = (float *)arena_alloc(a, T * 3 * D * sizeof(float));
+    e->tmp = (float *)arena_alloc(a, T * D * sizeof(float));
     e->lw = (float *)arena_alloc(a, D * sizeof(float));
     e->lb = (float *)arena_alloc(a, D * sizeof(float));
     e->row = (float *)arena_alloc(a, 3 * D * sizeof(float));
-    e->ff1 = (float *)arena_alloc(a, e->n_ff * sizeof(float));
-    e->ff2 = (float *)arena_alloc(a, e->n_ff * sizeof(float));
-    e->scores = (float *)arena_alloc(a, T * sizeof(float));
+    e->ff1 = (float *)arena_alloc(a, T * e->n_ff * sizeof(float));
+    e->ff2 = (float *)arena_alloc(a, T * e->n_ff * sizeof(float));
+    e->scores = (float *)arena_alloc(a, (size_t)e->n_head * T * sizeof(float));
     return true;
 }
 
@@ -441,8 +441,59 @@ static void rope(float *vec, uint32_t n_head, uint32_t d, int32_t pos,
     }
 }
 
-static bool matvec(const GgufTensor *t, const float *x, float *out) {
-    return quant_matvec(t->type, t->data, t->ne[0], t->ne[1], x, out);
+/* Every token's row through one weight matrix: x is T × ne[0], out is
+ * T × ne[1]. One pass over the weights per matrix per layer, not one per
+ * token (quant_matmul). */
+static bool matmul(const GgufTensor *t, const float *x, size_t T, float *out) {
+    return quant_matmul(t->type, t->data, t->ne[0], t->ne[1], x, T, out);
+}
+
+/* Attention for a range of heads. A head reads every token's q, k and v in its
+ * own slice of the model width and writes only that slice of every token's
+ * output, with its own row of scores, so heads run in parallel and the result
+ * does not depend on how they were split. */
+typedef struct {
+    Embedder *e;
+    size_t T;
+    float kq_scale;
+} AttnJob;
+
+static void attend_heads(size_t begin, size_t end, void *ud) {
+    const AttnJob *j = (const AttnJob *)ud;
+    Embedder *e = j->e;
+    const size_t T = j->T;
+    const uint32_t D = e->n_embd, HD = e->n_head_dim;
+    for (size_t h = begin; h < end; h++) {
+        float *scores = e->scores + h * T;
+        for (size_t t = 0; t < T; t++) {
+            const float *qh = e->q + t * D + h * HD;
+            float max = -INFINITY;
+            for (size_t u = 0; u < T; u++) {
+                const float *kh = e->k + u * D + h * HD;
+                float s = 0.0f;
+                for (uint32_t i = 0; i < HD; i++)
+                    s += qh[i] * kh[i];
+                s *= j->kq_scale;
+                scores[u] = s;
+                if (s > max)
+                    max = s;
+            }
+            float sum = 0.0f;
+            for (size_t u = 0; u < T; u++) {
+                scores[u] = expf(scores[u] - max);
+                sum += scores[u];
+            }
+            const float inv = 1.0f / sum;
+            float *oh = e->attn + t * D + h * HD;
+            memset(oh, 0, HD * sizeof(float));
+            for (size_t u = 0; u < T; u++) {
+                const float p = scores[u] * inv;
+                const float *vh = e->v + u * D + h * HD;
+                for (uint32_t i = 0; i < HD; i++)
+                    oh[i] += p * vh[i];
+            }
+        }
+    }
 }
 
 static bool forward(Embedder *e, const int32_t *ids, size_t T, float *out) {
@@ -472,76 +523,50 @@ static bool forward(Embedder *e, const int32_t *ids, size_t T, float *out) {
     const float kq_scale = 1.0f / sqrtf((float)HD);
     for (uint32_t l = 0; l < e->n_layer; l++) {
         const EmbedLayer *L = &e->layer[l];
+        if (!matmul(L->qkv, e->x, T, e->qkv))
+            return false;
         for (size_t t = 0; t < T; t++) {
-            if (!matvec(L->qkv, e->x + t * D, e->qkv))
-                return false;
             /* The fused projection is Q, then K, then V, in that order. */
-            memcpy(e->q + t * D, e->qkv, D * sizeof(float));
-            memcpy(e->k + t * D, e->qkv + D, D * sizeof(float));
-            memcpy(e->v + t * D, e->qkv + 2 * D, D * sizeof(float));
+            const float *qkv = e->qkv + t * 3 * D;
+            memcpy(e->q + t * D, qkv, D * sizeof(float));
+            memcpy(e->k + t * D, qkv + D, D * sizeof(float));
+            memcpy(e->v + t * D, qkv + 2 * D, D * sizeof(float));
             rope(e->q + t * D, H, HD, (int32_t)t, e->rope_base);
             rope(e->k + t * D, H, HD, (int32_t)t, e->rope_base);
         }
-        for (size_t t = 0; t < T; t++) {
-            float *o = e->attn + t * D;
-            memset(o, 0, D * sizeof(float));
-            for (uint32_t h = 0; h < H; h++) {
-                const float *qh = e->q + t * D + (size_t)h * HD;
-                float max = -INFINITY;
-                for (size_t u = 0; u < T; u++) {
-                    const float *kh = e->k + u * D + (size_t)h * HD;
-                    float s = 0.0f;
-                    for (uint32_t i = 0; i < HD; i++)
-                        s += qh[i] * kh[i];
-                    s *= kq_scale;
-                    e->scores[u] = s;
-                    if (s > max)
-                        max = s;
-                }
-                float sum = 0.0f;
-                for (size_t u = 0; u < T; u++) {
-                    e->scores[u] = expf(e->scores[u] - max);
-                    sum += e->scores[u];
-                }
-                const float inv = 1.0f / sum;
-                float *oh = o + (size_t)h * HD;
-                for (size_t u = 0; u < T; u++) {
-                    const float p = e->scores[u] * inv;
-                    const float *vh = e->v + u * D + (size_t)h * HD;
-                    for (uint32_t i = 0; i < HD; i++)
-                        oh[i] += p * vh[i];
-                }
-            }
-        }
+        AttnJob job = {e, T, kq_scale};
+        plat_parallel(H, attend_heads, &job);
         if (!quant_row(L->attn_norm_w->type, L->attn_norm_w->data, D, e->lw) ||
             !quant_row(L->attn_norm_b->type, L->attn_norm_b->data, D, e->lb))
             return false;
+        if (!matmul(L->attn_out, e->attn, T, e->tmp))
+            return false;
         for (size_t t = 0; t < T; t++) {
             float *xt = e->x + t * D;
-            if (!matvec(L->attn_out, e->attn + t * D, e->tmp))
-                return false;
+            const float *yt = e->tmp + t * D;
             for (uint32_t i = 0; i < D; i++)
-                xt[i] += e->tmp[i];
+                xt[i] += yt[i];
             layernorm(xt, e->lw, e->lb, D, e->eps);
         }
         if (!quant_row(L->out_norm_w->type, L->out_norm_w->data, D, e->lw) ||
             !quant_row(L->out_norm_b->type, L->out_norm_b->data, D, e->lb))
             return false;
+        if (!matmul(L->ffn_gate, e->x, T, e->ff1) ||
+            !matmul(L->ffn_up, e->x, T, e->ff2))
+            return false;
+        /* SiLU on the GATE and not on the up-projection: x·sigmoid(x)
+         * applied to the wrong half is a different network. */
+        for (size_t i = 0; i < T * e->n_ff; i++) {
+            const float g = e->ff1[i];
+            e->ff1[i] = (g / (1.0f + expf(-g))) * e->ff2[i];
+        }
+        if (!matmul(L->ffn_down, e->ff1, T, e->tmp))
+            return false;
         for (size_t t = 0; t < T; t++) {
             float *xt = e->x + t * D;
-            if (!matvec(L->ffn_gate, xt, e->ff1) ||
-                !matvec(L->ffn_up, xt, e->ff2))
-                return false;
-            /* SiLU on the GATE and not on the up-projection: x·sigmoid(x)
-             * applied to the wrong half is a different network. */
-            for (uint32_t i = 0; i < e->n_ff; i++) {
-                const float g = e->ff1[i];
-                e->ff1[i] = (g / (1.0f + expf(-g))) * e->ff2[i];
-            }
-            if (!matvec(L->ffn_down, e->ff1, e->tmp))
-                return false;
+            const float *yt = e->tmp + t * D;
             for (uint32_t i = 0; i < D; i++)
-                xt[i] += e->tmp[i];
+                xt[i] += yt[i];
             layernorm(xt, e->lw, e->lb, D, e->eps);
         }
     }

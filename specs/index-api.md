@@ -199,7 +199,13 @@ exact identifiers — `CreateIoCompletionPort`, `IORING_SETUP_SQPOLL`,
 `io_uring_prep_recv` and `io_uring_prep_send` are neighbours in vector space
 and opposites in practice. Keyword retrieval resolves those exactly; semantic
 retrieval finds what the reader could not name. Results from both are fused
-with reciprocal rank fusion.
+with reciprocal rank fusion, each list taken to depth `max(3k, 50)` first.
+
+A store without vectors — no model recorded, or chunks not yet embedded —
+answers a search that names no mode with keyword, and says so in the
+response's `mode`. Asking for `hybrid` or `semantic` by name is refused with
+the reason (§11). `bm25` and `vector` appear in `scores` only for the paths
+that found the hit.
 
 A hit:
 
@@ -319,6 +325,14 @@ Which model a workspace was indexed with stays pinned in its own
 `model_mismatch`, not a silent change. Vectors are stored int8 and scanned
 flat — at the scale a personal store reaches, an exact SIMD scan beats an
 approximate index that also has to be maintained.
+
+`index/vectors.bin` holds one vector per chunk **keyed by chunk id**, with the
+model fingerprint it was produced under. A chunk id names one passage forever
+(§1.1), so a stored vector stays right for as long as the model does: ingest
+and `rebuild` embed only chunks that have none and drop the ones whose chunks
+are gone, and only `reindex` embeds everything again. Documents are embedded
+with `documentPrefix`, queries with `queryPrefix`. `GET /status` reports the
+vectors' count, how many live chunks have none, and whether they are current.
 
 ## 9. MCP tool surface
 

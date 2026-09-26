@@ -63,6 +63,15 @@ bool quant_row(uint32_t ggml_type, const uint8_t *src, uint64_t n, float *out);
 bool quant_matvec(uint32_t ggml_type, const uint8_t *w, uint64_t n,
                   uint64_t rows, const float *x, float *out);
 
+/* The same product for T input vectors at once: out[t*rows + j] = Σ_i
+ * W[j][i] · x[t*n + i]. Each super-block of W is dequantised ONCE and used for
+ * all T vectors, where T calls to quant_matvec would dequantise it T times —
+ * for a 400-token chunk, the difference between unpacking the weights once
+ * and four hundred times. Every output is accumulated in exactly the order
+ * quant_matvec uses, so the two agree to the last bit. */
+bool quant_matmul(uint32_t ggml_type, const uint8_t *w, uint64_t n,
+                  uint64_t rows, const float *x, size_t T, float *out);
+
 /* True when this build compiled the SIMD matvec in. Reported by `kb status`
  * so a timing can be read against what actually ran. */
 bool quant_simd(void);

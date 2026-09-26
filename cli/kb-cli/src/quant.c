@@ -293,3 +293,52 @@ bool quant_matvec(uint32_t t, const uint8_t *w, uint64_t n, uint64_t rows,
     }
     return true;
 }
+
+typedef struct {
+    uint32_t t;
+    const uint8_t *w;
+    uint64_t n, rows;
+    const float *x;
+    size_t T;
+    float *out;
+} MatmulJob;
+
+static void matmul_rows(size_t begin, size_t end, void *ud) {
+    const MatmulJob *j = (const MatmulJob *)ud;
+    const size_t bsz = block_bytes(j->t);
+    const uint64_t nb = j->n / QK_K;
+    float buf[QK_K];
+    for (uint64_t r = begin; r < end; r++) {
+        const uint8_t *row = j->w + r * nb * bsz;
+        for (size_t tt = 0; tt < j->T; tt++)
+            j->out[tt * j->rows + r] = 0.0f;
+        for (uint64_t b = 0; b < nb; b++) {
+            deq_block(j->t, row + b * bsz, buf);
+            for (size_t tt = 0; tt < j->T; tt++)
+                j->out[tt * j->rows + r] +=
+                    dot256(buf, j->x + tt * j->n + b * QK_K);
+        }
+    }
+}
+
+bool quant_matmul(uint32_t t, const uint8_t *w, uint64_t n, uint64_t rows,
+                  const float *x, size_t T, float *out) {
+    if (t != GGML_Q4_K && t != GGML_Q5_K && t != GGML_Q6_K) {
+        /* Not a weight format this family uses for its matrices; one vector
+         * at a time is correct and there is nothing to share. */
+        float *col = out;
+        for (size_t tt = 0; tt < T; tt++) {
+            if (!quant_matvec(t, w, n, rows, x + tt * n, col))
+                return false;
+            col += rows;
+        }
+        return true;
+    }
+    if (n % QK_K != 0)
+        return false;
+    MatmulJob job = {t, w, n, rows, x, T, out};
+    /* Rows are independent and each is written by one range, so the result
+     * is the same for any number of threads. */
+    plat_parallel((size_t)rows, matmul_rows, &job);
+    return true;
+}

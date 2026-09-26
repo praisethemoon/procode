@@ -16,6 +16,7 @@
 
 #include "../../src/gguf.h"
 #include "../../src/quant.h"
+#include "../../src/vectors.h"
 #include "../../src/wpm.h"
 
 #include <math.h>
@@ -361,6 +362,34 @@ static void wpm_tests(Arena *a, const char *dir) {
     }
 }
 
+/* ---- the vector file's lookups ---------------------------------------- */
+
+static void vec_tests(void) {
+    t_begin("vectors: ids are found by bisection, absent ones are not");
+    int64_t ids[] = {3, 7, 8, 120, 4000};
+    float scales[] = {0.5f, 1.0f, 1.0f, 1.0f, 0.01f};
+    int8_t q[5 * 4] = {1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                       127, -127, 0, 1};
+    VecSet v;
+    memset(&v, 0, sizeof v);
+    v.dim = 4;
+    v.n = 5;
+    v.ids = ids;
+    v.scales = scales;
+    v.q = q;
+    ASSERT_EQ_I(vec_find(&v, 3), 0);
+    ASSERT_EQ_I(vec_find(&v, 120), 3);
+    ASSERT_EQ_I(vec_find(&v, 4000), 4);
+    ASSERT_EQ_I(vec_find(&v, 5), -1);
+    ASSERT_EQ_I(vec_find(&v, 9999), -1);
+
+    t_begin("vectors: a score is the scale times the int8 dot product");
+    float x[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    ASSERT_NEAR(vec_score(&v, 0, x), 0.5 * 10, 1e-6);
+    float y[4] = {1.0f, 1.0f, 2.0f, 3.0f};
+    ASSERT_NEAR(vec_score(&v, 4, y), 0.01 * (127 - 127 + 0 + 3), 1e-6);
+}
+
 void test_embed(void) {
     Arena *a = arena_new(1 << 20);
     char dir[512];
@@ -368,6 +397,7 @@ void test_embed(void) {
     gguf_tests(a, dir);
     quant_tests();
     wpm_tests(a, dir);
+    vec_tests();
     tmp_rm(a, dir);
     arena_free(a);
 }

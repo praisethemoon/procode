@@ -17,13 +17,13 @@ CFLAGS ?= -std=c11 -Wall -Wextra -O2 -g
 LDFLAGS ?=
 # BM25 needs a natural logarithm. libm is part of the C standard library,
 # not a third-party dependency; some systems just keep it in its own file.
-LDLIBS := -lm
+LDLIBS := -lm -lpthread
 PREFIX ?= /usr/local
 DESTDIR ?=
 
 SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/errdet.c src/platform.c \
            src/doc.c src/store.c src/chunk.c src/token.c src/fts.c \
-           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/embed.c src/modelrec.c \
+           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/embed.c src/modelrec.c src/vectors.c \
            src/rank.c src/cmd_common.c \
            src/cmd_init.c src/cmd_add.c src/cmd_ls.c src/cmd_get.c \
            src/cmd_search.c src/cmd_chunk.c src/cmd_rebuild.c \
@@ -49,9 +49,14 @@ $(TEST_BIN): $(SRC_LIB) $(SRC_TESTS) src/*.h tests/unit/test.h
 unit: $(TEST_BIN)
 	./$(TEST_BIN)
 
+# The model tests run against the real weights when this machine has them
+# (the one .gguf in ~/.kb/models, linked into the run's throwaway HOME) and
+# are skipped otherwise. KB_TEST_MODEL=<file> names another.
+KB_TEST_MODEL ?= $(firstword $(wildcard $(HOME)/.kb/models/*.gguf))
+
 e2e: $(BIN) $(TEST_BIN)
 	KB="$(abspath $(BIN))" KB_TESTS="$(abspath $(TEST_BIN))" \
-	  sh tests/e2e/run.sh
+	  KB_TEST_MODEL="$(KB_TEST_MODEL)" sh tests/e2e/run.sh
 
 test: unit e2e
 

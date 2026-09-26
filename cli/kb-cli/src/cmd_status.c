@@ -1,5 +1,6 @@
 #include "cmd.h"
 #include "modelrec.h"
+#include "vectors.h"
 
 /* GET /status (§7): the store's path, counts, disk use, index freshness and
  * model identity.
@@ -96,6 +97,20 @@ static void store_json(StrBuf *sb, Arena *a, const char *dir,
             sb_puts(sb, details);
         }
     }
+    /* The vectors: how many are stored, how many live chunks have none, and
+     * whether they were produced by the model the store records — the three
+     * things that decide whether hybrid search can answer. */
+    VecSet vs;
+    vec_load(a, &s, &vs);
+    ModelParams rec;
+    char rsha[65];
+    char rfp[65] = "";
+    if (model_recorded(a, &s, &rec, rsha))
+        model_fingerprint(&rec, rfp);
+    bool same_model = rfp[0] && strcmp(vs.fingerprint, rfp) == 0;
+    size_t vmissing = same_model ? vec_missing(&s, &vs) : (size_t)chunks;
+    sb_printf(sb, "},\"vectors\":{\"count\":%zu,\"missing\":%zu,\"current\":%s",
+              vs.n, vmissing, same_model && vmissing == 0 ? "true" : "false");
     sb_puts(sb, "}}");
     /* §8: what the store recorded, what this machine would load, and whether
      * they agree. `current` is null when either side is missing, because

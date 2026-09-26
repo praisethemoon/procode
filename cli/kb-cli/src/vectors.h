@@ -1,0 +1,78 @@
+/* index/vectors.bin (§8): one vector per chunk, stored int8 and scanned flat.
+ *
+ * KEYED BY CHUNK ID, AND THAT IS WHAT MAKES IT CHEAP TO KEEP. A chunk id names
+ * one passage of one version of one document forever (§1.1): a re-filed
+ * document gets a fresh range, a forgotten one leaves its ids unused. So a
+ * vector computed for C-812 under a given model is right for as long as that
+ * model is — keeping the file current after an ingest means embedding the new
+ * ids and dropping the dead ones, never re-embedding the rest. Only a change
+ * of model (`kb reindex`) throws them all away.
+ *
+ * THE FILE.
+ *
+ *     "KBVEC001"                          8 bytes
+ *     dim                                 u32
+ *     reserved                            u32
+ *     count                               u64
+ *     model fingerprint, hex              64 bytes
+ *     count × { chunk id i64, scale f32, int8[dim] }, ascending by id
+ *
+ * Little-endian. Each vector is quantised symmetrically, scale = max|v|/127,
+ * so v ≈ scale × q; the vectors are unit-length before quantisation, which
+ * makes scale × (q · query) an approximate cosine against a float query.
+ * Derived and disposable like everything under index/: `kb rebuild` makes it
+ * again from the logs, the blobs and the model.
+ */
+#ifndef KB_VECTORS_H
+#define KB_VECTORS_H
+
+#include "embed.h"
+#include "store.h"
+
+typedef struct {
+    uint32_t dim;
+    size_t n;
+    int64_t *ids;   /* ascending */
+    float *scales;
+    int8_t *q;      /* n × dim */
+    char fingerprint[65];
+} VecSet;
+
+/* Reads index/vectors.bin. A missing or unreadable file is an empty set with
+ * no fingerprint — the same answer as "nothing embedded yet". */
+void vec_load(Arena *a, const Store *s, VecSet *out);
+bool vec_save(Arena *a, const Store *s, const VecSet *v, char *err,
+              size_t errsz);
+
+/* Index of `id` in the set, or -1. */
+int64_t vec_find(const VecSet *v, int64_t id);
+
+/* scale × (q · x): the similarity of stored vector i to a float query. */
+float vec_score(const VecSet *v, size_t i, const float *x);
+
+/* How many of the store's live chunks have no vector in `v`. */
+size_t vec_missing(const Store *s, const VecSet *v);
+
+typedef struct {
+    size_t kept;     /* vectors carried over */
+    size_t embedded; /* chunks embedded now */
+    size_t dropped;  /* vectors for chunks no longer in the store */
+    size_t truncated;/* chunks longer than the model's context */
+} VecSync;
+
+/* Brings vectors.bin in line with the store under an open model: embeds every
+ * live chunk that has no vector, drops vectors for chunks that are gone, and
+ * with `all` (or a file written under another fingerprint) starts from
+ * nothing. `progress` prints a line per chunk to stderr when set. Needs the
+ * write lock. */
+bool vec_sync(Arena *a, Store *s, Embedder *e, bool all, bool progress,
+              VecSync *stats, char *err, size_t errsz);
+
+/* vec_sync when it can run: the store records a model and the one in
+ * ~/.kb/models is that model. Otherwise nothing is written and *ran is false —
+ * a keyword-only store, a missing model or a mismatch leaves the vectors as
+ * they were, and `kb status` and a vector search say why. */
+bool vec_update(Arena *a, Store *s, bool all, bool progress, VecSync *stats,
+                bool *ran, char *err, size_t errsz);
+
+#endif

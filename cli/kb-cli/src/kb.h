@@ -33,6 +33,7 @@
 #define KB_COUNTERS_NAME "index/counters.json"
 #define KB_MODEL_NAME "index/model.json"
 #define KB_FTS_NAME "index/fts.db"
+#define KB_VEC_NAME "index/vectors.bin"
 
 #define KB_PATH_MAX 4096
 /* Refuse content larger than this. The logs themselves are read uncapped

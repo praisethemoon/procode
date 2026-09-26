@@ -64,9 +64,13 @@ test("a span that is missing is zero-to-zero rather than undefined arithmetic", 
     assert.deepEqual(readChunk({ span: { start: "a", end: 5 } }).span, { start: 0, end: 5 });
 });
 
-test("a hit with no scores reads as zeros, not as a missing object", () => {
+test("a path's score is absent when that path did not find the hit, never zero", () => {
+    /* "the vector path found nothing here" and "it scored 0" are different
+     * answers; only the store may say which. */
     const h = readHit({ chunk: "C-1" });
-    assert.deepEqual(h.scores, { bm25: 0, vector: 0, fused: 0 });
+    assert.deepEqual(h.scores, { fused: 0 });
+    assert.deepEqual(readHit({ scores: { vector: 0.61, fused: 0.016 } }).scores, { vector: 0.61, fused: 0.016 });
+    assert.deepEqual(readHit({ scores: { bm25: 2.5, vector: "x", fused: 0.03 } }).scores, { bm25: 2.5, fused: 0.03 });
     assert.deepEqual([...h.matched], []);
     assert.equal(h.stale, false);
 });

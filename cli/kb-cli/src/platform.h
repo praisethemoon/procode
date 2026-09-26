@@ -125,4 +125,18 @@ int64_t plat_pid(void);
  */
 PlatLock *plat_lock_try(Arena *a, const char *path, int64_t *holder);
 
+/* ---- parallel work ----
+ *
+ * Runs fn over [0, n) split into contiguous ranges, one per thread, and
+ * returns when every range is done. The only concurrency in kb, and only for
+ * embedding, where a chunk is tens of billions of multiply-adds. A caller
+ * must make every index's work independent of every other's — each output
+ * written by exactly one range — so the result cannot depend on how many
+ * threads there were. Falls back to running fn(0, n) inline when threads
+ * cannot be started. */
+typedef void (*PlatRangeFn)(size_t begin, size_t end, void *ud);
+void plat_parallel(size_t n, PlatRangeFn fn, void *ud);
+/* Logical CPUs, at least 1. */
+size_t plat_cpus(void);
+
 #endif /* KB_PLATFORM_H */

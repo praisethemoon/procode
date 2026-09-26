@@ -1,5 +1,6 @@
 #include "cmd.h"
 #include "modelrec.h"
+#include "vectors.h"
 
 #include "rank.h"
 #include "snippet.h"
@@ -35,18 +36,29 @@ static const char *const VALUE_FLAGS[] = {
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef enum { MODE_KEYWORD, MODE_HYBRID, MODE_SEMANTIC } SearchMode;
+static const char *const MODE_NAMES[] = {"keyword", "hybrid", "semantic"};
+
+/* How deep each list goes before fusion. Rank fusion needs more than the k
+ * that will be shown: a chunk at rank 30 of both lists can outrank one at
+ * rank 1 of only one. */
+#define FUSE_DEPTH(k) ((size_t)((k) * 3 < 50 ? 50 : (k) * 3))
 
 /* ---- the model -------------------------------------------------------- */
 
-/* Whether a search that needs vectors can run, and the refusal when it cannot.
- * Degrading to keyword and saying nothing would hand back an answer the caller
- * reads as hybrid, so each way of not being ready is its own §11 error:
- * no model on this machine, a model other than the one the store recorded
- * (§8: vectors from two models are not comparable), or no vectors at all. */
-static bool semantic_ready(Arena *a, Store *s, bool json, const char *mode) {
+/* Opens what a vector search needs — the model and the stored vectors — or
+ * says why it cannot. Degrading to keyword and saying nothing would hand back
+ * an answer the caller reads as hybrid, so each way of not being ready is its
+ * own §11 error: no model on this machine, a model other than the one the
+ * store recorded (§8: vectors from two models are not comparable), or vectors
+ * that do not cover the store. With `report` false it only answers whether,
+ * which is how the default mode is chosen. */
+static bool semantic_open(Arena *a, Store *s, bool json, const char *mode,
+                          bool report, Embedder *e, VecSet *v) {
     ModelProbe probe;
     model_probe(a, &probe);
     if (!probe.found) {
+        if (!report)
+            return false;
         errdet_begin("model_missing");
         errdet_str("path", probe.dir);
         err_out(json, "model_missing", "mode \"%s\" needs the embedding model: %s",
@@ -55,8 +67,10 @@ static bool semantic_ready(Arena *a, Store *s, bool json, const char *mode) {
     }
     ModelParams recorded;
     char sha[65];
-    if (model_recorded(a, s, &recorded, sha) &&
-        !model_params_equal(&recorded, &probe.params)) {
+    bool has_recorded = model_recorded(a, s, &recorded, sha);
+    if (has_recorded && !model_params_equal(&recorded, &probe.params)) {
+        if (!report)
+            return false;
         StrBuf stored, loaded;
         sb_init(&stored, a);
         sb_init(&loaded, a);
@@ -77,14 +91,57 @@ static bool semantic_ready(Arena *a, Store *s, bool json, const char *mode) {
                 why, probe.path);
         return false;
     }
-    static const char *const structures[] = {"vectors"};
-    errdet_begin("index_stale");
-    errdet_strs("structures", structures, 1);
-    err_out(json, "index_stale",
-            "mode \"%s\" needs stored vectors and this store has none yet; "
-            "--mode keyword answers from the keyword index",
-            mode);
-    return false;
+    char fp[65];
+    model_fingerprint(&probe.params, fp);
+    vec_load(a, s, v);
+    /* A file written under another model covers nothing. */
+    if (strcmp(v->fingerprint, fp) != 0)
+        v->n = 0;
+    size_t missing = vec_missing(s, v);
+    if (!has_recorded || strcmp(v->fingerprint, fp) != 0 || missing > 0) {
+        if (!report)
+            return false;
+        static const char *const structures[] = {"vectors"};
+        errdet_begin("index_stale");
+        errdet_strs("structures", structures, 1);
+        if (missing)
+            errdet_int("missing", (int64_t)missing);
+        if (!has_recorded)
+            err_out(json, "index_stale",
+                    "mode \"%s\" needs vectors and this store records no "
+                    "model; \"kb reindex\" records it and embeds every chunk",
+                    mode);
+        else
+            err_out(json, "index_stale",
+                    "mode \"%s\" needs vectors for every chunk and %zu have "
+                    "none; \"kb rebuild\" embeds them",
+                    mode, missing);
+        return false;
+    }
+    char why[512];
+    if (!embed_open(a, probe.path, e, why, sizeof why)) {
+        if (report)
+            err_out(json, "model_missing", "%s", why);
+        return false;
+    }
+    return true;
+}
+
+/* The vector list: every stored vector the filter keeps, by similarity to the
+ * query, best first, at most `depth`. Chunk ids are mapped back to their
+ * documents through the log, so a vector for a chunk no longer in the store
+ * is never returned. */
+typedef struct {
+    int64_t id;
+    uint32_t doc_index, ordinal;
+    float score;
+} VecHit;
+
+static int vechit_cmp(const void *pa, const void *pb) {
+    const VecHit *x = (const VecHit *)pa, *y = (const VecHit *)pb;
+    if (x->score != y->score)
+        return x->score > y->score ? -1 : 1;
+    return x->id < y->id ? -1 : (x->id > y->id);
 }
 
 /* ---- filters ----------------------------------------------------------- */
@@ -105,9 +162,13 @@ static bool doc_keep(uint32_t doc_index, void *ud) {
     return docquery_keep(f->a, &f->q, d, src_by_id(&f->s->sources, d->source));
 }
 
+/* One chunk either list found, with whatever each list said about it. */
 typedef struct {
-    uint32_t chunk_index;
+    int64_t id;
+    uint32_t doc_index, ordinal;
     double bm25;
+    float vector;
+    bool has_bm25, has_vector;
 } Cand;
 
 /* Blob + chunk boundaries for one document, kept for the handful of hits
@@ -169,7 +230,10 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         return KB_EXIT_ERR;
     }
 
-    SearchMode mode = MODE_KEYWORD;
+    /* §4's default is hybrid. A store without vectors — no model, or one
+     * not embedded yet — answers keyword instead, and the response's `mode`
+     * says which ran; asking for hybrid by name is refused with the reason. */
+    SearchMode mode = MODE_HYBRID;
     const char *mode_s = flag_value(argc, argv, VALUE_FLAGS, "--mode");
     if (mode_s) {
         if (strcmp(mode_s, "keyword") == 0)
@@ -254,40 +318,120 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         err_out(json, code, "%s", err);
         return KB_EXIT_ERR;
     }
-    if (!fts_open_store(a, &s, &ix, &code, err, sizeof err)) {
+    Embedder emb;
+    VecSet vs;
+    if (mode == MODE_HYBRID && !mode_s) {
+        if (!semantic_open(a, &s, json, "hybrid", false, &emb, &vs))
+            mode = MODE_KEYWORD;
+    } else if (mode != MODE_KEYWORD &&
+               !semantic_open(a, &s, json, mode_s, true, &emb, &vs)) {
+        store_close(&s);
+        return KB_EXIT_ERR;
+    }
+    if (mode != MODE_SEMANTIC &&
+        !fts_open_store(a, &s, &ix, &code, err, sizeof err)) {
+        if (mode != MODE_KEYWORD)
+            embed_close(&emb);
         store_close(&s);
         err_out(json, code, "%s", err);
         return KB_EXIT_ERR;
     }
 
-    if (mode != MODE_KEYWORD && !semantic_ready(a, &s, json, mode_s)) {
-        store_close(&s);
-        return KB_EXIT_ERR;
-    }
-
     TermList q = token_terms(a, query, strlen(query));
-
     f.s = &s;
+    const size_t depth = FUSE_DEPTH(k);
+    RankList lists[2];
+    size_t nlists = 0;
 
-    FtsHit *hits = NULL;
-    size_t n =
-        fts_search(a, &ix, &q, min_score, doc_keep, &f, (size_t)k, &hits);
-    Cand *cands = (Cand *)arena_alloc(a, (n ? n : 1) * sizeof(Cand));
-    RankEntry *entries =
-        (RankEntry *)arena_alloc(a, (n ? n : 1) * sizeof(RankEntry));
-    for (size_t i = 0; i < n; i++) {
-        cands[i].chunk_index = hits[i].chunk_index;
-        cands[i].bm25 = hits[i].score;
-        entries[i].key = (uint64_t)hits[i].chunk_index;
-        entries[i].item = &cands[i];
+    /* The keyword list. min_score is a floor on BM25, applied here, before
+     * fusion (§4). */
+    size_t n = 0;
+    Cand *cands = NULL;
+    if (mode != MODE_SEMANTIC) {
+        FtsHit *hits = NULL;
+        n = fts_search(a, &ix, &q, min_score, doc_keep, &f,
+                       mode == MODE_KEYWORD ? (size_t)k : depth, &hits);
+        cands = (Cand *)arena_alloc0(a, (n ? n : 1) * sizeof(Cand));
+        RankEntry *entries =
+            (RankEntry *)arena_alloc(a, (n ? n : 1) * sizeof(RankEntry));
+        for (size_t i = 0; i < n; i++) {
+            const FtsChunk *fc = &ix.chunks[hits[i].chunk_index];
+            Cand *c = &cands[i];
+            c->doc_index = fc->doc_index;
+            c->ordinal = fc->ordinal;
+            c->id = s.documents.v[fc->doc_index].chunk_base + fc->ordinal;
+            c->bm25 = hits[i].score;
+            c->has_bm25 = true;
+            entries[i].key = (uint64_t)c->id;
+            entries[i].item = c;
+        }
+        lists[nlists].v = entries;
+        lists[nlists].n = n;
+        lists[nlists].tag = RANK_TAG_KEYWORD;
+        nlists++;
     }
-    RankList list;
-    list.v = entries;
-    list.n = n;
-    list.tag = RANK_TAG_KEYWORD;
+
+    /* The vector list: the query embedded with the query prefix (§8), scored
+     * against every stored vector the filter keeps. A chunk the keyword list
+     * already holds is the same candidate, so its row carries both scores. */
+    if (mode != MODE_KEYWORD) {
+        float *qv = (float *)arena_alloc(a, emb.n_embd * sizeof(float));
+        bool truncated;
+        bool ok = embed_text(&emb, query, strlen(query), true, qv, &truncated);
+        embed_close(&emb);
+        if (!ok) {
+            store_close(&s);
+            err_out(json, "internal", "the query could not be embedded");
+            return KB_EXIT_FATAL;
+        }
+        VecHit *vh = (VecHit *)arena_alloc(a, (vs.n ? vs.n : 1) * sizeof(VecHit));
+        size_t nv = 0;
+        for (size_t di = 0; di < s.documents.n; di++) {
+            const Document *d = &s.documents.v[di];
+            if (d->chunk_count == 0 || !doc_keep((uint32_t)di, &f))
+                continue;
+            for (uint32_t j = 0; j < d->chunk_count; j++) {
+                int64_t at = vec_find(&vs, d->chunk_base + (int64_t)j);
+                if (at < 0)
+                    continue;
+                vh[nv].id = d->chunk_base + (int64_t)j;
+                vh[nv].doc_index = (uint32_t)di;
+                vh[nv].ordinal = j;
+                vh[nv].score = vec_score(&vs, (size_t)at, qv);
+                nv++;
+            }
+        }
+        qsort(vh, nv, sizeof(VecHit), vechit_cmp);
+        size_t take = nv < (mode == MODE_SEMANTIC ? (size_t)k : depth)
+                          ? nv
+                          : (mode == MODE_SEMANTIC ? (size_t)k : depth);
+        Cand *vc = (Cand *)arena_alloc0(a, (take ? take : 1) * sizeof(Cand));
+        RankEntry *entries =
+            (RankEntry *)arena_alloc(a, (take ? take : 1) * sizeof(RankEntry));
+        for (size_t i = 0; i < take; i++) {
+            Cand *c = NULL;
+            for (size_t j = 0; j < n && !c; j++)
+                if (cands[j].id == vh[i].id)
+                    c = &cands[j];
+            if (!c) {
+                c = &vc[i];
+                c->id = vh[i].id;
+                c->doc_index = vh[i].doc_index;
+                c->ordinal = vh[i].ordinal;
+            }
+            c->vector = vh[i].score;
+            c->has_vector = true;
+            entries[i].key = (uint64_t)vh[i].id;
+            entries[i].item = c;
+        }
+        lists[nlists].v = entries;
+        lists[nlists].n = take;
+        lists[nlists].tag = RANK_TAG_SEMANTIC;
+        nlists++;
+    }
 
     RankResult *fused = NULL;
-    size_t nfused = rrf_fuse(a, &list, 1, KB_RRF_K, (size_t)k, &fused);
+    size_t nfused = rrf_fuse(a, lists, nlists, KB_RRF_K, (size_t)k, &fused);
 
     DocText *cache =
         (DocText *)arena_alloc0(a, ((size_t)k + 1) * sizeof(DocText));
@@ -296,21 +440,21 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
     StrBuf sb;
     sb_init(&sb, a);
     if (json)
-        sb_puts(&sb, "{\"ok\":true,\"mode\":\"keyword\",\"hits\":[");
+        sb_printf(&sb, "{\"ok\":true,\"mode\":\"%s\",\"hits\":[",
+                  MODE_NAMES[mode]);
     for (size_t i = 0; i < nfused; i++) {
         Cand *c = (Cand *)fused[i].item;
-        const FtsChunk *fc = &ix.chunks[c->chunk_index];
-        const Document *d = &s.documents.v[fc->doc_index];
+        const Document *d = &s.documents.v[c->doc_index];
         const Source *src = src_by_id(&s.sources, d->source);
-        DocText *dt = doc_text(a, &s, fc->doc_index, cache, &ncache);
+        DocText *dt = doc_text(a, &s, c->doc_index, cache, &ncache);
         const char *heading = NULL;
         const char *snip = "";
-        if (dt->ok && fc->ordinal < dt->ch.n) {
-            const Chunk *ch = &dt->ch.v[fc->ordinal];
+        if (dt->ok && c->ordinal < dt->ch.n) {
+            const Chunk *ch = &dt->ch.v[c->ordinal];
             heading = ch->heading;
             snip = snippet_of(a, dt->text, ch->start, ch->end, &q);
         }
-        int64_t chunk_num = d->chunk_base + (int64_t)fc->ordinal;
+        int64_t chunk_num = d->chunk_base + (int64_t)c->ordinal;
 
         if (json) {
             if (i)
@@ -332,12 +476,16 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             sb_puts(&sb, ",\"matched\":");
             put_matched(&sb, fused[i].tags);
             /* The scores that were computed. `fused` is the reciprocal-rank
-             * sum the list is ordered by — fusion runs even over the one
-             * keyword list. `vector` is absent rather than zero, because a
-             * caller must be able to tell "the vector path found nothing"
-             * from "the vector path did not run". */
-            sb_printf(&sb, ",\"scores\":{\"bm25\":%.6f,\"fused\":%.6f}",
-                      c->bm25, fused[i].score);
+             * sum the list is ordered by. `bm25` and `vector` are each
+             * present only when that path found the chunk, rather than zero,
+             * because a caller must be able to tell "this path found nothing
+             * here" from "this path did not run". */
+            sb_puts(&sb, ",\"scores\":{");
+            if (c->has_bm25)
+                sb_printf(&sb, "\"bm25\":%.6f,", c->bm25);
+            if (c->has_vector)
+                sb_printf(&sb, "\"vector\":%.6f,", (double)c->vector);
+            sb_printf(&sb, "\"fused\":%.6f}", fused[i].score);
             /* §5: every hit carries how old it is AND the verdict on that
              * age, from the one definition in cmd_common.c. */
             sb_printf(&sb, ",\"fetchedAt\":\"%s\",\"stale\":%s",
@@ -346,9 +494,9 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             if (expand) {
                 sb_puts(&sb, ",\"neighbours\":[");
                 bool first = true;
-                for (int64_t o = (int64_t)fc->ordinal - expand;
-                     o <= (int64_t)fc->ordinal + expand; o++) {
-                    if (o == (int64_t)fc->ordinal || o < 0 || !dt->ok ||
+                for (int64_t o = (int64_t)c->ordinal - expand;
+                     o <= (int64_t)c->ordinal + expand; o++) {
+                    if (o == (int64_t)c->ordinal || o < 0 || !dt->ok ||
                         o >= (int64_t)dt->ch.n)
                         continue;
                     const Chunk *nc = &dt->ch.v[o];
@@ -370,8 +518,12 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             }
             sb_putc(&sb, '}');
         } else {
-            sb_printf(&sb, "C-%-8lld %-7s %9.4f  ", (long long)chunk_num,
-                      d->id, c->bm25);
+            /* Which paths found it, where §4's JSON says `matched`. */
+            const uint32_t tags = fused[i].tags;
+            sb_printf(&sb, "C-%-8lld %-7s %-7s ", (long long)chunk_num, d->id,
+                      tags == (RANK_TAG_KEYWORD | RANK_TAG_SEMANTIC) ? "kw+sem"
+                      : tags == RANK_TAG_SEMANTIC                     ? "sem"
+                                                                      : "kw");
             sb_puts_safe(&sb, src ? src->collection : "-");
             sb_puts(&sb, "  ");
             sb_puts_safe(&sb, d->title ? d->title : "");
@@ -384,9 +536,9 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             sb_puts(&sb, "\n    ");
             sb_puts_safe(&sb, snip);
             sb_putc(&sb, '\n');
-            for (int64_t o = (int64_t)fc->ordinal - expand;
-                 o <= (int64_t)fc->ordinal + expand; o++) {
-                if (o == (int64_t)fc->ordinal || o < 0 || !dt->ok ||
+            for (int64_t o = (int64_t)c->ordinal - expand;
+                 o <= (int64_t)c->ordinal + expand; o++) {
+                if (o == (int64_t)c->ordinal || o < 0 || !dt->ok ||
                     o >= (int64_t)dt->ch.n)
                     continue;
                 const Chunk *nc = &dt->ch.v[o];
