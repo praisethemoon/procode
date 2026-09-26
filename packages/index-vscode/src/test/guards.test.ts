@@ -970,7 +970,7 @@ test("the extension's activation and contributions name what this package builds
     assert.ok(fs.existsSync(path.join(ROOT, "out", "extension.js")));
 
     /* §1: ONE contribution to the activity bar, called Knowledge, with the
-     * `book` codicon. §1's table is three columns and each of them is checked:
+     * icon §1 names. §1's table is three columns and each of them is checked:
      * a second container would be a second rail for a surface §1 says is one. */
     const containers = pkg.contributes.viewsContainers.activitybar as {
         id: string;
@@ -979,10 +979,10 @@ test("the extension's activation and contributions name what this package builds
     }[];
     assert.equal(containers.length, 1, "index-ui.md §1 asks for one activity-bar contribution");
     assert.equal(containers[0].title, "Knowledge");
-    assert.equal(
-        containers[0].icon,
-        "$(book)",
-        "§1's table names the book codicon; a path here would be an icon file this package does not ship",
+    assert.equal(containers[0].icon, "media/knowledge.svg", "§1's table names media/knowledge.svg");
+    assert.ok(
+        fs.existsSync(path.join(ROOT, containers[0].icon)),
+        "the activity-bar icon §1 names is not a file this package ships",
     );
 
     /* One view in it, and a webview: §1 says a native TreeView cannot carry a

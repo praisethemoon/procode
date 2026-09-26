@@ -15,7 +15,7 @@
  *   out/pdfjs/         pdf.js, which Knowledge imports at runtime to read PDFs
  *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/artifacts.js
  *                      the MCP servers, one file each
- *   media/             Lap History's activity-bar icon
+ *   media/             the parts' activity-bar icons
  */
 
 import { execFileSync } from "node:child_process";
@@ -114,7 +114,19 @@ for (const part of ["index-vscode", "coboard-vscode", "artifacts-vscode"]) {
         if (!f.endsWith(".map")) fs.copyFileSync(path.join(media, f), path.join(dist, "out", "media", f));
     }
 }
-fs.cpSync(path.join(repo, "packages", "lap-vscode", "media"), path.join(dist, "media"), { recursive: true });
+// Each part's activity-bar icon, from its own media/. The manifest keeps the
+// parts' "media/<name>.svg" paths, so every file lands in one media/ and a
+// name two parts both ship is an error rather than a silent overwrite.
+fs.mkdirSync(path.join(dist, "media"));
+for (const part of PARTS) {
+    const media = path.join(repo, "packages", part, "media");
+    if (!fs.existsSync(media)) continue;
+    for (const f of fs.readdirSync(media)) {
+        const to = path.join(dist, "media", f);
+        if (fs.existsSync(to)) throw new Error(`two parts both ship media/${f}`);
+        fs.copyFileSync(path.join(media, f), to);
+    }
+}
 // pdf.js, beside the bundle where Knowledge imports it from (index-vscode/src/pdf.ts).
 fs.cpSync(path.join(repo, "packages", "index-vscode", "out", "pdfjs"), path.join(dist, "out", "pdfjs"), { recursive: true });
 fs.copyFileSync(path.join(repo, "LICENSE"), path.join(dist, "LICENSE"));

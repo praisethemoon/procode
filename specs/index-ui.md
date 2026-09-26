@@ -15,9 +15,13 @@ editors on a URI scheme, public identifiers only, no dirty state, no save.
 
 One contribution to the VSCode activity bar:
 
-| view | codicon | contents |
+| view | icon | contents |
 |---|---|---|
-| **Knowledge** | `book` | documents, searchable |
+| **Knowledge** | `media/knowledge.svg`: lap's spiral as a magnifier | documents, searchable |
+
+The icon is drawn like lap's (`packages/lap-vscode/media/lap.svg`): 24×24, one
+2px round stroke. It replaced the `book` codicon on 2026-09-26, chosen from the
+options in artifact A-1.
 
 A webview sidebar, for the same reason the board is one: a native `TreeView`
 cannot carry a search field and per-row metadata.

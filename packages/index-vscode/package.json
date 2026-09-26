@@ -27,7 +27,7 @@
         {
           "id": "knowledge",
           "title": "Knowledge",
-          "icon": "$(book)"
+          "icon": "media/knowledge.svg"
         }
       ]
     },

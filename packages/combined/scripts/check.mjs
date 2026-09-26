@@ -2,6 +2,7 @@
  * module and checks what an install would rely on:
  *   - all three parts activate without an error message
  *   - every command the generated manifest contributes is registered
+ *   - every icon a view container or view names as a file is in dist/
  *   - the MCP definitions run files that exist in dist/, with the CLIs the
  *     settings name, and dist/ ships no native binary
  *   - "Set Up MCP for Claude Code" writes .mcp.json and keeps other servers
@@ -112,6 +113,11 @@ await new Promise((r) => setTimeout(r, 200));
 Module._load = load;
 
 assert.deepEqual(errors, [], "no part reported an error while starting");
+for (const c of [...manifest.contributes.viewsContainers.activitybar, ...Object.values(manifest.contributes.views).flat()]) {
+    if (typeof c.icon === "string" && !c.icon.startsWith("$(")) {
+        assert.ok(fs.existsSync(path.join(dist, c.icon)), `${c.id}'s icon ${c.icon} is in dist/`);
+    }
+}
 for (const c of manifest.contributes.commands) {
     assert.ok(registered.has(c.command), `${c.command} is contributed and registered`);
 }

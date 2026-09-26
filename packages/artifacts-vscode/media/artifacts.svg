@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Artifacts: a folded page with a line drawn on it (option 2 of artifact
+       A-1, chosen 2026-09-26), in lap.svg's 2px round stroke. Rendered by
+       VS Code as an alpha mask: only the silhouette matters. -->
+  <path d="M14 3 H7 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h10 a2 2 0 0 0 2 -2 V8 z M14 3 v5 h5 M8.5 16 q2 -4 3.5 -1.5 t3.5 -2"
+        stroke="#C5C5C5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
