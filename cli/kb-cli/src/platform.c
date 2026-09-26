@@ -800,11 +800,15 @@ PlatLock *plat_lock_try(Arena *a, const char *path, int64_t *holder) {
 
 #define PLAT_MAX_THREADS 64
 
-typedef struct {
-    PlatRangeFn fn;
-    void *ud;
-    size_t begin, end;
-} PlatRange;
+/* Ranges handed out per thread, roughly: small enough that a fast core takes
+ * more of them than a slow one, large enough that asking costs nothing next
+ * to the work. */
+#define PLAT_SLICES_PER_THREAD 8
+
+static size_t grain_for(size_t n, size_t threads) {
+    size_t g = n / (threads * PLAT_SLICES_PER_THREAD);
+    return g ? g : 1;
+}
 
 #ifdef _WIN32
 size_t plat_cpus(void) {
@@ -813,25 +817,29 @@ size_t plat_cpus(void) {
     return si.dwNumberOfProcessors > 0 ? (size_t)si.dwNumberOfProcessors : 1;
 }
 
-static DWORD WINAPI range_main(LPVOID p) {
-    PlatRange *r = (PlatRange *)p;
-    r->fn(r->begin, r->end, r->ud);
+/* Windows starts threads per call, as before, but they take ranges from a
+ * shared counter like the pool below does. */
+typedef struct {
+    PlatRangeFn fn;
+    void *ud;
+    size_t n, grain;
+    volatile LONG64 next;
+} WinJob;
+
+static void win_take(WinJob *j) {
+    for (;;) {
+        size_t b = (size_t)InterlockedExchangeAdd64(&j->next, (LONG64)j->grain);
+        if (b >= j->n)
+            return;
+        size_t e = b + j->grain < j->n ? b + j->grain : j->n;
+        j->fn(b, e, j->ud);
+    }
+}
+
+static DWORD WINAPI win_main(LPVOID p) {
+    win_take((WinJob *)p);
     return 0;
 }
-#else
-#include <pthread.h>
-
-size_t plat_cpus(void) {
-    long n = sysconf(_SC_NPROCESSORS_ONLN);
-    return n > 0 ? (size_t)n : 1;
-}
-
-static void *range_main(void *p) {
-    PlatRange *r = (PlatRange *)p;
-    r->fn(r->begin, r->end, r->ud);
-    return NULL;
-}
-#endif
 
 void plat_parallel(size_t n, PlatRangeFn fn, void *ud) {
     size_t k = plat_cpus();
@@ -843,40 +851,149 @@ void plat_parallel(size_t n, PlatRangeFn fn, void *ud) {
         fn(0, n, ud);
         return;
     }
-    PlatRange ranges[PLAT_MAX_THREADS];
-    for (size_t i = 0; i < k; i++) {
-        ranges[i].fn = fn;
-        ranges[i].ud = ud;
-        ranges[i].begin = n * i / k;
-        ranges[i].end = n * (i + 1) / k;
-    }
-    /* Range 0 runs on this thread; a range whose thread would not start
-     * runs here too, so every range is done exactly once either way. */
-#ifdef _WIN32
+    WinJob job = {fn, ud, n, grain_for(n, k), 0};
     HANDLE th[PLAT_MAX_THREADS];
-    for (size_t i = 1; i < k; i++) {
-        th[i] = CreateThread(NULL, 0, range_main, &ranges[i], 0, NULL);
-        if (!th[i])
-            range_main(&ranges[i]);
-    }
-    fn(ranges[0].begin, ranges[0].end, ud);
+    for (size_t i = 1; i < k; i++)
+        th[i] = CreateThread(NULL, 0, win_main, &job, 0, NULL);
+    win_take(&job);
     for (size_t i = 1; i < k; i++) {
         if (th[i]) {
             WaitForSingleObject(th[i], INFINITE);
             CloseHandle(th[i]);
         }
     }
+}
 #else
-    pthread_t th[PLAT_MAX_THREADS];
-    bool started[PLAT_MAX_THREADS];
-    for (size_t i = 1; i < k; i++) {
-        started[i] = pthread_create(&th[i], NULL, range_main, &ranges[i]) == 0;
-        if (!started[i])
-            range_main(&ranges[i]);
-    }
-    fn(ranges[0].begin, ranges[0].end, ud);
-    for (size_t i = 1; i < k; i++)
-        if (started[i])
-            pthread_join(th[i], NULL);
+#include <pthread.h>
+#include <stdatomic.h>
+
+size_t plat_cpus(void) {
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    return n > 0 ? (size_t)n : 1;
+}
+
+/* THE POOL. Workers wait for a new generation, take ranges from `next` until
+ * none are left, and report in through `busy`. The caller takes ranges too,
+ * then waits until every worker has reported, so no worker can still be
+ * reading this job's fields when the next job overwrites them.
+ *
+ * Between jobs a worker spins for a moment before it sleeps: in a forward
+ * pass the next job follows within microseconds, and a sleeping thread takes
+ * longer than that to wake. */
+#define PLAT_SPIN 20000
+
+typedef struct {
+    pthread_mutex_t mu;
+    pthread_cond_t wake, done;
+    size_t workers;
+    PlatRangeFn fn;
+    void *ud;
+    size_t n, grain;
+    atomic_size_t next;
+    atomic_size_t busy;
+    atomic_uint_fast64_t gen;
+} Pool;
+
+static Pool pool = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER,
+                    PTHREAD_COND_INITIALIZER, 0, NULL, NULL, 0, 0, 0, 0, 0};
+static pthread_once_t pool_once = PTHREAD_ONCE_INIT;
+static pthread_mutex_t pool_user = PTHREAD_MUTEX_INITIALIZER;
+static _Thread_local bool in_range;
+
+static inline void cpu_relax(void) {
+#if defined(__aarch64__)
+    __asm__ __volatile__("yield");
+#elif defined(__x86_64__) || defined(__i386__)
+    __asm__ __volatile__("pause");
 #endif
 }
+
+static void take_ranges(void) {
+    in_range = true;
+    for (;;) {
+        size_t b = atomic_fetch_add(&pool.next, pool.grain);
+        if (b >= pool.n)
+            break;
+        size_t e = b + pool.grain < pool.n ? b + pool.grain : pool.n;
+        pool.fn(b, e, pool.ud);
+    }
+    in_range = false;
+}
+
+static void *worker_main(void *unused) {
+    (void)unused;
+    uint_fast64_t seen = 0;
+    for (;;) {
+        uint_fast64_t g = atomic_load(&pool.gen);
+        for (int32_t i = 0; g == seen && i < PLAT_SPIN; i++) {
+            cpu_relax();
+            g = atomic_load(&pool.gen);
+        }
+        if (g == seen) {
+            pthread_mutex_lock(&pool.mu);
+            while ((g = atomic_load(&pool.gen)) == seen)
+                pthread_cond_wait(&pool.wake, &pool.mu);
+            pthread_mutex_unlock(&pool.mu);
+        }
+        seen = g;
+        take_ranges();
+        if (atomic_fetch_sub(&pool.busy, 1) == 1) {
+            pthread_mutex_lock(&pool.mu);
+            pthread_cond_signal(&pool.done);
+            pthread_mutex_unlock(&pool.mu);
+        }
+    }
+    return NULL;
+}
+
+static void pool_start(void) {
+    size_t k = plat_cpus();
+    if (k > PLAT_MAX_THREADS)
+        k = PLAT_MAX_THREADS;
+    for (size_t i = 1; i < k; i++) {
+        pthread_t th;
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        bool ok = pthread_create(&th, &attr, worker_main, NULL) == 0;
+        pthread_attr_destroy(&attr);
+        if (!ok)
+            break;
+        pool.workers++;
+    }
+}
+
+void plat_parallel(size_t n, PlatRangeFn fn, void *ud) {
+    if (n <= 1 || in_range) {
+        fn(0, n, ud);
+        return;
+    }
+    pthread_once(&pool_once, pool_start);
+    if (pool.workers == 0 || pthread_mutex_trylock(&pool_user) != 0) {
+        fn(0, n, ud);
+        return;
+    }
+    pthread_mutex_lock(&pool.mu);
+    pool.fn = fn;
+    pool.ud = ud;
+    pool.n = n;
+    pool.grain = grain_for(n, pool.workers + 1);
+    atomic_store(&pool.next, 0);
+    atomic_store(&pool.busy, pool.workers);
+    atomic_fetch_add(&pool.gen, 1);
+    pthread_cond_broadcast(&pool.wake);
+    pthread_mutex_unlock(&pool.mu);
+
+    take_ranges();
+
+    for (int32_t i = 0; atomic_load(&pool.busy) != 0 && i < PLAT_SPIN; i++)
+        cpu_relax();
+    if (atomic_load(&pool.busy) != 0) {
+        pthread_mutex_lock(&pool.mu);
+        while (atomic_load(&pool.busy) != 0)
+            pthread_cond_wait(&pool.done, &pool.mu);
+        pthread_mutex_unlock(&pool.mu);
+    }
+    pthread_mutex_unlock(&pool_user);
+}
+#endif

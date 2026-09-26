@@ -6,6 +6,11 @@
 
 #include <math.h>
 
+#if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(KB_NO_SIMD)
+#include <arm_neon.h>
+#define EMBED_NEON 1
+#endif
+
 /* ---- finding the weights ------------------------------------------------ */
 
 /* kb's default embedding model, and the fallback it can still run. kb never
@@ -401,7 +406,6 @@ static void alloc_scratch(Arena *a, Embedder *e, uint32_t ff_width) {
     e->row = (float *)arena_alloc(a, 3 * D * sizeof(float));
     e->ff1 = (float *)arena_alloc(a, T * ff_width * sizeof(float));
     e->ff2 = (float *)arena_alloc(a, T * ff_width * sizeof(float));
-    e->scores = (float *)arena_alloc(a, (size_t)e->n_head * T * sizeof(float));
 }
 
 /* ModernBERT (tools/modernbert/MODERNBERT.md): the shape and the attention
@@ -596,10 +600,10 @@ static bool matmul(const GgufTensor *t, const float *x, size_t T, float *out) {
     return quant_matmul(t->type, t->data, t->ne[0], t->ne[1], x, T, out);
 }
 
-/* Attention for a range of heads. A head reads every token's q, k and v in its
- * own slice of the model width and writes only that slice of every token's
- * output, with its own row of scores, so heads run in parallel and the result
- * does not depend on how they were split. */
+/* Attention for a range of (head, query block) units. A head reads every
+ * token's q, k and v in its own slice of the model width, and a unit writes
+ * only that slice of its own tokens' outputs, so units run in parallel and the
+ * result does not depend on how they were split. */
 typedef struct {
     Embedder *e;
     size_t T;
@@ -608,14 +612,60 @@ typedef struct {
     int64_t half;
 } AttnJob;
 
+/* The two inner loops of attention, over one head's 64 values: a query
+ * against a key, and a value added into the output. Vectorised by hand
+ * because a compiler keeps a floating-point sum in its written order, which
+ * leaves it scalar. */
+static float dot_head(const float *a, const float *b, uint32_t n) {
+    uint32_t i = 0;
+    float s = 0.0f;
+#ifdef EMBED_NEON
+    float32x4_t s0 = vdupq_n_f32(0.0f), s1 = s0, s2 = s0, s3 = s0;
+    for (; i + 16 <= n; i += 16) {
+        s0 = vfmaq_f32(s0, vld1q_f32(a + i), vld1q_f32(b + i));
+        s1 = vfmaq_f32(s1, vld1q_f32(a + i + 4), vld1q_f32(b + i + 4));
+        s2 = vfmaq_f32(s2, vld1q_f32(a + i + 8), vld1q_f32(b + i + 8));
+        s3 = vfmaq_f32(s3, vld1q_f32(a + i + 12), vld1q_f32(b + i + 12));
+    }
+    s = vaddvq_f32(vaddq_f32(vaddq_f32(s0, s1), vaddq_f32(s2, s3)));
+#endif
+    for (; i < n; i++)
+        s += a[i] * b[i];
+    return s;
+}
+
+static void add_scaled(float *y, float p, const float *x, uint32_t n) {
+    uint32_t i = 0;
+#ifdef EMBED_NEON
+    const float32x4_t pv = vdupq_n_f32(p);
+    for (; i + 4 <= n; i += 4)
+        vst1q_f32(y + i, vfmaq_f32(vld1q_f32(y + i), pv, vld1q_f32(x + i)));
+#endif
+    for (; i < n; i++)
+        y[i] += p * x[i];
+}
+
+/* A unit of attention work is one head for a block of ATTN_ROWS query
+ * tokens: twelve heads alone would leave most of a many-core machine idle. */
+#define ATTN_ROWS 32
+
+static size_t attn_units(const Embedder *e, size_t T) {
+    return (size_t)e->n_head * ((T + ATTN_ROWS - 1) / ATTN_ROWS);
+}
+
 static void attend_heads(size_t begin, size_t end, void *ud) {
     const AttnJob *j = (const AttnJob *)ud;
     Embedder *e = j->e;
     const size_t T = j->T;
     const uint32_t D = e->n_embd, HD = e->n_head_dim;
-    for (size_t h = begin; h < end; h++) {
-        float *scores = e->scores + h * T;
-        for (size_t t = 0; t < T; t++) {
+    const size_t blocks = (T + ATTN_ROWS - 1) / ATTN_ROWS;
+    /* Each unit its own row of scores: two blocks of one head run at once. */
+    float scores[KB_EMBED_MAX_TOKENS];
+    for (size_t unit = begin; unit < end; unit++) {
+        const size_t h = unit / blocks;
+        const size_t t0 = (unit % blocks) * ATTN_ROWS;
+        const size_t t1 = t0 + ATTN_ROWS < T ? t0 + ATTN_ROWS : T;
+        for (size_t t = t0; t < t1; t++) {
             const float *qh = e->q + t * D + h * HD;
             float max = -INFINITY;
             size_t u0 = 0, u1 = T;
@@ -623,16 +673,8 @@ static void attend_heads(size_t begin, size_t end, void *ud) {
                 u0 = t > (size_t)j->half ? t - (size_t)j->half : 0;
                 u1 = t + (size_t)j->half + 1 < T ? t + (size_t)j->half + 1 : T;
             }
-            for (size_t u = 0; u < u0; u++)
-                scores[u] = 0.0f;
-            for (size_t u = u1; u < T; u++)
-                scores[u] = 0.0f;
             for (size_t u = u0; u < u1; u++) {
-                const float *kh = e->k + u * D + h * HD;
-                float s = 0.0f;
-                for (uint32_t i = 0; i < HD; i++)
-                    s += qh[i] * kh[i];
-                s *= j->kq_scale;
+                const float s = dot_head(qh, e->k + u * D + h * HD, HD) * j->kq_scale;
                 scores[u] = s;
                 if (s > max)
                     max = s;
@@ -645,12 +687,8 @@ static void attend_heads(size_t begin, size_t end, void *ud) {
             const float inv = 1.0f / sum;
             float *oh = e->attn + t * D + h * HD;
             memset(oh, 0, HD * sizeof(float));
-            for (size_t u = u0; u < u1; u++) {
-                const float p = scores[u] * inv;
-                const float *vh = e->v + u * D + h * HD;
-                for (uint32_t i = 0; i < HD; i++)
-                    oh[i] += p * vh[i];
-            }
+            for (size_t u = u0; u < u1; u++)
+                add_scaled(oh, scores[u] * inv, e->v + u * D + h * HD, HD);
         }
     }
 }
@@ -694,7 +732,7 @@ static bool forward(Embedder *e, const int32_t *ids, size_t T, float *out) {
             rope(e->k + t * D, H, HD, (int32_t)t, e->rope_base);
         }
         AttnJob job = {e, T, kq_scale, -1};
-        plat_parallel(H, attend_heads, &job);
+        plat_parallel(attn_units(e, T), attend_heads, &job);
         if (!quant_row(L->attn_norm_w->type, L->attn_norm_w->data, D, e->lw) ||
             !quant_row(L->attn_norm_b->type, L->attn_norm_b->data, D, e->lb))
             return false;
@@ -794,8 +832,61 @@ static float gelu(float x) {
     return 0.5f * x * (1.0f + erff(x * 0.70710678118654752f));
 }
 
-static bool forward_modernbert(Embedder *e, const int32_t *ids, size_t T, float *out) {
+/* The work between the matrix products, one token at a time. Every token's
+ * values depend only on that token's own row, so the tokens are split across
+ * the thread pool like a matrix's rows are; left on one thread, this part
+ * kept every other core waiting between products. */
+typedef enum { GLUE_NORM, GLUE_QKV_ROPE, GLUE_ADD, GLUE_GEGLU } GlueOp;
+
+typedef struct {
+    Embedder *e;
+    GlueOp op;
+    const float *w;    /* GLUE_NORM: the norm's weights; NULL copies only */
+    const float *freq; /* GLUE_QKV_ROPE */
+} GlueJob;
+
+static void glue(size_t begin, size_t end, void *ud) {
+    const GlueJob *j = (const GlueJob *)ud;
+    Embedder *e = j->e;
     const uint32_t D = e->n_embd, H = e->n_head, HD = e->n_head_dim, F = e->n_ff;
+    for (size_t t = begin; t < end; t++) {
+        switch (j->op) {
+        case GLUE_NORM: /* tmp = LayerNorm(x), or a copy of x */
+            memcpy(e->tmp + t * D, e->x + t * D, D * sizeof(float));
+            if (j->w)
+                layernorm(e->tmp + t * D, j->w, NULL, D, e->eps);
+            break;
+        case GLUE_QKV_ROPE: {
+            const float *qkv = e->qkv + t * 3 * D;
+            memcpy(e->q + t * D, qkv, D * sizeof(float));
+            memcpy(e->k + t * D, qkv + D, D * sizeof(float));
+            memcpy(e->v + t * D, qkv + 2 * D, D * sizeof(float));
+            rope_apply(e->q + t * D, H, HD, (int32_t)t, j->freq);
+            rope_apply(e->k + t * D, H, HD, (int32_t)t, j->freq);
+            break;
+        }
+        case GLUE_ADD: /* x += tmp */
+            for (uint32_t i = 0; i < D; i++)
+                e->x[t * D + i] += e->tmp[t * D + i];
+            break;
+        case GLUE_GEGLU: {
+            const float *uv = e->ff1 + t * 2 * F;
+            float *a = e->ff2 + t * F;
+            for (uint32_t i = 0; i < F; i++)
+                a[i] = gelu(uv[i]) * uv[F + i];
+            break;
+        }
+        }
+    }
+}
+
+static void run_glue(Embedder *e, size_t T, GlueOp op, const float *w, const float *freq) {
+    GlueJob job = {e, op, w, freq};
+    plat_parallel(T, glue, &job);
+}
+
+static bool forward_modernbert(Embedder *e, const int32_t *ids, size_t T, float *out) {
+    const uint32_t D = e->n_embd, HD = e->n_head_dim;
     float freq_global[256], freq_local[256];
     if (HD / 2 > 256)
         return false;
@@ -819,48 +910,31 @@ static bool forward_modernbert(Embedder *e, const int32_t *ids, size_t T, float 
         const EmbedLayer *L = &e->layer[l];
         const bool global = l % e->global_every == 0;
         /* The attention input: x normalised, or x itself in layer 0. */
-        memcpy(e->tmp, e->x, T * D * sizeof(float));
+        const float *w = NULL;
         if (L->attn_norm_w) {
             if (!quant_row(L->attn_norm_w->type, L->attn_norm_w->data, D, e->lw))
                 return false;
-            for (size_t t = 0; t < T; t++)
-                layernorm(e->tmp + t * D, e->lw, NULL, D, e->eps);
+            w = e->lw;
         }
+        run_glue(e, T, GLUE_NORM, w, NULL);
         if (!matmul(L->qkv, e->tmp, T, e->qkv))
             return false;
-        const float *freq = global ? freq_global : freq_local;
-        for (size_t t = 0; t < T; t++) {
-            const float *qkv = e->qkv + t * 3 * D;
-            memcpy(e->q + t * D, qkv, D * sizeof(float));
-            memcpy(e->k + t * D, qkv + D, D * sizeof(float));
-            memcpy(e->v + t * D, qkv + 2 * D, D * sizeof(float));
-            rope_apply(e->q + t * D, H, HD, (int32_t)t, freq);
-            rope_apply(e->k + t * D, H, HD, (int32_t)t, freq);
-        }
+        run_glue(e, T, GLUE_QKV_ROPE, NULL, global ? freq_global : freq_local);
         AttnJob job = {e, T, kq_scale, global ? -1 : (int64_t)(e->window / 2)};
-        plat_parallel(H, attend_heads, &job);
+        plat_parallel(attn_units(e, T), attend_heads, &job);
         if (!matmul(L->attn_out, e->attn, T, e->tmp))
             return false;
-        for (size_t i = 0; i < T * D; i++)
-            e->x[i] += e->tmp[i];
+        run_glue(e, T, GLUE_ADD, NULL, NULL);
 
-        memcpy(e->tmp, e->x, T * D * sizeof(float));
         if (!quant_row(L->out_norm_w->type, L->out_norm_w->data, D, e->lw))
             return false;
-        for (size_t t = 0; t < T; t++)
-            layernorm(e->tmp + t * D, e->lw, NULL, D, e->eps);
+        run_glue(e, T, GLUE_NORM, e->lw, NULL);
         if (!matmul(L->ffn_up, e->tmp, T, e->ff1))
             return false;
-        for (size_t t = 0; t < T; t++) {
-            const float *uv = e->ff1 + t * 2 * F;
-            float *a = e->ff2 + t * F;
-            for (uint32_t i = 0; i < F; i++)
-                a[i] = gelu(uv[i]) * uv[F + i];
-        }
+        run_glue(e, T, GLUE_GEGLU, NULL, NULL);
         if (!matmul(L->ffn_down, e->ff2, T, e->tmp))
             return false;
-        for (size_t i = 0; i < T * D; i++)
-            e->x[i] += e->tmp[i];
+        run_glue(e, T, GLUE_ADD, NULL, NULL);
     }
 
     if (!quant_row(e->final_norm_w->type, e->final_norm_w->data, D, e->lw))

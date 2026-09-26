@@ -133,13 +133,21 @@ PlatLock *plat_lock_try(Arena *a, const char *path, int64_t *holder);
 
 /* ---- parallel work ----
  *
- * Runs fn over [0, n) split into contiguous ranges, one per thread, and
- * returns when every range is done. The only concurrency in kb, and only for
- * embedding, where a chunk is tens of billions of multiply-adds. A caller
- * must make every index's work independent of every other's — each output
- * written by exactly one range — so the result cannot depend on how many
- * threads there were. Falls back to running fn(0, n) inline when threads
- * cannot be started. */
+ * Runs fn over [0, n) split into contiguous ranges and returns when every
+ * range is done. The only concurrency in kb, and only for embedding, where a
+ * chunk is tens of billions of multiply-adds. A caller must make every
+ * index's work independent of every other's — each output written by exactly
+ * one range — so the result cannot depend on how the work was split.
+ *
+ * The threads are a pool, started on the first call and kept: a forward pass
+ * makes a hundred calls per chunk, and starting threads for each one cost more
+ * than some of the work. Ranges are handed out as threads ask for them rather
+ * than cut in equal shares up front, because the cores are not equal (a
+ * laptop's efficiency cores run at a fraction of the speed of its performance
+ * cores) and an equal share makes every fast core wait for the slowest.
+ *
+ * Runs fn(0, n) inline when threads cannot be started, when called from inside
+ * a range (no nesting), and when another thread is already using the pool. */
 typedef void (*PlatRangeFn)(size_t begin, size_t end, void *ud);
 void plat_parallel(size_t n, PlatRangeFn fn, void *ud);
 /* Logical CPUs, at least 1. */

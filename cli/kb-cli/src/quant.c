@@ -2,7 +2,11 @@
 
 #include "gguf.h"
 
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+/* SIMD is chosen at compile time and only where the target guarantees it
+ * (NEON is part of every AArch64 CPU). Everything else, and any build with
+ * KB_NO_SIMD defined (`make SIMD=0`), takes the portable C loops, which
+ * compute the same values up to rounding. */
+#if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(KB_NO_SIMD)
 #include <arm_neon.h>
 #define QUANT_NEON 1
 #endif
@@ -303,78 +307,140 @@ typedef struct {
     float *out;
 } MatmulJob;
 
-static void matmul_rows(size_t begin, size_t end, void *ud) {
-    const MatmulJob *j = (const MatmulJob *)ud;
-    const size_t bsz = block_bytes(j->t);
-    const uint64_t nb = j->n / QK_K;
-    float buf[QK_K];
-    for (uint64_t r = begin; r < end; r++) {
-        const uint8_t *row = j->w + r * nb * bsz;
-        for (size_t tt = 0; tt < j->T; tt++)
-            j->out[tt * j->rows + r] = 0.0f;
-        for (uint64_t b = 0; b < nb; b++) {
-            deq_block(j->t, row + b * bsz, buf);
-            for (size_t tt = 0; tt < j->T; tt++)
-                j->out[tt * j->rows + r] +=
-                    dot256(buf, j->x + tt * j->n + b * QK_K);
-        }
-    }
+/* Matrix products, four rows and four tokens at a time.
+ *
+ * WHY BLOCKS. A plain dot product loads one weight and one input for every
+ * multiply-add, so the loads, not the arithmetic, set the pace. Holding four
+ * weight rows against four tokens' inputs gives sixteen running sums from
+ * eight loads, which is what lets the multiply-add units stay busy.
+ *
+ * Each group of four rows is widened to floats once, whole (F16 converted,
+ * a K-quant dequantised), and reused for every token; each output is then
+ * written once. The width must be a multiple
+ * of 4 and at most F16_MAX_WIDTH, which every matrix these models have is; a
+ * group of fewer than four rows, and the tokens left over from the groups of
+ * four, take the one-at-a-time path.
+ *
+ * The sums are added in a different order than a row-by-row dot product
+ * would, so the result differs in the last bits, not more; the forward pass is
+ * tested against the reference at cosine 0.999. */
+#define F16_ROWS 4
+#define F16_TOKS 4
+#define F16_MAX_WIDTH 4096u
+
+static void widen(const uint8_t *row, uint64_t k, uint64_t m, float *dst) {
+    for (uint64_t i = 0; i < m; i++)
+        dst[i] = quant_f16(rd_u16(row + (k + i) * 2));
 }
 
-/* F16 rows the same way: each row is widened once, a QK_K slice at a time,
- * and every token's dot product reads the widened slice. The width need not
- * be a multiple of QK_K (ModernBERT's MLP is 1152 wide), so the last slice
- * may be short. */
-static void matmul_rows_f16(size_t begin, size_t end, void *ud) {
+static float dot_n(const float *w, const float *x, uint64_t m) {
+    float s = 0.0f;
+    uint64_t i = 0;
+    for (; i + QK_K <= m; i += QK_K)
+        s += dot256(w + i, x + i);
+    for (; i < m; i++)
+        s += w[i] * x[i];
+    return s;
+}
+
+#ifdef QUANT_NEON
+/* acc[r][t] = sum over m of w[r] · x[t]. */
+static void f16_block(const float *w, uint64_t ws, const float *const *x, uint64_t m,
+                      float acc[F16_ROWS][F16_TOKS]) {
+    float32x4_t c00 = vdupq_n_f32(0.0f), c01 = c00, c02 = c00, c03 = c00;
+    float32x4_t c10 = c00, c11 = c00, c12 = c00, c13 = c00;
+    float32x4_t c20 = c00, c21 = c00, c22 = c00, c23 = c00;
+    float32x4_t c30 = c00, c31 = c00, c32 = c00, c33 = c00;
+    for (uint64_t k = 0; k < m; k += 4) {
+        const float32x4_t w0 = vld1q_f32(w + k), w1 = vld1q_f32(w + ws + k);
+        const float32x4_t w2 = vld1q_f32(w + 2 * ws + k), w3 = vld1q_f32(w + 3 * ws + k);
+        const float32x4_t x0 = vld1q_f32(x[0] + k), x1 = vld1q_f32(x[1] + k);
+        const float32x4_t x2 = vld1q_f32(x[2] + k), x3 = vld1q_f32(x[3] + k);
+        c00 = vfmaq_f32(c00, w0, x0); c01 = vfmaq_f32(c01, w0, x1);
+        c02 = vfmaq_f32(c02, w0, x2); c03 = vfmaq_f32(c03, w0, x3);
+        c10 = vfmaq_f32(c10, w1, x0); c11 = vfmaq_f32(c11, w1, x1);
+        c12 = vfmaq_f32(c12, w1, x2); c13 = vfmaq_f32(c13, w1, x3);
+        c20 = vfmaq_f32(c20, w2, x0); c21 = vfmaq_f32(c21, w2, x1);
+        c22 = vfmaq_f32(c22, w2, x2); c23 = vfmaq_f32(c23, w2, x3);
+        c30 = vfmaq_f32(c30, w3, x0); c31 = vfmaq_f32(c31, w3, x1);
+        c32 = vfmaq_f32(c32, w3, x2); c33 = vfmaq_f32(c33, w3, x3);
+    }
+    acc[0][0] = vaddvq_f32(c00); acc[0][1] = vaddvq_f32(c01);
+    acc[0][2] = vaddvq_f32(c02); acc[0][3] = vaddvq_f32(c03);
+    acc[1][0] = vaddvq_f32(c10); acc[1][1] = vaddvq_f32(c11);
+    acc[1][2] = vaddvq_f32(c12); acc[1][3] = vaddvq_f32(c13);
+    acc[2][0] = vaddvq_f32(c20); acc[2][1] = vaddvq_f32(c21);
+    acc[2][2] = vaddvq_f32(c22); acc[2][3] = vaddvq_f32(c23);
+    acc[3][0] = vaddvq_f32(c30); acc[3][1] = vaddvq_f32(c31);
+    acc[3][2] = vaddvq_f32(c32); acc[3][3] = vaddvq_f32(c33);
+}
+#else
+static void f16_block(const float *w, uint64_t ws, const float *const *x, uint64_t m,
+                      float acc[F16_ROWS][F16_TOKS]) {
+    for (int32_t r = 0; r < F16_ROWS; r++)
+        for (int32_t t = 0; t < F16_TOKS; t++)
+            acc[r][t] = dot_n(w + (uint64_t)r * ws, x[t], m);
+}
+#endif
+
+/* Row r of the matrix as floats. */
+static void widen_row(const MatmulJob *j, uint64_t r, float *dst) {
+    if (j->t == GGML_F16) {
+        widen(j->w + r * j->n * 2, 0, j->n, dst);
+        return;
+    }
+    const size_t bsz = block_bytes(j->t);
+    const uint64_t nb = j->n / QK_K;
+    for (uint64_t b = 0; b < nb; b++)
+        deq_block(j->t, j->w + (r * nb + b) * bsz, dst + b * QK_K);
+}
+
+/* Groups of F16_ROWS rows: [begin, end) counts groups, not rows. */
+static void matmul_groups(size_t begin, size_t end, void *ud) {
     const MatmulJob *j = (const MatmulJob *)ud;
-    float buf[QK_K];
-    for (uint64_t r = begin; r < end; r++) {
-        const uint8_t *row = j->w + r * j->n * 2;
-        for (size_t tt = 0; tt < j->T; tt++)
-            j->out[tt * j->rows + r] = 0.0f;
-        for (uint64_t k = 0; k < j->n; k += QK_K) {
-            const uint64_t m = j->n - k < QK_K ? j->n - k : QK_K;
-            for (uint64_t i = 0; i < m; i++)
-                buf[i] = quant_f16(rd_u16(row + (k + i) * 2));
-            for (size_t tt = 0; tt < j->T; tt++) {
-                const float *xt = j->x + tt * j->n + k;
-                float s;
-                if (m == QK_K) {
-                    s = dot256(buf, xt);
-                } else {
-                    s = 0.0f;
-                    for (uint64_t i = 0; i < m; i++)
-                        s += buf[i] * xt[i];
-                }
-                j->out[tt * j->rows + r] += s;
+    const uint64_t n = j->n;
+    float buf[F16_ROWS * F16_MAX_WIDTH];
+    for (size_t g = begin; g < end; g++) {
+        const uint64_t r0 = (uint64_t)g * F16_ROWS;
+        const uint64_t nr = j->rows - r0 < F16_ROWS ? j->rows - r0 : F16_ROWS;
+        for (uint64_t r = 0; r < nr; r++)
+            widen_row(j, r0 + r, buf + r * n);
+        size_t tt = 0;
+        if (nr == F16_ROWS && n % 4 == 0) {
+            for (; tt + F16_TOKS <= j->T; tt += F16_TOKS) {
+                const float *xs[F16_TOKS];
+                for (int32_t t = 0; t < F16_TOKS; t++)
+                    xs[t] = j->x + (tt + (size_t)t) * n;
+                float acc[F16_ROWS][F16_TOKS];
+                f16_block(buf, n, xs, n, acc);
+                for (int32_t t = 0; t < F16_TOKS; t++)
+                    for (int32_t r = 0; r < F16_ROWS; r++)
+                        j->out[(tt + (size_t)t) * j->rows + r0 + (uint64_t)r] = acc[r][t];
             }
         }
+        for (; tt < j->T; tt++)
+            for (uint64_t r = 0; r < nr; r++)
+                j->out[tt * j->rows + r0 + r] = dot_n(buf + r * n, j->x + tt * n, n);
     }
 }
 
 bool quant_matmul(uint32_t t, const uint8_t *w, uint64_t n, uint64_t rows,
                   const float *x, size_t T, float *out) {
-    if (t == GGML_F16) {
+    const bool kquant = t == GGML_Q4_K || t == GGML_Q5_K || t == GGML_Q6_K;
+    if ((t == GGML_F16 || (kquant && n % QK_K == 0)) && n <= F16_MAX_WIDTH) {
+        /* Row groups are independent and each is written by one range, so
+         * the result is the same for any number of threads. */
         MatmulJob job = {t, w, n, rows, x, T, out};
-        plat_parallel((size_t)rows, matmul_rows_f16, &job);
+        plat_parallel((size_t)((rows + F16_ROWS - 1) / F16_ROWS), matmul_groups, &job);
         return true;
     }
-    if (t != GGML_Q4_K && t != GGML_Q5_K && t != GGML_Q6_K) {
-        /* Not a weight format this family uses for its matrices; one vector
-         * at a time is correct and there is nothing to share. */
-        float *col = out;
-        for (size_t tt = 0; tt < T; tt++) {
-            if (!quant_matvec(t, w, n, rows, x + tt * n, col))
-                return false;
-            col += rows;
-        }
-        return true;
+    /* Any other format, or a row wider than a group's buffer: one vector at a
+     * time, which is correct and shares nothing. */
+    float *col = out;
+    for (size_t tt = 0; tt < T; tt++) {
+        if (!quant_matvec(t, w, n, rows, x + tt * n, col))
+            return false;
+        col += rows;
     }
-    if (n % QK_K != 0)
-        return false;
-    MatmulJob job = {t, w, n, rows, x, T, out};
-    /* Rows are independent and each is written by one range, so the result
-     * is the same for any number of threads. */
-    plat_parallel((size_t)rows, matmul_rows, &job);
     return true;
 }

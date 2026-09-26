@@ -100,7 +100,6 @@ typedef struct {
     float *tmp;                    /* T × n_embd */
     float *lw, *lb, *row;          /* n_embd each (row is 3 × n_embd) */
     float *ff1, *ff2;              /* T × n_ff each */
-    float *scores;                 /* T */
     char *prefixed;
     size_t prefixed_cap;
 

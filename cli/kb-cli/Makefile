@@ -14,6 +14,11 @@
 
 CC ?= cc
 CFLAGS ?= -std=c11 -Wall -Wextra -O2 -g
+# `make SIMD=0` builds the portable C loops even where NEON is available, so
+# the path every non-ARM machine takes can be tested here.
+ifeq ($(SIMD),0)
+CFLAGS += -DKB_NO_SIMD
+endif
 LDFLAGS ?=
 # BM25 needs a natural logarithm. libm is part of the C standard library,
 # not a third-party dependency; some systems just keep it in its own file.
@@ -52,6 +57,12 @@ $(TEST_BIN): $(SRC_LIB) $(SRC_TESTS) src/*.h tests/unit/test.h
 bin/kb-bpe-dump: $(SRC_LIB) tests/tools/bpe_dump.c src/*.h
 	@mkdir -p bin
 	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC_LIB) tests/tools/bpe_dump.c $(LDFLAGS) $(LDLIBS)
+
+# A development tool: times the embedder, and compares its vectors with a
+# saved run, so a faster forward pass can show it computes the same thing.
+bin/kb-embed-bench: $(SRC_LIB) tests/tools/embed_bench.c src/*.h
+	@mkdir -p bin
+	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC_LIB) tests/tools/embed_bench.c $(LDFLAGS) $(LDLIBS)
 
 # The BPE and ModernBERT tests read gte-modernbert-base's model file
 # (read-only) and are skipped without it.
