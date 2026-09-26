@@ -23,7 +23,8 @@ DESTDIR ?=
 
 SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/errdet.c src/platform.c \
            src/doc.c src/store.c src/chunk.c src/token.c src/fts.c \
-           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/embed.c src/modelrec.c src/vectors.c \
+           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/bpe.c src/embed.c src/modelrec.c src/vectors.c \
+           src/third_party/utf8proc/utf8proc.c \
            src/rank.c src/cmd_common.c \
            src/cmd_init.c src/cmd_add.c src/cmd_ls.c src/cmd_get.c \
            src/cmd_search.c src/cmd_chunk.c src/cmd_rebuild.c \
@@ -38,7 +39,7 @@ TEST_BIN := bin/kb-unit-tests
 
 all: $(BIN)
 
-$(BIN): $(SRC_LIB) $(SRC_MAIN) src/*.h
+$(BIN): $(SRC_LIB) $(SRC_MAIN) src/*.h src/third_party/utf8proc/*
 	@mkdir -p bin
 	$(CC) $(CFLAGS) -o $@ $(SRC_LIB) $(SRC_MAIN) $(LDFLAGS) $(LDLIBS)
 
@@ -46,13 +47,23 @@ $(TEST_BIN): $(SRC_LIB) $(SRC_TESTS) src/*.h tests/unit/test.h
 	@mkdir -p bin
 	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC_LIB) $(SRC_TESTS) $(LDFLAGS) $(LDLIBS)
 
+# A development tool: kb's BPE tokenizer over files, for the check against
+# the Hugging Face tokenizer (tools/modernbert/check_tokenizer.py).
+bin/kb-bpe-dump: $(SRC_LIB) tests/tools/bpe_dump.c src/*.h
+	@mkdir -p bin
+	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC_LIB) tests/tools/bpe_dump.c $(LDFLAGS) $(LDLIBS)
+
+# The BPE tests read the ModernBERT model file's vocabulary (read-only) and
+# are skipped without it.
+KB_TEST_MODERNBERT ?= $(firstword $(wildcard $(HOME)/.kb/models/gte-modernbert-base*.gguf))
+
 unit: $(TEST_BIN)
-	./$(TEST_BIN)
+	KB_TEST_MODERNBERT="$(KB_TEST_MODERNBERT)" ./$(TEST_BIN)
 
 # The model tests run against the real weights when this machine has them
 # (the one .gguf in ~/.kb/models, linked into the run's throwaway HOME) and
 # are skipped otherwise. KB_TEST_MODEL=<file> names another.
-KB_TEST_MODEL ?= $(firstword $(wildcard $(HOME)/.kb/models/*.gguf))
+KB_TEST_MODEL ?= $(firstword $(wildcard $(HOME)/.kb/models/nomic-embed-text*.gguf))
 
 e2e: $(BIN) $(TEST_BIN)
 	KB="$(abspath $(BIN))" KB_TESTS="$(abspath $(TEST_BIN))" \

@@ -32,6 +32,8 @@ set(KB_LIB_SOURCES
     src/gguf.c
     src/quant.c
     src/wpm.c
+    src/bpe.c
+    src/third_party/utf8proc/utf8proc.c
     src/embed.c
     src/modelrec.c
     src/vectors.c
