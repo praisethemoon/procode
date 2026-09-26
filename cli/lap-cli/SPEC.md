@@ -1,8 +1,8 @@
 # lap — specification (v0.1)
 
 `lap` is a CLI that records **fine-grained, human-interpretable edit history**
-for AI agents. It sits below git: agents record every small edit with a
-reason; git keeps its normal human-scale history.
+for AI agents. It sits below git: agents record every small edit with its
+intent and what it does; git keeps its normal human-scale history.
 
 ## Core rules
 
@@ -12,10 +12,11 @@ reason; git keeps its normal human-scale history.
    must be committed separately. Blank (whitespace-only) lines carry no
    identity, so a gap made only of them never splits an edit: the changed
    runs merge into one region that spans the gap, blank lines included.
-2. **Every commit has a message** — a single non-empty string, multiline
-   welcome, given with `-m "text"` or `-F <file>` (`-F -` reads stdin;
-   trailing whitespace is trimmed). The first line is used as the summary in
-   listings. Messages explain *why* the edit exists.
+2. **Every commit states its intent and its behavior**, both required
+   (§Messages). The *intent* says why the edit exists — the goal it serves.
+   The *behavior* says what this edit makes the code do. Edits that serve
+   one goal share an intent; each still describes its own behavior, so a
+   hunk that cannot say what it does stands out.
 3. **Commits belong to sessions.** A session is a named group of commits with
    a purpose ("fix the parser bug"). Committing requires an active session
    unless `--no-session` is passed explicitly.
@@ -23,6 +24,12 @@ reason; git keeps its normal human-scale history.
    history is a recording. There is no checkout, branch, merge, or staging.
 5. **Commit ids are short and sequential** (`L1`, `L2`, ...; sessions `S1`,
    `S2`, ...). Integrity comes from a hash chain, not content-addressed ids.
+   Every commit also has a **hash** (§The log), which is how one commit's
+   text refers to another.
+6. **lap is for one developer's working copy.** There are no branches, and
+   logs are never merged. When work arrives from elsewhere (a merged pull
+   request), it lands in the working tree like any other change and is
+   committed edit by edit.
 
 ## Repository layout
 
@@ -85,12 +92,20 @@ reason; git keeps its normal human-scale history.
 - History is **linear by construction**: there are no branches, refs, or
   merges; concurrency is serialized by the writer lock and expressed as
   interleaved sessions.
+- Resolving a commit by hash (§References) scans the log's commit records;
+  the index does not store hashes. A cache may be added for it later under
+  the cache contract, without changing any output.
 
 ## The log
 
 One JSON object per line. Field order is fixed at encode time. Every record
 carries `prev`: the SHA-256 (lowercase hex) of the previous record's exact
 bytes; the first record chains from 64 zeros. `lap verify` walks the chain.
+
+A record's **hash** is the SHA-256 of its own exact bytes — the value the
+next record carries as `prev`. It is never stored in the record itself.
+A commit's hash is its stable name for references (§References); its
+**short hash** is the first 7 hex digits.
 
 Record types:
 
@@ -104,12 +119,19 @@ Record types:
  "old_start":10,"old_lines":2,"new_start":10,"new_lines":3,
  "eof_nl":true,                                 // trailing-\n state after commit
  "old_text":["..."],"new_text":["..."],         // full replaced/replacement lines
- "msg":"...","ts":"...","prev":"..."}
+ "intent":"...","behavior":"...",               // §Messages
+ "forced":true,                                 // present only with --force-message
+ "ts":"...","prev":"..."}
 
 {"type":"session_start","id":"S2","user":"jane","msg":"purpose",
  "meta":{"ticket":"T-12"},"ts":"...","prev":"..."}   // meta: optional
 {"type":"session_end","id":"S2","ts":"...","prev":"..."}
 ```
+
+A commit record without both `intent` and `behavior` is malformed,
+including one that carries a single `msg` in their place.
+
+Sessions keep `msg`: a session's purpose is already an intent.
 
 `user` identifies the committer on `commit` and `session_start` records.
 Resolution order: `$LAP_USER` (agents/orchestrators set this to tag their
@@ -129,6 +151,61 @@ Blame and hunk headers rely on this.
 
 Timestamps are UTC ISO-8601 (`2026-09-20T12:34:56Z`); since they are
 lexicographically ordered, `--since`/`--until` compare as strings.
+
+## Messages
+
+A commit's text is two fields, each a non-empty string, multiline welcome,
+trailing whitespace trimmed. The first line of each is its summary.
+
+- **intent** — why the edit exists. Written as the goal, not the mechanics:
+  "Route the graph place to its view."
+- **behavior** — what this edit makes the code do: "Render Graph when the
+  target place is graph; every other place still gets Collections." For a
+  supporting edit, behavior says what it supports: "Import Graph for the
+  graph route in #fa9cebd."
+
+### Checks
+
+`lap commit` refuses a message that fails any of these, with the error code
+shown, before anything is written. Words are counted after lowercasing and
+splitting on every character that is not a letter or a digit (bytes ≥ 0x80
+count as letters, so non-ASCII words stay whole).
+
+1. **Length** (`message_too_short`): intent and behavior each have at least
+   3 words.
+2. **Behavior is not the intent** (`behavior_repeats_intent`): the word-set
+   Jaccard similarity of behavior and intent is below 0.8.
+3. **Behavior is not the previous behavior** (`behavior_repeats_previous`):
+   the Jaccard similarity of behavior and the behavior of the most recent
+   commit in the same session is below 0.8. Skipped when there is none,
+   and under `--no-session`.
+4. **Behavior is not the code** (`behavior_restates_code`): the Jaccard
+   similarity of behavior and the words of the edit's changed lines (its
+   `new_text`, or its `old_text` for a pure deletion) is below 0.8.
+
+Intent may repeat freely: it is shared by design.
+
+`--force-message` skips checks 2–4, never check 1, for the rare honest
+near-duplicate. The commit record then carries `"forced":true`, and `show`
+and `rr` mark it, so a reviewer sees which messages bypassed the checks.
+
+The thresholds are constants, chosen against this repository's own
+history (§Unresolved).
+
+### References
+
+A commit's text refers to another commit by its hash, written as `#`
+followed by 7 to 64 hex digits (`#fa9cebd`), in any case. lap does not
+parse or validate references when committing: they are plain text, and the
+words around them ("needs", "fixes", "reverts") are the author's. They are
+for readers — an agent following the chain with `lap show`, or a UI that
+turns each one into a link.
+
+Wherever a command takes a commit, it accepts an id (`L42`), a hash, or a
+hash prefix of at least 7 hex digits, with or without the `#`. A prefix
+that matches more than one commit is refused with `ambiguous_ref`, listing
+the matches; one that matches none is `unknown_ref`. Only commit records
+are addressable by hash.
 
 ## Edit detection
 
@@ -156,20 +233,28 @@ Every command accepts `--json` for machine-readable output on stdout.
 Exit codes: `0` success, `1` user/repo error, `2` internal failure.
 JSON errors are `{"ok":false,"error":"<code>","message":"..."}`.
 
+Every JSON object that describes a commit carries its full `hash`, and every
+human listing of commits prints the short hash beside the id
+(`L42 fa9cebd`).
+
 Argument parsing: flags that take values consume the next word entirely, so
-a message like `-m "--no-session"` is never misread as a flag; a literal
+a message like `-i "--no-session"` is never misread as a flag; a literal
 `--` ends flag parsing, letting file names that start with `-` be committed
-(`lap commit -m "msg" -- -weird.txt`).
+(`lap commit -i "..." -b "..." -- -weird.txt`). A word before `--` that
+starts with `-` and is not one of the command's flags (or lap's own colour
+flags) is refused with `unknown_flag`, naming it; nothing is run. A
+skipped flag would let its value pass for an argument — `-x "text" f.c`
+would name a file `text`.
 
 ### Colour
 
 `--color=auto|always|never` and `--no-color` are lap's own flags rather
 than any command's, and may appear on either side of the command name; the
-last one given wins. They are spelled with `=` so that a command's own
-parser, which skips anything starting with `-`, cannot mistake the mode for
-a positional argument. The scan that finds them applies the same rule every
-command does: **a value-taking flag's value is data**, so
-`lap commit -m "--color=always"` records that message and changes nothing
+last one given wins. They are spelled with `=` so that the mode is part of
+the flag's own word and can never be mistaken for a positional argument;
+every command's parser accepts them. The scan that finds them applies the
+same rule every command does: **a value-taking flag's value is data**, so
+`lap commit -i "--color=always"` records that intent and changes nothing
 about the display.
 
 Colour is bound by one contract: **it never changes what the output says,
@@ -198,25 +283,43 @@ Creates `.lap/` in the cwd plus a starter `.lapignore` (kept if present).
 Active session, then every file with pending changes: `new` (line count),
 `modified` (numbered edit list with line ranges), `deleted`, or `binary`.
 
-### `lap commit <file> -m "msg" | -F <file|-> [--edit N | --lines A-B] [--no-session]`
-Records exactly one edit (`-m` and `-F` are mutually exclusive; `-F -`
-reads the message from stdin — the reliable path for long, multiline
-rationales that would fight shell quoting):
-- 0 pending edits → error `no_changes`.
-- 1 pending edit → committed.
-- \>1 pending edits → error `multiple_edits` listing numbered regions; retry
+### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B] [--force-message] [--no-session]`
+Records exactly one edit. The message comes from `-i`/`--intent` and
+`-b`/`--behavior` together, or from `-F`, never a mix:
+
+- `-F <file>` reads both fields from a file (`-F -` reads stdin — the
+  reliable path for long, multiline text that would fight shell quoting).
+  The file holds two sections, each opened by a line that is exactly
+  `Intent:` or `Behavior:` (any order, each once); a section's text is the
+  lines up to the next header or the end. Text before the first header, a
+  missing or repeated section, or an empty one is refused with
+  `bad_message_file`.
+- A missing field is `missing_intent` or `missing_behavior`.
+- The message then passes the checks in §Messages, or the commit is
+  refused.
+
+Then, by the number of pending edits in the file:
+- 0 → error `no_changes`.
+- 1 → committed.
+- \>1 → error `multiple_edits` listing numbered regions; retry
   with `--edit N` (pick from the list) or `--lines A-B` (must exactly match
   one region's range as shown by `lap status`: current-file lines, or
   last-committed lines for pure deletions). Remaining edits stay pending and
   are re-detected (with fresh coordinates) on the next run.
 - New file → `create` (whole content, one edit). Deleted file → `delete`.
 
-### `lap log [--session S] [--file F] [-n N]`
-Commits newest-first: id, timestamp, session, op, file, range, message
-summary.
+On success it prints the new commit's id and short hash (`L42 fa9cebd`);
+`--json` returns the id and the full `hash`. This is how an agent learns
+the hash to cite in its next commit.
 
-### `lap show <id> [--full-file]`
-Full record: metadata, complete message, unified-diff-style hunk.
+### `lap log [--session S] [--file F] [-n N]`
+Commits newest-first: id, short hash, timestamp, session, op, file, range,
+intent summary.
+
+### `lap show <commit> [--full-file]`
+Full record: metadata with the full hash, the complete intent and behavior,
+`forced` when set, and a unified-diff-style hunk.
+`<commit>` is an id, a hash or a hash prefix (§References).
 `--full-file` additionally reconstructs the whole file as of that commit by
 replaying its history.
 
@@ -226,11 +329,12 @@ Asks the history questions; criteria AND together:
   N (blame). Pending lines are reported as pending. Line numbers are traced
   back through both pending edits and every commit's line shifts.
 - `--text STR [--added|--removed]` — commits whose changed lines contain STR.
-- `--msg STR` — message substring.
+- `--msg STR` — substring of the intent or the behavior.
 - `--session S`, `--since TS`, `--until TS`, `--limit N`.
 
 ### `lap session [start "purpose" | end | list | current] [--meta key=value]...`
-One active session at a time; `start` requires a purpose message; a crashed
+One active session at a time; `start` requires a purpose, given as its
+argument or read with `-F <file|->` (the whole text); a crashed
 session simply stays open. `list` shows every session with commit counts.
 
 `--meta key=value` (repeatable) on `start` tags the session with metadata,
@@ -246,14 +350,21 @@ starts sessions with `--meta ticket=T-12` and finds a ticket's sessions with
 
 ### `lap rr [<session>] [<from> <to>] [--no-diff]`
 A **review request**: what a run of work changed, and why. Two halves —
-the *trajectory* (every commit's message in the order the work happened)
-and the *net change* (each touched file replayed to just before the range
-and again at its end, then diffed). Edits that cancelled out show as no
-net change; ten commits to one function show as one coherent change.
+the *trajectory* (every commit in the order the work happened) and the
+*net change* (each touched file replayed to just before the range and
+again at its end, then diffed). Edits that cancelled out show as no net
+change; ten commits to one function show as one coherent change.
 
-The target is a session, an inclusive commit range, or — with no argument
-— the most recent session. `--no-diff` keeps the per-file summary and
-drops the hunks, in both the human and JSON shapes. Read-only.
+In the human trajectory, consecutive commits with the same intent print
+under one intent heading, each followed by its own behavior. The JSON
+trajectory stays one entry per commit, in order, and leaves grouping to
+the reader.
+
+The target is a session, an inclusive commit range (`<from>` and `<to>`
+are commits, §References), or — with no argument — the most recent
+session. Targets are given only as arguments; there are no `--session`,
+`--from` or `--to` flags. `--no-diff` keeps the per-file summary and drops
+the hunks, in both the human and JSON shapes. Read-only.
 
 ### `lap verify [--deep]`
 Walks the hash chain. `--deep` also replays every file's history from
@@ -298,3 +409,12 @@ segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git/`,
 C11, zero dependencies. POSIX (macOS/Linux) is the tested platform; the
 `_WIN32` branches (paths, locking, directory walking) are best-effort and
 currently untested. All internal paths use `/` separators.
+
+## Unresolved
+
+- **Thresholds.** 3 words and 0.8 are starting values. Before they are
+  fixed, run the checks over the messages this repository recorded before
+  commits had an intent and a behavior (each `msg` taken as a behavior,
+  paired with its session neighbour and its hunk) and look at what they
+  would have refused. Those messages stay in git history, so this can run
+  from `git show <rev>:.lap/log.jsonl`.
