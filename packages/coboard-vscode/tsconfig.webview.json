@@ -15,5 +15,5 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true
   },
-  "include": ["webview", "src/protocol.ts", "src/linkify.ts", "src/filter.ts", "src/kanban.ts", "src/commits.ts"]
+  "include": ["webview", "src/protocol.ts", "src/linkify.ts", "src/filter.ts", "src/kanban.ts", "src/commits.ts", "src/timeline.ts"]
 }

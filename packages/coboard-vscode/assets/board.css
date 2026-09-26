@@ -715,32 +715,111 @@ body {
 .cb-diff-hunk {
     color: var(--bk-color-info);
 }
-.cb-trajectory {
+/* The trajectory as a timeline: a rail down the left, a node per change.
+ * Filled for a file created, hollow for an edit, a cross for a delete. */
+.cb-tl {
+    position: relative;
     list-style: none;
     margin: 0;
-    padding: 0;
-    counter-reset: step;
+    padding: 0 0 0 22px;
 }
-.cb-trajectory > li {
+.cb-tl::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 10px;
+    bottom: 10px;
+    width: 2px;
+    background: var(--bk-color-border);
+}
+.cb-tl-node {
+    position: relative;
+    margin: 0 0 2px;
+}
+.cb-tl-dot {
+    position: absolute;
+    left: -21px;
+    top: 9px;
+    width: 12px;
+    height: 12px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 2px solid var(--bk-color-foreground-muted);
+    background: var(--bk-color-background);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.cb-tl-create .cb-tl-dot {
+    border-color: var(--bk-color-success);
+    background: var(--bk-color-success);
+}
+.cb-tl-delete .cb-tl-dot {
+    border-color: var(--bk-color-danger);
+    color: var(--bk-color-danger);
+}
+.cb-tl-delete .cb-tl-dot .codicon {
+    font-size: 9px;
+}
+.cb-tl-card {
     padding: 6px 8px;
-    border-left: 2px solid var(--bk-color-border);
-    margin-left: 6px;
+    border-radius: 4px;
     cursor: pointer;
 }
-.cb-trajectory > li:hover {
-    border-left-color: var(--bk-color-focus);
+.cb-tl-card:hover {
     background: var(--bk-color-list-hover, transparent);
 }
-.cb-step-head {
+.cb-tl-card:focus-visible {
+    outline: 1px solid var(--bk-color-focus);
+    outline-offset: -1px;
+}
+.cb-tl-node:hover > .cb-tl-dot {
+    border-color: var(--bk-color-focus);
+}
+.cb-tl-lines {
+    color: var(--bk-color-foreground-muted);
+    font-size: 0.92em;
+    font-variant-numeric: tabular-nums;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cb-tl-more {
+    margin-top: 2px;
+    color: var(--bk-color-link, var(--bk-color-foreground-muted));
+    font-size: 0.92em;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+.cb-tl-node > .cb-edit-parts {
+    margin: 0 0 4px 8px;
+}
+/* Where the work moves to another part of the repository, on the rail. */
+.cb-tl-move {
+    position: relative;
+    margin: 6px 0 4px -22px;
+    padding-left: 22px;
+    color: var(--bk-color-foreground-muted);
+    font-size: 0.92em;
     display: flex;
     align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
+    gap: 4px;
 }
-.cb-step-msg {
-    margin-top: 2px;
-    white-space: pre-wrap;
-    line-height: 1.45;
+.cb-tl-move::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    width: 10px;
+    height: 2px;
+    background: var(--bk-color-border);
+}
+.cb-tl-gap {
+    margin: 4px 0;
+    color: var(--bk-color-foreground-muted);
+    font-size: 0.92em;
+    font-style: italic;
 }
 
 /* ---- a session's edits ------------------------------------------------- */

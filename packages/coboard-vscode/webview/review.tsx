@@ -1,13 +1,16 @@
 /* A lap session as a review: what it was for, what it changed, and how it got
  * there. The files first, with their net change over the session; then the
- * trajectory — every edit in the order it was made, with the reason recorded
- * for it — each opening as the same diff-with-comment a ticket's commit list
+ * trajectory as a timeline (timeline.ts) — every change in the order it was
+ * made, with the reason recorded for it, a restructure's parts drawn as one
+ * node — each opening as the same diff-with-comment a ticket's commit list
  * opens. */
 
 import { Icon } from "baukasten-ui/core";
 import { useState } from "react";
 
-import type { LapReview, LapReviewFile } from "coboard/lap";
+import type { LapReview, LapReviewFile, LapReviewStep } from "coboard/lap";
+import { splitPath } from "../src/commits";
+import { TimelineItem, gapLabel, linesOf, timeline } from "../src/timeline";
 import { IdLink } from "./parts";
 import { send } from "./rpc";
 
@@ -46,6 +49,69 @@ function FileRow(props: { f: LapReviewFile }): JSX.Element {
                 </span>
             </div>
             {open ? <Diff text={f.diff} /> : null}
+        </li>
+    );
+}
+
+const OP_TITLE: Record<string, string> = { create: "created", edit: "edited", delete: "deleted" };
+
+/* One change on the rail. A single step opens its diff; a restructure's parts
+ * are listed under it, each opening its own. */
+function Node(props: { item: Extract<TimelineItem<LapReviewStep>, { kind: "node" }>; purpose: string }): JSX.Element {
+    const [open, setOpen] = useState(false);
+    const { item } = props;
+    const { name, dir } = splitPath(item.file);
+    const many = item.steps.length > 1;
+    const first = item.steps[0];
+    const last = item.steps[item.steps.length - 1];
+    const show = (id: string) => send({ type: "showEdit", commit: id, sessionMsg: props.purpose });
+    const toggle = () => (many ? setOpen(!open) : show(first.id));
+    return (
+        <li className={`cb-tl-node cb-tl-${item.op}`}>
+            <span className="cb-tl-dot" title={OP_TITLE[item.op] ?? item.op} aria-hidden="true">
+                {item.op === "delete" ? <Icon name="close" /> : null}
+            </span>
+            <div
+                className={`cb-tl-card${many ? " cb-tl-many" : ""}`}
+                role="button"
+                tabIndex={0}
+                title={many ? `${item.steps.length} edits: show them` : `Show the diff of ${first.id}`}
+                onClick={toggle}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter") toggle();
+                }}
+            >
+                <div className="cb-edit-head">
+                    <span className="cb-edit-name">{name}</span>
+                    {dir ? <span className="cb-edit-dir">{dir}</span> : null}
+                    {item.op !== "edit" ? <span className="cb-label">{item.op}</span> : null}
+                    {many ? <span className="cb-edit-count">{item.steps.length} edits</span> : null}
+                    <span className="cb-tl-lines">
+                        {item.op === "delete" && !many ? "" : `line${many || first.new_lines !== 1 ? "s" : ""} ${item.steps.map(linesOf).join(" · ")}`}
+                    </span>
+                    <code className="cb-edit-id">{many ? `${first.id}–${last.id}` : first.id}</code>
+                </div>
+                <div className="cb-edit-msg" title={item.msg}>
+                    {item.msg}
+                </div>
+                {many ? (
+                    <div className="cb-tl-more">
+                        <Icon name={open ? "chevron-down" : "chevron-right"} /> {open ? "hide" : "show"} the {item.steps.length} parts
+                    </div>
+                ) : null}
+            </div>
+            {many && open ? (
+                <ol className="cb-edit-parts">
+                    {item.steps.map((s, i) => (
+                        <li key={s.id} className="cb-commit" title={`Show the diff of ${s.id}`} onClick={() => show(s.id)}>
+                            <Icon name="diff" /> <code>{s.id}</code>{" "}
+                            <span className="cb-muted">
+                                part {i + 1} of {item.steps.length} · line{s.new_lines === 1 ? "" : "s"} {linesOf(s)}
+                            </span>
+                        </li>
+                    ))}
+                </ol>
+            ) : null}
         </li>
     );
 }
@@ -96,25 +162,20 @@ export function Review(props: { session: string; ticket: string | null; review: 
 
             <section className="cb-section">
                 <h3>How it got there</h3>
-                <ol className="cb-trajectory">
-                    {r.trajectory.map((step) => (
-                        <li
-                            key={step.id}
-                            className="cb-commit"
-                            title={`Show the diff of ${step.id}`}
-                            onClick={() => send({ type: "showEdit", commit: step.id, sessionMsg: r.purpose })}
-                        >
-                            <div className="cb-step-head">
-                                <Icon name="diff" /> <code>{step.id}</code> <code>{step.file}</code>
-                                <span className="cb-muted">
-                                    {" "}
-                                    {step.op}
-                                    {step.new_lines > 0 ? ` · line ${step.new_start}${step.new_lines > 1 ? `–${step.new_start + step.new_lines - 1}` : ""}` : ""}
-                                </span>
-                            </div>
-                            <div className="cb-step-msg">{step.msg}</div>
-                        </li>
-                    ))}
+                <ol className="cb-tl">
+                    {timeline(r.trajectory).map((item, i) =>
+                        item.kind === "node" ? (
+                            <Node key={item.steps[0].id} item={item} purpose={r.purpose} />
+                        ) : item.kind === "move" ? (
+                            <li key={`move-${i}`} className="cb-tl-move">
+                                <Icon name="arrow-right" /> <code>{item.area || "the repository root"}</code>
+                            </li>
+                        ) : (
+                            <li key={`gap-${i}`} className="cb-tl-gap">
+                                {gapLabel(item.ms)}
+                            </li>
+                        ),
+                    )}
                 </ol>
             </section>
         </article>
