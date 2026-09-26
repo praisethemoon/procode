@@ -12,6 +12,8 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <stdlib.h>
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -136,6 +138,23 @@ bool plat_getcwd(char *buf, size_t bufsz) {
     return true;
 #else
     return getcwd(buf, bufsz) != NULL;
+#endif
+}
+
+bool plat_realpath(const char *path, char *out, size_t outsz) {
+#ifdef _WIN32
+    char wb[KB_PATH_MAX];
+    if (!_fullpath(out, winpath(wb, sizeof wb, path), outsz))
+        return false;
+    for (char *p = out; *p; p++)
+        if (*p == '\\')
+            *p = '/';
+    return plat_is_dir(out) || plat_is_file(out);
+#else
+    char buf[PATH_MAX];
+    if (!realpath(path, buf))
+        return false;
+    return snprintf(out, outsz, "%s", buf) < (int)outsz;
 #endif
 }
 

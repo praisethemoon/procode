@@ -510,6 +510,50 @@ expect_grep '"error":"not_found"' cat away.txt
 [ ! -s "$HOME/.kb/documents.jsonl" ] || fail "add wrote to the home store"
 rm -rf "$AWAY"
 
+# A home directory of the run's own whose .kb holds only the machine's
+# models, as it does once a model is installed, and a workspace under it with
+# no store. Every command here gets that HOME; the run's usual HOME and the
+# developer's are never involved.
+HT=$(mktemp -d "${TMPDIR:-/tmp}/kb-home.XXXXXX") || exit 1
+[ -n "$HT" ] && [ -d "$HT" ] || exit 1
+H="$HT/home"
+mkdir -p "$H/.kb/models" "$H/ws"
+inws() { ( cd "$H/ws" && HOME="$H" "$KB" "$@" ); }
+
+t "the home directory's models folder is not a store"
+inws ls --json > away.txt 2>&1
+expect_grep '"error":"not_found"' cat away.txt
+inws status --json > away.txt 2>&1
+expect_grep '"path":null' cat away.txt
+
+t "an add under the home directory is refused, and nothing is written there"
+printf 'x\n' | inws add --title t --collection c --json > away.txt 2>&1
+expect_grep '"error":"not_found"' cat away.txt
+[ ! -e "$H/.kb/documents.jsonl" ] || fail "add wrote a log into the home directory's .kb"
+[ ! -e "$H/.kb/blobs" ] || fail "add wrote blobs into the home directory's .kb"
+[ "$(ls -A "$H/.kb")" = "models" ] || fail "the home directory's .kb holds more than models: $(ls -A "$H/.kb")"
+
+t "logs planted in the home directory's .kb do not make it a store"
+: > "$H/.kb/documents.jsonl"
+: > "$H/.kb/sources.jsonl"
+inws ls --json > away.txt 2>&1
+expect_grep '"error":"not_found"' cat away.txt
+rm -f "$H/.kb/documents.jsonl" "$H/.kb/sources.jsonl"
+
+t "kb init refuses to make a store in the home directory"
+( cd "$H" && HOME="$H" "$KB" init --json ) > away.txt 2>&1
+expect_grep '"error":"init_failed"' cat away.txt
+expect_grep 'models' cat away.txt
+[ ! -e "$H/.kb/documents.jsonl" ] || fail "init wrote a store into the home directory"
+
+t "a workspace under the home directory uses its own store"
+inws init > /dev/null
+printf 'own words\n' | inws add --title own --collection c > /dev/null
+inws ls --json > away.txt 2>&1
+expect_grep '"title":"own"' cat away.txt
+[ ! -e "$H/.kb/documents.jsonl" ] || fail "the workspace's add reached the home directory"
+rm -rf "$HT"
+
 t "--store is not an option on any command"
 for c in "ls" "get D-1" "search port" "chunk C-1" "collections" "stats" \
          "stale" "refresh" "links D-1" "rebuild" "reindex" "compact" \

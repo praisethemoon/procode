@@ -9,6 +9,8 @@ import { test } from "node:test";
 
 import { Kb } from "kb-js";
 
+import { TEST_ENV } from "./home";
+
 import { extractPdf, isPdf, pageText, pdfMarkdown } from "../pdf";
 
 const KB = path.resolve(__dirname, "../../../../cli/kb-cli/bin/kb");
@@ -90,7 +92,7 @@ test("a PDF is read by pdf.js and filed so its pages are searchable", { skip: !f
     assert.match(paper.markdown, /## Page 2\n\nRings\nio_uring shares a zzsubmission ring with the kernel\.\n\nA second paragraph\./);
 
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-pdf-"));
-    const kb = new Kb({ bin: KB, cwd: dir });
+    const kb = new Kb({ bin: KB, cwd: dir, env: TEST_ENV });
     await kb.init();
     const file = path.join(dir, "notes.pdf");
     fs.writeFileSync(file, pdf);

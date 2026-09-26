@@ -43,6 +43,13 @@ import { Server } from "../server";
 
 const BIN = path.resolve(__dirname, "..", "..", "..", "..", "cli", "kb-cli", "bin", "kb");
 
+/* One throwaway home for every kb this file starts: the CLI reads HOME to
+ * find ~/.kb/models (§8), and a model on the developer's machine must not
+ * change what these tests see, nor may anything here reach their home. */
+const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "kb-mcp-home-"));
+process.on("exit", () => fs.rmSync(HOME, { recursive: true, force: true }));
+const ENV: NodeJS.ProcessEnv = { ...process.env, HOME };
+
 function built(): boolean {
     return fs.existsSync(BIN);
 }
@@ -67,9 +74,9 @@ function workspace(): Work {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-mcp-real-"));
     const project = path.join(dir, "project");
     fs.mkdirSync(project);
-    execFileSync(BIN, ["init", "--json"], { cwd: project });
+    execFileSync(BIN, ["init", "--json"], { cwd: project, env: ENV });
     return {
-        server: new Server(new Kb({ bin: BIN, cwd: project })),
+        server: new Server(new Kb({ bin: BIN, cwd: project, env: ENV })),
         dir: project,
         dispose: () => fs.rmSync(dir, { recursive: true, force: true }),
     };
@@ -265,7 +272,7 @@ test("with no store to find, kb_add is a refusal that tells the agent to run kb 
                 break;
             }
         }
-        const server = new Server(new Kb({ bin: BIN, cwd: dir }));
+        const server = new Server(new Kb({ bin: BIN, cwd: dir, env: ENV }));
         const result = await call({ server, dir, dispose: () => undefined }, "kb_add", {
             documents: [{ title: "IOCP", content: IOCP, collection: "win32-iocp" }],
         });
@@ -436,7 +443,7 @@ test("a tool answers every field the reader it is built on answered", async (t) 
     }
     const work = workspace();
     try {
-        const kb = new Kb({ bin: BIN, cwd: work.dir });
+        const kb = new Kb({ bin: BIN, cwd: work.dir, env: ENV });
         await call(work, "kb_add", {
             documents: [
                 { title: "IOCP", content: IOCP, collection: "win32-iocp", mime: "text/markdown" },

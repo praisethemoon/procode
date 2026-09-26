@@ -3,6 +3,9 @@
 #include "errdet.h"
 #include "sha256.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 /* Collapses ".", "..", doubled slashes; converts '\\' to '/'. Adapted from
  * lap's repo.c, which normalizes paths for the same reason: the walk up to
  * the filesystem root is a string operation, and it is only correct on a
@@ -98,6 +101,48 @@ static bool at_filesystem_root(const char *dir) {
     return false;
 }
 
+/* The directory the home directory resolves to, or false when there is no
+ * home. `HOME` may be a symbolic link to where the working directory really
+ * is, so both sides are compared canonically. */
+static bool home_dir(char *out, size_t outsz) {
+    const char *home = getenv("HOME");
+#ifdef _WIN32
+    if (!home || !home[0])
+        home = getenv("USERPROFILE");
+#endif
+    return home && home[0] && plat_realpath(home, out, outsz);
+}
+
+/* Whether `probe`, a directory named `.kb` in `parent`, is a store.
+ *
+ * ONLY WHAT `kb init` MADE. `store_create` writes the documents log from the
+ * start, so every real store has one; a `.kb` directory without it — the
+ * home directory's, which holds only `models/`, or any stray one — is walked
+ * past like a plain file named `.kb` is.
+ *
+ * AND NEVER THE HOME DIRECTORY'S. `~/.kb` is the machine's models (§8), and
+ * §1.4 has no store in the home directory: were it a store, every folder
+ * under the home directory without one of its own would read and write
+ * there. Refused even when it holds logs, so that a store a buggy version
+ * wrote there is not adopted either. */
+bool store_is_store(const char *parent, const char *probe) {
+    char home[KB_PATH_MAX];
+    char here[KB_PATH_MAX];
+    if (home_dir(home, sizeof home) && plat_realpath(parent, here, sizeof here) && strcmp(home, here) == 0)
+        return false;
+    char log[KB_PATH_MAX];
+    if (snprintf(log, sizeof log, "%s/%s", probe, KB_DOCUMENTS_NAME) >= (int)sizeof log)
+        return false;
+    return plat_is_dir(probe) && plat_is_file(log);
+}
+
+/* Whether `dir` is the home directory, where §1.4 allows no store. */
+bool store_is_home(const char *dir) {
+    char home[KB_PATH_MAX];
+    char here[KB_PATH_MAX];
+    return home_dir(home, sizeof home) && plat_realpath(dir, here, sizeof here) && strcmp(home, here) == 0;
+}
+
 bool store_find(char *out, size_t outsz) {
     char cwd[KB_PATH_MAX];
     if (!plat_getcwd(cwd, sizeof cwd))
@@ -112,9 +157,11 @@ bool store_find(char *out, size_t outsz) {
                                 at_filesystem_root(dir) ? "" : "/", KB_DIR);
         if (need >= (int32_t)sizeof probe)
             return false;
-        /* A plain file named .kb is not a store. Walking on past it is the
-         * point: a stray file must not shadow a real store further up. */
-        if (plat_is_dir(probe)) {
+        /* A plain file named .kb is not a store, nor is a directory that
+         * `kb init` did not make, nor the home directory's (store_is_store).
+         * Walking on past them is the point: nothing stray may shadow a real
+         * store further up. */
+        if (store_is_store(dir, probe)) {
             snprintf(out, outsz, "%s", probe);
             return true;
         }

@@ -14,6 +14,9 @@ bool plat_mkdirs(const char *path);      /* mkdir -p */
 bool plat_remove_file(const char *path);
 bool plat_remove_dir(const char *path); /* must already be empty */
 bool plat_getcwd(char *buf, size_t bufsz);
+/* The canonical absolute path of an existing path, symbolic links resolved
+ * and separators as '/'. False when it does not exist. */
+bool plat_realpath(const char *path, char *out, size_t outsz);
 
 /* Reads the whole file (binary-safe). *data gets a NUL-terminated buffer,
  * *len the byte count excluding the NUL. Returns false if unreadable or

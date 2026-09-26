@@ -10,10 +10,15 @@
  * `.kb/` found by walking up from the working directory, and every test that
  * runs the binary runs it inside a throwaway directory where `kb init` has
  * just made one — so the store it finds is the temporary one, and it exists
- * only for the length of the run. The CLI reads neither `HOME` nor a
- * `KB_STORE`, so there is no second place for a write to land: a test that
- * wrote into somebody's own `.kb/` would be a test that files their research
- * under `win32-iocp` every time it ran.
+ * only for the length of the run. The CLI reads no `KB_STORE`, so there is
+ * no second place for a write to land: a test that wrote into somebody's own
+ * `.kb/` would be a test that files their research under `win32-iocp` every
+ * time it ran.
+ *
+ * NOR THE DEVELOPER'S HOME. The CLI reads `HOME` to find `~/.kb/models`
+ * (§8), so every run here gets a throwaway `HOME` (`ENV` below): a model
+ * installed on the machine must not change what these tests see, and nothing
+ * they do may reach the real home directory.
  *
  * IT SKIPS RATHER THAN FAILS WHEN THE BINARY IS NOT BUILT. `kb-js` is
  * installable on its own, and a suite that could not pass without a C
@@ -33,6 +38,11 @@ import { addBatchArgv, batchLines, deleteCollectionArgv, forgetArgv, lsArgv, ref
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const BIN = path.resolve(ROOT, "..", "..", "cli", "kb-cli", "bin", "kb");
+
+/* One throwaway home for every kb this file starts. */
+const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "kb-js-home-"));
+process.on("exit", () => fs.rmSync(HOME, { recursive: true, force: true }));
+const ENV: NodeJS.ProcessEnv = { ...process.env, HOME };
 
 function built(): boolean {
     return fs.existsSync(BIN);
@@ -59,11 +69,11 @@ function workspace(): Work {
     /* The working directory is inside the throwaway, and that is the whole
      * of the store selection: §1.4 walks up from it and finds the `.kb/` that
      * `kb.init()` creates there. */
-    const kb = new Kb({ bin: BIN, cwd: project, env: { ...process.env } });
+    const kb = new Kb({ bin: BIN, cwd: project, env: { ...ENV } });
     return {
         dir: project,
         kb,
-        env: { ...process.env },
+        env: { ...ENV },
         dispose: () => fs.rmSync(dir, { recursive: true, force: true }),
     };
 }

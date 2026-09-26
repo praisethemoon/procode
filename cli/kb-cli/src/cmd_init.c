@@ -47,6 +47,14 @@ int32_t cmd_init(Arena *a, int32_t argc, char **argv) {
      * — silently succeeding would let a script believe it had a fresh store
      * and then be surprised by what is in it. Nothing is overwritten either
      * way; the logs are the truth and init never touches an existing one. */
+    /* THE HOME DIRECTORY'S `.kb` IS THE MACHINE'S MODELS (§8), and §1.4 has
+     * no store there: one would be found by every folder under the home
+     * directory that has none of its own. */
+    if (store_is_home(here)) {
+        err_out(json, "init_failed",
+                "the home directory holds kb's models, not a store; run kb init in a workspace");
+        return KB_EXIT_ERR;
+    }
     if (plat_is_dir(dir)) {
         /* `init_failed`, not a code of this command's own invention. §11's
          * table is not the whole vocabulary — the CLI also prints

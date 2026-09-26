@@ -11,6 +11,8 @@ import { test } from "node:test";
 
 import { Kb } from "kb-js";
 
+import { TEST_ENV } from "./home";
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Module = require("node:module") as { _load: (req: string, parent: unknown, isMain: boolean) => unknown };
 
@@ -36,7 +38,7 @@ function load(): Pick<Commands, "refreshDocument" | "fetchPage"> {
 
 test("a document is refreshed from its own source", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-refresh-"));
-    const kb = new Kb({ bin: KB, cwd: dir });
+    const kb = new Kb({ bin: KB, cwd: dir, env: TEST_ENV });
     await kb.init();
     const { refreshDocument } = load();
 
@@ -104,7 +106,7 @@ test("a page is refreshed conditionally on its etag, and a failure files nothing
     const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/iocp`;
     try {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-url-"));
-        const kb = new Kb({ bin: KB, cwd: dir });
+        const kb = new Kb({ bin: KB, cwd: dir, env: TEST_ENV });
         await kb.init();
         const { refreshDocument, fetchPage } = load();
 

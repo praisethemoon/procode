@@ -92,7 +92,15 @@ One store, and it belongs to the workspace.
 There is no store in the home directory and no environment variable naming
 one. `kb init` creates `.kb/` in the current directory; every other command
 uses the first `.kb/` at or above it, and fails with `not_found` when there is
-none rather than filing or reading anywhere else. Research that should outlive
+none rather than filing or reading anywhere else.
+
+A `.kb/` counts as a store only when `kb init` made it (it holds
+`documents.jsonl` from the start), and **the home directory's `.kb/` never
+does**: it holds the machine's models (§8), and were it a store, every folder
+under the home directory without one of its own would read and write there.
+Discovery walks past both, as it walks past a plain file named `.kb`, and
+`kb init` in the home directory is refused with `init_failed`. No command
+creates a store implicitly. Research that should outlive
 a project is kept by committing its `.kb/` (§1.5), not by a second, shared
 tier.
 

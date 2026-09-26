@@ -69,6 +69,11 @@ typedef struct {
  * outside it.
  */
 bool store_find(char *out, size_t outsz);
+/* Whether `probe` (`<parent>/.kb`) is a store: made by `kb init`, and never
+ * the home directory's, which holds the machine's models. */
+bool store_is_store(const char *parent, const char *probe);
+/* Whether `dir` is the home directory, where there is no store (§1.4). */
+bool store_is_home(const char *dir);
 /* Absolute, '/'-separated, with "." and ".." collapsed. A locator has to be
  * the same string every time the same thing is filed, or idempotency by
  * locator means nothing. */

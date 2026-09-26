@@ -89,6 +89,68 @@ static void test_discovery(Arena *a) {
     tmp_rm(a, other);
 }
 
+/* HOME, set for one test and put back: the tests below make a home
+ * directory of their own under the temporary root and never read or write
+ * the real one. */
+static void set_home(const char *value) {
+#ifdef _WIN32
+    _putenv_s("HOME", value ? value : "");
+#else
+    if (value)
+        setenv("HOME", value, 1);
+    else
+        unsetenv("HOME");
+#endif
+}
+
+static void test_discovery_home(Arena *a) {
+    char root[KB_PATH_MAX];
+    tmp_dir(root, sizeof root);
+    char cwd_before[KB_PATH_MAX];
+    plat_getcwd(cwd_before, sizeof cwd_before);
+    const char *was = getenv("HOME");
+    char *saved = was ? arena_printf(a, "%s", was) : NULL;
+    char err[512];
+
+    /* A home directory with only the machine's models in its .kb, and a
+     * workspace under it with no store of its own. */
+    char *home = jn(a, root, "home");
+    ASSERT_TRUE(plat_mkdirs(jn(a, home, ".kb/models")));
+    char *ws = jn(a, home, "ws/deep");
+    ASSERT_TRUE(plat_mkdirs(ws));
+    set_home(home);
+
+    t_begin("store: the home directory's .kb (its models) is not a store");
+    ASSERT_EQ_I(chdir(ws), 0);
+    char none[KB_PATH_MAX];
+    ASSERT_TRUE(!store_find(none, sizeof none));
+
+    t_begin("store: nor is it one when something has written logs into it");
+    ASSERT_TRUE(plat_write_file_atomic(jn(a, home, ".kb/" KB_DOCUMENTS_NAME), "", 0));
+    ASSERT_TRUE(plat_write_file_atomic(jn(a, home, ".kb/" KB_SOURCES_NAME), "", 0));
+    ASSERT_TRUE(!store_find(none, sizeof none));
+    ASSERT_TRUE(store_is_home(home));
+    ASSERT_TRUE(!store_is_home(ws));
+
+    t_begin("store: a workspace under the home directory finds its own store");
+    char *proj = jn(a, home, "ws");
+    ASSERT_TRUE(store_create(a, jn(a, proj, KB_DIR), err, sizeof err));
+    char found[KB_PATH_MAX];
+    ASSERT_TRUE(store_find(found, sizeof found));
+    ASSERT_TRUE(strstr(found, "/ws/" KB_DIR) != NULL);
+
+    t_begin("store: a .kb directory kb init did not make is walked past");
+    char *stray = jn(a, ws, KB_DIR);
+    ASSERT_TRUE(plat_mkdirs(jn(a, stray, "blobs")));
+    char found2[KB_PATH_MAX];
+    ASSERT_TRUE(store_find(found2, sizeof found2));
+    ASSERT_EQ_S(found2, found);
+
+    set_home(saved);
+    chdir(cwd_before);
+    tmp_rm(a, root);
+}
+
 /* ---- identifiers ------------------------------------------------------ */
 
 static void test_ids(Arena *a) {
@@ -415,6 +477,7 @@ static void test_layout(Arena *a) {
 void test_store(void) {
     Arena *a = arena_new(1 << 16);
     test_discovery(a);
+    test_discovery_home(a);
     test_ids(a);
     test_lock(a);
     test_torn_append(a);

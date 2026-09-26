@@ -12,6 +12,8 @@ import { test } from "node:test";
 
 import { Kb } from "kb-js";
 
+import { TEST_ENV } from "./home";
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Module = require("node:module") as { _load: (req: string, parent: unknown, isMain: boolean) => unknown };
 
@@ -34,7 +36,7 @@ function loadHost(): Host {
 async function ask(dir: string, bin: string, op: string, input: unknown = {}): Promise<Record<string, unknown>> {
     const host = loadHost();
     const posted: Record<string, unknown>[] = [];
-    const client = new Kb({ bin, cwd: dir });
+    const client = new Kb({ bin, cwd: dir, env: TEST_ENV });
     const ctx = {
         extensionUri: {},
         client: () => client,
@@ -67,7 +69,7 @@ test("a folder with no store is marked as having none, not shown as a refusal", 
 
 test("something missing inside a store stays a plain refusal", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
     const dir = tmp();
-    await new Kb({ bin: KB, cwd: dir }).init();
+    await new Kb({ bin: KB, cwd: dir, env: TEST_ENV }).init();
     const r = await ask(dir, KB, "get", { id: "D-99" });
     assert.equal(r["kind"], "failed");
     const error = r["error"] as { code: string; noStore?: boolean };
