@@ -2,17 +2,10 @@
 
 #include "gguf.h"
 
-/* SIMD is chosen at compile time and only where the target guarantees it
- * (NEON is part of every AArch64 CPU). Everything else, and any build with
- * KB_NO_SIMD defined (`make SIMD=0`), takes the portable C loops, which
- * compute the same values up to rounding. */
-#if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(KB_NO_SIMD)
-#include <arm_neon.h>
-#define QUANT_NEON 1
-#endif
+#include "simd.h"
 
 bool quant_simd(void) {
-#ifdef QUANT_NEON
+#ifdef KB_SIMD4
     return true;
 #else
     return false;
@@ -234,17 +227,15 @@ bool quant_row(uint32_t t, const uint8_t *src, uint64_t n, float *out) {
  * answer rather than a change in the speed.
  */
 static float dot256(const float *w, const float *x) {
-#ifdef QUANT_NEON
-    float32x4_t a0 = vdupq_n_f32(0.0f), a1 = vdupq_n_f32(0.0f);
-    float32x4_t a2 = vdupq_n_f32(0.0f), a3 = vdupq_n_f32(0.0f);
+#ifdef KB_SIMD4
+    v4f a0 = v4_zero(), a1 = a0, a2 = a0, a3 = a0;
     for (int32_t k = 0; k < QK_K; k += 16) {
-        a0 = vfmaq_f32(a0, vld1q_f32(w + k), vld1q_f32(x + k));
-        a1 = vfmaq_f32(a1, vld1q_f32(w + k + 4), vld1q_f32(x + k + 4));
-        a2 = vfmaq_f32(a2, vld1q_f32(w + k + 8), vld1q_f32(x + k + 8));
-        a3 = vfmaq_f32(a3, vld1q_f32(w + k + 12), vld1q_f32(x + k + 12));
+        a0 = v4_madd(a0, v4_load(w + k), v4_load(x + k));
+        a1 = v4_madd(a1, v4_load(w + k + 4), v4_load(x + k + 4));
+        a2 = v4_madd(a2, v4_load(w + k + 8), v4_load(x + k + 8));
+        a3 = v4_madd(a3, v4_load(w + k + 12), v4_load(x + k + 12));
     }
-    float32x4_t s = vaddq_f32(vaddq_f32(a0, a1), vaddq_f32(a2, a3));
-    return vaddvq_f32(s);
+    return v4_sum(v4_add(v4_add(a0, a1), v4_add(a2, a3)));
 #else
     float a0 = 0.0f, a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;
     for (int32_t k = 0; k < QK_K; k += 4) {
@@ -343,36 +334,28 @@ static float dot_n(const float *w, const float *x, uint64_t m) {
     return s;
 }
 
-#ifdef QUANT_NEON
+#ifdef KB_SIMD4
 /* acc[r][t] = sum over m of w[r] · x[t]. */
 static void f16_block(const float *w, uint64_t ws, const float *const *x, uint64_t m,
                       float acc[F16_ROWS][F16_TOKS]) {
-    float32x4_t c00 = vdupq_n_f32(0.0f), c01 = c00, c02 = c00, c03 = c00;
-    float32x4_t c10 = c00, c11 = c00, c12 = c00, c13 = c00;
-    float32x4_t c20 = c00, c21 = c00, c22 = c00, c23 = c00;
-    float32x4_t c30 = c00, c31 = c00, c32 = c00, c33 = c00;
+    v4f c[F16_ROWS][F16_TOKS];
+    for (int32_t r = 0; r < F16_ROWS; r++)
+        for (int32_t t = 0; t < F16_TOKS; t++)
+            c[r][t] = v4_zero();
     for (uint64_t k = 0; k < m; k += 4) {
-        const float32x4_t w0 = vld1q_f32(w + k), w1 = vld1q_f32(w + ws + k);
-        const float32x4_t w2 = vld1q_f32(w + 2 * ws + k), w3 = vld1q_f32(w + 3 * ws + k);
-        const float32x4_t x0 = vld1q_f32(x[0] + k), x1 = vld1q_f32(x[1] + k);
-        const float32x4_t x2 = vld1q_f32(x[2] + k), x3 = vld1q_f32(x[3] + k);
-        c00 = vfmaq_f32(c00, w0, x0); c01 = vfmaq_f32(c01, w0, x1);
-        c02 = vfmaq_f32(c02, w0, x2); c03 = vfmaq_f32(c03, w0, x3);
-        c10 = vfmaq_f32(c10, w1, x0); c11 = vfmaq_f32(c11, w1, x1);
-        c12 = vfmaq_f32(c12, w1, x2); c13 = vfmaq_f32(c13, w1, x3);
-        c20 = vfmaq_f32(c20, w2, x0); c21 = vfmaq_f32(c21, w2, x1);
-        c22 = vfmaq_f32(c22, w2, x2); c23 = vfmaq_f32(c23, w2, x3);
-        c30 = vfmaq_f32(c30, w3, x0); c31 = vfmaq_f32(c31, w3, x1);
-        c32 = vfmaq_f32(c32, w3, x2); c33 = vfmaq_f32(c33, w3, x3);
+        const v4f x0 = v4_load(x[0] + k), x1 = v4_load(x[1] + k);
+        const v4f x2 = v4_load(x[2] + k), x3 = v4_load(x[3] + k);
+        for (int32_t r = 0; r < F16_ROWS; r++) {
+            const v4f wr = v4_load(w + (uint64_t)r * ws + k);
+            c[r][0] = v4_madd(c[r][0], wr, x0);
+            c[r][1] = v4_madd(c[r][1], wr, x1);
+            c[r][2] = v4_madd(c[r][2], wr, x2);
+            c[r][3] = v4_madd(c[r][3], wr, x3);
+        }
     }
-    acc[0][0] = vaddvq_f32(c00); acc[0][1] = vaddvq_f32(c01);
-    acc[0][2] = vaddvq_f32(c02); acc[0][3] = vaddvq_f32(c03);
-    acc[1][0] = vaddvq_f32(c10); acc[1][1] = vaddvq_f32(c11);
-    acc[1][2] = vaddvq_f32(c12); acc[1][3] = vaddvq_f32(c13);
-    acc[2][0] = vaddvq_f32(c20); acc[2][1] = vaddvq_f32(c21);
-    acc[2][2] = vaddvq_f32(c22); acc[2][3] = vaddvq_f32(c23);
-    acc[3][0] = vaddvq_f32(c30); acc[3][1] = vaddvq_f32(c31);
-    acc[3][2] = vaddvq_f32(c32); acc[3][3] = vaddvq_f32(c33);
+    for (int32_t r = 0; r < F16_ROWS; r++)
+        for (int32_t t = 0; t < F16_TOKS; t++)
+            acc[r][t] = v4_sum(c[r][t]);
 }
 #else
 static void f16_block(const float *w, uint64_t ws, const float *const *x, uint64_t m,

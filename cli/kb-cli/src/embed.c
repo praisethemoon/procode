@@ -6,10 +6,7 @@
 
 #include <math.h>
 
-#if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(KB_NO_SIMD)
-#include <arm_neon.h>
-#define EMBED_NEON 1
-#endif
+#include "simd.h"
 
 /* ---- finding the weights ------------------------------------------------ */
 
@@ -619,15 +616,15 @@ typedef struct {
 static float dot_head(const float *a, const float *b, uint32_t n) {
     uint32_t i = 0;
     float s = 0.0f;
-#ifdef EMBED_NEON
-    float32x4_t s0 = vdupq_n_f32(0.0f), s1 = s0, s2 = s0, s3 = s0;
+#ifdef KB_SIMD4
+    v4f s0 = v4_zero(), s1 = s0, s2 = s0, s3 = s0;
     for (; i + 16 <= n; i += 16) {
-        s0 = vfmaq_f32(s0, vld1q_f32(a + i), vld1q_f32(b + i));
-        s1 = vfmaq_f32(s1, vld1q_f32(a + i + 4), vld1q_f32(b + i + 4));
-        s2 = vfmaq_f32(s2, vld1q_f32(a + i + 8), vld1q_f32(b + i + 8));
-        s3 = vfmaq_f32(s3, vld1q_f32(a + i + 12), vld1q_f32(b + i + 12));
+        s0 = v4_madd(s0, v4_load(a + i), v4_load(b + i));
+        s1 = v4_madd(s1, v4_load(a + i + 4), v4_load(b + i + 4));
+        s2 = v4_madd(s2, v4_load(a + i + 8), v4_load(b + i + 8));
+        s3 = v4_madd(s3, v4_load(a + i + 12), v4_load(b + i + 12));
     }
-    s = vaddvq_f32(vaddq_f32(vaddq_f32(s0, s1), vaddq_f32(s2, s3)));
+    s = v4_sum(v4_add(v4_add(s0, s1), v4_add(s2, s3)));
 #endif
     for (; i < n; i++)
         s += a[i] * b[i];
@@ -636,10 +633,10 @@ static float dot_head(const float *a, const float *b, uint32_t n) {
 
 static void add_scaled(float *y, float p, const float *x, uint32_t n) {
     uint32_t i = 0;
-#ifdef EMBED_NEON
-    const float32x4_t pv = vdupq_n_f32(p);
+#ifdef KB_SIMD4
+    const v4f pv = v4_set1(p);
     for (; i + 4 <= n; i += 4)
-        vst1q_f32(y + i, vfmaq_f32(vld1q_f32(y + i), pv, vld1q_f32(x + i)));
+        v4_store(y + i, v4_madd(v4_load(y + i), pv, v4_load(x + i)));
 #endif
     for (; i < n; i++)
         y[i] += p * x[i];
