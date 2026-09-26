@@ -49,6 +49,7 @@ export {
     KbCrash,
     KbError,
     KbErrorCode,
+    KbErrorDetails,
     SPEC_ERROR_CODES,
     SpecErrorCode,
     isKbCrash,

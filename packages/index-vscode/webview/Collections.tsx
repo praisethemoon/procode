@@ -28,7 +28,17 @@ import { KbCollection, KbDocument } from "kb-js/pure";
 
 import { CollectionRow, collectionRows, formatBytes, formatDate } from "../src/view/facts";
 import { Codicon, Resolved, useQuery } from "./parts";
-import { addFiles, call, confirm, notify, scope } from "./rpc";
+import { StoreRefusal, addFiles, call, confirm, notify, scope } from "./rpc";
+
+/* The document count from a `collection_in_use` refusal, or null for any
+ * other failure. */
+function inUse(e: unknown): number | null {
+    if (!(e instanceof StoreRefusal) || e.error.code !== "collection_in_use") {
+        return null;
+    }
+    const documents = e.error.details?.["documents"];
+    return typeof documents === "number" ? documents : null;
+}
 
 function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element {
     const row = props.row;
@@ -56,24 +66,27 @@ function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element 
             .catch((e: unknown) => problem(e, "rename a collection"));
     };
 
+    /* The store is asked first without the documents. An empty collection
+     * simply goes; one that holds documents is refused with §11's
+     * `collection_in_use`, and the count in that refusal — the store's, as of
+     * now, not the row's as of the last refresh — is what the reader confirms
+     * before the documents are forgotten with it. */
     const remove = (): void => {
-        void confirm(
-            `Forget the collection “${row.name}”?`,
-            /* The count is in the confirmation because it is the fact somebody
-             * deciding needs, and §11's `collection_in_use` carries the same
-             * number when the store refuses. */
-            `${row.documents} document${row.documents === 1 ? "" : "s"}, ${formatBytes(row.bytes)}. The documents go with it.`,
-            "Forget",
-        ).then((confirmed) => {
-            if (!confirmed) {
-                return;
-            }
-            /* The confirmation above names the documents that go with it, so
-             * the store is asked to forget them rather than to refuse. */
-            call("deleteCollection", { name: row.name, withDocuments: true })
-                .then(() => props.onChanged())
-                .catch((e: unknown) => problem(e, "delete a collection"));
-        });
+        const forget = (withDocuments: boolean): Promise<void> =>
+            call("deleteCollection", { name: row.name, withDocuments }).then(() => props.onChanged());
+        forget(false)
+            .catch((e: unknown) => {
+                const held = inUse(e);
+                if (held === null) {
+                    throw e;
+                }
+                return confirm(
+                    `Forget the collection “${row.name}”?`,
+                    `It holds ${held} document${held === 1 ? "" : "s"}, and they are forgotten with it.`,
+                    "Forget",
+                ).then((confirmed) => (confirmed ? forget(true) : undefined));
+            })
+            .catch((e: unknown) => problem(e, "delete a collection"));
     };
 
     return (

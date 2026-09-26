@@ -111,6 +111,9 @@ static int32_t collection_write(Arena *a, bool json, const char *from,
          * topic forgets what it holds, so that is asked for by name rather
          * than done because a collection happened to be non-empty. */
         store_close(&s);
+        errdet_begin("collection_in_use");
+        errdet_str("collection", from);
+        errdet_int("documents", (int64_t)ndocs);
         err_out(json, "collection_in_use",
                 "\"%s\" still holds %lu document%s; pass --with-documents to "
                 "forget them with it",

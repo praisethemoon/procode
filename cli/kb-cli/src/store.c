@@ -1,5 +1,6 @@
 #include "store.h"
 
+#include "errdet.h"
 #include "sha256.h"
 
 /* Collapses ".", "..", doubled slashes; converts '\\' to '/'. Adapted from
@@ -360,6 +361,10 @@ bool store_open(Arena *a, Store *s, const char *dir, bool for_write, char *err,
                 snprintf(err, errsz, "store %s is locked by another process",
                          dir);
             *code = "store_locked";
+            errdet_begin("store_locked");
+            errdet_str("store", dir);
+            if (holder > 0)
+                errdet_int("pid", holder);
             return false;
         }
         /* Before anything is read and long before anything is appended: a

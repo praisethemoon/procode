@@ -1,5 +1,6 @@
 #include "cmd.h"
 
+#include "errdet.h"
 #include "sha256.h"
 
 #include <stdarg.h>
@@ -117,7 +118,13 @@ void err_out(bool json_mode, const char *code, const char *fmt, ...) {
             else
                 putchar(*p);
         }
-        fputs("\"}\n", stdout);
+        fputc('"', stdout);
+        const char *details = errdet_json(code);
+        if (details) {
+            fputs(",\"details\":", stdout);
+            fputs(details, stdout);
+        }
+        fputs("}\n", stdout);
     } else {
         fputs("error: ", stderr);
         /* the message is half ours and half not — most of them name a path —

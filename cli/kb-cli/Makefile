@@ -21,7 +21,7 @@ LDLIBS := -lm
 PREFIX ?= /usr/local
 DESTDIR ?=
 
-SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/platform.c \
+SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/errdet.c src/platform.c \
            src/doc.c src/store.c src/chunk.c src/token.c src/fts.c \
            src/snippet.c \
            src/rank.c src/cmd_common.c \

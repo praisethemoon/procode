@@ -19,6 +19,7 @@ set(KB_LIB_SOURCES
     src/str.c
     src/sha256.c
     src/json.c
+    src/errdet.c
     src/platform.c
     src/doc.c
     src/store.c

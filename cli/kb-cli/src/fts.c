@@ -1,5 +1,6 @@
 #include "fts.h"
 
+#include "errdet.h"
 #include "sha256.h"
 
 #include <math.h>
@@ -478,6 +479,15 @@ void fts_store_digest(const Store *s, ChunkParams cp, char out[65]) {
     out[64] = '\0';
 }
 
+/* §11's index_stale names the structures that need rebuilding. The keyword
+ * index is the only one this file knows about. */
+static void stale_details(const char *path) {
+    static const char *const structures[] = {"keyword"};
+    errdet_begin("index_stale");
+    errdet_strs("structures", structures, 1);
+    errdet_str("path", path);
+}
+
 bool fts_open_store(Arena *a, const Store *s, FtsIndex *out, const char **code,
                     char *err, size_t errsz) {
     /* An index over no documents is empty whatever is on disk, so a store
@@ -498,6 +508,7 @@ bool fts_open_store(Arena *a, const Store *s, FtsIndex *out, const char **code,
     if (!fts_load(a, path, out, code, why, sizeof why)) {
         snprintf(err, errsz, "store %s: fts.db %s (run \"kb rebuild\")",
                  s->dir, why);
+        stale_details(path);
         return false;
     }
     ChunkParams cp = store_chunk_params(a, s);
@@ -509,6 +520,7 @@ bool fts_open_store(Arena *a, const Store *s, FtsIndex *out, const char **code,
                  "store %s: fts.db no longer describes the logs "
                  "(run \"kb rebuild\")",
                  s->dir);
+        stale_details(path);
         return false;
     }
     /* The digest covers the documents in log order, so record i of the index
@@ -521,6 +533,7 @@ bool fts_open_store(Arena *a, const Store *s, FtsIndex *out, const char **code,
                      "store %s: fts.db and the log disagree about "
                      "document %lu (run \"kb rebuild\")",
                      s->dir, (unsigned long)i);
+            stale_details(path);
             return false;
         }
     }

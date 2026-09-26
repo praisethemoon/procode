@@ -161,6 +161,25 @@ test("a code §11 does not have is kept as the store's word and flagged", async 
     });
 });
 
+test("an error's details are read typed for their own code, and only when they have its shape", async () => {
+    const envelope = (details: unknown): string =>
+        JSON.stringify({ ok: false, error: "collection_in_use", message: "still holds 3", details }) + "\n";
+    await withFake([{ stdout: envelope({ collection: "win32", documents: 3 }), exit: 1 }], async (fake) => {
+        const e = (await run(["collections", "delete", "win32"], { bin: fake.bin, env: fake.env() }).catch((x: unknown) => x)) as KbError;
+        assert.deepEqual(e.details, { collection: "win32", documents: 3 });
+        assert.equal(e.detailsOf("collection_in_use")?.documents, 3);
+        assert.equal(e.detailsOf("store_locked"), null, "details were read under another code");
+    });
+    await withFake([{ stdout: envelope({ collection: "win32", documents: "three" }), exit: 1 }], async (fake) => {
+        const e = (await run(["ls"], { bin: fake.bin, env: fake.env() }).catch((x: unknown) => x)) as KbError;
+        assert.equal(e.detailsOf("collection_in_use"), null, "a mis-shaped details object was typed anyway");
+    });
+    await withFake([{ stdout: refusal("not_found", "no document D-9"), exit: 1 }], async (fake) => {
+        const e = (await run(["get", "D-9"], { bin: fake.bin, env: fake.env() }).catch((x: unknown) => x)) as KbError;
+        assert.equal(e.details, null);
+    });
+});
+
 test("exit 2 is a fault and is never dressed as a refusal", async () => {
     /* §11's table is the vocabulary a caller can act on, and a bug in kb is
      * not in it. A UI that showed this as an error would tell the reader to

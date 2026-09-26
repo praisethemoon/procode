@@ -474,7 +474,10 @@ test("forgetting through this package: a document, a source, and a collection wi
         assert.deepEqual(bySource.sources, [b.source]);
 
         await work.kb.add("zzthree\n", { title: "three", collection: "topic" });
-        await assert.rejects(work.kb.deleteCollection("topic"), (e: unknown) => isKbError(e) && e.code === "collection_in_use");
+        await assert.rejects(
+            work.kb.deleteCollection("topic"),
+            (e: unknown) => isKbError(e) && e.detailsOf("collection_in_use")?.documents === 1,
+        );
         await work.kb.deleteCollection("topic", { withDocuments: true });
         assert.deepEqual(await work.kb.collections(), []);
         await assert.rejects(work.kb.forget(a.document), (e: unknown) => isKbError(e) && e.code === "not_found");

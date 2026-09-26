@@ -266,6 +266,7 @@ export function failure(id: number, e: unknown): Response {
                 message: error.message,
                 spec: error.spec,
                 unrecognised: error.unrecognised,
+                details: error.details,
             },
         };
     }

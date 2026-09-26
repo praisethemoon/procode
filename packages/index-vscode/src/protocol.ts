@@ -56,6 +56,8 @@ export interface WireError {
     message: string;
     spec: string | null;
     unrecognised: boolean;
+    /* §11's details as the store sent them; plain JSON, so it crosses as is. */
+    details: Readonly<Record<string, unknown>> | null;
 }
 
 /* ----------------------------------------------------- webview -> host */

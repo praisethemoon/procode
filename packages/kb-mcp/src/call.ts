@@ -75,7 +75,16 @@ const STDERR_LIMIT = 2000;
  * was never the problem. */
 function whyItFailed(e: unknown): Record<string, unknown> {
     if (isKbError(e)) {
-        return { ok: false, kind: "refused", error: e.code, message: e.message };
+        /* §11's details go with the code: the index_stale structure or the
+         * unsupported mime is what an agent acts on, and it should not have to
+         * parse the message for it. */
+        return {
+            ok: false,
+            kind: "refused",
+            error: e.code,
+            message: e.message,
+            ...(e.details === null ? {} : { details: e.details }),
+        };
     }
     if (isKbCrash(e)) {
         return {

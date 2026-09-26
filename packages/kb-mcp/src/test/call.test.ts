@@ -661,8 +661,23 @@ test("a store that refused a well-formed call is a result the model can read", a
             assert.equal(answer["kind"], "refused");
             assert.equal(answer["error"], "not_found");
             assert.match(String(answer["message"]), /D-9999/);
+            assert.equal("details" in answer, false, "a refusal without details grew a details field");
         },
     );
+});
+
+test("a refusal's details reach the agent as the store sent them", async () => {
+    const envelope =
+        JSON.stringify({
+            ok: false,
+            error: "index_stale",
+            message: "fts.db no longer describes the logs",
+            details: { structures: ["keyword"] },
+        }) + "\n";
+    await withKb([{ stdout: envelope, exit: 1 }], async (kb) => {
+        const answer = body(await callTool(kb, "kb_search", { q: "x" }));
+        assert.deepEqual(answer["details"], { structures: ["keyword"] });
+    });
 });
 
 test("§11's codes arrive verbatim rather than mapped onto something plausible", async () => {

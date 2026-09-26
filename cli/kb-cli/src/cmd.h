@@ -3,6 +3,7 @@
 #define KB_CMD_H
 
 #include "chunk.h"
+#include "errdet.h"
 #include "fts.h"
 #include "store.h"
 

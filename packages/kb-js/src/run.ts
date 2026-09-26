@@ -265,7 +265,15 @@ export async function run(
                 done.stderr.trim(),
             );
         }
-        throw new KbError(code, message, full);
+        const details = payload["details"];
+        throw new KbError(
+            code,
+            message,
+            full,
+            typeof details === "object" && details !== null && !Array.isArray(details)
+                ? (details as Readonly<Record<string, unknown>>)
+                : null,
+        );
     }
 
     /* Exit 2 is kb's own word for a fault, and anything else — a signal

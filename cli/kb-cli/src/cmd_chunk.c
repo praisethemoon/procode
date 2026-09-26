@@ -138,6 +138,10 @@ int32_t cmd_chunk(Arena *a, int32_t argc, char **argv) {
          * chunker has changed under the store (§7's reindex, not
          * rebuild). §11's index_stale names the structure at fault. */
         store_close(&s);
+        static const char *const structures[] = {"chunks"};
+        errdet_begin("index_stale");
+        errdet_strs("structures", structures, 1);
+        errdet_str("document", d->id);
         err_out(json, "index_stale",
                 "%s records %lu chunks and its text now splits into %zu; "
                 "the chunker changed (run \"kb reindex\" when it exists)",

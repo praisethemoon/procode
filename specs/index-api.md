@@ -335,16 +335,21 @@ One implementation, in C.
 
 ## 11. Errors
 
+An error is `{ok: false, error, message, details?}`. `error` is the code,
+`message` is prose for a person, and `details` carries the fields a caller acts
+on, so nothing has to be parsed out of the message. `details` is absent when a
+code has none to give.
+
 | code | details |
 |---|---|
 | `not_found` | — |
 | `model_mismatch` | the stored configuration and the loaded one |
-| `model_missing` | the expected weights path |
-| `index_stale` | which structures need rebuilding |
-| `unsupported_mime` | what was seen |
-| `fetch_failed` | status and locator |
-| `store_locked` | the holding process |
-| `collection_in_use` | document count |
+| `model_missing` | `path`: the expected weights path |
+| `index_stale` | `structures`: which need rebuilding (`keyword`, `chunks`); `path` or `document` where one is at fault |
+| `unsupported_mime` | `mime`: what was seen. Any `text/` type is accepted, and the `application/` types that are text (JSON, XML, YAML, TOML, JavaScript, TypeScript, shell, XHTML) |
+| `fetch_failed` | `locator`; `status` when an HTTP fetch returned one |
+| `store_locked` | `store`; `pid` of the holding process when it is known |
+| `collection_in_use` | `collection`, `documents`: the count |
 
 ## 12. Unresolved
 

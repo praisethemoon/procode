@@ -88,6 +88,7 @@ export {
     CLI_ERROR_CODES,
     CliErrorCode,
     KbErrorCode,
+    KbErrorDetails,
     SPEC_ERROR_CODES,
     SpecErrorCode,
     isKnownCode,

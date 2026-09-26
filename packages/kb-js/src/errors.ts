@@ -64,6 +64,39 @@ export function isKnownCode(code: string): code is KbErrorCode {
     return isSpecErrorCode(code) || (CLI_ERROR_CODES as readonly string[]).includes(code);
 }
 
+/* §11's details column, per code, as the CLI spells it. Optional fields are
+ * the ones the store cannot always know: a lock file whose holder did not
+ * write its pid, a stale structure found without a file to name. */
+export interface KbErrorDetails {
+    collection_in_use: { readonly collection: string; readonly documents: number };
+    store_locked: { readonly store: string; readonly pid?: number };
+    index_stale: { readonly structures: readonly string[]; readonly path?: string; readonly document?: string };
+    unsupported_mime: { readonly mime: string };
+    fetch_failed: { readonly locator: string; readonly status?: number };
+    model_missing: { readonly path: string };
+}
+
+type Raw = Readonly<Record<string, unknown>>;
+
+const str = (v: unknown): v is string => typeof v === "string";
+const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const opt = <T>(v: unknown, ok: (v: unknown) => v is T): boolean => v === undefined || ok(v);
+
+/* Each shape is checked, not asserted: a details object that does not match
+ * its code reads as absent, so a caller's typed fields are never a guess. */
+const DETAIL_CHECKS: { readonly [C in keyof KbErrorDetails]: (d: Raw) => boolean } = {
+    collection_in_use: (d) => str(d["collection"]) && num(d["documents"]),
+    store_locked: (d) => str(d["store"]) && opt(d["pid"], num),
+    index_stale: (d) =>
+        Array.isArray(d["structures"]) &&
+        d["structures"].every(str) &&
+        opt(d["path"], str) &&
+        opt(d["document"], str),
+    unsupported_mime: (d) => str(d["mime"]),
+    fetch_failed: (d) => str(d["locator"]) && opt(d["status"], num),
+    model_missing: (d) => str(d["path"]),
+};
+
 /* A refusal: exit 1, with the store's own reason.
  *
  * `code` IS WHATEVER THE STORE SAID AND IS NEVER TRANSLATED. A binding that
@@ -79,14 +112,26 @@ export class KbError extends Error {
     readonly unrecognised: boolean;
     /* The command that produced it, for a message a reader can act on. */
     readonly argv: readonly string[];
+    /* The envelope's `details` as sent, or null when there were none. */
+    readonly details: Raw | null;
 
-    constructor(code: string, message: string, argv: readonly string[]) {
+    constructor(code: string, message: string, argv: readonly string[], details: Raw | null = null) {
         super(message);
         this.name = "KbError";
         this.code = code;
         this.spec = isSpecErrorCode(code) ? code : null;
         this.unrecognised = !isKnownCode(code);
         this.argv = argv;
+        this.details = details;
+    }
+
+    /* The details, typed, when this error is `code` and they have its shape.
+     * `e.detailsOf("collection_in_use")?.documents` is how a caller asks. */
+    detailsOf<C extends keyof KbErrorDetails>(code: C): KbErrorDetails[C] | null {
+        if (this.code !== code || this.details === null || !DETAIL_CHECKS[code](this.details)) {
+            return null;
+        }
+        return this.details as unknown as KbErrorDetails[C];
     }
 }
 

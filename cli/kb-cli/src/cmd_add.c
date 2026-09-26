@@ -113,7 +113,11 @@ typedef struct {
     bool created, reindexed, blob_written;
 } Filed;
 
-static bool prepare(Arena *a, Filing *f, char *err, size_t errsz) {
+/* Fails with *code "usage", or "unsupported_mime" for a type the chunker
+ * cannot split. */
+static bool prepare(Arena *a, Filing *f, const char **code, char *err,
+                    size_t errsz) {
+    *code = "usage";
     if (!f->title || !f->title[0]) {
         snprintf(err, errsz, "a document needs a title");
         return false;
@@ -169,6 +173,16 @@ static bool prepare(Arena *a, Filing *f, char *err, size_t errsz) {
         f->mime = mime_from_path(path_hint);
     if (!f->mime)
         f->mime = "text/plain";
+    if (!chunk_mime_supported(f->mime)) {
+        *code = "unsupported_mime";
+        errdet_begin("unsupported_mime");
+        errdet_str("mime", f->mime);
+        snprintf(err, errsz,
+                 "%s is not text kb can split; extract the text and file it "
+                 "as text/plain or text/markdown",
+                 f->mime);
+        return false;
+    }
     return true;
 }
 
@@ -399,8 +413,9 @@ static int32_t add_batch(Arena *a, bool json) {
         }
         if (m && m->t == J_OBJ)
             f->meta = arena_strndup(a, m->src.ptr, m->src.len);
-        if (!prepare(a, f, err, sizeof err)) {
-            err_out(json, "usage", "batch line %d: %s", lineno, err);
+        const char *code;
+        if (!prepare(a, f, &code, err, sizeof err)) {
+            err_out(json, code, "batch line %d: %s", lineno, err);
             return KB_EXIT_ERR;
         }
         n++;
@@ -505,8 +520,9 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
         return KB_EXIT_ERR;
     }
     f.content = content;
-    if (!prepare(a, &f, err, sizeof err)) {
-        err_out(json, "usage", "%s", err);
+    const char *code;
+    if (!prepare(a, &f, &code, err, sizeof err)) {
+        err_out(json, code, "%s", err);
         return KB_EXIT_ERR;
     }
 

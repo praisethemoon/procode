@@ -76,6 +76,21 @@ Lang chunk_lang(const char *mime, const char *path) {
     return LANG_TEXT;
 }
 
+bool chunk_mime_supported(const char *mime) {
+    static const char *const text_like[] = {
+        "application/xhtml+xml",  "application/javascript",
+        "application/typescript", "application/x-sh",
+        "application/json",       "application/xml",
+        "application/x-yaml",     "application/yaml",
+        "application/toml",       NULL};
+    if (strncmp(mime, "text/", 5) == 0)
+        return true;
+    for (int32_t i = 0; text_like[i]; i++)
+        if (strcmp(mime, text_like[i]) == 0)
+            return true;
+    return false;
+}
+
 uint32_t chunk_tokens_of(size_t bytes) {
     return (uint32_t)((bytes + KB_BYTES_PER_TOKEN - 1) / KB_BYTES_PER_TOKEN);
 }

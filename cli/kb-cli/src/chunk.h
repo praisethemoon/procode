@@ -38,6 +38,12 @@ typedef struct {
 Lang chunk_lang(const char *mime, const char *path);
 const char *chunk_lang_name(Lang l);
 
+/* Whether text of this type can be split at all: any text/ type, and the
+ * application/ types that are text by another name. A PDF, an image or an
+ * archive would be split as plain text and indexed as noise, so ingest refuses
+ * them (§11's unsupported_mime) instead of falling back. */
+bool chunk_mime_supported(const char *mime);
+
 /* Tokens are estimated from bytes until a real tokenizer exists (§8). */
 uint32_t chunk_tokens_of(size_t bytes);
 

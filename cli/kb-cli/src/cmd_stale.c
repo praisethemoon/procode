@@ -222,6 +222,8 @@ static int32_t refresh_source(Arena *a, bool json, const char *id) {
     }
     if (strcmp(src->kind, "url") == 0) {
         store_close(&s);
+        errdet_begin("fetch_failed");
+        errdet_str("locator", src->locator);
         err_out(json, "fetch_failed",
                 "%s is %s, and kb has no HTTP client to fetch it: re-file the "
                 "page with kb add --url",
@@ -240,6 +242,8 @@ static int32_t refresh_source(Arena *a, bool json, const char *id) {
     size_t len;
     if (!read_text_arg(a, src->locator, &text, &len)) {
         store_close(&s);
+        errdet_begin("fetch_failed");
+        errdet_str("locator", src->locator);
         err_out(json, "fetch_failed", "cannot read %s for %s", src->locator, id);
         return KB_EXIT_ERR;
     }

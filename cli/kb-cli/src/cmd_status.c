@@ -90,6 +90,11 @@ static void store_json(StrBuf *sb, Arena *a, const char *dir,
     if (!ok) {
         sb_puts(sb, ",\"error\":\"index_stale\",\"message\":");
         json_escape_c(sb, ierr);
+        const char *details = errdet_json("index_stale");
+        if (details) {
+            sb_puts(sb, ",\"details\":");
+            sb_puts(sb, details);
+        }
     }
     sb_puts(sb, "}}");
     /* The model is the one thing §7 reports that this slice cannot: say so

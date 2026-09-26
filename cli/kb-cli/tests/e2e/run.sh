@@ -290,6 +290,22 @@ has "ls" "$out" '"id":"D-1"'
 has "ls" "$out" '"collection":"win32-iocp"'
 hasnt "ls" "$out" '"store":'
 
+t "a type the chunker cannot split is refused, and nothing is filed"
+before=$(wc -c < .kb/documents.jsonl)
+out=$(printf '%%PDF-1.7' | "$KB" add --title paper --collection papers \
+        --mime application/pdf --json)
+has "pdf" "$out" '"error":"unsupported_mime"'
+has "pdf" "$out" '"details":{"mime":"application/pdf"}'
+out=$(printf '{"title":"t","collection":"c","content":"x","mime":"image/png"}\n' |
+        "$KB" add --batch --json)
+has "batch png" "$out" '"error":"unsupported_mime"'
+[ "$before" = "$(wc -c < .kb/documents.jsonl)" ] || fail "a refused type was filed"
+expect_ok sh -c "printf 'a: 1' | '$KB' add --title cfg --collection formats --mime application/yaml"
+expect_ok sh -c "printf 'a,b' | '$KB' add --title csv --collection formats --mime text/csv"
+
+t "an error without details has no details field"
+expect_not_grep '"details"' "$KB" ls --nope --json
+
 t "ls filters by collection, source and mime"
 out=$("$KB" ls --collection notes --json)
 has "ls collection" "$out" '"count":1'
@@ -454,6 +470,7 @@ if [ -n "$KB_TESTS" ]; then
         [ "$rc" -eq 1 ] || fail "expected exit 1 while locked, got $rc"
         has "locked" "$out" '"error":"store_locked"'
         has "locked" "$out" "process $pid"
+        has "locked" "$out" "\"details\":{\"store\":\"[^\"]*\",\"pid\":$pid}"
         after=$(wc -c < .kb/documents.jsonl)
         [ "$before" = "$after" ] || fail "a locked-out writer still appended"
     fi
@@ -795,6 +812,7 @@ cp iso/.kb/index/fts.db iso/fts.db.bak
 head -c 64 iso/fts.db.bak > iso/.kb/index/fts.db
 expect_code 1 kbi search port
 expect_grep '"error":"index_stale"' kbi search port --json
+expect_grep '"details":{"structures":\["keyword"\]' kbi search port --json
 expect_grep 'rebuild' kbi search port --json
 
 t "an index from another format version is refused, not misread"
@@ -1318,6 +1336,7 @@ expect_code 1 kbv collections delete renamed
 out=$(kbv collections delete renamed --json)
 has "in use" "$out" '"error":"collection_in_use"'
 has "in use" "$out" 'still holds 3 document'
+has "in use" "$out" '"details":{"collection":"renamed","documents":3}'
 expect_grep '"name":"renamed"' kbv collections --json
 expect_grep '"error":"not_found"' kbv collections delete nosuch --json
 
@@ -1588,6 +1607,7 @@ expect_grep 'changed, re-indexed' sh -c "printf '# Notes\n\nagain\n' > '$WORK/sr
 t "a source that cannot be read again says why"
 mv srcs/notes.md srcs/notes.moved
 expect_grep '"error":"fetch_failed"' kbs refresh S-1 --json
+expect_grep '"details":{"locator":"[^"]*notes.md"}' kbs refresh S-1 --json
 expect_grep '"error":"fetch_failed"' kbs refresh S-2 --json
 expect_grep 'kb add --url' kbs refresh S-2 --json
 expect_grep '"error":"usage"' kbs refresh S-3 --json
