@@ -15,15 +15,16 @@
 
 import { CommitRec, LapLog, SessionRec, regionLabel, summaryLine } from "./model";
 
-export const RANGES = ["recent", "today", "3d", "week", "30d"] as const;
+export const RANGES = ["recent", "today", "3d", "week", "30d", "all"] as const;
 export type Range = (typeof RANGES)[number];
 
 export const RANGE_LABELS: Readonly<Record<Range, string>> = {
     recent: "Most recent",
     today: "Today",
-    "3d": "Last 3 days",
-    week: "Last week",
-    "30d": "Last 30 days",
+    "3d": "< 3 days",
+    week: "< 7 days",
+    "30d": "< 30 days",
+    all: "All",
 };
 
 export const OPS = ["edit", "create", "delete"] as const;
@@ -60,16 +61,24 @@ export function isFiltering(f: HistoryFilter): boolean {
 
 export const PAGE_SIZE = { grouped: 25, raw: 50 } as const;
 
+function midnight(d: Date): number {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
 /* The earliest moment in range, in milliseconds, or null for no limit.
- * "Today" starts at local midnight, the way a person means it; the others
- * count back from now. */
-export function rangeStart(range: Range, now: Date): number | null {
+ * "Most recent" is the last day anything happened — `latest`, the log's
+ * newest moment — from its local midnight: after a weekend, Today is empty
+ * and this is not. "Today" starts at local midnight, the way a person means
+ * it; the "< n days" ranges count back from now; "All" has no limit. */
+export function rangeStart(range: Range, now: Date, latest: number | null = null): number | null {
     const day = 24 * 60 * 60 * 1000;
     switch (range) {
-        case "recent":
+        case "all":
             return null;
+        case "recent":
+            return latest === null ? null : midnight(new Date(latest));
         case "today":
-            return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            return midnight(now);
         case "3d":
             return now.getTime() - 3 * day;
         case "week":
@@ -171,12 +180,22 @@ export function row(c: CommitRec): CommitRow {
     };
 }
 
+/* The log's newest moment: its last commit or session start. */
+export function latestOf(log: LapLog): number | null {
+    let latest: number | null = null;
+    for (const ts of [...log.commits.map((c) => c.ts), ...log.sessions.map((s) => s.ts)]) {
+        const n = Date.parse(ts);
+        if (!Number.isNaN(n) && (latest === null || n > latest)) latest = n;
+    }
+    return latest;
+}
+
 export function query(
     log: LapLog,
     filter: HistoryFilter,
     options: { grouped: boolean; page: number; now: Date },
 ): HistoryPage {
-    const since = rangeStart(filter.range, options.now);
+    const since = rangeStart(filter.range, options.now, latestOf(log));
     const t = textOf(filter.text);
     const inRange = (ts: string) => since === null || time(ts) >= since;
     /* Everything but the text: what a commit must pass wherever it is shown. */
