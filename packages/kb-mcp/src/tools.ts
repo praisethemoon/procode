@@ -129,7 +129,15 @@ const KB_GET: ToolDefinition = {
     },
 };
 
-/* §2's `POST /documents` and `POST /documents/batch` — the load-bearing route.
+/* §2's `POST /documents` and `POST /documents/batch` — the load-bearing route —
+ * and §2.1's folder, `POST /sources` with kind `dir`.
+ *
+ * A FOLDER IS FILED WITHOUT FORGETTING, ALWAYS. §2.1's walk forgets a file that
+ * is gone from the folder unless told not to, and forgetting is not an agent's
+ * decision (§9) — so `call.ts` sends `--no-forget` on every folder filing and
+ * there is no argument that turns it off. A file that is gone comes back named
+ * under `missing`, which is a fact the agent can pass on to the reader, who is
+ * the one who can decide to forget it.
  *
  * IT FILES INTO THE STORE THE SERVER'S WORKING DIRECTORY FINDS, AND NOWHERE
  * ELSE. When there is no `.kb/` at or above that directory the CLI refuses with
@@ -145,7 +153,11 @@ const KB_ADD: ToolDefinition = {
         "answered from disk instead of fetched again. Hand over the text you have; nothing is re-fetched. " +
         "Filing is idempotent by content hash. All the documents of one call are filed together or not at " +
         "all: if the store refuses one, none is filed. Documents go to this workspace's store; if the workspace has " +
-        "none this fails, and creating one is the user's decision, not yours.",
+        "none this fails, and creating one is the user's decision, not yours. " +
+        "To file a whole folder of source or documentation instead, pass dir and collection and no documents: " +
+        "each file the folder holds as git would track it becomes a document at its path, and filing the same " +
+        "folder again re-indexes only what changed. Files gone from the folder since it was last filed are " +
+        "reported as missing, not forgotten; forgetting them is the user's call.",
     inputSchema: {
         type: "object",
         properties: {
@@ -181,9 +193,23 @@ const KB_ADD: ToolDefinition = {
                     required: ["title", "content", "collection"],
                     additionalProperties: false,
                 },
+                description: "The documents to file. Give either documents or dir, not both.",
+            },
+            dir: {
+                type: "string",
+                description:
+                    "A folder to file whole, absolute or relative to the server's working directory. Needs collection; " +
+                    "each document's title, type and content come from its file.",
+            },
+            collection: {
+                type: "string",
+                description:
+                    "With dir: the topic scope every file of the folder is filed under. Documents name their own.",
             },
         },
-        required: ["documents"],
+        /* Either `documents` or `dir` with `collection`, which a flat
+         * `required` cannot say; `call.ts` checks it and names the missing
+         * half. */
         additionalProperties: false,
     },
 };

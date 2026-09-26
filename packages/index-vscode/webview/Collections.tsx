@@ -28,7 +28,7 @@ import { KbCollection, KbDocument } from "kb-js/pure";
 
 import { CollectionRow, collectionRows, formatBytes, formatDate } from "../src/view/facts";
 import { Codicon, Resolved, useQuery } from "./parts";
-import { StoreRefusal, addFiles, call, confirm, notify, scope } from "./rpc";
+import { StoreRefusal, addFiles, addFolder, call, confirm, notify, scope } from "./rpc";
 
 /* The document count from a `collection_in_use` refusal, or null for any
  * other failure. */
@@ -135,6 +135,14 @@ function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element 
                         onClick={() => addFiles(row.name)}
                     />
                     <IconButton
+                        icon={<Codicon name="new-folder" />}
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Add a folder to ${row.name}`}
+                        title={`Add a folder to ${row.name}…`}
+                        onClick={() => addFolder(row.name)}
+                    />
+                    <IconButton
                         icon={<Codicon name="edit" />}
                         variant="ghost"
                         size="sm"
@@ -191,9 +199,14 @@ export function Collections(): JSX.Element {
                             A collection is a flat named scope and a document belongs to exactly one.
                         </div>
                     </div>
-                    <Button size="sm" variant="secondary" onClick={() => addFiles()}>
-                        <Codicon name="new-file" /> Add files…
-                    </Button>
+                    <span className="kb-head-buttons">
+                        <Button size="sm" variant="secondary" onClick={() => addFiles()}>
+                            <Codicon name="new-file" /> Add files…
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => addFolder()}>
+                            <Codicon name="new-folder" /> Add folder…
+                        </Button>
+                    </span>
                 </header>
                 <Resolved state={collections.state} loading="Counting…">
                     {(rows) => (

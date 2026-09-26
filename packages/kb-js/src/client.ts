@@ -24,6 +24,7 @@
  */
 
 import {
+    AddDirOptions,
     AddOptions,
     BatchDocument,
     addBatchArgv,
@@ -34,6 +35,7 @@ import {
     SearchOptions,
     StaleOptions,
     addArgv,
+    addDirArgv,
     chunkArgv,
     collectionsArgv,
     deleteCollectionArgv,
@@ -55,7 +57,7 @@ import {
     statsArgv,
     statusArgv,
 } from "./argv";
-import { KbOptions, run } from "./run";
+import { DEFAULT_DIR_TIMEOUT_MS, KbOptions, run } from "./run";
 import {
     arr,
     num,
@@ -63,6 +65,7 @@ import {
     readAdded,
     readChunkRead,
     readCollection,
+    readDirAdded,
     readDocument,
     readDocumentRead,
     readEdges,
@@ -84,6 +87,7 @@ import {
     KbChunkRead,
     KbCollection,
     KbDocument,
+    KbDirAdded,
     KbDocumentRead,
     KbEdge,
     KbForgotten,
@@ -203,6 +207,16 @@ export class Kb {
         return arr(payload["added"]).map((row) => readAdded(obj(row)));
     }
 
+    /* §2.1's folder, filed as one `dir` source with a document per file. The
+     * store walks it, so this hands over a path and not content; a relative
+     * path is resolved against this client's directory, as the CLI's own
+     * working directory. Forgetting files gone from the folder is on unless
+     * `forget: false` asks for them to be reported as `missing` instead. */
+    async addDir(dir: string, options: AddDirOptions): Promise<KbDirAdded> {
+        const patient: KbOptions = { ...this.options, timeoutMs: this.options.timeoutMs ?? DEFAULT_DIR_TIMEOUT_MS };
+        return readDirAdded(await run(addDirArgv(dir, options), patient));
+    }
+
     /* §5's `GET /stale`: "documents whose age exceeds a threshold, newest
      * sources first".
      *
@@ -278,7 +292,10 @@ export class Kb {
     }
 
     /* §2's POST /sources/{id}/refresh, for a file source: read it again and
-     * re-index only if its text changed. A url or inline source is refused. */
+     * re-index only if its text changed. A url or inline source is refused. A
+     * `dir` source is walked again by the CLI and answers in `addDir`'s shape,
+     * not this one, so it is refreshed through `addDir` with its locator and
+     * collection instead. */
     async refreshSource(id: string): Promise<KbSourceRefreshed> {
         return readSourceRefreshed(await run(refreshSourceArgv(id), this.options));
     }

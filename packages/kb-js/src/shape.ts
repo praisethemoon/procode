@@ -24,6 +24,7 @@ import {
     KbCollection,
     KbDocument,
     KbDocumentRead,
+    KbDirAdded,
     KbForgotten,
     KbHit,
     KbSourceRead,
@@ -398,6 +399,35 @@ export function readAdded(payload: Record<string, unknown>): KbAdded {
         reindexed: payload["reindexed"] === true,
         blobWritten: payload["blobWritten"] === true,
         fetchedAt: str(payload["fetchedAt"]),
+    };
+}
+
+/* What `kb add --dir` answers. `source` stays null when the store said null:
+ * see `KbDirAdded`. */
+export function readDirAdded(payload: Record<string, unknown>): KbDirAdded {
+    const ids = (v: unknown) => arr(v).filter((x): x is string => typeof x === "string");
+    const skipped = obj(payload["skipped"]);
+    return {
+        source: strOrNull(payload["source"]),
+        root: str(payload["root"]),
+        collection: str(payload["collection"]),
+        files: num(payload["files"]),
+        added: num(payload["added"]),
+        updated: num(payload["updated"]),
+        unchanged: num(payload["unchanged"]),
+        forgotten: ids(payload["forgotten"]),
+        missing: ids(payload["missing"]),
+        skipped: {
+            ignored: num(skipped["ignored"]),
+            hidden: num(skipped["hidden"]),
+            vendored: num(skipped["vendored"]),
+            generated: num(skipped["generated"]),
+            binary: num(skipped["binary"]),
+            large: num(skipped["large"]),
+            unreadable: num(skipped["unreadable"]),
+            otherTypes: num(skipped["otherTypes"]),
+        },
+        embedded: num(payload["embedded"]),
     };
 }
 

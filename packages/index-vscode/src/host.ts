@@ -23,7 +23,7 @@
 
 import * as vscode from "vscode";
 
-import { Kb, KbCrash, KbError, KbSourceRefreshed, isKbCrash, isKbError } from "kb-js";
+import { Kb, KbCrash, KbDirAdded, KbError, KbSourceRefreshed, isKbCrash, isKbError } from "kb-js";
 
 import { refreshDocument } from "./commands";
 import { KNOWLEDGE_STYLESHEETS, knowledgePolicy } from "./policy";
@@ -213,6 +213,9 @@ export function handleRequest(ctx: HostContext, surface: Surface, raw: unknown):
         case "addFiles":
             void vscode.commands.executeCommand("knowledge.addFiles", request.collection ?? undefined);
             return;
+        case "addFolder":
+            void vscode.commands.executeCommand("knowledge.addFolder", request.collection ?? undefined);
+            return;
         case "init":
             void vscode.commands.executeCommand("knowledge.init");
             return;
@@ -374,9 +377,14 @@ export function broadcast(webviews: Iterable<vscode.Webview>, response: Response
 
 /* A source's Refresh. A file is read again by kb itself; a url is fetched
  * here, because kb has no network (index-api §12.2) — through the same
- * document refresh, conditional on the ETag, answered in the source's shape. */
-async function refreshSourceHere(kb: Kb, id: string): Promise<KbSourceRefreshed> {
+ * document refresh, conditional on the ETag, answered in the source's shape.
+ * A folder is walked again (§2.1), with forgetting on as `kb refresh` has it,
+ * and answers in the folder's own shape: there is no one document to name. */
+async function refreshSourceHere(kb: Kb, id: string): Promise<KbSourceRefreshed | KbDirAdded> {
     const read = await kb.source(id);
+    if (read.source.kind === "dir") {
+        return kb.addDir(read.source.locator, { collection: read.source.collection });
+    }
     if (read.source.kind !== "url") {
         return kb.refreshSource(id);
     }

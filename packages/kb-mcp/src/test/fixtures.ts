@@ -130,6 +130,22 @@ export const ADDED = {
     fetchedAt: "2026-09-25T00:00:00Z",
 };
 
+/* `kb add --dir --no-forget`, as §2.1 prints it: a file gone from the folder
+ * is named under `missing` and nothing is forgotten. */
+export const DIR_ADDED = {
+    source: "S-4",
+    root: "/work/lap/cli/kb-cli",
+    collection: "code",
+    files: 92,
+    added: 3,
+    updated: 1,
+    unchanged: 88,
+    forgotten: [],
+    missing: ["src/old.c"],
+    skipped: { ignored: 2, hidden: 0, vendored: 1, generated: 0, binary: 0, large: 1, unreadable: 0, otherTypes: 0 },
+    embedded: 14,
+};
+
 export const LINKS = {
     document: "D-241",
     outgoing: [

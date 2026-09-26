@@ -12,6 +12,7 @@
 
 export { Kb, KbSearchResult } from "./client";
 export {
+    AddDirOptions,
     AddOptions,
     GetOptions,
     LsOptions,
@@ -20,6 +21,7 @@ export {
     SearchOptions,
     StaleOptions,
     addArgv,
+    addDirArgv,
     chunkArgv,
     collectionsArgv,
     deleteCollectionArgv,
@@ -61,6 +63,7 @@ export {
 } from "./errors";
 export {
     DEFAULT_BIN,
+    DEFAULT_DIR_TIMEOUT_MS,
     DEFAULT_MAX_BYTES,
     DEFAULT_TIMEOUT_MS,
     KbOptions,
@@ -81,6 +84,7 @@ export {
     obj,
     readChunk,
     readCollection,
+    readDirAdded,
     readDocument,
     readHit,
     readLink,
@@ -98,6 +102,8 @@ export {
     KbChunk,
     KbChunkRead,
     KbCollection,
+    KbDirAdded,
+    KbDirSkipped,
     KbDocument,
     KbDocumentRead,
     KbForgotten,

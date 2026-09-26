@@ -20,7 +20,7 @@ reader must get the same answer to the same question.
 |---|---|
 | `kb_search` | `GET /search` with every filter |
 | `kb_get` | `GET /chunks/{id}`, `GET /documents/{id}` |
-| `kb_add` | `POST /documents` |
+| `kb_add` | `POST /documents`, `POST /documents/batch`; with `dir`, a folder (§2.1) filed without forgetting |
 | `kb_collections` | `GET /collections`, `GET /stats` |
 | `kb_links` | `GET /documents/{id}/links`, `POST /links` |
 | `kb_stale` | `GET /stale` |

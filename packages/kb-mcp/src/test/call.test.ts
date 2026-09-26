@@ -26,6 +26,7 @@ import {
     ADDED,
     CHUNK,
     COLLECTIONS,
+    DIR_ADDED,
     DOCUMENT,
     DOCUMENT_OLD,
     DOCUMENT_TEXT,
@@ -415,6 +416,69 @@ test("a document missing its collection is refused before anything is filed", as
         );
         await assert.rejects(() => callTool(kb, "kb_add", { documents: [] }), RpcError);
         assert.equal(fake.calls().length, 0);
+    });
+});
+
+test("a folder is filed with --no-forget, always, and its answer comes back whole", async () => {
+    /* §9: forgetting is not an agent's decision. The walk would forget a file
+     * gone from the folder by default, so the flag that stops it is on every
+     * folder filing this server makes, and the file comes back as `missing`. */
+    await withKb([{ stdout: ok(DIR_ADDED) }], async (kb, fake) => {
+        const answer = body(await callTool(kb, "kb_add", { dir: "cli/kb-cli", collection: "code" }));
+        const call = fake.calls()[0];
+        assert.deepEqual(call.argv, [
+            "add",
+            "--dir",
+            "cli/kb-cli",
+            "--collection",
+            "code",
+            "--no-forget",
+            "--json",
+        ]);
+        assert.equal(call.stdin, "", "a folder's files are read by the store, not handed down stdin");
+        assert.equal(answer["source"], "S-4");
+        assert.deepEqual(answer["missing"], ["src/old.c"]);
+        assert.deepEqual(answer["forgotten"], []);
+        assert.equal((answer["skipped"] as Record<string, unknown>)["large"], 1);
+    });
+});
+
+test("a folder and documents are two ways to file, and one call is one of them", async () => {
+    await withKb([{ stdout: ok(DIR_ADDED) }], async (kb, fake) => {
+        for (const args of [
+            // Both forms at once.
+            {
+                dir: "/x",
+                collection: "code",
+                documents: [{ title: "t", content: "c", collection: "c" }],
+            },
+            // A folder with no topic to file it under.
+            { dir: "/x" },
+            { dir: "/x", collection: "  " },
+            // A blank folder.
+            { dir: "", collection: "code" },
+            // A collection with nothing to file under it.
+            { collection: "code" },
+            { documents: [{ title: "t", content: "c", collection: "c" }], collection: "code" },
+            // Neither.
+            {},
+            // Forgetting cannot be asked for.
+            { dir: "/x", collection: "code", forget: true },
+        ]) {
+            await assert.rejects(() => callTool(kb, "kb_add", args), RpcError, JSON.stringify(args));
+        }
+        assert.equal(fake.calls().length, 0);
+    });
+});
+
+test("a folder the store cannot file is a refusal the agent can read", async () => {
+    await withKb([{ stdout: refusal("not_found", "/nope is not a directory"), exit: 1 }], async (kb, fake) => {
+        const result = await callTool(kb, "kb_add", { dir: "/nope", collection: "code" });
+        assert.equal(result.isError, true);
+        const answer = body(result);
+        assert.equal(answer["kind"], "refused");
+        assert.equal(answer["error"], "not_found");
+        assert.equal(fake.calls().length, 1);
     });
 });
 

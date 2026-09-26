@@ -12,6 +12,7 @@ import { test } from "node:test";
 import {
     addArgv,
     addBatchArgv,
+    addDirArgv,
     batchLines,
     chunkArgv,
     collectionsArgv,
@@ -266,6 +267,38 @@ test("a title or a collection the caller left empty is still sent, so the CLI sa
     assert.equal(argv[argv.indexOf("--collection") + 1], "");
 });
 
+test("a folder is one argument and the collection another, and forgetting is on unless turned off", () => {
+    /* The store walks the folder itself, so nothing goes down stdin and there
+     * is no `--file -`. `--no-forget` is sent only when asked for: the CLI
+     * forgets by default, and a binding that defaulted the other way would be
+     * a second answer to what `kb add --dir` does. */
+    assert.deepEqual(addDirArgv("/work/lap/cli", { collection: "code" }), [
+        "add",
+        "--dir",
+        "/work/lap/cli",
+        "--collection",
+        "code",
+    ]);
+    assert.deepEqual(addDirArgv("/work/lap/cli", { collection: "code", forget: true }), [
+        "add",
+        "--dir",
+        "/work/lap/cli",
+        "--collection",
+        "code",
+    ]);
+    assert.deepEqual(addDirArgv("my notes", { collection: "code", forget: false }), [
+        "add",
+        "--dir",
+        "my notes",
+        "--collection",
+        "code",
+        "--no-forget",
+    ]);
+    // A blank collection is still sent, so the CLI's refusal names it.
+    const blank = addDirArgv("x", { collection: "" });
+    assert.equal(blank[blank.indexOf("--collection") + 1], "");
+});
+
 /* -------------------------------------------------- nothing is ever a line */
 
 test("no builder ever produces an argument that is two arguments", () => {
@@ -286,6 +319,7 @@ test("no builder ever produces an argument that is two arguments", () => {
         searchArgv(hostile, { collection: hostile, source: hostile, mime: hostile }),
         chunkArgv(hostile),
         addArgv({ title: hostile, collection: hostile, url: hostile, meta: { k: hostile } }),
+        addDirArgv(hostile, { collection: hostile, forget: false }),
         collectionsArgv(),
         initArgv(),
         statusArgv(),
@@ -348,6 +382,7 @@ test("no builder ever emits --store, because the CLI no longer has one", () => {
         deleteCollectionArgv("a", true),
         forgetArgv("D-1"),
         addBatchArgv(),
+        addDirArgv("/tmp/x", { collection: "c", forget: false }),
         sourcesArgv({ collection: "c", kind: "file" }),
         sourceArgv("S-1"),
         refreshSourceArgv("S-1"),

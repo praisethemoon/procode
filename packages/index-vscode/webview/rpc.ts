@@ -117,6 +117,11 @@ export function addFiles(collection: string | null = null): void {
     send({ kind: "addFiles", collection });
 }
 
+/* A folder filed whole, into the row's collection when a row asked. */
+export function addFolder(collection: string | null = null): void {
+    send({ kind: "addFolder", collection });
+}
+
 /* The ways out of "no knowledge base here" and "kb can't be found". */
 export function initStore(): void {
     send({ kind: "init" });

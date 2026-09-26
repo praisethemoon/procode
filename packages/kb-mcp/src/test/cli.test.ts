@@ -201,6 +201,47 @@ test("a store filed into and searched through §9's tools", async (t) => {
     }
 });
 
+test("a folder filed through kb_add, relative to the server's directory, and a gone file kept", async (t) => {
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    /* Beside the project, inside the throwaway `dispose` removes, and named
+     * relative to the project, which is the server's working directory. */
+    const tree = path.join(work.dir, "..", "tree");
+    try {
+        fs.mkdirSync(path.join(tree, "src"), { recursive: true });
+        fs.writeFileSync(path.join(tree, "README.md"), "# Tree\n\nzzreadme\n");
+        fs.writeFileSync(path.join(tree, "src", "ring.c"), "int zzring(void) { return 1; }\n");
+
+        const first = payload(await call(work, "kb_add", { dir: "../tree", collection: "code" }));
+        assert.equal(first["root"], fs.realpathSync(tree));
+        assert.equal(first["files"], 2);
+        assert.equal(first["added"], 2);
+        assert.match(String(first["source"]), /^S-\d+$/);
+
+        /* Gone from the folder, and still in the store: the agent is told,
+         * and forgetting it is left to the reader. */
+        fs.rmSync(path.join(tree, "src", "ring.c"));
+        const again = payload(await call(work, "kb_add", { dir: "../tree", collection: "code" }));
+        assert.equal(again["source"], first["source"]);
+        assert.deepEqual(again["missing"], ["src/ring.c"]);
+        assert.deepEqual(again["forgotten"], []);
+        const found = payload(await call(work, "kb_search", { q: "zzring" }));
+        assert.equal((found["hits"] as unknown[]).length, 1, "a file gone from the folder was forgotten");
+
+        // The tool answers every field the reader it is built on answers.
+        const read = await new Kb({ bin: BIN, cwd: work.dir, env: ENV }).addDir("../tree", {
+            collection: "code",
+            forget: false,
+        });
+        assert.deepEqual(Object.keys(again).sort(), Object.keys(read).sort());
+    } finally {
+        work.dispose();
+    }
+});
+
 test("a filter §4 names is one the real binary accepts", async (t) => {
     if (!built()) {
         t.skip("cli/kb-cli/bin/kb is not built");

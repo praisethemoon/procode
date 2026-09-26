@@ -258,6 +258,30 @@ export function batchLines(documents: readonly BatchDocument[]): string {
         .join("");
 }
 
+/* §2.1's folder: one `dir` source, one document per file at its path under the
+ * folder. The store reads the files itself — the walk, the ignore rules and the
+ * per-file types are the CLI's — so nothing travels on stdin and the folder is
+ * the one value in the argv.
+ *
+ * `forget` IS ON UNLESS IT IS TURNED OFF, as it is in the CLI. A file gone from
+ * the folder is forgotten; `forget: false` sends `--no-forget` and the store
+ * reports it as `missing` instead. The MCP tool always turns it off (§9), and a
+ * default spelled differently here than there would be a third opinion. */
+export interface AddDirOptions {
+    collection: string;
+    forget?: boolean;
+}
+
+export function addDirArgv(dir: string, options: AddDirOptions): string[] {
+    /* Sent as given, blank or not, for the reason `addArgv` sends an empty
+     * title: the CLI's refusal names what is missing. */
+    const argv = ["add", "--dir", dir, "--collection", options.collection];
+    if (options.forget === false) {
+        argv.push("--no-forget");
+    }
+    return argv;
+}
+
 /* §5's `GET /stale` and `POST /refresh`, and §7's two collection writes.
  *
  * NONE OF THESE COMMANDS EXIST IN THE CLI YET, and that is recorded here

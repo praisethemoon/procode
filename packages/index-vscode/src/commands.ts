@@ -24,10 +24,10 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { Kb, KbError, isKbError } from "kb-js";
+import { Kb, KbDocument, KbError, isKbError } from "kb-js";
 
 import { extractPdf, isPdf } from "./pdf";
-import { RefreshOutcome, refreshPlan } from "./refresh";
+import { RefreshOutcome, folderMessage, refreshPlan } from "./refresh";
 
 /* VSCode's language identifiers, mapped onto the mimes `kb add` files under.
  *
@@ -276,6 +276,48 @@ export async function addFiles(kb: Kb, announce: () => void, collection?: string
     }
 }
 
+/* A folder picked from disk, filed whole as one source with a document per
+ * file (index-api §2.1). kb walks it itself — the ignore rules, the per-file
+ * types and the skipping are the CLI's — so nothing is read here but the
+ * folder's name. Filing the same folder again re-indexes only what changed.
+ *
+ * FORGETTING IS ON. A file gone from the folder since it was last filed is
+ * forgotten, which is the CLI's default and is right here: this is the
+ * reader's own action on their own folder, and §9 withholds forgetting from
+ * agents, not from the reader. The message names every forgotten count so it
+ * is never silent. */
+export async function addFolder(kb: Kb, announce: () => void, collection?: string): Promise<void> {
+    const picked = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        canSelectFiles: false,
+        canSelectFolders: true,
+        openLabel: "Add to Knowledge",
+        title: collection ? `Add a folder to ${collection}` : "Add a folder to Knowledge",
+    });
+    if (picked === undefined || picked.length === 0) {
+        return;
+    }
+    const folder = picked[0];
+    const into = collection ?? (await pickCollection(kb));
+    if (into === undefined || into.length === 0) {
+        return;
+    }
+    const name = path.basename(folder.fsPath);
+    try {
+        const filed = await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: `Filing ${name} into ${into}…`,
+            },
+            () => kb.addDir(folder.fsPath, { collection: into }),
+        );
+        announce();
+        void vscode.window.showInformationMessage(folderMessage(filed));
+    } catch (e) {
+        report(e, `file ${name}`);
+    }
+}
+
 /* §2: "add a URL". See the header for why the fetch is here. */
 export async function addUrl(kb: Kb, announce: () => void): Promise<void> {
     const typed = await vscode.window.showInputBox({
@@ -349,6 +391,9 @@ export async function addUrl(kb: Kb, announce: () => void): Promise<void> {
  * adding a URL is. */
 export async function refreshDocument(kb: Kb, id: string): Promise<RefreshOutcome> {
     const d = (await kb.get(id)).document;
+    if (d.path !== "") {
+        return refreshFolderDocument(kb, d);
+    }
     const plan = refreshPlan(d.locator);
     if (plan.kind === "none") {
         return { outcome: "cannot", why: plan.why };
@@ -404,6 +449,26 @@ export async function refreshDocument(kb: Kb, id: string): Promise<RefreshOutcom
         outcome: added.created || added.reindexed ? "updated" : "unchanged",
         document: added.document,
         fetchedAt: added.fetchedAt,
+    };
+}
+
+/* A file of a folder (index-api §2.1). Its locator is the folder, not the file,
+ * and kb reads the file itself by walking the folder again — there is no route
+ * that re-files one of its documents alone. WITHOUT FORGETTING: refreshing one
+ * document is not where its neighbours should disappear, so a file gone from
+ * the folder is reported rather than acted on. Whether this one changed is read
+ * off its content hash, since the walk counts the folder rather than naming
+ * each document. */
+async function refreshFolderDocument(kb: Kb, d: KbDocument): Promise<RefreshOutcome> {
+    const walked = await kb.addDir(d.locator, { collection: d.collection, forget: false });
+    if (walked.missing.includes(d.path)) {
+        return { outcome: "cannot", why: `its file is no longer at ${path.join(d.locator, d.path)}.` };
+    }
+    const now = (await kb.get(d.id)).document;
+    return {
+        outcome: now.contentHash === d.contentHash ? "unchanged" : "updated",
+        document: now.id,
+        fetchedAt: now.fetchedAt,
     };
 }
 

@@ -155,6 +155,7 @@ test("no tool reaches a part of kb-js that §9 decided not to expose", () => {
         "get",
         "add",
         "addBatch",
+        "addDir",
         "collections",
         "stats",
         "links",
@@ -187,6 +188,21 @@ test("no tool reaches a part of kb-js that §9 decided not to expose", () => {
         }
     }
     assert.ok(called.size >= 6, `only ${called.size} kb methods were found; the scan is broken`);
+});
+
+test("a folder is never filed with forgetting on", () => {
+    /* §2.1's walk forgets a file gone from the folder unless it is told not
+     * to, and that default is right for a reader and wrong for an agent (§9).
+     * Every folder filing in the shipped source says so at the call, where a
+     * refactor that dropped the option would have to delete it in view. */
+    let seen = 0;
+    for (const { file, text } of shipped()) {
+        for (const m of code(text).matchAll(/\bkb\.addDir\s*\(([^;]*)\)/g)) {
+            seen++;
+            assert.match(m[1], /\bforget:\s*false\b/, `${file} files a folder without forget: false`);
+        }
+    }
+    assert.ok(seen >= 1, "no folder filing was found; the scan is broken");
 });
 
 test("no argv builder for a withheld command is imported", () => {

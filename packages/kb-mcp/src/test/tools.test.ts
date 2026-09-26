@@ -125,20 +125,35 @@ test("kb_get takes one id and not a list of them", () => {
     assert.deepEqual(findTool("kb_get")?.inputSchema["required"], ["id"]);
 });
 
-test("kb_add takes documents and nothing that names a destination", () => {
+test("kb_add takes documents or a folder, and nothing that names a destination", () => {
     /* There is one store, the one the server's working directory finds, and a
      * write lands in it or is refused. An argument that chose somewhere else —
      * the `store` that once picked a tier — would be a second answer to a
-     * question the working directory already answered. */
+     * question the working directory already answered. `dir` is where the
+     * content comes FROM, and `collection` is the folder's topic. */
     const schema = findTool("kb_add")?.inputSchema ?? {};
     const properties = schema["properties"] as Record<string, unknown>;
-    assert.deepEqual(Object.keys(properties), ["documents"]);
+    assert.deepEqual(Object.keys(properties), ["documents", "dir", "collection"]);
+    /* Neither form is required on its own, so the schema cannot say "one of";
+     * `call.ts` does. */
+    assert.equal("required" in schema, false);
     const item = (properties["documents"] as Record<string, unknown>)["items"] as Record<
         string,
         unknown
     >;
     assert.equal("store" in (item["properties"] as Record<string, unknown>), false);
     assert.deepEqual((item["required"] as string[]).sort(), ["collection", "content", "title"]);
+});
+
+test("kb_add offers no way to forget, and says a folder's gone files are missing", () => {
+    /* §9: forgetting is the reader's decision. The CLI's `--no-forget` is sent
+     * on every folder filing and there is no argument to turn it off — and the
+     * description says what happens instead, because it is the one place a
+     * model is told. */
+    const tool = findTool("kb_add");
+    const keys = Object.keys((tool?.inputSchema["properties"] ?? {}) as Record<string, unknown>);
+    assert.equal(keys.some((k) => /forget/i.test(k)), false);
+    assert.match(String(tool?.description), /reported as missing, not forgotten/);
 });
 
 test("kb_links names §6's five relationship types and no sixth", () => {

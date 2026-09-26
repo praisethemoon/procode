@@ -834,7 +834,7 @@ test("every operation the surface can ask is one the host answers", () => {
     /* And nothing else: a `case` naming an operation the protocol does not have
      * is dead code that reads as a feature. */
     for (const c of cases) {
-        if (["call", "open", "link", "scope", "title", "notify", "addFiles", "init", "settings"].includes(c)) {
+        if (["call", "open", "link", "scope", "title", "notify", "addFiles", "addFolder", "init", "settings"].includes(c)) {
             continue; /* the request kinds, which share the file */
         }
         assert.ok(
@@ -876,8 +876,9 @@ test("every mime kb-cli itself can file is one this package can place", () => {
     /* The other half: the CLI guesses a mime from a locator's extension, and
      * its table is the one that decides what is actually in a store. Read out
      * of the C rather than copied, so a mime added there fails here instead of
-     * arriving as an unformatted wall of text. */
-    const cli = path.resolve(ROOT, "..", "..", "cli", "kb-cli", "src", "cmd_add.c");
+     * arriving as an unformatted wall of text. The table lives beside the
+     * chunker, which a folder's walk and a single `kb add` both ask. */
+    const cli = path.resolve(ROOT, "..", "..", "cli", "kb-cli", "src", "chunk.c");
     if (!fs.existsSync(cli)) {
         return;
     }
@@ -1019,6 +1020,7 @@ test("the extension's activation and contributions name what this package builds
     );
     for (const needed of [
         "knowledge.addCurrentFile",
+        "knowledge.addFolder",
         "knowledge.addUrl",
         "knowledge.refreshStale",
         "knowledge.search",
@@ -1028,7 +1030,7 @@ test("the extension's activation and contributions name what this package builds
     const titleBar = (pkg.contributes.menus["view/title"] as { command: string; when: string }[])
         .filter((m) => m.when === "view == knowledge.documents")
         .map((m) => m.command);
-    for (const needed of ["knowledge.addCurrentFile", "knowledge.addUrl", "knowledge.refreshStale"]) {
+    for (const needed of ["knowledge.addCurrentFile", "knowledge.addFolder", "knowledge.addUrl", "knowledge.refreshStale"]) {
         assert.ok(titleBar.includes(needed), `${needed} is not on the sidebar's title bar (§2)`);
     }
     /* §5's command is a COMMAND and not a title-bar button: it is for a reader

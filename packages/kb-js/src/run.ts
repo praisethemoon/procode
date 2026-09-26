@@ -55,6 +55,12 @@ export interface KbOptions {
 
 export const DEFAULT_BIN = "kb";
 export const DEFAULT_TIMEOUT_MS = 30_000;
+/* A folder is read, chunked and embedded file by file, and a repository's
+ * worth of that is minutes of work rather than the seconds a search takes. A
+ * filing cut off by the search's limit would be killed partway through a write
+ * it was going to finish, so `addDir` waits this long unless the client was
+ * given a limit of its own. */
+export const DEFAULT_DIR_TIMEOUT_MS = 10 * 60_000;
 export const DEFAULT_MAX_BYTES = 192 * 1024 * 1024;
 
 interface Completed {

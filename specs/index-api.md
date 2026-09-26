@@ -403,7 +403,7 @@ Six tools.
 |---|---|
 | `kb_search` | `GET /search` with every filter |
 | `kb_get` | `GET /chunks/{id}`, `GET /documents/{id}` |
-| `kb_add` | `POST /documents`, `POST /documents/batch` |
+| `kb_add` | `POST /documents`, `POST /documents/batch`; with `dir`, `POST /sources` of kind `dir` (§2.1), never forgetting: a file gone from the folder is reported as `missing` |
 | `kb_collections` | `GET /collections`, `GET /stats` |
 | `kb_links` | `GET /documents/{id}/links`, `POST /links` |
 | `kb_stale` | `GET /stale` |

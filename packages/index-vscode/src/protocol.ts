@@ -92,6 +92,8 @@ export type Request =
     | { kind: "notify"; level: "info" | "warning" | "error"; message: string }
     /* Pick files from disk and file them, into `collection` when a row asked. */
     | { kind: "addFiles"; collection: string | null }
+    /* Pick a folder and file it whole (index-api §2.1), likewise. */
+    | { kind: "addFolder"; collection: string | null }
     /* The two ways out of the states above: create a store in the
      * workspace folder, or open the setting that names the kb command. */
     | { kind: "init" }
@@ -133,6 +135,7 @@ export function isRequest(data: unknown): data is Request {
         kind === "title" ||
         kind === "notify" ||
         kind === "addFiles" ||
+        kind === "addFolder" ||
         kind === "init" ||
         kind === "settings" ||
         kind === "confirm"

@@ -300,7 +300,40 @@ async function get(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
     );
 }
 
+/* §2.1's folder. The two forms of the tool share nothing but the collection's
+ * name, so each refuses the other's arguments rather than filing one and
+ * quietly dropping the rest. */
+function given(v: unknown): boolean {
+    return v !== undefined && v !== null;
+}
+
+async function addDir(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    if (given(args["documents"])) {
+        throw bad("kb_add", 'give either "documents" or "dir", not both.');
+    }
+    const dir = asString("kb_add", "dir", args["dir"]) ?? "";
+    if (dir.trim() === "") {
+        throw bad("kb_add", '"dir" must name a folder.');
+    }
+    const collection = asString("kb_add", "collection", args["collection"]);
+    if (collection === undefined || collection.trim() === "") {
+        throw bad("kb_add", '"dir" needs "collection": the topic every file of the folder is filed under.');
+    }
+    /* NEVER FORGETTING. A file gone from the folder is reported under
+     * `missing` and stays in the store: forgetting is the reader's decision
+     * (§9), and a folder walk is not a way round that. The path goes as the
+     * agent wrote it, so a relative one resolves against the directory the
+     * CLI runs in, which is the server's own. */
+    return rows(await kb.addDir(dir, { collection, forget: false }));
+}
+
 async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    if (given(args["dir"])) {
+        return addDir(kb, args);
+    }
+    if (given(args["collection"])) {
+        throw bad("kb_add", '"collection" goes with "dir"; each of the documents names its own.');
+    }
     const list = args["documents"];
     if (!Array.isArray(list) || list.length === 0) {
         throw bad("kb_add", '"documents" must be a non-empty array.');

@@ -19,7 +19,7 @@ export type Rendering = "markdown" | "html" | "code" | "text";
  * the keyword set and whether `#` starts a comment. */
 export type Language = "c-family" | "script" | "hash" | "sql" | "data" | "none";
 
-/* `text/x-c` and friends are what `kb add`'s own table emits (`cmd_add.c`), so
+/* `text/x-c` and friends are what `kb add`'s own table emits (`chunk.c`), so
  * the two lists have to agree — `guards.test.ts` reads that table and checks
  * every mime it can produce is one this file has an answer for. A mime the
  * store can file and this cannot place would be a source document rendered as
@@ -31,6 +31,11 @@ const CODE: Readonly<Record<string, Language>> = {
     "text/x-go": "c-family",
     "text/x-rust": "c-family",
     "text/x-csharp": "c-family",
+    "text/x-objc": "c-family",
+    "text/x-kotlin": "c-family",
+    "text/x-swift": "c-family",
+    "text/x-zig": "c-family",
+    "text/x-php": "c-family",
     "text/javascript": "script",
     "application/javascript": "script",
     "application/typescript": "script",
@@ -42,10 +47,17 @@ const CODE: Readonly<Record<string, Language>> = {
     "text/x-shellscript": "hash",
     "text/x-yaml": "hash",
     "application/yaml": "hash",
+    "application/toml": "hash",
+    "text/x-cmake": "hash",
     "text/x-sql": "sql",
     "application/json": "data",
     "text/x-css": "data",
     "text/css": "data",
+    /* Code, shown as code, with no family to colour it by: Lua's `--` is
+     * SQL's comment but its keywords are not, and an assembler's comment
+     * character depends on the assembler. Uncoloured is better than wrong. */
+    "text/x-lua": "none",
+    "text/x-asm": "none",
 };
 
 export function renderingFor(mime: string): Rendering {
@@ -87,6 +99,15 @@ const LABELS: Readonly<Record<string, string>> = {
     "application/x-sh": "Shell",
     "text/x-css": "CSS",
     "text/x-typec": "Type-C",
+    "text/x-objc": "Objective-C",
+    "text/x-kotlin": "Kotlin",
+    "text/x-swift": "Swift",
+    "text/x-zig": "Zig",
+    "text/x-php": "PHP",
+    "text/x-lua": "Lua",
+    "text/x-asm": "Assembly",
+    "text/x-cmake": "CMake",
+    "application/toml": "TOML",
 };
 
 export function mimeLabel(mime: string): string | null {

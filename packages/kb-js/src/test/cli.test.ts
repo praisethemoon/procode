@@ -34,7 +34,8 @@ import { test } from "node:test";
 
 import { Kb } from "../client";
 import { KbError, isKbError } from "../errors";
-import { addBatchArgv, batchLines, deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, refreshSourceArgv, searchArgv, sourceArgv, sourcesArgv } from "../argv";
+import { obj } from "../shape";
+import { addBatchArgv, addDirArgv, batchLines, deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, refreshSourceArgv, searchArgv, sourceArgv, sourcesArgv } from "../argv";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const BIN = path.resolve(ROOT, "..", "..", "cli", "kb-cli", "bin", "kb");
@@ -96,6 +97,7 @@ test("every flag this package spells for an implemented command is one the CLI n
         ["add", "--title", "t", "--collection", "c", "--url", "u", "--mime", "m", "--meta", "{}", "--file", "-"],
         forgetArgv("D-1"),
         addBatchArgv(),
+        addDirArgv("d", { collection: "c", forget: false }),
         deleteCollectionArgv("c", true),
         sourcesArgv({ collection: "c", kind: "file" }),
         sourceArgv("S-1"),
@@ -571,6 +573,77 @@ test("a batch through this package: filed together, and refused together", async
             (e: unknown) => isKbError(e) && e.code === "usage" && /batch line 2/.test(e.message),
         );
         assert.equal(fs.readFileSync(path.join(work.dir, ".kb", "documents.jsonl"), "utf8"), before, "a refused batch wrote nothing");
+    } finally {
+        work.dispose();
+    }
+});
+
+test("a folder through this package: filed, filed again, and a file gone kept or forgotten as asked", async (t) => {
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    /* Beside the project rather than inside it, so the store's own `.kb/` is
+     * not part of the walk; `dispose` removes the throwaway it sits in. */
+    const tree = path.join(work.dir, "..", "tree");
+    try {
+        await work.kb.init();
+        fs.mkdirSync(path.join(tree, "lib"), { recursive: true });
+        fs.mkdirSync(path.join(tree, "node_modules", "dep"), { recursive: true });
+        fs.writeFileSync(path.join(tree, "README.md"), "# Tree\n\nzzreadme\n");
+        fs.writeFileSync(path.join(tree, "lib", "ring.c"), "int zzring(void) { return 1; }\n");
+        fs.writeFileSync(path.join(tree, "node_modules", "dep", "index.js"), "module.exports = 1;\n");
+        fs.writeFileSync(path.join(tree, ".hidden.md"), "# Hidden\n");
+
+        const first = await work.kb.addDir(tree, { collection: "code" });
+        /* The locator is the folder with its links resolved, which on macOS
+         * is /private/var rather than the /var that os.tmpdir() answers. */
+        assert.equal(first.root, fs.realpathSync(tree));
+        assert.match(first.source ?? "", /^S-\d+$/);
+        assert.equal(first.collection, "code");
+        assert.equal(first.files, 2);
+        assert.equal(first.added, 2);
+        assert.equal(first.skipped.vendored, 1);
+        assert.equal(first.skipped.hidden, 1);
+        assert.equal((await work.kb.search("zzring")).count, 1);
+        const shown = await work.kb.source(first.source ?? "");
+        assert.equal(shown.source.kind, "dir");
+        assert.deepEqual(shown.documents.map((d) => d.path).sort(), ["README.md", "lib/ring.c"]);
+        assert.deepEqual(shown.documents.map((d) => d.title).sort(), ["tree/README.md", "tree/lib/ring.c"]);
+
+        const again = await work.kb.addDir(tree, { collection: "code" });
+        assert.equal(again.source, first.source);
+        assert.equal(again.unchanged, 2);
+        assert.equal(again.added + again.updated, 0);
+
+        /* A file changed and a file gone, with forgetting off: the gone one is
+         * still in the store and is named by its path. */
+        fs.writeFileSync(path.join(tree, "README.md"), "# Tree\n\nzzchanged\n");
+        fs.rmSync(path.join(tree, "lib", "ring.c"));
+        const kept = await work.kb.addDir(tree, { collection: "code", forget: false });
+        assert.equal(kept.updated, 1);
+        assert.deepEqual([...kept.missing], ["lib/ring.c"]);
+        assert.deepEqual([...kept.forgotten], []);
+        assert.equal((await work.kb.search("zzring")).count, 1);
+
+        const ring = shown.documents.find((d) => d.path === "lib/ring.c")?.id;
+        const forgot = await work.kb.addDir(tree, { collection: "code" });
+        assert.deepEqual([...forgot.forgotten], [ring]);
+        assert.deepEqual([...forgot.missing], []);
+        assert.equal((await work.kb.search("zzring")).count, 0);
+
+        // The reader answers exactly the keys the binary prints.
+        assert.deepEqual(
+            answered(forgot),
+            printed(raw(work, ["add", "--dir", tree, "--collection", "code", "--no-forget"])),
+        );
+        assert.deepEqual(answered(forgot.skipped), Object.keys(obj(raw(work, ["add", "--dir", tree, "--collection", "code"])["skipped"])).sort());
+
+        await assert.rejects(
+            work.kb.addDir(path.join(tree, "README.md"), { collection: "code" }),
+            (e: unknown) => isKbError(e) && e.code === "not_found",
+        );
     } finally {
         work.dispose();
     }

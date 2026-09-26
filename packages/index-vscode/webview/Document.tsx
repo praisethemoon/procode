@@ -23,12 +23,12 @@
 
 import { useEffect, useState } from "react";
 
-import { KbChunk, KbDocument, KbSourceRead, KbSourceRefreshed, isStale } from "kb-js/pure";
+import { KbChunk, KbDirAdded, KbDocument, KbSourceRead, KbSourceRefreshed, isStale } from "kb-js/pure";
 
 import { documentFacts, formatDate, metaEntries } from "../src/view/facts";
 import { revealId } from "../src/view/headings";
 import { mimeLabel, renderingFor } from "../src/view/mime";
-import { RefreshOutcome, outcomeMessage } from "../src/refresh";
+import { RefreshOutcome, folderMessage, outcomeMessage } from "../src/refresh";
 import { Body } from "./Body";
 import { Codicon, Resolved, StaleBadge, useQuery } from "./parts";
 import { call, link, notify, onHostEvent, open, setTitle, tag } from "./rpc";
@@ -202,17 +202,20 @@ export function DocumentView(props: { reference: string }): JSX.Element {
  * `kb sources show`, so the page has the source's own kind and locator and
  * every time its documents were fetched, not only what its documents say. A
  * file source can be read again from here (`kb refresh S-n`); the outcome is
- * said out loud, as a document's refresh is. */
+ * said out loud, as a document's refresh is. A folder is walked again and
+ * answers with its totals rather than one document's. */
 export function SourceView(props: { reference: string }): JSX.Element {
     const { state, refresh } = useQuery<KbSourceRead>("source", { id: props.reference });
     const onRefresh = (): void => {
-        call<KbSourceRefreshed>("refreshSource", { id: props.reference })
+        call<KbSourceRefreshed | KbDirAdded>("refreshSource", { id: props.reference })
             .then((r) => {
                 notify(
                     "info",
-                    r.changed
-                        ? `${props.reference} changed on disk and ${r.document} was re-indexed.`
-                        : `${props.reference} is unchanged on disk; its fetch date is now ${r.fetchedAt}.`,
+                    "files" in r
+                        ? folderMessage(r)
+                        : r.changed
+                          ? `${props.reference} changed on disk and ${r.document} was re-indexed.`
+                          : `${props.reference} is unchanged on disk; its fetch date is now ${r.fetchedAt}.`,
                 );
                 refresh();
             })
@@ -238,14 +241,16 @@ export function SourceView(props: { reference: string }): JSX.Element {
                                         {source.locator}
                                     </button>
                                 )}
-                                {source.kind === "file" || source.kind === "url" ? (
+                                {source.kind === "file" || source.kind === "url" || source.kind === "dir" ? (
                                     <button
                                         type="button"
                                         className="kb-link"
                                         title={
                                             source.kind === "url"
                                                 ? "Fetch the page again (asked first) and re-index it if it changed"
-                                                : "Read the file again and re-index it if it changed"
+                                                : source.kind === "dir"
+                                                  ? "Walk the folder again: re-index what changed, file what is new, and forget what is gone"
+                                                  : "Read the file again and re-index it if it changed"
                                         }
                                         onClick={onRefresh}
                                     >

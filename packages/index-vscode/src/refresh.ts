@@ -12,6 +12,8 @@
  * Pure: no vscode, no kb. The host does the reading and the filing.
  */
 
+import type { KbDirAdded } from "kb-js/pure";
+
 export type RefreshPlan =
     | { readonly kind: "url"; readonly url: string; readonly host: string }
     | { readonly kind: "file"; readonly path: string }
@@ -58,4 +60,30 @@ export function outcomeMessage(id: string, r: RefreshOutcome): string {
         case "declined":
             return `${id} was not refreshed.`;
     }
+}
+
+/* What a reader is told after a folder was filed or walked again (index-api
+ * §2.1): the totals, whatever they are, because "3 added, 88 unchanged" is how
+ * somebody knows the walk saw the folder they meant. Skipped files are one
+ * number here — the reasons are in the answer and in `kb add --dir`'s own
+ * output — and files gone from the folder are named by what happened to them. */
+export function folderMessage(r: KbDirAdded): string {
+    const name = r.root.split(/[\\/]/).filter((p) => p.length > 0).pop() ?? r.root;
+    const skipped = Object.values(r.skipped).reduce((a, b) => a + b, 0);
+    const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
+    if (r.source === null) {
+        return `${name} holds no file to file into ${r.collection}; ${plural(skipped, "file")} skipped.`;
+    }
+    const parts = [
+        `${r.added} added`,
+        `${r.updated} updated`,
+        `${r.unchanged} unchanged`,
+        `${r.forgotten.length} forgotten`,
+        `${skipped} skipped`,
+    ];
+    const missing =
+        r.missing.length === 0
+            ? ""
+            : ` ${plural(r.missing.length, "file")} gone from the folder ${r.missing.length === 1 ? "is" : "are"} still filed: ${r.missing.join(", ")}.`;
+    return `Filed ${name} into ${r.collection} as ${r.source}: ${plural(r.files, "file")}, ${parts.join(", ")}.${missing}`;
 }

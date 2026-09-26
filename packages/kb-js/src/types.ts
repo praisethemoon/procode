@@ -20,10 +20,10 @@ export type SourceId = string;
 export type DocumentId = string;
 export type ChunkId = string;
 
-/* §1.2. `kind` is what was ingested from: a URL, a file, or content handed
- * in directly. There is no directory walk: kb holds reference material, not
- * the workspace's own code. */
-export type SourceKind = "url" | "file" | "inline";
+/* §1.2. `kind` is what was ingested from: a URL, a file, content handed in
+ * directly, or a folder walked as git sees it (§2.1), whose documents are its
+ * files at their paths. */
+export type SourceKind = "url" | "file" | "inline" | "dir";
 
 export interface KbSource {
     readonly id: SourceId;
@@ -227,6 +227,43 @@ export interface KbAdded {
     readonly reindexed: boolean;
     readonly blobWritten: boolean;
     readonly fetchedAt: string;
+}
+
+/* What `kb add --dir` answers (§2.1): the folder's source and what the walk did
+ * to each file.
+ *
+ * `source` IS NULL when the folder held nothing to file and had never been
+ * filed before — there is no source to name, and an empty string would read as
+ * an id. `forgotten` carries document ids and `missing` carries paths: a
+ * forgotten document is gone from the fold and its id is all that is left to
+ * report, while a missing one is still there and the path is what a reader
+ * goes and looks for. At most one of the two is ever non-empty, by whether
+ * forgetting was on. */
+export interface KbDirSkipped {
+    readonly ignored: number;
+    readonly hidden: number;
+    readonly vendored: number;
+    readonly generated: number;
+    readonly binary: number;
+    readonly large: number;
+    readonly unreadable: number;
+    readonly otherTypes: number;
+}
+
+export interface KbDirAdded {
+    readonly source: SourceId | null;
+    /* The folder's absolute path with links resolved: the source's locator. */
+    readonly root: string;
+    readonly collection: string;
+    readonly files: number;
+    readonly added: number;
+    readonly updated: number;
+    readonly unchanged: number;
+    readonly forgotten: readonly DocumentId[];
+    readonly missing: readonly string[];
+    readonly skipped: KbDirSkipped;
+    /* Chunks embedded by this filing; zero on a keyword-only store. */
+    readonly embedded: number;
 }
 
 /* `kb get` with `--include text,chunks,links`. The document is always there;

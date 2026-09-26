@@ -15,6 +15,7 @@ import {
     obj,
     readChunk,
     readCollection,
+    readDirAdded,
     readDocument,
     readHit,
     readModelStatus,
@@ -145,4 +146,48 @@ test("the model status reads both sides typed, and null where either is absent",
     });
     assert.equal(e.detailsOf("model_mismatch")?.loaded.weights, "F16");
     assert.equal(new KbError("model_mismatch", "x", [], { stored: 1 }).detailsOf("model_mismatch"), null);
+});
+
+test("a folder's answer reads whole, and a folder with no source says null rather than an id", () => {
+    const filed = readDirAdded({
+        ok: true,
+        source: "S-4",
+        root: "/work/lap/cli/kb-cli",
+        collection: "code",
+        files: 92,
+        added: 3,
+        updated: 1,
+        unchanged: 88,
+        forgotten: ["D-51"],
+        missing: [],
+        skipped: { ignored: 2, hidden: 0, vendored: 1, generated: 0, binary: 0, large: 1, unreadable: 0, otherTypes: 0 },
+        embedded: 14,
+    });
+    assert.equal(filed.source, "S-4");
+    assert.equal(filed.root, "/work/lap/cli/kb-cli");
+    assert.equal(filed.files, 92);
+    assert.equal(filed.unchanged, 88);
+    assert.deepEqual([...filed.forgotten], ["D-51"]);
+    assert.deepEqual([...filed.missing], []);
+    assert.equal(filed.skipped.large, 1);
+    assert.equal(filed.skipped.otherTypes, 0);
+    assert.equal(filed.embedded, 14);
+
+    /* An empty folder filed for the first time: there is no source, and ""
+     * would be read by a caller as an id to look up. */
+    const empty = readDirAdded({ ok: true, source: null, root: "/x", collection: "c", files: 0 });
+    assert.equal(empty.source, null);
+    assert.equal(empty.added, 0);
+    assert.deepEqual(empty.skipped, {
+        ignored: 0,
+        hidden: 0,
+        vendored: 0,
+        generated: 0,
+        binary: 0,
+        large: 0,
+        unreadable: 0,
+        otherTypes: 0,
+    });
+    // Only names survive in either list.
+    assert.deepEqual([...readDirAdded({ missing: ["a.c", 3, null, "b/c.h"] }).missing], ["a.c", "b/c.h"]);
 });

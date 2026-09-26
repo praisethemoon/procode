@@ -587,6 +587,12 @@ html, body {
   justify-content: space-between;
   gap: var(--bk-gap-md, 12px);
 }
+.kb-head-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--bk-gap-xs, 4px);
+}
 
 /* A row's actions stay quiet until the row is pointed at or focused, so a
  * list of collections reads as names and numbers, not as a wall of buttons. */
