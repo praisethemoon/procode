@@ -316,6 +316,17 @@ function SessionsSection(props: { ticket: string; sessions: Sessions | null; com
                                         · {x.commits} commit{x.commits === 1 ? "" : "s"} · {x.started.slice(0, 10)}
                                         {x.active ? " · active" : x.ended ? "" : " · open"}
                                     </span>
+                                    <button
+                                        type="button"
+                                        className="cb-review-button"
+                                        title={`Review ${x.id}: what it changed and how`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            send({ type: "review", session: x.id, ticket: props.ticket });
+                                        }}
+                                    >
+                                        <Icon name="git-pull-request" /> Review
+                                    </button>
                                 </div>
                                 {expanded && (
                                     <ul className="cb-commits">

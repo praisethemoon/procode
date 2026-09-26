@@ -585,3 +585,84 @@ body {
     margin-left: auto;
     color: var(--bk-color-foreground-muted);
 }
+
+/* ---- a session's review ------------------------------------------------ */
+
+.cb-review-button {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border: 1px solid var(--bk-color-border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--bk-color-foreground);
+    font: inherit;
+    font-size: 0.92em;
+    cursor: pointer;
+}
+.cb-review-button:hover {
+    background: var(--bk-color-list-hover, var(--bk-color-background-secondary));
+}
+.cb-review-stat {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+}
+.cb-plus {
+    color: var(--bk-color-success);
+}
+.cb-minus {
+    color: var(--bk-color-danger);
+}
+.cb-diff {
+    margin: 4px 0 10px 22px;
+    padding: 8px 0;
+    border: 1px solid var(--bk-color-border);
+    border-radius: 4px;
+    background: var(--bk-color-code-background);
+    font-family: var(--vscode-editor-font-family, var(--bk-font-family-mono));
+    font-size: 12px;
+    line-height: 1.45;
+    overflow-x: auto;
+}
+.cb-diff > div {
+    padding: 0 10px;
+    white-space: pre;
+}
+.cb-diff-add {
+    background: color-mix(in srgb, var(--bk-color-success) 16%, transparent);
+}
+.cb-diff-del {
+    background: color-mix(in srgb, var(--bk-color-danger) 16%, transparent);
+}
+.cb-diff-hunk {
+    color: var(--bk-color-info);
+}
+.cb-trajectory {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: step;
+}
+.cb-trajectory > li {
+    padding: 6px 8px;
+    border-left: 2px solid var(--bk-color-border);
+    margin-left: 6px;
+    cursor: pointer;
+}
+.cb-trajectory > li:hover {
+    border-left-color: var(--bk-color-focus);
+    background: var(--bk-color-list-hover, transparent);
+}
+.cb-step-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.cb-step-msg {
+    margin-top: 2px;
+    white-space: pre-wrap;
+    line-height: 1.45;
+}

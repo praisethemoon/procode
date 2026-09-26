@@ -8,9 +8,32 @@ import { createRoot } from "react-dom/client";
 import type { LapCommit } from "coboard/lap";
 import type { Choices, Sessions, ToView } from "../src/protocol";
 import { listen, send } from "./rpc";
+import { Review } from "./review";
 import { Epic, Milestone, Ticket } from "./views";
 
 type Data = Extract<ToView, { type: "data" }>;
+type ReviewData = Extract<ToView, { type: "review" }>;
+
+/* A session's review tab: one message, drawn once. */
+function ReviewApp(props: { session: string }): JSX.Element {
+    const [data, setData] = useState<ReviewData | null>(null);
+    useEffect(() => {
+        const stop = listen((m) => {
+            if (m.type === "review") setData(m);
+        });
+        send({ type: "ready" });
+        return stop;
+    }, []);
+    return (
+        <main className="cb-page">
+            {data === null ? (
+                <p className="cb-muted">Reading {props.session} from lap…</p>
+            ) : (
+                <Review session={data.session} ticket={data.ticket} review={data.review} error={data.error} />
+            )}
+        </main>
+    );
+}
 
 function App(props: { id: string }): JSX.Element {
     const [data, setData] = useState<Data | null>(null);
@@ -61,8 +84,7 @@ function App(props: { id: string }): JSX.Element {
 }
 
 const root = document.getElementById("root")!;
+const id = root.dataset["id"] ?? "";
 createRoot(root).render(
-    <StrictMode>
-        <App id={root.dataset["id"] ?? ""} />
-    </StrictMode>,
+    <StrictMode>{id.startsWith("review:") ? <ReviewApp session={id.slice("review:".length)} /> : <App id={id} />}</StrictMode>,
 );

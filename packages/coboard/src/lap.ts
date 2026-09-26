@@ -83,6 +83,58 @@ export async function sessionCommits(root: string, session: string): Promise<Lap
     }
 }
 
+/* A session as a review (`lap rr`): the purpose, every edit in the order it
+ * was made with its reason, and each file's net change over the session. */
+export interface LapReviewStep {
+    readonly id: string;
+    readonly ts: string;
+    readonly user: string;
+    readonly file: string;
+    readonly op: string;
+    readonly new_start: number;
+    readonly new_lines: number;
+    readonly msg: string;
+}
+
+export interface LapReviewFile {
+    readonly path: string;
+    readonly added: number;
+    readonly removed: number;
+    readonly deleted: boolean;
+    /* A unified diff of the whole session's change to this file. */
+    readonly diff: string;
+}
+
+export interface LapReview {
+    readonly range: string;
+    readonly purpose: string;
+    readonly commits: number;
+    readonly from: string;
+    readonly to: string;
+    readonly trajectory: readonly LapReviewStep[];
+    readonly files: readonly LapReviewFile[];
+}
+
+export async function sessionReview(root: string, session: string): Promise<LapResult<LapReview | null>> {
+    try {
+        const p = await run(root, ["rr", session]);
+        return {
+            ok: true,
+            value: {
+                range: String(p["range"] ?? session),
+                purpose: String(p["purpose"] ?? ""),
+                commits: Number(p["commits"] ?? 0),
+                from: String(p["from"] ?? ""),
+                to: String(p["to"] ?? ""),
+                trajectory: (p["trajectory"] as LapReviewStep[]) ?? [],
+                files: (p["files"] as LapReviewFile[]) ?? [],
+            },
+        };
+    } catch (e) {
+        return { ok: false, value: null, error: (e as Error).message };
+    }
+}
+
 /* One edit as the file before and after it: what a diff view needs. */
 export interface LapDiff {
     readonly id: string;

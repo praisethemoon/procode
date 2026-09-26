@@ -19,6 +19,7 @@ import {
     findBoard,
     search,
     sessionCommits,
+    sessionReview,
     startSession,
     ticketSessions,
     view,
@@ -153,8 +154,48 @@ function refreshAll(tree: Sidebar): void {
     tree.refresh();
     const all = items();
     for (const [id, panel] of panels) {
-        push(id, panel, all);
+        // A review shows a finished session; the board changing does not change it.
+        if (!id.startsWith(REVIEW)) push(id, panel, all);
     }
+}
+
+/* ---------------------------------------------------------------- reviews
+ *
+ * A lap session as a review (`lap rr`): its purpose, every edit in order with
+ * its reason — each opens as the same diff-with-comment a ticket's commits
+ * open — and every file's net change. One tab per session, keyed REVIEW+id. */
+const REVIEW = "review:";
+const reviewTickets = new Map<string, string | null>();
+
+async function pushReview(key: string, panel: vscode.WebviewPanel): Promise<void> {
+    const session = key.slice(REVIEW.length);
+    const b = currentBoard();
+    if (!b) return;
+    syncLapPath();
+    const r = await sessionReview(b.root, session);
+    const msg: ToView = { type: "review", session, ticket: reviewTickets.get(key) ?? null, review: r.value, ...(r.error ? { error: r.error } : {}) };
+    void panel.webview.postMessage(msg);
+}
+
+function openReview(ctx: vscode.ExtensionContext, tree: Sidebar, session: string, ticket: string | null): void {
+    const key = REVIEW + session.trim().toUpperCase();
+    reviewTickets.set(key, ticket);
+    const existing = panels.get(key);
+    if (existing) {
+        existing.reveal();
+        return;
+    }
+    const media = vscode.Uri.joinPath(ctx.extensionUri, "out", "media");
+    const panel = vscode.window.createWebviewPanel("coboard.review", `${key.slice(REVIEW.length)} review`, vscode.ViewColumn.Active, {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [media],
+    });
+    panel.iconPath = new vscode.ThemeIcon("git-pull-request");
+    panels.set(key, panel);
+    panel.onDidDispose(() => panels.delete(key));
+    panel.webview.onDidReceiveMessage((m: ToHost) => void onMessage(ctx, tree, key, panel, m));
+    panel.webview.html = html(panel.webview, media, "board.js", key);
 }
 
 function html(webview: vscode.Webview, media: vscode.Uri, script: string, id: string): string {
@@ -213,11 +254,18 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string
     try {
         switch (m.type) {
             case "ready":
+                if (id.startsWith(REVIEW)) {
+                    await pushReview(id, panel);
+                    return;
+                }
                 push(id, panel);
                 if (id.startsWith("T-")) await pushSessions(id, panel);
                 return;
             case "open":
                 open(ctx, tree, m.id);
+                return;
+            case "review":
+                openReview(ctx, tree, m.session, m.ticket ?? null);
                 return;
             case "mode":
                 viewMode = m.mode === "kanban" ? "kanban" : "list";
