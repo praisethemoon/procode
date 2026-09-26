@@ -1,11 +1,11 @@
-/* procode: Lap History, Knowledge, the Board and Artifacts as one extension, with the
- * lap and kb CLIs inside it.
+/* procode: Lap History, Knowledge, the Board and Artifacts as one extension.
  *
  * Each part is the extension it always was — its own activate(), its own
  * views and commands (the manifest is merged from theirs at build time) — and
- * this file only starts them in turn. The CLIs ship in <extension>/bin and go
- * first on PATH, so Knowledge's `kb` and the Board's `lap` are the ones built
- * with this package unless a setting names another.
+ * this file only starts them in turn. The lap and kb CLIs are not in the
+ * package: the user builds them, and each part finds its CLI through its own
+ * setting (clis.ts). That keeps the package free of native code, so one .vsix
+ * installs on every platform.
  */
 
 import { execFile } from "node:child_process";
@@ -15,9 +15,10 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { addArgv, findClaude, forClaude, removeArgv, shellLine, signature } from "./claude";
+import { CLIS, missingMessage, resolveCli } from "./clis";
 import { outdated, withServers } from "./mcpjson";
 
-export { addArgv, findClaude, forClaude, removeArgv, shellLine, signature };
+export { addArgv, findClaude, forClaude, removeArgv, resolveCli, shellLine, signature };
 
 interface Part {
     activate(ctx: vscode.ExtensionContext): unknown;
@@ -32,8 +33,10 @@ const PARTS: readonly [string, Part][] = [
     ["Artifacts", require("../../artifacts-vscode/out/extension.js") as Part],
 ];
 
-export function binDir(ctx: vscode.ExtensionContext): string {
-    return path.join(ctx.extensionPath, "bin");
+/* The command a CLI's setting names, "kb" or "lap" when it names none. */
+function cliCommand(settingId: string, fallback: string): string {
+    const [section, key] = settingId.split(".");
+    return vscode.workspace.getConfiguration(section).get<string>(key, fallback)?.trim() || fallback;
 }
 
 /* ------------------------------------------------------------ MCP servers
@@ -41,7 +44,7 @@ export function binDir(ctx: vscode.ExtensionContext): string {
  * coboard's, kb's and artifacts' MCP servers, each bundled into one script under
  * out/mcp. They run on VS Code's own runtime (the extension host's
  * executable with ELECTRON_RUN_AS_NODE=1), so no separate Node is needed,
- * and they are handed the bundled CLIs by path. */
+ * and they are handed the CLIs the settings name. */
 
 const VERSION = "0.1.0";
 
@@ -54,7 +57,6 @@ export interface Server {
 }
 
 export function servers(ctx: vscode.ExtensionContext): Server[] {
-    const bin = binDir(ctx);
     const script = (name: string) => path.join(ctx.extensionPath, "out", "mcp", `${name}.js`);
     const node = { ELECTRON_RUN_AS_NODE: "1" };
     return [
@@ -63,14 +65,14 @@ export function servers(ctx: vscode.ExtensionContext): Server[] {
             label: "coboard: the board",
             command: process.execPath,
             args: [script("coboard")],
-            env: { ...node, LAP_BIN: path.join(bin, "lap") },
+            env: { ...node, LAP_BIN: cliCommand("coboard.lapPath", "lap") },
         },
         {
             name: "kb",
             label: "kb: the knowledge base",
             command: process.execPath,
             args: [script("kb")],
-            env: { ...node, KB_BIN: path.join(bin, "kb") },
+            env: { ...node, KB_BIN: cliCommand("knowledge.cliPath", "kb") },
         },
         {
             name: "artifacts",
@@ -265,12 +267,29 @@ export async function refreshClaudeUserScope(ctx: vscode.ExtensionContext): Prom
     }
 }
 
-export function activate(ctx: vscode.ExtensionContext): void {
-    const bin = binDir(ctx);
-    const current = process.env["PATH"] ?? "";
-    if (!current.split(path.delimiter).includes(bin)) {
-        process.env["PATH"] = bin + path.delimiter + current;
+/* Says once per window, for each CLI its setting cannot reach, what cannot
+ * run and how to fix it. The parts report their own failures when used; this
+ * is the one place that says it up front, with the setting one click away. */
+function checkClis(): void {
+    const isFile = (p: string) => {
+        try {
+            return fs.statSync(p).isFile();
+        } catch {
+            return false;
+        }
+    };
+    for (const cli of CLIS) {
+        const command = cliCommand(cli.settingId, cli.name);
+        if (resolveCli(command, process.env["PATH"] ?? "", isFile)) continue;
+        void vscode.window.showWarningMessage(missingMessage(cli, command), "Open Setting").then((choice) => {
+            if (choice === "Open Setting") {
+                void vscode.commands.executeCommand("workbench.action.openSettings", cli.settingId);
+            }
+        });
     }
+}
+
+export function activate(ctx: vscode.ExtensionContext): void {
     for (const [name, part] of PARTS) {
         try {
             void part.activate(ctx);
@@ -286,6 +305,7 @@ export function activate(ctx: vscode.ExtensionContext): void {
     );
     checkClaudeMcp(ctx);
     void refreshClaudeUserScope(ctx);
+    checkClis();
 }
 
 export function deactivate(): void {

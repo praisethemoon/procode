@@ -1,8 +1,10 @@
 /* Builds the combined extension into dist/, and with --package turns dist/
- * into a .vsix for this machine's platform.
+ * into one .vsix for every platform: nothing in it is native. The lap and kb
+ * CLIs are not packaged; users build them, and the parts find them through
+ * their settings.
  *
  *   npm run build   --workspace combined     dist/ only
- *   npm run package --workspace combined     dist/ and procode-<version>-<target>.vsix
+ *   npm run package --workspace combined     dist/ and procode-<version>.vsix
  *
  * dist/ holds:
  *   package.json   generated: the four extensions' contributions merged, plus
@@ -13,7 +15,6 @@
  *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/artifacts.js
  *                      the MCP servers, one file each
  *   media/             Lap History's activity-bar icon
- *   bin/lap, bin/kb    the CLIs, built here for this platform
  */
 
 import { execFileSync } from "node:child_process";
@@ -33,8 +34,6 @@ const readJson = (p) => JSON.parse(fs.readFileSync(p, "utf8"));
 
 /* ---------------------------------------------------------- build the parts */
 
-run("make", ["-C", "cli/lap-cli"]);
-run("make", ["-C", "cli/kb-cli"]);
 for (const w of [...PARTS, "kb-mcp"]) {
     run("npm", ["run", "compile", "--workspace", w]);
 }
@@ -115,17 +114,15 @@ for (const part of ["index-vscode", "coboard-vscode", "artifacts-vscode"]) {
     }
 }
 fs.cpSync(path.join(repo, "packages", "lap-vscode", "media"), path.join(dist, "media"), { recursive: true });
-fs.mkdirSync(path.join(dist, "bin"));
-for (const [cli, bin] of [["lap-cli", "lap"], ["kb-cli", "kb"]]) {
-    fs.copyFileSync(path.join(repo, "cli", cli, "bin", bin), path.join(dist, "bin", bin));
-    fs.chmodSync(path.join(dist, "bin", bin), 0o755);
-}
 fs.copyFileSync(path.join(repo, "LICENSE"), path.join(dist, "LICENSE"));
 // dist/ holds exactly what ships; this only tells vsce so.
 fs.writeFileSync(path.join(dist, ".vscodeignore"), "**/*.map\n");
 fs.writeFileSync(
     path.join(dist, "README.md"),
-    "# procode\n\nLap History, Knowledge, the Board and Artifacts in one extension, with the `lap` and `kb` CLIs built in.\n\n" +
+    "# procode\n\nLap History, Knowledge, the Board and Artifacts in one extension.\n\n" +
+        "Knowledge and the Board run the `kb` and `lap` CLIs, which you build from the lap repository " +
+        "(`make -C cli/kb-cli install`, `make -C cli/lap-cli install`). They are found on PATH, or wherever " +
+        "the settings **Knowledge › Cli Path** and **Board › Lap Path** point.\n\n" +
         "The kb, coboard and artifacts MCP servers are registered with VS Code's agent automatically. For Claude Code, " +
         "procode offers to register them once for every project; **procode: Register MCP Servers with Claude Code** does it on demand.\n",
 );
@@ -169,11 +166,10 @@ console.log(`combined: built ${dist}`);
 if (process.argv.includes("--package")) {
     // A .vsix that would fail to start is not worth producing.
     execFileSync(process.execPath, [path.join(here, "scripts", "check.mjs")], { cwd: here, stdio: "inherit" });
-    const target = `${process.platform}-${process.arch}`;
-    const out = path.join(here, `procode-${VERSION}-${target}.vsix`);
+    const out = path.join(here, `procode-${VERSION}.vsix`);
     execFileSync(
         path.join(repo, "node_modules", ".bin", "vsce"),
-        ["package", "--no-dependencies", "--allow-missing-repository", "--target", target, "--out", out],
+        ["package", "--no-dependencies", "--allow-missing-repository", "--out", out],
         { cwd: dist, stdio: "inherit" },
     );
     console.log(`combined: packaged ${out}`);

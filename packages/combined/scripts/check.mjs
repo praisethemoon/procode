@@ -2,7 +2,8 @@
  * module and checks what an install would rely on:
  *   - all three parts activate without an error message
  *   - every command the generated manifest contributes is registered
- *   - the MCP definitions run files that exist in dist/, with the bundled CLIs
+ *   - the MCP definitions run files that exist in dist/, with the CLIs the
+ *     settings name, and dist/ ships no native binary
  *   - "Set Up MCP for Claude Code" writes .mcp.json and keeps other servers
  *   - user-scope registration asks a stand-in `claude` on PATH, never the real
  *     one: the first time, after an update, and not again once current
@@ -121,8 +122,14 @@ for (const d of defs) {
     assert.ok(fs.existsSync(d.args[0]), `${d.args[0]} exists`);
     assert.equal(d.env.ELECTRON_RUN_AS_NODE, "1");
     assert.equal(d.cwd.fsPath, folder);
-    for (const [k, v] of Object.entries(d.env)) if (k.endsWith("_BIN")) assert.ok(fs.existsSync(v), `${k} ${v} exists`);
 }
+assert.equal(defs[0].env.LAP_BIN, "lap", "coboard is handed Board › Lap Path, lap by default");
+assert.equal(defs[1].env.KB_BIN, "kb", "kb is handed Knowledge › Cli Path, kb by default");
+assert.equal(fs.existsSync(path.join(dist, "bin")), false, "the package carries no CLI");
+assert.equal(ext.resolveCli("kb", "/nowhere", () => false), null);
+assert.equal(ext.resolveCli("kb", ["/a", "/b"].join(path.delimiter), (p) => p === path.join("/b", "kb")), path.join("/b", "kb"));
+assert.equal(ext.resolveCli("/opt/kb", "", (p) => p === "/opt/kb"), "/opt/kb");
+assert.equal(ext.resolveCli("kb", "/w", (p) => p === path.join("/w", "kb.exe"), "win32"), path.join("/w", "kb.exe"));
 
 // The Claude Code command writes our servers and keeps the other one.
 registered.get("procode.setUpClaudeMcp")();
@@ -159,7 +166,7 @@ const coboardEntry = JSON.parse(first[1][5]);
 assert.equal(coboardEntry.type, "stdio");
 assert.equal(coboardEntry.args[0], defs[0].args[0], "user scope runs the installed script");
 assert.equal(coboardEntry.env.COBOARD_AUTHOR, "claude");
-assert.ok(fs.existsSync(JSON.parse(first[3][5]).env.KB_BIN), "user scope hands kb the bundled CLI");
+assert.equal(JSON.parse(first[3][5]).env.KB_BIN, "kb", "user scope hands kb the configured CLI");
 
 await ext.refreshClaudeUserScope(ctx2);
 assert.equal(asked().length, 6, "a current registration is left alone");
