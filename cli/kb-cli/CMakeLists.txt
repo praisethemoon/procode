@@ -27,6 +27,11 @@ set(KB_LIB_SOURCES
     src/token.c
     src/fts.c
     src/snippet.c
+    src/gguf.c
+    src/quant.c
+    src/wpm.c
+    src/embed.c
+    src/modelrec.c
     src/rank.c
     src/cmd_common.c
     src/cmd_init.c

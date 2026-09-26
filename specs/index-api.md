@@ -284,9 +284,15 @@ will state that relationship.
   "quantization": "int8" }
 ```
 
-Recorded in `index/model.json` at first ingest. **Every embedding in the store
-was produced by this configuration**, so a mismatch between it and the loaded
-model makes the index meaningless rather than merely worse.
+Recorded in `index/model.json` at first ingest, when there is a model to
+record, and again by `POST /reindex`. **Every embedding in the store was
+produced by this configuration**, so a mismatch between it and the loaded
+model makes the index meaningless rather than merely worse. Beside §8's
+fields the file carries what a mismatch also turns on: `arch`, how the
+weights were quantised (`weights`, e.g. `Q4_K_M` — two quantisations of one
+model are two sets of vectors), the tokenizer's version, a `fingerprint` over
+all of these, and the model file itself (`modelFile: { name, bytes, sha256 }`).
+A store with no model recorded is keyword-only.
 
 `GET /status` reports the mismatch and every search refuses with
 `model_mismatch` until `POST /reindex` completes. Silently mixing vectors from
@@ -355,7 +361,7 @@ code has none to give.
 | code | details |
 |---|---|
 | `not_found` | — |
-| `model_mismatch` | the stored configuration and the loaded one |
+| `model_mismatch` | `stored`, `loaded`: the two configurations, as §8 records them |
 | `model_missing` | `path`: the expected weights path |
 | `index_stale` | `structures`: which need rebuilding (`keyword`, `chunks`); `path` or `document` where one is at fault |
 | `unsupported_mime` | `mime`: what was seen. Any `text/` type is accepted, and the `application/` types that are text (JSON, XML, YAML, TOML, JavaScript, TypeScript, shell, XHTML) |

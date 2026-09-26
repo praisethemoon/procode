@@ -1,18 +1,20 @@
 #include "cmd.h"
+#include "modelrec.h"
 
 #include "rank.h"
 #include "snippet.h"
 
 /* GET /search (§4).
  *
- * WHAT THIS BUILD CAN ANSWER. §4's default is hybrid, and hybrid needs an
- * embedding model this build does not have (§8). Rather than pretend, the
+ * WHAT THIS BUILD CAN ANSWER. §4's default is hybrid, and hybrid needs stored
+ * vectors, which this build does not write yet. Rather than pretend, the
  * default here is `keyword` and every response says `"mode":"keyword"`, so
  * a caller can see what actually ran instead of inferring it. Asking for
- * `hybrid` or `semantic` explicitly is refused with `model_missing` and a
- * sentence saying why: a search that silently answered a hybrid question
- * with half a hybrid answer would be worse than one that refused, because
- * the caller would go on believing the vector side had been consulted.
+ * `hybrid` or `semantic` explicitly is refused — `model_missing`,
+ * `model_mismatch` or `index_stale` on the vectors, whichever is true (see
+ * semantic_ready): a search that silently answered a hybrid question with
+ * half a hybrid answer would be worse than one that refused, because the
+ * caller would go on believing the vector side had been consulted.
  *
  * SNIPPETS ONLY. §4: "a list must not be able to flood a caller's context."
  * Every passage returned here is a window of at most KB_SNIPPET_BYTES,
@@ -33,6 +35,57 @@ static const char *const VALUE_FLAGS[] = {
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef enum { MODE_KEYWORD, MODE_HYBRID, MODE_SEMANTIC } SearchMode;
+
+/* ---- the model -------------------------------------------------------- */
+
+/* Whether a search that needs vectors can run, and the refusal when it cannot.
+ * Degrading to keyword and saying nothing would hand back an answer the caller
+ * reads as hybrid, so each way of not being ready is its own §11 error:
+ * no model on this machine, a model other than the one the store recorded
+ * (§8: vectors from two models are not comparable), or no vectors at all. */
+static bool semantic_ready(Arena *a, Store *s, bool json, const char *mode) {
+    ModelProbe probe;
+    model_probe(a, &probe);
+    if (!probe.found) {
+        errdet_begin("model_missing");
+        errdet_str("path", probe.dir);
+        err_out(json, "model_missing", "mode \"%s\" needs the embedding model: %s",
+                mode, probe.err);
+        return false;
+    }
+    ModelParams recorded;
+    char sha[65];
+    if (model_recorded(a, s, &recorded, sha) &&
+        !model_params_equal(&recorded, &probe.params)) {
+        StrBuf stored, loaded;
+        sb_init(&stored, a);
+        sb_init(&loaded, a);
+        sb_putc(&stored, '{');
+        model_params_json(&stored, &recorded);
+        sb_putc(&stored, '}');
+        sb_putc(&loaded, '{');
+        model_params_json(&loaded, &probe.params);
+        sb_putc(&loaded, '}');
+        errdet_begin("model_mismatch");
+        errdet_raw("stored", sb_finish(&stored));
+        errdet_raw("loaded", sb_finish(&loaded));
+        char why[256];
+        model_params_diff(&recorded, &probe.params, why, sizeof why);
+        err_out(json, "model_mismatch",
+                "the store was indexed with another model configuration (%s); "
+                "run \"kb reindex\" to rebuild it under %s",
+                why, probe.path);
+        return false;
+    }
+    static const char *const structures[] = {"vectors"};
+    errdet_begin("index_stale");
+    errdet_strs("structures", structures, 1);
+    err_out(json, "index_stale",
+            "mode \"%s\" needs stored vectors and this store has none yet; "
+            "--mode keyword answers from the keyword index",
+            mode);
+    return false;
+}
 
 /* ---- filters ----------------------------------------------------------- */
 
@@ -131,15 +184,6 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             return KB_EXIT_ERR;
         }
     }
-    if (mode != MODE_KEYWORD) {
-        /* §11's model_missing. Degrading to keyword and saying nothing would
-         * hand back an answer the caller would read as hybrid. */
-        err_out(json, "model_missing",
-                "mode \"%s\" needs an embedding model and this build has "
-                "none; only --mode keyword exists so far",
-                mode_s);
-        return KB_EXIT_ERR;
-    }
 
     int64_t k = KB_SEARCH_K_DEFAULT;
     const char *k_s = flag_value(argc, argv, VALUE_FLAGS, "--k");
@@ -213,6 +257,11 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
     if (!fts_open_store(a, &s, &ix, &code, err, sizeof err)) {
         store_close(&s);
         err_out(json, code, "%s", err);
+        return KB_EXIT_ERR;
+    }
+
+    if (mode != MODE_KEYWORD && !semantic_ready(a, &s, json, mode_s)) {
+        store_close(&s);
         return KB_EXIT_ERR;
     }
 

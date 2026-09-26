@@ -17,9 +17,11 @@ import {
     readCollection,
     readDocument,
     readHit,
+    readModelStatus,
     readSource,
     strOrNull,
 } from "../shape";
+import { KbError } from "../errors";
 
 test("a row with nothing in it is still a row, with everything empty", () => {
     const d = readDocument({});
@@ -99,4 +101,44 @@ test("the small readers say what they are asked and never throw", () => {
     }
     assert.deepEqual(arr("nope"), []);
     assert.deepEqual(obj([1]), {});
+});
+
+test("the model status reads both sides typed, and null where either is absent", () => {
+    const config = {
+        model: "nomic-embed-text-v1.5",
+        arch: "nomic-bert",
+        dim: 768,
+        pooling: "mean",
+        maxTokens: 1024,
+        queryPrefix: "search_query: ",
+        documentPrefix: "search_document: ",
+        normalize: true,
+        quantization: "int8",
+        weights: "Q4_K_M",
+        tokenizer: 1,
+        fingerprint: "053c01",
+    };
+    const both = readModelStatus({
+        recorded: { ...config, sha256: "ab".repeat(32) },
+        available: { path: "/home/ana/.kb/models/m.gguf", bytes: 84106624, ...config },
+        current: true,
+    });
+    assert.equal(both.recorded?.dim, 768);
+    assert.equal(both.recorded?.sha256.length, 64);
+    assert.equal(both.available?.path, "/home/ana/.kb/models/m.gguf");
+    assert.equal(both.current, true);
+    assert.equal("missing" in both, false);
+
+    const none = readModelStatus({ recorded: null, available: null, missing: "no embedding model in ~/.kb/models", current: null });
+    assert.equal(none.recorded, null);
+    assert.equal(none.available, null);
+    assert.match(none.missing ?? "", /no embedding model/);
+    assert.equal(none.current, null);
+
+    const e = new KbError("model_mismatch", "another model", ["search"], {
+        stored: config,
+        loaded: { ...config, weights: "F16", fingerprint: "99" },
+    });
+    assert.equal(e.detailsOf("model_mismatch")?.loaded.weights, "F16");
+    assert.equal(new KbError("model_mismatch", "x", [], { stored: 1 }).detailsOf("model_mismatch"), null);
 });

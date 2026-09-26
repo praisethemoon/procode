@@ -97,6 +97,13 @@ void errdet_strs(const char *key, const char *const *values, size_t n) {
     commit(&f);
 }
 
+void errdet_raw(const char *key, const char *json) {
+    static Field f;
+    begin(&f, key);
+    put(&f, json, strlen(json));
+    commit(&f);
+}
+
 const char *errdet_json(const char *code) {
     if (used == 0 || strcmp(code, owner) != 0)
         return NULL;

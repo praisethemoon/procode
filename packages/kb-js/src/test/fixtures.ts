@@ -117,7 +117,7 @@ export const STATUS = {
         chunkOverlap: 60,
         current: true,
     },
-    model: null,
+    model: { recorded: null, available: null, missing: "no embedding model in /home/ana/.kb/models", current: null },
     torn: false,
     olderThan: "90d",
 };

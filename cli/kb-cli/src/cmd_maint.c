@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "modelrec.h"
 
 /* §7 — maintenance: GET /stats, POST /reindex, POST /compact.
  *
@@ -258,6 +259,16 @@ int32_t cmd_reindex(Arena *a, int32_t argc, char **argv) {
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
     }
+    /* §8: reindex is the one command entitled to change which model the
+     * store records, because it is the one that rebuilds under it. With no
+     * model in ~/.kb/models the store is left keyword-only and says so. */
+    ModelProbe model;
+    model_probe(a, &model);
+    if (model.found && !model_record(a, &s, &model, err, sizeof err)) {
+        store_close(&s);
+        err_out(json, "internal", "%s", err);
+        return KB_EXIT_FATAL;
+    }
 
     StrBuf sb;
     sb_init(&sb, a);
@@ -278,13 +289,23 @@ int32_t cmd_reindex(Arena *a, int32_t argc, char **argv) {
                   (unsigned long)KB_CHUNK_OVERLAP, old.chunker,
                   (unsigned long)old.chunk_tokens,
                   (unsigned long)old.chunk_overlap);
-        /* There are no embeddings in this build (§8), so a reindex re-chunks
-         * and re-indexes keywords and nothing else. Said in the payload
-         * rather than implied by an absent field. */
+        sb_puts(&sb, ",\"model\":");
+        if (model.found)
+            json_escape_c(&sb, model.params.model);
+        else
+            sb_puts(&sb, "null");
+        /* Vectors are not stored yet, so a reindex re-chunks, re-indexes
+         * keywords and records the model, and re-embeds nothing. Said in the
+         * payload rather than implied by an absent field. */
         sb_puts(&sb, ",\"note\":");
-        json_escape_c(&sb, "rechunked and re-indexed for keyword retrieval; "
-                           "this build has no embedding model, so nothing was "
-                           "re-embedded.");
+        json_escape_c(&sb, model.found
+                               ? "rechunked, re-indexed for keyword retrieval "
+                                 "and recorded the model; no vectors are "
+                                 "stored yet, so nothing was re-embedded."
+                               : "rechunked and re-indexed for keyword "
+                                 "retrieval; there is no model in "
+                                 "~/.kb/models, so the store stays "
+                                 "keyword-only.");
         sb_putc(&sb, '}');
         puts(sb_finish(&sb));
     } else {

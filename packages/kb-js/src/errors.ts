@@ -22,6 +22,8 @@
  * NO `vscode` AND NO THIRD-PARTY IMPORT. This module is loadable anywhere.
  */
 
+import type { KbModelConfig } from "./types";
+
 /* §11, verbatim and in its order. */
 export const SPEC_ERROR_CODES = [
     "not_found",
@@ -74,12 +76,15 @@ export interface KbErrorDetails {
     unsupported_mime: { readonly mime: string };
     fetch_failed: { readonly locator: string; readonly status?: number };
     model_missing: { readonly path: string };
+    model_mismatch: { readonly stored: KbModelConfig; readonly loaded: KbModelConfig };
 }
 
 type Raw = Readonly<Record<string, unknown>>;
 
 const str = (v: unknown): v is string => typeof v === "string";
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const isConfig = (v: unknown): boolean =>
+    typeof v === "object" && v !== null && str((v as Raw)["model"]) && str((v as Raw)["fingerprint"]);
 const opt = <T>(v: unknown, ok: (v: unknown) => v is T): boolean => v === undefined || ok(v);
 
 /* Each shape is checked, not asserted: a details object that does not match
@@ -95,6 +100,7 @@ const DETAIL_CHECKS: { readonly [C in keyof KbErrorDetails]: (d: Raw) => boolean
     unsupported_mime: (d) => str(d["mime"]),
     fetch_failed: (d) => str(d["locator"]) && opt(d["status"], num),
     model_missing: (d) => str(d["path"]),
+    model_mismatch: (d) => isConfig(d["stored"]) && isConfig(d["loaded"]),
 };
 
 /* A refusal: exit 1, with the store's own reason.

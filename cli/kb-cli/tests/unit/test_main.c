@@ -24,6 +24,7 @@ void test_snippet(void);
 void test_stale(void);
 void test_link(void);
 void test_errdet(void);
+void test_embed(void);
 
 /* Holds the write lock on a store until stdin closes, so the end-to-end
  * script can see what a *second* process meets: cross-process locking is
@@ -66,6 +67,7 @@ int main(int argc, char **argv) {
     test_stale();
     test_link();
     test_errdet();
+    test_embed();
     printf("unit tests: %d passed, %d failed\n", t_pass, t_fail);
     return t_fail == 0 ? 0 : 1;
 }

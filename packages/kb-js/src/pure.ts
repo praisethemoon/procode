@@ -70,6 +70,8 @@ export {
     KbSource,
     KbStaleList,
     KbStats,
+    KbModelConfig,
+    KbModelStatus,
     KbStatus,
     LINK_TYPES,
     LinkType,

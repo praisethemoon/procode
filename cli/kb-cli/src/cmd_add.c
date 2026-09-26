@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "modelrec.h"
 
 #include "sha256.h"
 
@@ -504,7 +505,9 @@ static int32_t add_batch(Arena *a, bool json) {
         }
         any_reindexed |= r[i].reindexed;
     }
-    if (any_reindexed && !rebuild(a, &s, err, sizeof err)) {
+    /* §8: the model is recorded at first ingest, when there is one. */
+    if ((any_reindexed && !rebuild(a, &s, err, sizeof err)) ||
+        !model_record_if_absent(a, &s, err, sizeof err)) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
@@ -597,7 +600,8 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
     Filed r;
     if (!ingest(a, &s, &f, now, &r, err, sizeof err) ||
         (r.reindexed &&
-         (!reread(a, &s, err, sizeof err) || !rebuild(a, &s, err, sizeof err)))) {
+         (!reread(a, &s, err, sizeof err) || !rebuild(a, &s, err, sizeof err))) ||
+        !model_record_if_absent(a, &s, err, sizeof err)) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;

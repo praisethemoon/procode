@@ -28,6 +28,8 @@ void errdet_begin(const char *code);
 void errdet_str(const char *key, const char *value);
 void errdet_int(const char *key, int64_t value);
 void errdet_strs(const char *key, const char *const *values, size_t n);
+/* A value that is already JSON — an object the caller built. Taken as is. */
+void errdet_raw(const char *key, const char *json);
 
 /* "{...}" with the fields added since errdet_begin(code), or NULL when there
  * are none for that code. Valid until the next errdet_* call. */

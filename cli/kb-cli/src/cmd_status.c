@@ -1,13 +1,13 @@
 #include "cmd.h"
+#include "modelrec.h"
 
-/* GET /status (§7): the store's path, counts and disk use.
+/* GET /status (§7): the store's path, counts, disk use, index freshness and
+ * model identity.
  *
- * §7 also asks for index freshness and model identity. There is no model
- * yet, so this reports the chunking parameters the index was
- * built with instead, and whether they still match what this build would
- * produce. That is the same question one layer down: a store whose
- * chunkTokens or chunker differ from the running binary owes a reindex
- * exactly as a store built with another model would (§8).
+ * Two freshness questions, one layer apart. The chunking parameters the index
+ * was built with against what this build would produce, and the model the
+ * store recorded (§8) against the one in ~/.kb/models now. Either differing
+ * means a reindex is owed.
  */
 
 static const char *const VALUE_FLAGS[] = {"--older-than", "--olderThan",
@@ -97,10 +97,40 @@ static void store_json(StrBuf *sb, Arena *a, const char *dir,
         }
     }
     sb_puts(sb, "}}");
-    /* The model is the one thing §7 reports that this slice cannot: say so
-     * rather than omit the field, so a caller can tell "no model yet" from
-     * "this build does not know about models". */
-    sb_puts(sb, ",\"model\":null");
+    /* §8: what the store recorded, what this machine would load, and whether
+     * they agree. `current` is null when either side is missing, because
+     * there is nothing to compare. */
+    ModelParams recorded;
+    char sha[65];
+    bool has_recorded = model_recorded(a, &s, &recorded, sha);
+    ModelProbe probe;
+    model_probe(a, &probe);
+    sb_puts(sb, ",\"model\":{\"recorded\":");
+    if (has_recorded) {
+        sb_putc(sb, '{');
+        model_params_json(sb, &recorded);
+        sb_printf(sb, ",\"sha256\":\"%s\"}", sha);
+    } else {
+        sb_puts(sb, "null");
+    }
+    sb_puts(sb, ",\"available\":");
+    if (probe.found) {
+        sb_puts(sb, "{\"path\":");
+        json_escape_c(sb, probe.path);
+        sb_printf(sb, ",\"bytes\":%llu,", (unsigned long long)probe.bytes);
+        model_params_json(sb, &probe.params);
+        sb_putc(sb, '}');
+    } else {
+        sb_puts(sb, "null,\"missing\":");
+        json_escape_c(sb, probe.err);
+    }
+    sb_puts(sb, ",\"current\":");
+    if (has_recorded && probe.found)
+        sb_puts(sb, model_params_equal(&recorded, &probe.params) ? "true"
+                                                                 : "false");
+    else
+        sb_puts(sb, "null");
+    sb_putc(sb, '}');
     sb_puts(sb, ",\"torn\":");
     sb_puts(sb, (s.sources.torn_tail || s.documents.torn_tail) ? "true"
                                                               : "false");
@@ -155,7 +185,28 @@ static void store_human(Arena *a, const char *dir, const Staleness *st) {
                (unsigned long long)ix.file_bytes);
     else
         printf("         keyword index stale: %s\n", ierr);
-    puts("         model   none (not built yet)");
+    ModelParams recorded;
+    char sha[65];
+    bool has_recorded = model_recorded(a, &s, &recorded, sha);
+    ModelProbe probe;
+    model_probe(a, &probe);
+    if (has_recorded)
+        printf("         model    %s (%s, %lu dims), recorded\n",
+               recorded.model, recorded.weights, (unsigned long)recorded.dim);
+    else
+        puts("         model    none recorded: the store is keyword-only");
+    if (!probe.found)
+        printf("         no model in %s\n", probe.dir);
+    else if (!has_recorded)
+        printf("         %s is available; kb reindex records it\n",
+               probe.path);
+    else if (!model_params_equal(&recorded, &probe.params)) {
+        char why[256];
+        model_params_diff(&recorded, &probe.params, why, sizeof why);
+        printf("         %s differs from the recorded model: %s (reindex "
+               "owed)\n",
+               probe.path, why);
+    }
     if (s.sources.torn_tail || s.documents.torn_tail)
         puts("         an interrupted append left a partial final line; the "
              "next write repairs it");

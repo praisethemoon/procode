@@ -23,7 +23,7 @@ DESTDIR ?=
 
 SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/errdet.c src/platform.c \
            src/doc.c src/store.c src/chunk.c src/token.c src/fts.c \
-           src/snippet.c \
+           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/embed.c src/modelrec.c \
            src/rank.c src/cmd_common.c \
            src/cmd_init.c src/cmd_add.c src/cmd_ls.c src/cmd_get.c \
            src/cmd_search.c src/cmd_chunk.c src/cmd_rebuild.c \

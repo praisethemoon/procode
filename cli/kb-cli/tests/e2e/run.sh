@@ -431,7 +431,8 @@ hasnt "status" "$out" '"tiers"'
 hasnt "status" "$out" '"defaultWrite"'
 has "status" "$out" '"chunkTokens":400'
 has "status" "$out" '"chunkOverlap":60'
-has "status" "$out" '"model":null'
+has "status" "$out" '"model":{"recorded":null,"available":null,"missing":"no embedding model in '
+has "status" "$out" 'curl -fL'
 has "status" "$out" '"nextIds"'
 
 t "the chunking parameters are recorded in index/model.json"
@@ -1428,7 +1429,8 @@ before_docs=$(wc -c < prov/.kb/documents.jsonl)
 out=$(kbv reindex --json)
 has "reindex noop" "$out" '"rechunked":0'
 has "reindex noop" "$out" '"reembedded":0'
-has "reindex noop" "$out" 'no embedding model'
+has "reindex noop" "$out" '"model":null'
+has "reindex noop" "$out" 'keyword-only'
 [ "$(wc -c < prov/.kb/documents.jsonl)" = "$before_docs" ] || \
     fail "a reindex with nothing to do still appended"
 
@@ -1771,6 +1773,42 @@ if [ -n "$KB_TESTS" ]; then
     exec 9>&-
     wait $holder
     rm -f compctl
+fi
+
+# ------------------------------------------------------------------ model
+# Needs the real weights, which a test cannot make: KB_TEST_MODEL names a
+# nomic-embed-text GGUF, linked into this run's throwaway HOME.
+if [ -n "${KB_TEST_MODEL:-}" ] && [ -f "$KB_TEST_MODEL" ]; then
+    mkdir -p "$HOME/.kb/models" mdl
+    ln "$KB_TEST_MODEL" "$HOME/.kb/models/" 2>/dev/null ||
+        cp "$KB_TEST_MODEL" "$HOME/.kb/models/"
+    kbm() { ( cd "$WORK/mdl" && "$KB" "$@" ); }
+    kbm init > /dev/null
+
+    t "the model is recorded at first ingest, with its file's hash"
+    printf 'zzmodel text\n' | kbm add --title m --collection c > /dev/null
+    out=$(cat mdl/.kb/index/model.json)
+    has "model.json" "$out" '"model":"nomic-embed-text-v1.5"'
+    has "model.json" "$out" '"dim":768'
+    has "model.json" "$out" '"queryPrefix":"search_query: "'
+    has "model.json" "$out" '"documentPrefix":"search_document: "'
+    has "model.json" "$out" '"chunkTokens":400'
+    has "model.json" "$out" "\"sha256\":\"$(sha_of "$KB_TEST_MODEL")\""
+    has "status current" "$(kbm status --json)" '"current":true}'
+
+    t "another recorded configuration is model_mismatch until reindex records this one"
+    sed -i.bak 's/"weights":"[^"]*"/"weights":"F16"/' mdl/.kb/index/model.json
+    has "status mismatch" "$(kbm status --json)" '"current":false}'
+    out=$(kbm search zzmodel --mode hybrid --json)
+    has "mismatch" "$out" '"error":"model_mismatch"'
+    has "mismatch" "$out" '"details":{"stored":{"model":"nomic-embed-text-v1.5"'
+    has "mismatch" "$out" 'weights'
+    has "keyword unaffected" "$(kbm search zzmodel --json)" '"count":1'
+    has "reindex records" "$(kbm reindex --json)" '"model":"nomic-embed-text-v1.5"'
+    has "status current again" "$(kbm status --json)" '"current":true}'
+
+    t "with the model current, vector search says there are no vectors yet"
+    has "no vectors" "$(kbm search zzmodel --mode hybrid --json)" '"structures":\["vectors"\]'
 fi
 
 t "kb still writes nothing outside its own store"

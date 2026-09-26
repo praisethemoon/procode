@@ -36,6 +36,8 @@ import {
     KbSource,
     KbStaleList,
     KbStats,
+    KbModelConfig,
+    KbModelStatus,
     KbStatus,
 } from "./types";
 
@@ -229,12 +231,54 @@ export function readStats(payload: Record<string, unknown>): KbStats {
     };
 }
 
+function readModelConfig(v: Record<string, unknown>): KbModelConfig {
+    return {
+        model: str(v["model"]),
+        arch: str(v["arch"]),
+        dim: num(v["dim"]),
+        pooling: str(v["pooling"]),
+        maxTokens: num(v["maxTokens"]),
+        queryPrefix: str(v["queryPrefix"]),
+        documentPrefix: str(v["documentPrefix"]),
+        normalize: bool(v["normalize"]),
+        quantization: str(v["quantization"]),
+        weights: str(v["weights"]),
+        tokenizer: num(v["tokenizer"]),
+        fingerprint: str(v["fingerprint"]),
+    };
+}
+
+export function readModelStatus(v: unknown): KbModelStatus {
+    const m = obj(v);
+    const rec = m["recorded"];
+    const av = m["available"];
+    const out: {
+        recorded: KbModelStatus["recorded"];
+        available: KbModelStatus["available"];
+        missing?: string;
+        current: boolean | null;
+    } = {
+        recorded:
+            typeof rec === "object" && rec !== null
+                ? { ...readModelConfig(obj(rec)), sha256: str(obj(rec)["sha256"]) }
+                : null,
+        available:
+            typeof av === "object" && av !== null
+                ? { ...readModelConfig(obj(av)), path: str(obj(av)["path"]), bytes: num(obj(av)["bytes"]) }
+                : null,
+        current: typeof m["current"] === "boolean" ? m["current"] : null,
+    };
+    if (typeof m["missing"] === "string") {
+        out.missing = m["missing"];
+    }
+    return out;
+}
+
 export function readStatus(payload: Record<string, unknown>): KbStatus {
     const t = payload;
     const status: Record<string, unknown> = {
         path: typeof t["path"] === "string" ? t["path"] : null,
         present: bool(t["present"]),
-        model: t["model"] ?? null,
         olderThan: str(t["olderThan"]),
     };
     /* Everything below is absent when there is no store, and absent is
@@ -266,6 +310,7 @@ export function readStatus(payload: Record<string, unknown>): KbStatus {
                 chunkOverlap: num(ch["chunkOverlap"]),
                 current: bool(ch["current"]),
             };
+            status["model"] = readModelStatus(t["model"]);
             status["torn"] = bool(t["torn"]);
         }
     }

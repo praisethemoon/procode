@@ -136,6 +136,36 @@ export interface KbCollection {
     readonly chunks?: number;
 }
 
+/* §8's configuration, as index/model.json records it and as `kb status`
+ * reports the model in ~/.kb/models. `fingerprint` covers every field that
+ * changes what a vector means; two configurations are the same exactly when
+ * their fingerprints are. */
+export interface KbModelConfig {
+    readonly model: string;
+    readonly arch: string;
+    readonly dim: number;
+    readonly pooling: string;
+    readonly maxTokens: number;
+    readonly queryPrefix: string;
+    readonly documentPrefix: string;
+    readonly normalize: boolean;
+    readonly quantization: string;
+    readonly weights: string;
+    readonly tokenizer: number;
+    readonly fingerprint: string;
+}
+
+export interface KbModelStatus {
+    /* What the store's vectors were produced by; null for a keyword-only store. */
+    readonly recorded: (KbModelConfig & { readonly sha256: string }) | null;
+    /* The model in ~/.kb/models; null when there is none, and `missing` says
+     * where it looked and the command that puts one there. */
+    readonly available: (KbModelConfig & { readonly path: string; readonly bytes: number }) | null;
+    readonly missing?: string;
+    /* null when either side is absent: there is nothing to compare. */
+    readonly current: boolean | null;
+}
+
 /* §7's `GET /status`. There is one store, the first `.kb/` at or above the
  * working directory; `path: null` and `present: false` mean there is none, and
  * everything else is absent then, because "no store here" and "a store with no
@@ -167,8 +197,9 @@ export interface KbStatus {
          * with another model would. */
         readonly current: boolean;
     };
-    /* §8's model identity, or null where there is no model yet. */
-    readonly model: unknown;
+    /* §8: the model the store recorded and the one this machine would load.
+     * Absent when there is no readable store. */
+    readonly model?: KbModelStatus;
     readonly torn?: boolean;
     /* The staleness threshold the counts were taken against. */
     readonly olderThan: string;
