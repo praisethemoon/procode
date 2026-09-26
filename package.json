@@ -10,6 +10,7 @@
         "packages/coboard",
         "packages/coboard-vscode",
         "packages/artifacts",
+        "packages/artifacts-vscode",
         "packages/combined"
     ],
     "scripts": {

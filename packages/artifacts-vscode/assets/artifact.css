@@ -1,0 +1,166 @@
+/* The default look of a plain artifact (specs/artifacts.md §3): every element
+ * an agent is likely to write, styled with baukasten's tokens, so a page with
+ * no CSS of its own already reads like part of the editor.
+ *
+ * In a layer, after baukasten's own: any rule a page writes, however weak its
+ * selector, wins over these, because unlayered styles beat layered ones. */
+
+@layer baukasten, artifact;
+
+@layer artifact {
+    :root {
+        color-scheme: light dark;
+    }
+
+    html {
+        background: var(--bk-color-background);
+    }
+
+    body {
+        margin: 0 auto;
+        max-width: 60rem;
+        padding: var(--bk-spacing-6) var(--bk-spacing-8) var(--bk-spacing-12);
+        color: var(--bk-color-foreground);
+        background: var(--bk-color-background);
+        font-family: var(--vscode-font-family, var(--bk-font-family-sans));
+        font-size: var(--bk-font-size-base);
+        line-height: var(--bk-line-height-normal);
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        line-height: var(--bk-line-height-tight);
+        font-weight: var(--bk-font-weight-semibold);
+        margin: var(--bk-spacing-8) 0 var(--bk-spacing-3);
+    }
+    h1 {
+        font-size: var(--bk-font-size-3xl);
+        margin-top: 0;
+    }
+    h2 {
+        font-size: var(--bk-font-size-2xl);
+        padding-bottom: var(--bk-spacing-2);
+        border-bottom: var(--bk-border-width-1) solid var(--bk-color-divider);
+    }
+    h3 {
+        font-size: var(--bk-font-size-xl);
+    }
+    h4 {
+        font-size: var(--bk-font-size-lg);
+    }
+
+    p,
+    ul,
+    ol,
+    dl,
+    table,
+    pre,
+    blockquote,
+    figure {
+        margin: 0 0 var(--bk-spacing-4);
+    }
+    ul,
+    ol {
+        padding-left: var(--bk-spacing-6);
+    }
+    li + li {
+        margin-top: var(--bk-spacing-1);
+    }
+    dt {
+        font-weight: var(--bk-font-weight-semibold);
+    }
+    dd {
+        margin: 0 0 var(--bk-spacing-2) var(--bk-spacing-4);
+        color: var(--bk-color-foreground-muted);
+    }
+
+    a {
+        color: var(--bk-color-link);
+        text-decoration: none;
+    }
+    a:hover {
+        color: var(--bk-color-link-hover);
+        text-decoration: underline;
+    }
+
+    small,
+    .muted,
+    figcaption {
+        color: var(--bk-color-foreground-muted);
+        font-size: var(--bk-font-size-sm);
+    }
+
+    code,
+    kbd,
+    samp,
+    pre {
+        font-family: var(--vscode-editor-font-family, var(--bk-font-family-mono));
+        font-size: 0.92em;
+    }
+    code {
+        padding: 0.1em 0.35em;
+        border-radius: var(--bk-radius-sm);
+        color: var(--bk-color-code-foreground);
+        background: var(--bk-color-code-background);
+    }
+    pre {
+        padding: var(--bk-spacing-3) var(--bk-spacing-4);
+        border-radius: var(--bk-radius-md);
+        background: var(--bk-color-code-background);
+        overflow-x: auto;
+        line-height: var(--bk-line-height-normal);
+    }
+    pre code {
+        padding: 0;
+        background: none;
+    }
+
+    blockquote {
+        padding: var(--bk-spacing-1) var(--bk-spacing-4);
+        border-left: var(--bk-border-width-4) solid var(--bk-color-border);
+        color: var(--bk-color-foreground-muted);
+    }
+
+    hr {
+        border: 0;
+        border-top: var(--bk-border-width-1) solid var(--bk-color-divider);
+        margin: var(--bk-spacing-6) 0;
+    }
+
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: var(--bk-font-size-md);
+    }
+    th,
+    td {
+        text-align: left;
+        vertical-align: top;
+        padding: var(--bk-spacing-2) var(--bk-spacing-3);
+        border-bottom: var(--bk-border-width-1) solid var(--bk-color-divider);
+    }
+    th {
+        font-weight: var(--bk-font-weight-semibold);
+        color: var(--bk-color-foreground-muted);
+        border-bottom-color: var(--bk-color-border);
+    }
+    tbody tr:hover {
+        background: var(--bk-color-hover);
+    }
+
+    img,
+    svg,
+    video,
+    canvas {
+        max-width: 100%;
+    }
+
+    mark {
+        color: inherit;
+        background: var(--bk-color-warning);
+        padding: 0 0.15em;
+        border-radius: var(--bk-radius-sm);
+    }
+}
