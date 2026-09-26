@@ -70,6 +70,11 @@
         "icon": "$(library)"
       },
       {
+        "command": "knowledge.graph",
+        "title": "Knowledge: Graph of Links",
+        "icon": "$(type-hierarchy)"
+      },
+      {
         "command": "knowledge.addCurrentFile",
         "title": "Knowledge: Add The Current File",
         "icon": "$(file-add)"
@@ -120,6 +125,11 @@
           "command": "knowledge.collections",
           "when": "view == knowledge.documents",
           "group": "navigation@4"
+        },
+        {
+          "command": "knowledge.graph",
+          "when": "view == knowledge.documents",
+          "group": "navigation@5"
         }
       ],
       "commandPalette": [

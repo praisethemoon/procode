@@ -48,6 +48,7 @@ static const char *USAGE =
     "\n"
     "links:\n"
     "  links <D-n>                outgoing and incoming, resolved to rows\n"
+    "  links --all                every link in the store, both ends\n"
     "  links add <D-n> <type> <D-m>\n"
     "                             supersedes | cites | analogue_of |\n"
     "                             implements | see_also\n"

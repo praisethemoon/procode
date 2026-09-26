@@ -46,6 +46,7 @@ import {
     initArgv,
     linkArgv,
     linksArgv,
+    allLinksArgv,
     lsArgv,
     refreshArgv,
     renameCollectionArgv,
@@ -64,6 +65,7 @@ import {
     readCollection,
     readDocument,
     readDocumentRead,
+    readEdges,
     readForgotten,
     readSource,
     readSourceRead,
@@ -83,6 +85,7 @@ import {
     KbCollection,
     KbDocument,
     KbDocumentRead,
+    KbEdge,
     KbForgotten,
     KbHit,
     KbSource,
@@ -214,6 +217,11 @@ export class Kb {
      * rows". */
     async links(document: string): Promise<KbLinks> {
         return readLinks(await run(linksArgv(document), this.options));
+    }
+
+    /* Every link in the store, for a graph of it. */
+    async allLinks(): Promise<KbEdge[]> {
+        return readEdges(await run(allLinksArgv(), this.options));
     }
 
     /* §6's `POST /links`. `analogue_of` is the one that motivated the layer:

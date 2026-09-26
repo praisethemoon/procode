@@ -39,7 +39,7 @@ const KIND_OF: Readonly<Record<string, EntityKind>> = {
 };
 
 /* §6's one place that is not an entity. */
-export const PLACES = ["collections"] as const;
+export const PLACES = ["collections", "graph"] as const;
 export type Place = (typeof PLACES)[number];
 
 export type Target =
@@ -133,6 +133,7 @@ export function isPlaceable(t: Target): boolean {
 
 export const PLACE_TITLES: Readonly<Record<Place, string>> = {
     collections: "Collections",
+    graph: "Graph",
 };
 
 /* What a tab is called until the store answers. The reference alone — a title

@@ -27,7 +27,7 @@
 
 static const char *const VALUE_FLAGS[] = {"--older-than", "--olderThan",
                                           NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+static const char *const BOOL_FLAGS[] = {"--json", "--all", NULL};
 
 /* "supersedes, cites, analogue_of, implements or see_also" — built from the
  * one table so a type added there cannot be missing from the message. */
@@ -227,6 +227,52 @@ static int32_t links_read(Arena *a, int32_t argc, char **argv, bool json,
     return KB_EXIT_OK;
 }
 
+/* Every live link in the store, for a graph: one row per edge with both ends
+ * and whether each end is still a document, and nothing else — the documents
+ * themselves are `kb ls`, read once, rather than repeated on every edge. */
+static int32_t links_all(Arena *a, bool json) {
+    char err[512];
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
+        err_out(json, "not_found", "%s", err);
+        return KB_EXIT_ERR;
+    }
+    Store s;
+    const char *code;
+    if (!store_open(a, &s, dir, false, err, sizeof err, &code)) {
+        err_out(json, code, "%s", err);
+        return KB_EXIT_ERR;
+    }
+    StrBuf sb;
+    sb_init(&sb, a);
+    if (json)
+        sb_puts(&sb, "{\"ok\":true,\"links\":[");
+    for (size_t i = 0; i < s.documents.nlinks; i++) {
+        const Link *l = &s.documents.links[i];
+        bool from_ok = doc_by_id(&s.documents, l->from) != NULL;
+        bool to_ok = doc_by_id(&s.documents, l->to) != NULL;
+        if (json)
+            sb_printf(&sb,
+                      "%s{\"type\":\"%s\",\"from\":\"%s\",\"to\":\"%s\","
+                      "\"resolved\":%s}",
+                      i ? "," : "", l->rel, l->from, l->to,
+                      from_ok && to_ok ? "true" : "false");
+        else
+            sb_printf(&sb, "%-8s %-11s %-8s%s\n", l->from, l->rel, l->to,
+                      from_ok && to_ok ? "" : "  (an end is forgotten)");
+    }
+    if (json) {
+        sb_printf(&sb, "],\"count\":%zu}", s.documents.nlinks);
+        puts(sb_finish(&sb));
+    } else if (s.documents.nlinks == 0) {
+        puts("no links");
+    } else {
+        fputs(sb_finish(&sb), stdout);
+    }
+    store_close(&s);
+    return KB_EXIT_OK;
+}
+
 int32_t cmd_links(Arena *a, int32_t argc, char **argv) {
     bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
     const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
@@ -237,6 +283,13 @@ int32_t cmd_links(Arena *a, int32_t argc, char **argv) {
     /* The first positional is either a verb or the document being read. The
      * two can never be confused: a document id is `D-<n>` and no verb is. */
     const char *first = positional_arg(argc, argv, VALUE_FLAGS, 0);
+    if (has_flag(argc, argv, VALUE_FLAGS, "--all")) {
+        if (first) {
+            err_out(json, "usage", "kb links --all takes no document");
+            return KB_EXIT_ERR;
+        }
+        return links_all(a, json);
+    }
     if (first && strcmp(first, "add") == 0)
         return links_write(a, argc, argv, json, false);
     if (first && strcmp(first, "delete") == 0)

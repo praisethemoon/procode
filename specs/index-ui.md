@@ -107,7 +107,13 @@ keyboard.
 kb:/D-241          a document
 kb:/S-3            a source, with its documents
 kb:/collections    the collection list
+kb:/graph          the links between documents, drawn
 ```
+
+`kb:/graph` draws index-api §6's links: a document is a node coloured by its
+collection, a link an arrow in its type's style. It is read-only like
+everything else here — a collection and "documents with no links" narrow what
+is drawn, and clicking a document opens it.
 
 Same scheme discipline as `UI.md` §4 and §6: one string is both the reference
 and the editor URI, every identifier shown is the public one, and opening a

@@ -155,6 +155,12 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
             return kb.get(text("id") ?? "", { text: true, chunks: true });
         case "collections":
             return kb.collections();
+        case "graph": {
+            /* Every document once and every link once: the graph is drawn
+             * from the two, rather than one `links` call per document. */
+            const [documents, edges] = await Promise.all([kb.ls(), kb.allLinks()]);
+            return { documents, edges };
+        }
         case "refresh":
             /* §5's route takes a scope and a threshold and nothing else: a
              * report over the store. One document's refresh is its own

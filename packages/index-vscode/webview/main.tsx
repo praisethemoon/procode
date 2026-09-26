@@ -12,6 +12,7 @@ import { createRoot } from "react-dom/client";
 
 import { parseTarget } from "../src/uri";
 import { Collections } from "./Collections";
+import { Graph } from "./Graph";
 import { DocumentView, SourceView } from "./Document";
 import { Sidebar } from "./Sidebar";
 import { tag } from "./rpc";
@@ -30,7 +31,7 @@ function Entity(props: { reference: string }): JSX.Element {
         );
     }
     if (target.sort === "place") {
-        return <Collections />;
+        return target.place === "graph" ? <Graph /> : <Collections />;
     }
     if (target.kind === "source") {
         return <SourceView reference={target.id} />;

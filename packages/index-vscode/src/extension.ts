@@ -157,6 +157,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand("knowledge.collections", () =>
             editors.provider.open("collections", null, false),
         ),
+        vscode.commands.registerCommand("knowledge.graph", () => editors.provider.open("graph", null, false)),
         vscode.commands.registerCommand(
             "knowledge.addCurrentFile",
             withClient((kb) => addCurrentFile(kb, announce)),

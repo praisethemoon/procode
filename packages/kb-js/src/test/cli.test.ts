@@ -706,3 +706,28 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
         work.dispose();
     }
 });
+
+test("the whole graph through this package: every edge, both ends, and a forgotten end marked", async (t) => {
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await work.kb.init();
+        const a = await work.kb.add("zzga\n", { title: "a", collection: "g" });
+        const b = await work.kb.add("zzgb\n", { title: "b", collection: "g" });
+        const c = await work.kb.add("zzgc\n", { title: "c", collection: "h" });
+        assert.deepEqual(await work.kb.allLinks(), []);
+        await work.kb.link(a.document, "cites", b.document);
+        await work.kb.link(b.document, "analogue_of", c.document);
+        assert.deepEqual(await work.kb.allLinks(), [
+            { from: a.document, to: b.document, type: "cites", resolved: true },
+            { from: b.document, to: c.document, type: "analogue_of", resolved: true },
+        ]);
+        await work.kb.forget(c.document);
+        assert.equal((await work.kb.allLinks())[1].resolved, false);
+    } finally {
+        work.dispose();
+    }
+});

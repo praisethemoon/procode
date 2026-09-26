@@ -36,6 +36,7 @@ import {
     KbSource,
     KbStaleList,
     KbStats,
+    KbEdge,
     KbModelConfig,
     KbModelStatus,
     KbStatus,
@@ -432,4 +433,11 @@ export function readChunkRead(payload: Record<string, unknown>): KbChunkRead {
         chunk: readChunk(payload["chunk"]),
         neighbours: arr(payload["neighbours"]).map(readChunk),
     };
+}
+
+export function readEdges(payload: Record<string, unknown>): KbEdge[] {
+    return arr(payload["links"]).map((v) => {
+        const e = obj(v);
+        return { from: str(e["from"]), to: str(e["to"]), type: str(e["type"]), resolved: bool(e["resolved"]) };
+    });
 }

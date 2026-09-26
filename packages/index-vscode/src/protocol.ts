@@ -39,6 +39,7 @@ export const OPERATIONS = [
     "refreshSource",
     "renameCollection",
     "deleteCollection",
+    "graph",
 ] as const;
 
 export type Operation = (typeof OPERATIONS)[number];

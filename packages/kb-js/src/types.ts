@@ -304,6 +304,15 @@ export function isLinkType(v: unknown): v is LinkType {
  * later would be dropped by a reader that only knew the five, and an edge would
  * then claim a relationship it does not have. `LINK_TYPES` is what is known,
  * not what is permitted — the same rule `KbHit.matched` follows. */
+/* One edge of the whole store's graph: both ends and whether both are still
+ * documents. The documents themselves come from `ls`, read once. */
+export interface KbEdge {
+    readonly from: DocumentId;
+    readonly to: DocumentId;
+    readonly type: string;
+    readonly resolved: boolean;
+}
+
 export interface KbLink {
     readonly from: DocumentId;
     readonly to: DocumentId;

@@ -330,6 +330,21 @@ t "the query-string spelling of a flag also works"
 out=$("$KB" ls --collection=notes --json)
 has "ls eq form" "$out" '"count":1'
 
+# ------------------------------------------------------------ all links
+t "links --all lists every edge with both ends, and a forgotten end says so"
+mkdir -p lnk
+kbl() { ( cd "$WORK/lnk" && "$KB" "$@" ); }
+kbl init > /dev/null
+for n in a b c; do printf 'zz%s\n' "$n" | kbl add --title "$n" --collection g > /dev/null; done
+kbl links add D-1 cites D-2 > /dev/null
+kbl links add D-2 see_also D-3 > /dev/null
+out=$(kbl links --all --json)
+has "all" "$out" '"count":2'
+has "all" "$out" '{"type":"cites","from":"D-1","to":"D-2","resolved":true}'
+kbl forget D-3 > /dev/null
+has "forgotten end" "$(kbl links --all --json)" '"to":"D-3","resolved":false'
+expect_grep '"error":"usage"' kbl links D-1 --all --json
+
 # -------------------------------------------------------------- filters
 mkdir -p filt
 kbf() { ( cd "$WORK/filt" && "$KB" "$@" ); }

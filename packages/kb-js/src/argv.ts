@@ -394,6 +394,11 @@ export function linksArgv(document: string): string[] {
     return ["links", document];
 }
 
+/* Every link in the store, for a graph (`kb links --all`). */
+export function allLinksArgv(): string[] {
+    return ["links", "--all"];
+}
+
 export function linkArgv(from: string, type: string, to: string): string[] {
     return ["links", "add", from, type, to];
 }

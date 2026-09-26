@@ -61,6 +61,7 @@ export {
     KbSourceRefreshed,
     KbCollectionStats,
     KbHit,
+    KbEdge,
     KbLink,
     KbLinkWritten,
     KbLinks,
