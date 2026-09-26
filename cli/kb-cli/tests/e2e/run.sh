@@ -453,7 +453,7 @@ has "status" "$out" '"nextIds"'
 t "the chunking parameters are recorded in index/model.json"
 [ -f .kb/index/model.json ] || fail "index/model.json missing"
 expect_grep '"chunkTokens":400' cat .kb/index/model.json
-expect_grep '"chunker":"structural-1"' cat .kb/index/model.json
+expect_grep '"chunker":"structural-2"' cat .kb/index/model.json
 
 t "a store built with other chunking parameters says a reindex is owed"
 cp .kb/index/model.json model.json.bak
@@ -650,24 +650,34 @@ n=$(ls -a .coboard | wc -l | tr -d ' ')
 [ "$n" = "3" ] || fail ".coboard gained entries"
 
 # ------------------------------------------------------------ chunk shapes
-t "source code splits on top-level declarations"
-cat > sample.c <<'EOC'
-#include <stdio.h>
-
-static int32_t helper(int32_t x) {
-    return x + 1;
-}
-
-int32_t main(void) {
-    return helper(1);
-}
-EOC
+t "source code splits along its syntax: small definitions together, a large one whole"
+# helper and main fit one chunk together; big() is over the budget on its own
+# and starts a chunk of its own, headed by its signature.
+{
+    printf '#include <stdio.h>\n\nstatic int32_t helper(int32_t x) {\n    return x + 1;\n}\n\n'
+    printf 'int32_t main(void) {\n    return helper(1);\n}\n\n'
+    printf 'static int32_t big(int32_t x) {\n'
+    i=0; while [ $i -lt 60 ]; do printf '    x = x * 3 + %d; /* zzstep %d */\n' $i $i; i=$((i + 1)); done
+    printf '    return x;\n}\n'
+} > sample.c
 out=$("$KB" add --title sample --collection code --file sample.c --json)
 has "code" "$out" '"splitter":"code"'
-has "code" "$out" '"chunkCount":2'
 D_CODE=$(jstr document "$out")
 out=$("$KB" get "$D_CODE" --include chunks --json)
-has "code heading" "$out" '"heading":"int32_t main(void) {"'
+has "small together" "$out" '"heading":"static int32_t helper(int32_t x) {"'
+hasnt "small together" "$out" '"heading":"int32_t main(void) {"'
+has "large on its own" "$out" '"heading":"static int32_t big(int32_t x) {'
+has "found under its function" "$("$KB" search 'big zzstep' --mode keyword --json)" '"heading":"static int32_t big(int32_t x) {'
+
+t "a C file the grammar cannot read is cut into line windows, not refused"
+printf 'int f( { return ;;; }}} @@@ ### int\n%.0s' $(seq 1 3) > broken.c
+out=$("$KB" add --title broken --collection code --file broken.c --json)
+has "broken" "$out" '"ok":true'
+has "broken" "$out" '"chunkCount":1'
+
+t "the file and the function are words a search matches (the chunk's header)"
+out=$("$KB" search sample --collection code --mode keyword --json)
+has "title matched" "$out" "\"document\":\"$D_CODE\""
 
 t "html splits on heading elements"
 printf '<h1>io_uring</h1><p>a</p><h2>prep_recv</h2><p>b</p>' > page.html
@@ -1537,7 +1547,7 @@ base_after=$(kbr get D-1 --json | \
 
 t "reindex rewrites index/model.json and rebuild then obeys it"
 expect_grep '"chunkTokens":400' cat rechunk/.kb/index/model.json
-expect_grep '"chunker":"structural-1"' cat rechunk/.kb/index/model.json
+expect_grep '"chunker":"structural-2"' cat rechunk/.kb/index/model.json
 expect_grep '"current":true' kbr status --json
 out=$(kbr rebuild --json)
 has "after reindex" "$out" '"mismatched":0'

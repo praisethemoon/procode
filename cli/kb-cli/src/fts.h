@@ -67,6 +67,8 @@ typedef struct {
     const char *text;
     size_t len;
     Lang lang;
+    SyntaxLang syn;
+    const char *title; /* for a code chunk's header line (chunk_header) */
 } FtsDocInput;
 
 typedef struct {

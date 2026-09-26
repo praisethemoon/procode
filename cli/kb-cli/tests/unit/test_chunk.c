@@ -15,7 +15,7 @@
 #include "../../src/chunk.h"
 
 static Chunks split(Arena *a, const char *text, Lang lang) {
-    return chunk_split(a, text, strlen(text), lang, 400, 60);
+    return chunk_split(a, text, strlen(text), lang, SYNTAX_NONE, 400, 60);
 }
 
 static void test_lang(void) {
@@ -99,7 +99,7 @@ static void test_text(Arena *a) {
     for (size_t i = 0; i < sizeof big - 1; i++)
         big[i] = (char)('a' + (i % 26));
     big[sizeof big - 1] = '\0';
-    Chunks c = chunk_split(a, big, strlen(big), LANG_TEXT, 400, 60);
+    Chunks c = chunk_split(a, big, strlen(big), LANG_TEXT, SYNTAX_NONE, 400, 60);
     ASSERT_TRUE(c.n > 1);
     spans_are_sane(&c, strlen(big), "text");
     /* §3 says the fallback overlaps. Without it a match that straddles a
@@ -113,7 +113,7 @@ static void test_text(Arena *a) {
     ASSERT_EQ_I((int64_t)one.v[0].end, 5);
 
     t_begin("chunk: an empty document yields nothing to retrieve");
-    Chunks none = chunk_split(a, "", 0, LANG_TEXT, 400, 60);
+    Chunks none = chunk_split(a, "", 0, LANG_TEXT, SYNTAX_NONE, 400, 60);
     ASSERT_EQ_I((int64_t)none.n, 0);
 }
 

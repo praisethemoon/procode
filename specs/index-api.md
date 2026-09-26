@@ -221,9 +221,24 @@ pass. Progress goes to standard error when it is a terminal.
 ## 3. Chunking
 
 Chunks follow document structure, not a fixed window. A Markdown or HTML
-document splits on heading boundaries; source code splits on top-level
-declarations; a plain text or PDF document falls back to a sliding window with
-overlap.
+document splits on heading boundaries; a plain text or PDF document falls back
+to a sliding window with overlap.
+
+**Source code splits along its syntax tree** where kb has a grammar for it
+(C, TypeScript, TSX, JavaScript, Python, Go, Rust and assembly, chosen by the
+file's extension, or by its mime type for a single file filed without a
+path): whole definitions when they fit the chunk budget, split along their
+own children when they do not, and small neighbours merged, with the comments
+and attributes above a definition kept with it. A chunk's heading is
+`container > signature`, the first line of its first definition under the
+definitions it sits inside (`export class Kb { > async addDir(...)`). A file
+whose tree is more than 10% parse error is cut into line windows instead;
+code in a language without a grammar splits on top-level declarations found
+line by line.
+
+A code chunk is indexed and embedded under a header line, `<document title> >
+<heading>`, ahead of its text: the file and the function a passage is in are
+words a search should match, and the passage itself seldom says them.
 
 Every chunk keeps `heading` and `span` back into its document, so a hit can be
 shown in place rather than as a floating fragment.

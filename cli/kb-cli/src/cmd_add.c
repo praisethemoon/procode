@@ -250,7 +250,7 @@ static bool ingest(Arena *a, Store *s, const Filing *f, const char *now,
      * in that record stops describing the chunks on disk (see doc_lang). */
     out->lang = doc_lang(f->mime, path);
     ChunkParams cp = store_chunk_params(a, s);
-    Chunks chunks = chunk_split(a, f->content, f->len, out->lang,
+    Chunks chunks = chunk_split(a, f->content, f->len, out->lang, doc_syntax(f->mime, path),
                                 (size_t)cp.chunk_tokens * KB_BYTES_PER_TOKEN,
                                 (size_t)cp.chunk_overlap * KB_BYTES_PER_TOKEN);
     /* Ids become durable here, before any record that uses them is

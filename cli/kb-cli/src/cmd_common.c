@@ -238,6 +238,28 @@ Lang doc_lang(const char *mime, const char *path) {
     return chunk_lang(mime, path);
 }
 
+SyntaxLang doc_syntax(const char *mime, const char *path) {
+    SyntaxLang l = syntax_lang(path);
+    if (l != SYNTAX_NONE || !mime)
+        return l;
+    static const struct {
+        const char *mime;
+        SyntaxLang lang;
+    } map[] = {{"text/x-c", SYNTAX_C},
+               {"application/typescript", SYNTAX_TYPESCRIPT},
+               {"text/javascript", SYNTAX_JAVASCRIPT},
+               {"application/javascript", SYNTAX_JAVASCRIPT},
+               {"text/x-python", SYNTAX_PYTHON},
+               {"text/x-go", SYNTAX_GO},
+               {"text/x-rust", SYNTAX_RUST},
+               {"text/x-asm", SYNTAX_ASM},
+               {NULL, SYNTAX_NONE}};
+    for (int32_t i = 0; map[i].mime; i++)
+        if (strcmp(mime, map[i].mime) == 0)
+            return map[i].lang;
+    return SYNTAX_NONE;
+}
+
 bool doc_chunks(Arena *a, Store *s, const Document *d, char **text,
                 size_t *len, Chunks *out) {
     if (!store_get_blob(s, d->content_hash, text, len))
@@ -247,6 +269,7 @@ bool doc_chunks(Arena *a, Store *s, const Document *d, char **text,
      * else would describe chunks the store does not contain (§8). */
     ChunkParams cp = store_chunk_params(a, s);
     *out = chunk_split(a, *text, *len, doc_lang(d->mime, d->path),
+                       doc_syntax(d->mime, d->path),
                        (size_t)cp.chunk_tokens * KB_BYTES_PER_TOKEN,
                        (size_t)cp.chunk_overlap * KB_BYTES_PER_TOKEN);
     return true;
@@ -466,6 +489,7 @@ bool refile_document(Arena *a, Store *s, const Document *existing,
      * doc_lang), with the parameters the store was built with. */
     ChunkParams cp = store_chunk_params(a, s);
     Chunks chunks = chunk_split(a, content, len, doc_lang(mime, existing->path),
+                                doc_syntax(mime, existing->path),
                                 (size_t)cp.chunk_tokens * KB_BYTES_PER_TOKEN,
                                 (size_t)cp.chunk_overlap * KB_BYTES_PER_TOKEN);
     int64_t unused = 0, chunk_base = 0;
@@ -546,6 +570,8 @@ bool index_rebuild(Arena *a, Store *s, uint32_t *docs, uint32_t *missing_blobs,
         in[i].chunk_base = d->chunk_base;
         in[i].chunk_count = d->chunk_count;
         in[i].lang = doc_lang(d->mime, d->path);
+        in[i].syn = doc_syntax(d->mime, d->path);
+        in[i].title = d->title;
         /* A missing blob is a damaged store, not a reason to refuse to
          * index the rest of it: the document keeps its place in the log
          * order the digest is taken over, and contributes no chunks. */

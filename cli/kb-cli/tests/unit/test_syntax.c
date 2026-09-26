@@ -3,8 +3,10 @@
 
 #include "test.h"
 
+#include "../../src/platform.h"
 #include "../../src/syntax.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 static SyntaxOutline outline(Arena *a, const char *path, const char *text) {
@@ -29,6 +31,99 @@ static bool types_are(const SyntaxOutline *o, const char *want) {
 
 static bool clean(const SyntaxOutline *o, const char *text) {
     return o->error_bytes == 0 && o->missing == 0 && syntax_usable(o, strlen(text));
+}
+
+
+/* Cuts one fixture (a snapshot of a real file) and checks what every cut must
+ * be: the chunks tile the file from byte 0, each is within the budget (or
+ * barely past it, by the whitespace after its last node), and every chunk but
+ * possibly the first has a heading. Returns the headings, joined by "\n". */
+static const char *cut_file(Arena *a, const char *name, size_t target) {
+    char *path = arena_printf(a, "tests/fixtures/syntax/%s", name);
+    char *text;
+    size_t len;
+    if (!plat_read_file(a, path, &text, &len)) {
+        ASSERT_TRUE(!"fixture unreadable");
+        return "";
+    }
+    SyntaxCut *cuts;
+    size_t n;
+    ASSERT_TRUE(syntax_cuts(a, syntax_lang(name), text, len, target, &cuts, &n));
+    ASSERT_TRUE(n > 1);
+    if (n == 0)
+        return "";
+    ASSERT_EQ_I(cuts[0].start, 0);
+    char *heads = arena_strdup(a, "");
+    for (size_t i = 0; i < n; i++) {
+        uint32_t end = i + 1 < n ? cuts[i + 1].start : (uint32_t)len;
+        ASSERT_TRUE(end > cuts[i].start);
+        ASSERT_TRUE(end - cuts[i].start <= target + target / 10);
+        ASSERT_TRUE(i == 0 || cuts[i].heading != NULL);
+        heads = arena_printf(a, "%s%s\n", heads, cuts[i].heading ? cuts[i].heading : "-");
+    }
+    return heads;
+}
+
+static bool has_line(const char *heads, const char *want) {
+    char *needle = (char *)malloc(strlen(want) + 3);
+    sprintf(needle, "\n%s\n", want);
+    char *hay = (char *)malloc(strlen(heads) + 2);
+    sprintf(hay, "\n%s", heads);
+    bool ok = strstr(hay, needle) != NULL;
+    if (!ok)
+        printf("    no heading \"%s\" in:\n%s", want, heads);
+    free(needle);
+    free(hay);
+    return ok;
+}
+
+static void test_syntax_cuts(void) {
+    Arena *a = arena_new(1 << 20);
+    t_begin("syntax cuts: C, a definition whole when it fits, along its tree when not");
+    const char *h = cut_file(a, "gitignore.c", 1600);
+    ASSERT_TRUE(has_line(h, "void gitignore_add(GitIgnore *g, const char *base, const char *text, size_t len) {"));
+    ASSERT_TRUE(has_line(h, "static bool wm(const char *p0, const char *p, const char *s) { > if (*p == '[') {"));
+
+    t_begin("syntax cuts: TypeScript methods under their class");
+    h = cut_file(a, "client.ts", 1600);
+    ASSERT_TRUE(has_line(h, "export class Kb { > async addDir(dir: string, options: AddDirOptions): Promise<KbDirAdded> {"));
+    ASSERT_TRUE(has_line(h, "export interface KbSearchResult {"));
+
+    t_begin("syntax cuts: TSX components");
+    h = cut_file(a, "Body.tsx", 1600);
+    ASSERT_TRUE(has_line(h, "export function Body(props: { text: string; mime: string }): JSX.Element {"));
+    ASSERT_TRUE(has_line(h, "function HtmlPart(props: { node: HtmlNode }): JSX.Element {"));
+
+    t_begin("syntax cuts: a JavaScript script");
+    h = cut_file(a, "playground.mjs", 1600);
+    ASSERT_TRUE(has_line(h, "const write = (file, text) => {"));
+
+    t_begin("syntax cuts: Python, a long function split at its statements");
+    h = cut_file(a, "convert.py", 1600);
+    ASSERT_TRUE(has_line(h, "def vocabulary(tok):"));
+    ASSERT_TRUE(has_line(h, "def main(): > ap = argparse.ArgumentParser()"));
+
+    t_begin("syntax cuts: Go methods");
+    h = cut_file(a, "ring.go", 600);
+    ASSERT_TRUE(has_line(h, "func (r *Ring) Read() ([]byte, error) {"));
+
+    t_begin("syntax cuts: Rust, attributes with their item, functions under their impl");
+    h = cut_file(a, "lexer.rs", 600);
+    ASSERT_TRUE(has_line(h, "pub enum Token {"));
+    ASSERT_TRUE(has_line(h, "impl<'a> Lexer<'a> { > fn ident(&mut self, first: char) -> Token {"));
+
+    t_begin("syntax cuts: assembly, one chunk per function, named by its label");
+    h = cut_file(a, "strings.s", 600);
+    ASSERT_TRUE(has_line(h, "kb_memchr:"));
+    ASSERT_TRUE(has_line(h, "kb_strlen:"));
+
+    t_begin("syntax cuts: no usable tree, no cuts (the caller windows the file)");
+    SyntaxCut *cuts;
+    size_t n;
+    const char *bad = "int f( { return ;;; }}} @@@ ### int\n";
+    ASSERT_TRUE(!syntax_cuts(a, SYNTAX_C, bad, strlen(bad), 1600, &cuts, &n));
+    ASSERT_TRUE(!syntax_cuts(a, SYNTAX_NONE, "x", 1, 1600, &cuts, &n));
+    arena_free(a);
 }
 
 void test_syntax(void) {
@@ -131,4 +226,6 @@ void test_syntax(void) {
     ASSERT_EQ_I(empty.n, 0);
     ASSERT_TRUE(syntax_usable(&empty, 0));
     arena_free(a);
+
+    test_syntax_cuts();
 }

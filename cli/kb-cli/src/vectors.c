@@ -189,9 +189,18 @@ bool vec_sync(Arena *a, Store *s, Embedder *e, bool all, bool progress,
             if (j >= ch.n)
                 break; /* the log's range and the text disagree: reindex */
             bool truncated = false;
-            if (!embed_text(e, text + ch.v[j].start,
-                            ch.v[j].end - ch.v[j].start, false, vec,
-                            &truncated)) {
+            /* A code chunk is embedded under its header line: which file,
+             * which function (chunk_header). */
+            const char *body = text + ch.v[j].start;
+            size_t blen = ch.v[j].end - ch.v[j].start;
+            const char *header = chunk_header(tmp, doc_lang(d->mime, d->path),
+                                              d->title, &ch.v[j]);
+            if (header) {
+                char *joined = arena_printf(tmp, "%s\n%.*s", header, (int)blen, body);
+                body = joined;
+                blen = strlen(joined);
+            }
+            if (!embed_text(e, body, blen, false, vec, &truncated)) {
                 if (tmp)
                     arena_free(tmp);
                 snprintf(err, errsz, "embedding C-%lld failed", (long long)id);

@@ -502,7 +502,41 @@ static void window_split(ChunkBuf *b, const char *text, size_t start,
     }
 }
 
-Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang,
+/* Code with a grammar: the chunks syntax_cuts finds, or, when the file has
+ * no usable tree, line windows over the whole of it. TypeScript that will not
+ * parse is tried as TSX before giving up: a single file filed without a path
+ * has only its mime type, and that is the same for both. */
+static Chunks split_syntax(Arena *a, const char *text, size_t len, SyntaxLang syn,
+                           size_t target_bytes, size_t overlap_bytes) {
+    SyntaxCut *cuts;
+    size_t n;
+    bool ok = syntax_cuts(a, syn, text, len, target_bytes, &cuts, &n);
+    if (!ok && syn == SYNTAX_TYPESCRIPT)
+        ok = syntax_cuts(a, SYNTAX_TSX, text, len, target_bytes, &cuts, &n);
+    ChunkBuf b = {a, NULL, 0, 0};
+    if (!ok) {
+        window_split(&b, text, 0, len, NULL, target_bytes, overlap_bytes);
+    } else {
+        for (size_t i = 0; i < n; i++)
+            chunk_add(&b, cuts[i].start, i + 1 < n ? cuts[i + 1].start : len,
+                      cuts[i].heading);
+    }
+    Chunks out = {b.v, b.n};
+    return out;
+}
+
+char *chunk_header(Arena *a, Lang lang, const char *title, const Chunk *c) {
+    if (lang != LANG_CODE)
+        return NULL;
+    bool t = title && title[0], h = c->heading && c->heading[0];
+    if (t && h)
+        return arena_printf(a, "%s > %s", title, c->heading);
+    if (t || h)
+        return arena_strdup(a, t ? title : c->heading);
+    return NULL;
+}
+
+Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang, SyntaxLang syn,
                    size_t target_bytes, size_t overlap_bytes) {
     Chunks out = {NULL, 0};
     if (len == 0)
@@ -511,6 +545,8 @@ Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang,
         target_bytes = 1;
     if (overlap_bytes >= target_bytes)
         overlap_bytes = target_bytes / 2;
+    if (lang == LANG_CODE && syn != SYNTAX_NONE)
+        return split_syntax(a, text, len, syn, target_bytes, overlap_bytes);
 
     Sections sec = {a, NULL, 0, 0};
     Lines l = split_lines(a, text, len);

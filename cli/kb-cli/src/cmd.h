@@ -84,6 +84,10 @@ const char *older_than_arg(int32_t argc, char **argv,
  * it here, from the two fields the log actually carries.
  */
 Lang doc_lang(const char *mime, const char *path);
+/* The grammar a document is split with, from the same two fields: the
+ * path's extension when it has one (a file of a filed folder), otherwise the
+ * mime type (a single file, whose path is ""). */
+SyntaxLang doc_syntax(const char *mime, const char *path);
 
 /* Reads a document's blob and splits it with the parameters the store's
  * index/model.json records — which is what the store was built with, not

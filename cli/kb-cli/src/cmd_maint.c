@@ -180,11 +180,12 @@ int32_t cmd_reindex(Arena *a, int32_t argc, char **argv) {
             continue;
         }
         Lang lang = doc_lang(d->mime, d->path);
-        fresh[i] = chunk_split(a, text, len, lang,
+        SyntaxLang syn = doc_syntax(d->mime, d->path);
+        fresh[i] = chunk_split(a, text, len, lang, syn,
                                (size_t)KB_CHUNK_TOKENS * KB_BYTES_PER_TOKEN,
                                (size_t)KB_CHUNK_OVERLAP *
                                    KB_BYTES_PER_TOKEN);
-        Chunks was = chunk_split(a, text, len, lang,
+        Chunks was = chunk_split(a, text, len, lang, syn,
                                  (size_t)old.chunk_tokens *
                                      KB_BYTES_PER_TOKEN,
                                  (size_t)old.chunk_overlap *

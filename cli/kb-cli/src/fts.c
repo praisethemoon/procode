@@ -169,7 +169,7 @@ char *fts_build(Arena *a, const FtsDocInput *in, size_t n, size_t target_bytes,
     uint32_t mismatched = 0;
 
     for (size_t d = 0; d < n; d++) {
-        Chunks ch = chunk_split(a, in[d].text, in[d].len, in[d].lang,
+        Chunks ch = chunk_split(a, in[d].text, in[d].len, in[d].lang, in[d].syn,
                                 target_bytes, overlap_bytes);
         /* Never past the range the log reserved: chunk ids are public and
          * are never reused (§1.1), and the id after this document's last is
@@ -192,6 +192,11 @@ char *fts_build(Arena *a, const FtsDocInput *in, size_t n, size_t target_bytes,
             c.chunk_index = (uint32_t)nchunks;
             c.length = 0;
             c.postings = 0;
+            /* A code chunk is indexed under its header too: the file and
+             * the function it is in are words a search should match. */
+            const char *header = chunk_header(a, in[d].lang, in[d].title, &ch.v[i]);
+            if (header)
+                token_scan(header, strlen(header), scan_term, &c);
             token_scan(in[d].text + ch.v[i].start, ch.v[i].end - ch.v[i].start,
                        scan_term, &c);
             postings += c.postings;

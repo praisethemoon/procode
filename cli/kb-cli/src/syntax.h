@@ -82,4 +82,32 @@ bool syntax_outline(Arena *a, SyntaxLang l, const char *text, size_t len,
 #define SYNTAX_MAX_ERROR_PERCENT 10
 bool syntax_usable(const SyntaxOutline *o, size_t len);
 
+/* WHERE A FILE IS CUT INTO CHUNKS, from its tree: split-then-merge, as cAST
+ * does it.
+ *
+ *   - Siblings are grouped into units: a definition with the comments right
+ *     above it, which belong to it.
+ *   - Units are merged, in order, while the chunk stays within `target`
+ *     bytes, so small neighbours (includes, one-line declarations, short
+ *     functions) share a chunk and a whole definition that fits is never cut.
+ *   - A unit larger than `target` is split along its own children, with its
+ *     signature pushed onto the container path; one with no children to
+ *     split along (a huge string, a table of data) is cut at line breaks.
+ *
+ * Chunk i runs from cuts[i].start to cuts[i + 1].start (the last to the end
+ * of the file); cuts[0].start is 0, so the chunks tile the file with no gap.
+ * A cut's heading is `container > signature` — "struct Store > bool
+ * store_open(...)" — the first line of the first definition in the chunk,
+ * under the definitions it sits inside.
+ *
+ * False when the file has no usable tree (syntax_usable); the caller then
+ * cuts it into line windows. */
+typedef struct {
+    uint32_t start;
+    const char *heading;
+} SyntaxCut;
+
+bool syntax_cuts(Arena *a, SyntaxLang l, const char *text, size_t len,
+                 size_t target, SyntaxCut **cuts, size_t *n);
+
 #endif /* KB_SYNTAX_H */

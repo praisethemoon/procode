@@ -1,10 +1,11 @@
 /* Structural chunking (§3).
  *
  * Chunks follow the document's own structure, not a fixed window: Markdown
- * and HTML split on heading boundaries, source code on top-level
- * declarations, and everything else falls back to a sliding window with
- * overlap. A section that is too large for the window is itself split by
- * sliding window, keeping the heading it belongs to.
+ * and HTML split on heading boundaries, source code along its syntax tree
+ * where kb has a grammar for it (syntax.h) and on top-level declarations
+ * found line by line where it does not, and everything else falls back to a
+ * sliding window with overlap. A section that is too large for the window is
+ * itself split by sliding window, keeping the heading it belongs to.
  *
  * Every chunk carries the heading it sits under and its byte span into the
  * document text exactly as stored, so a hit can be shown in place. The
@@ -18,6 +19,7 @@
 #define KB_CHUNK_H
 
 #include "str.h"
+#include "syntax.h"
 
 typedef enum { LANG_MARKDOWN, LANG_HTML, LANG_CODE, LANG_TEXT } Lang;
 
@@ -51,7 +53,17 @@ const char *chunk_mime_from_path(const char *path);
 /* Tokens are estimated from bytes until a real tokenizer exists (§8). */
 uint32_t chunk_tokens_of(size_t bytes);
 
-Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang,
+/* Splits a document. `syn` is the grammar for code that has one
+ * (SYNTAX_NONE otherwise): its chunks follow the syntax tree (syntax_cuts),
+ * or are line windows when the tree is not usable. */
+Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang, SyntaxLang syn,
                    size_t target_bytes, size_t overlap_bytes);
+
+/* The line a code chunk is indexed and embedded under, ahead of its text:
+ * "<document title> > <heading>", the heading being the chunk's container
+ * and signature. A chunk's text alone often never says which file or which
+ * function it is in; this puts both in the words a search matches. NULL for
+ * a chunk that is not code. */
+char *chunk_header(Arena *a, Lang lang, const char *title, const Chunk *c);
 
 #endif /* KB_CHUNK_H */
