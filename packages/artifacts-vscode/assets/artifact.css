@@ -163,4 +163,272 @@
         padding: 0 0.15em;
         border-radius: var(--bk-radius-sm);
     }
+
+    /* ---- components ----------------------------------------------------
+     *
+     * The parts of a report, by class name, so a page is markup and no CSS.
+     * Taken from the first report an agent published; each one is written
+     * only with tokens, like everything above.
+     */
+
+    /* A small line above the title: what kind of page, and when. */
+    .eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: var(--bk-font-size-xs);
+        color: var(--bk-color-foreground-muted);
+        margin-bottom: var(--bk-spacing-2);
+    }
+
+    /* The paragraph under the title that says what the page is. */
+    .lede {
+        font-size: var(--bk-font-size-lg);
+        line-height: var(--bk-line-height-relaxed);
+        color: var(--bk-color-foreground-muted);
+        max-width: 48rem;
+    }
+
+    /* A row of chips: `<div class="meta"><span class="chip">Status <b>open</b></span></div>` */
+    .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--bk-gap-md);
+        margin: var(--bk-spacing-4) 0 var(--bk-spacing-8);
+    }
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--bk-spacing-1);
+        padding: var(--bk-spacing-0-5) var(--bk-spacing-2);
+        border: var(--bk-border-width-1) solid var(--bk-color-border);
+        border-radius: var(--bk-radius-full);
+        font-size: var(--bk-font-size-sm);
+        color: var(--bk-color-foreground-muted);
+    }
+    .chip b {
+        color: var(--bk-color-foreground);
+        font-weight: var(--bk-font-weight-semibold);
+    }
+
+    /* Headline numbers:
+     * `<div class="kpis"><div class="kpi"><b>13</b><span>tickets closed</span><small>3 epics</small></div></div>` */
+    .kpis {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+        gap: var(--bk-gap-lg);
+        margin-bottom: var(--bk-spacing-8);
+    }
+    .kpi {
+        display: flex;
+        flex-direction: column;
+        gap: var(--bk-spacing-1);
+        padding: var(--bk-spacing-4);
+        border: var(--bk-border-width-1) solid var(--bk-color-border);
+        border-radius: var(--bk-radius-lg);
+        background: var(--bk-color-background-secondary);
+    }
+    .kpi b {
+        font-size: var(--bk-font-size-3xl);
+        font-weight: var(--bk-font-weight-bold);
+        line-height: var(--bk-line-height-tight);
+    }
+    .kpi span {
+        font-size: var(--bk-font-size-sm);
+        color: var(--bk-color-foreground-muted);
+    }
+    .kpi small {
+        font-size: var(--bk-font-size-xs);
+        color: var(--bk-color-success);
+    }
+    .kpi.warn small {
+        color: var(--bk-color-warning);
+    }
+    .kpi.danger small {
+        color: var(--bk-color-danger);
+    }
+
+    /* A finding with a verdict:
+     * `<div class="callout ok"><strong>It works.</strong><p>Why we think so.</p></div>`
+     * ok · info · warn · danger */
+    .callout {
+        margin: 0 0 var(--bk-spacing-4);
+        padding: var(--bk-spacing-3) var(--bk-spacing-4);
+        border: var(--bk-border-width-1) solid var(--bk-color-border);
+        border-left-width: var(--bk-border-width-4);
+        border-radius: var(--bk-radius-md);
+        background: var(--bk-color-background-secondary);
+    }
+    .callout > strong {
+        display: block;
+        font-weight: var(--bk-font-weight-semibold);
+    }
+    .callout > p {
+        margin: var(--bk-spacing-1) 0 0;
+    }
+    .callout.ok {
+        border-left-color: var(--bk-color-success);
+    }
+    .callout.info {
+        border-left-color: var(--bk-color-info);
+    }
+    .callout.warn {
+        border-left-color: var(--bk-color-warning);
+    }
+    .callout.danger {
+        border-left-color: var(--bk-color-danger);
+    }
+
+    /* Side by side, stacking when the editor is narrow. */
+    .cols {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+        gap: var(--bk-gap-xl);
+    }
+    .panel {
+        padding: var(--bk-spacing-4);
+        border: var(--bk-border-width-1) solid var(--bk-color-border);
+        border-radius: var(--bk-radius-lg);
+        margin: 0 0 var(--bk-spacing-6);
+    }
+
+    /* A small label: an epic, a state, a kind. */
+    .tag {
+        display: inline-block;
+        font-size: var(--bk-font-size-xs);
+        padding: 0 var(--bk-spacing-1-5);
+        border: var(--bk-border-width-1) solid var(--bk-color-border);
+        border-radius: var(--bk-radius-sm);
+        color: var(--bk-color-foreground-muted);
+        white-space: nowrap;
+    }
+    .tag.ok {
+        color: var(--bk-color-success);
+        border-color: var(--bk-color-success);
+    }
+    .tag.warn {
+        color: var(--bk-color-warning);
+        border-color: var(--bk-color-warning);
+    }
+    .tag.danger {
+        color: var(--bk-color-danger);
+        border-color: var(--bk-color-danger);
+    }
+
+    /* Table cells: identifiers in the editor's font, numbers right-aligned. */
+    td.id,
+    th.id {
+        font-family: var(--vscode-editor-font-family, var(--bk-font-family-mono));
+        white-space: nowrap;
+    }
+    td.num,
+    th.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Filter buttons: the pressed one is `aria-pressed="true"`. */
+    .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--bk-gap-xs);
+        margin-bottom: var(--bk-spacing-3);
+    }
+    .tabs button {
+        font: inherit;
+        font-size: var(--bk-font-size-sm);
+        padding: var(--bk-spacing-1) var(--bk-spacing-3);
+        border: var(--bk-border-width-1) solid var(--bk-color-border);
+        border-radius: var(--bk-radius-full);
+        background: transparent;
+        color: var(--bk-color-foreground-muted);
+        cursor: pointer;
+    }
+    .tabs button[aria-pressed="true"] {
+        background: var(--bk-color-primary);
+        border-color: var(--bk-color-primary);
+        color: var(--bk-color-primary-foreground);
+    }
+
+    details {
+        border: var(--bk-border-width-1) solid var(--bk-color-border);
+        border-radius: var(--bk-radius-md);
+        padding: var(--bk-spacing-2) var(--bk-spacing-4);
+        margin-bottom: var(--bk-spacing-3);
+    }
+    details summary {
+        cursor: pointer;
+        font-weight: var(--bk-font-weight-medium);
+    }
+    details[open] summary {
+        margin-bottom: var(--bk-spacing-2);
+    }
+
+    /* A contents list in two columns. */
+    .toc {
+        columns: 2;
+        font-size: var(--bk-font-size-sm);
+    }
+    .toc a {
+        display: block;
+        color: var(--bk-color-foreground-muted);
+    }
+
+    /* ---- charts: inline SVG, coloured by class --------------------------
+     * `<svg class="chart" viewBox="…">` with `rect.bar`, `line.grid`,
+     * `rect.node`, `path.edge`, `text.label`. Colours follow the theme. */
+    svg.chart {
+        width: 100%;
+        height: auto;
+        overflow: visible;
+    }
+    svg.chart text {
+        fill: var(--bk-color-foreground-muted);
+        font-family: inherit;
+        font-size: 11px;
+    }
+    svg.chart text.label {
+        fill: var(--bk-color-foreground);
+        font-size: 12px;
+    }
+    svg.chart .grid {
+        stroke: var(--bk-color-divider);
+        stroke-width: 1;
+    }
+    svg.chart .bar {
+        fill: var(--bk-color-primary);
+    }
+    svg.chart .bar.ok {
+        fill: var(--bk-color-success);
+    }
+    svg.chart .bar.warn {
+        fill: var(--bk-color-warning);
+    }
+    svg.chart .bar.danger {
+        fill: var(--bk-color-danger);
+    }
+    svg.chart .bar.muted {
+        fill: var(--bk-color-border);
+    }
+    svg.chart .node {
+        fill: var(--bk-color-background-secondary);
+        stroke: var(--bk-color-border);
+    }
+    svg.chart .node.accent {
+        stroke: var(--bk-color-primary);
+        stroke-width: 2;
+    }
+    svg.chart .edge {
+        fill: none;
+        stroke: var(--bk-color-foreground-muted);
+        stroke-width: 1.2;
+    }
+    svg.chart .edge.accent {
+        stroke: var(--bk-color-primary);
+    }
+    svg.chart .edge.dashed {
+        stroke-dasharray: 4 3;
+    }
+    svg.chart .arrowhead {
+        fill: var(--bk-color-foreground-muted);
+    }
 }

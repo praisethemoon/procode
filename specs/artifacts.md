@@ -80,8 +80,26 @@ fragment in a document. It may assume:
   `--bk-line-height-{tight,normal,relaxed}`), shape (`--bk-radius-{sm..3xl}`,
   `--bk-border-width-{1,2,4}`, `--bk-shadow-{sm..2xl}`);
 - **a default stylesheet** for plain elements — body, headings, paragraphs,
-  lists, links, tables, `code` and `pre`, `blockquote`, `hr` — written with
-  those tokens, so a page with no styles of its own already looks native.
+  lists, links, tables, `code` and `pre`, `blockquote`, `hr`, `details` —
+  written with those tokens, so a page with no styles of its own already
+  looks native;
+- **components by class name**, so a report is markup and no CSS:
+
+  | class | markup |
+  |---|---|
+  | `eyebrow`, `lede` | the line above the title; the paragraph under it |
+  | `meta` + `chip` | `<div class="meta"><span class="chip">Status <b>open</b></span></div>` |
+  | `kpis` + `kpi` (`warn`, `danger`) | `<div class="kpi"><b>13</b><span>tickets closed</span><small>3 epics</small></div>` |
+  | `callout ok · info · warn · danger` | `<div class="callout ok"><strong>Finding.</strong><p>Why.</p></div>` |
+  | `cols`, `panel` | side by side (stacking when narrow); a bordered box |
+  | `tag` (`ok`, `warn`, `danger`) | a small label in a table or a line |
+  | `tabs` | filter buttons; the pressed one has `aria-pressed="true"` |
+  | `td.id`, `td.num` | identifiers in the editor font; right-aligned numbers |
+  | `toc` | a two-column list of section links |
+  | `svg.chart` | inline charts: `.bar` (`ok`, `warn`, `danger`, `muted`), `.grid`, `.node` (`accent`), `.edge` (`accent`, `dashed`), `.arrowhead`, `text.label` |
+
+  All of them are in the stylesheet's layer, so a page's own CSS overrides
+  any of them.
 
 A page that hard-codes colours will look wrong in some theme; the tokens are
 the point.
