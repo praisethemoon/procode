@@ -4,6 +4,8 @@
  *   - every command the generated manifest contributes is registered
  *   - the MCP definitions run files that exist in dist/, with the bundled CLIs
  *   - "Set Up MCP for Claude Code" writes .mcp.json and keeps other servers
+ *   - user-scope registration asks a stand-in `claude` on PATH, never the real
+ *     one: the first time, after an update, and not again once current
  *
  *   node scripts/check.mjs      (after npm run build --workspace combined)
  *
@@ -128,5 +130,45 @@ const written = JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8
 assert.deepEqual(Object.keys(written.mcpServers).sort(), ["coboard", "kb", "other"]);
 assert.equal(written.mcpServers.other.command, "x", "an unrelated server is kept as it was");
 assert.equal(written.mcpServers.kb.args[0], defs[1].args[0], "Claude Code runs the same script as VS Code's agent");
+assert.equal(written.mcpServers.coboard.env.COBOARD_AUTHOR, "claude", "Claude Code's board comments are signed");
+
+// User scope, against a stand-in `claude` that records its arguments.
+const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), "procode-claude-"));
+const calls = path.join(fakeBin, "calls.jsonl");
+fs.writeFileSync(
+    path.join(fakeBin, "claude"),
+    `#!/bin/sh\nexec "${process.execPath}" -e 'require("fs").appendFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)) + "\\n")' "${calls}" "$@"\n`,
+    { mode: 0o755 },
+);
+process.env.PATH = fakeBin + path.delimiter + process.env.PATH;
+const state = new Map([["procode.claude.userScope", "a signature from an older install"]]);
+const ctx2 = { ...ctx, globalState: { get: (k) => state.get(k), update: async (k, v) => void state.set(k, v) } };
+const asked = () => (fs.existsSync(calls) ? fs.readFileSync(calls, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : []);
+
+await ext.refreshClaudeUserScope(ctx2);
+const first = asked();
+assert.deepEqual(first.map((a) => a.slice(0, 5).join(" ")), [
+    "mcp remove --scope user coboard",
+    "mcp add-json --scope user coboard",
+    "mcp remove --scope user kb",
+    "mcp add-json --scope user kb",
+]);
+const coboardEntry = JSON.parse(first[1][5]);
+assert.equal(coboardEntry.type, "stdio");
+assert.equal(coboardEntry.args[0], defs[0].args[0], "user scope runs the installed script");
+assert.equal(coboardEntry.env.COBOARD_AUTHOR, "claude");
+assert.ok(fs.existsSync(JSON.parse(first[3][5]).env.KB_BIN), "user scope hands kb the bundled CLI");
+
+await ext.refreshClaudeUserScope(ctx2);
+assert.equal(asked().length, 4, "a current registration is left alone");
+state.set("procode.claude.userScope", "declined");
+await ext.refreshClaudeUserScope(ctx2);
+assert.equal(asked().length, 4, "a declined offer is not made again");
+assert.equal(
+    ext.shellLine(["mcp", "add-json", "kb", `{"a":"it's"}`]),
+    `claude mcp add-json kb '{"a":"it'\\''s"}'`,
+    "the clipboard line survives a single quote",
+);
+
 console.log(`check: ${registered.size} commands registered, ${defs.length} MCP servers, no errors`);
-console.log(`check: workspace ${folder}`);
+console.log(`check: workspace ${folder}, stand-in claude ${fakeBin}`);

@@ -72,7 +72,10 @@ for (const part of PARTS) {
         }
     }
 }
-contributes.commands.push({ command: "procode.setUpClaudeMcp", title: "Set Up MCP for Claude Code", category: "procode" });
+contributes.commands.push(
+    { command: "procode.registerClaudeMcp", title: "Register MCP Servers with Claude Code (All Projects)", category: "procode" },
+    { command: "procode.setUpClaudeMcp", title: "Set Up MCP for Claude Code (This Project's .mcp.json)", category: "procode" },
+);
 contributes.mcpServerDefinitionProviders = [{ id: "procode.mcp", label: "procode" }];
 
 const ids = [
