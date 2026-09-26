@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Activity bar icons: five options each</title>
+<style>
+.ic path { fill: none; stroke: var(--bk-color-foreground); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cur path { fill: var(--bk-color-foreground); }
+.abar svg { flex: none; width: 24px; height: 24px; }
+.cur { vertical-align: -3px; }
+.abar { flex: none; display: inline-flex; flex-direction: column; align-items: center; gap: var(--bk-spacing-4); padding: var(--bk-spacing-3) var(--bk-spacing-3);
+  background: var(--bk-color-background-secondary); border: var(--bk-border-width-1) solid var(--bk-color-border); border-radius: var(--bk-radius-md); }
+.lineups { display: flex; gap: var(--bk-gap-lg); flex-wrap: wrap; align-items: flex-start; margin: var(--bk-spacing-4) 0; }
+.lineups figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: var(--bk-spacing-2); }
+.lineups figcaption { font-size: var(--bk-font-size-sm); color: var(--bk-color-foreground-muted); text-align: center; max-width: 9rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: var(--bk-gap-md); margin: var(--bk-spacing-3) 0 var(--bk-spacing-8); }
+.card { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: var(--bk-spacing-3); padding: var(--bk-spacing-3);
+  border: var(--bk-border-width-1) solid var(--bk-color-border); border-radius: var(--bk-radius-lg); cursor: pointer; color: var(--bk-color-foreground); font-family: var(--bk-font-family-sans); }
+.card:hover { background: var(--bk-color-background-secondary); }
+.card:focus-visible { outline: var(--bk-border-width-2) solid var(--bk-color-primary); outline-offset: 2px; }
+.card[aria-pressed="true"] { border-color: var(--bk-color-primary); box-shadow: inset 0 0 0 1px var(--bk-color-primary); }
+.stage { display: flex; justify-content: center; padding: var(--bk-spacing-4) 0; background: var(--bk-color-background-secondary); border-radius: var(--bk-radius-md); }
+.row { display: flex; gap: var(--bk-spacing-3); align-items: flex-start; }
+.txt p { margin: var(--bk-spacing-1) 0 0; font-size: var(--bk-font-size-sm); line-height: var(--bk-line-height-normal); }
+.card dl { margin: 0; font-size: var(--bk-font-size-sm); display: grid; grid-template-columns: auto 1fr; gap: var(--bk-spacing-1) var(--bk-spacing-2); }
+.card dt { color: var(--bk-color-foreground-muted); }
+.card dd { margin: 0; }
+#pick { color: var(--bk-color-foreground); }
+</style>
+</head>
+<body>
+
+<div class="eyebrow">Design options · 26 September 2026</div>
+<h1>Activity bar icons for Board, Artifacts and Knowledge</h1>
+<p class="lede">
+  Five options for each of the three views, drawn in the language of lap's spiral: one 2px stroke with round ends,
+  on a 24×24 canvas, filling it with about 2px to spare. lap's own icon stays as it is. Click one card per view to
+  see your lineup in the activity bar below.
+</p>
+<div class="meta">
+  <span class="chip">Views <b>Board · Artifacts · Knowledge</b></span>
+  <span class="chip">Kept <b>lap's spiral</b></span>
+  <span class="chip">Format <b>24×24 SVG, 2px stroke</b></span>
+  <span class="chip">Status <b>options, nothing changed yet</b></span>
+</div>
+
+<nav class="toc">
+  <a href="#lineups">1. Lineups</a>
+  <a href="#rules">2. What is taken from lap</a>
+  <a href="#board">3. Board</a>
+  <a href="#artifacts">4. Artifacts</a>
+  <a href="#knowledge">5. Knowledge</a>
+  <a href="#open">6. Not checked yet</a>
+</nav>
+
+<h2 id="lineups">1. Lineups</h2>
+<div class="lineups">
+  <figure><div class="abar" role="img" aria-label="Today&#x27;s activity bar"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="cur" width="24" height="24" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M1.5 1h13l.5.5v13l-.5.5h-13l-.5-.5v-13l.5-.5zM2 14h12V2H2v12zM3 3h2v10H3V3zm6 0H7v6h2V3zm2 0h2v8h-2V3z"/></svg><svg class="cur" width="24" height="24" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2 2h12l1 1v10l-1 1H2l-1-1V3l1-1zm0 11h12V3H2v10zm11-9H3v3h10V4zm-1 2H4V5h8v1zm-3 6h4V8H9v4zm1-3h2v2h-2V9zM7 8H3v1h4V8zm-4 3h4v1H3v-1z"/></svg><svg class="cur" width="24" height="24" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M14.5 2H9l-.35.15-.65.64-.65-.64L7 2H1.5l-.5.5v10l.5.5h5.29l.86.85h.7l.86-.85h5.29l.5-.5v-10l-.5-.5zm-7 10.32l-.18-.17L7 12H2V3h4.79l.74.74-.03 8.58zM14 12H9l-.35.15-.14.13V3.7l.7-.7H14v9zM6 5H3v1h3V5zm0 4H3v1h3V9zM3 7h3v1H3V7zm10-2h-3v1h3V5zm-3 2h3v1h-3V7zm0 2h3v1h-3V9z"/></svg></div><figcaption>Today: lap, then the codicons <code>project</code>, <code>preview</code>, <code>book</code></figcaption></figure>
+  <figure><div class="abar" role="img" aria-label="Recommended lineup"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v15 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-15 a1.5 1.5 0 0 1 1.5 -1.5 z M11.25 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 a1.5 1.5 0 0 1 1.5 -1.5 z M18 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v5.5 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-5.5 a1.5 1.5 0 0 1 1.5 -1.5 z"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3 H7 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h10 a2 2 0 0 0 2 -2 V8 z M14 3 v5 h5 M8.5 16 q2 -4 3.5 -1.5 t3.5 -2"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 10.5 A1.5 1.5 0 1 1 7.5 10.5 A3 3 0 1 1 13.5 10.5 A4.5 4.5 0 1 1 4.5 10.5 A6 6 0 1 1 16.5 10.5 M15.3 15.3 L21 21"/></svg></div><figcaption>Recommended: Lanes, Folded page, Spiral lens</figcaption></figure>
+  <figure><div class="abar" role="img" aria-label="All-spiral lineup"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12 h4 v-4 h-8 v8 h12 v-12 h-16 v16"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7 A1.25 1.25 0 1 0 5.5 7 A2.5 2.5 0 1 0 10.5 7 A3.75 3.75 0 1 0 3 7 V19 a2 2 0 0 0 2 2 H19 a2 2 0 0 0 2 -2 V5 a2 2 0 0 0 -2 -2 H11"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 10.5 A1.5 1.5 0 1 1 7.5 10.5 A3 3 0 1 1 13.5 10.5 A4.5 4.5 0 1 1 4.5 10.5 A6 6 0 1 1 16.5 10.5 M15.3 15.3 L21 21"/></svg></div><figcaption>All spirals: Square spiral, Page from the spiral, Spiral lens</figcaption></figure>
+  <figure><div id="mine"><div class="abar" role="img" aria-label="Your lineup"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v15 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-15 a1.5 1.5 0 0 1 1.5 -1.5 z M11.25 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 a1.5 1.5 0 0 1 1.5 -1.5 z M18 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v5.5 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-5.5 a1.5 1.5 0 0 1 1.5 -1.5 z"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3 H7 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h10 a2 2 0 0 0 2 -2 V8 z M14 3 v5 h5 M8.5 16 q2 -4 3.5 -1.5 t3.5 -2"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 10.5 A1.5 1.5 0 1 1 7.5 10.5 A3 3 0 1 1 13.5 10.5 A4.5 4.5 0 1 1 4.5 10.5 A6 6 0 1 1 16.5 10.5 M15.3 15.3 L21 21"/></svg></div></div><figcaption>Yours: <span id="pick">click a card in each section</span></figcaption></figure>
+</div>
+<div class="callout info">
+  <strong>Recommended: one spiral besides lap's, not three.</strong>
+  <p>
+    Spiral lens gives Knowledge lap's look and a clear meaning (search). Lanes and Folded page say what they open
+    without help. The all-spiral set is the most unified, but four spirals in one bar make the views hard to tell
+    apart at a glance.
+  </p>
+</div>
+
+<h2 id="rules">2. What is taken from lap</h2>
+<ul>
+  <li><strong>One stroke weight:</strong> 2px on a 24px canvas, round ends and round joins (Strata keeps sharp joins where layers meet).</li>
+  <li><strong>The canvas filled:</strong> drawings span about 18px, leaving about 2px of margin, as lap's does.</li>
+  <li><strong>Outline only:</strong> no filled shapes. VS Code draws activity bar icons as a single-colour mask, so only the outline counts.</li>
+  <li><strong>The spiral itself</strong> in three options (Square spiral, Page from the spiral, Spiral lens), each with the same outward passes as lap's.</li>
+</ul>
+
+<h2 id="board">3. Board</h2>
+<p class="muted">Today: <svg class="cur" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M1.5 1h13l.5.5v13l-.5.5h-13l-.5-.5v-13l.5-.5zM2 14h12V2H2v12zM3 3h2v10H3V3zm6 0H7v6h2V3zm2 0h2v8h-2V3z"/></svg> <code>project</code> from the codicons.</p>
+<div class="grid"><button type="button" class="card" data-project="board" data-index="0" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12 h4 v-4 h-8 v8 h12 v-12 h-16 v16"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Square spiral beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12 h4 v-4 h-8 v8 h12 v-12 h-16 v16"/></svg></div>
+    <div class="txt"><strong>1. Square spiral</strong><p>lap's spiral, squared: the same passes outward, drawn on a board's grid.</p></div></div>
+  <dl><dt>From lap</dt><dd>The closest sibling to lap: same start in the middle, same outward passes.</dd><dt>Risk</dt><dd>Can read as a maze or a Greek key before it reads as a board.</dd></dl>
+</button><button type="button" class="card" data-project="board" data-index="1" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v15 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-15 a1.5 1.5 0 0 1 1.5 -1.5 z M11.25 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 a1.5 1.5 0 0 1 1.5 -1.5 z M18 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v5.5 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-5.5 a1.5 1.5 0 0 1 1.5 -1.5 z"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Lanes beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v15 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-15 a1.5 1.5 0 0 1 1.5 -1.5 z M11.25 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 a1.5 1.5 0 0 1 1.5 -1.5 z M18 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v5.5 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-5.5 a1.5 1.5 0 0 1 1.5 -1.5 z"/></svg></div>
+    <div class="txt"><strong>2. Lanes</strong> <span class="tag ok">recommended</span><p>Three lanes of different heights: a Kanban board at a glance.</p></div></div>
+  <dl><dt>From lap</dt><dd>Same stroke and round ends; nothing else from the spiral.</dd><dt>Risk</dt><dd>The shape is close to Trello's mark.</dd></dl>
+</button><button type="button" class="card" data-project="board" data-index="2" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 10 h8 a2 2 0 0 1 2 2 v7 a2 2 0 0 1 -2 2 h-8 a2 2 0 0 1 -2 -2 v-7 a2 2 0 0 1 2 -2 z M6 17 v-8 a2 2 0 0 1 2 -2 h9 M3 13 v-8 a2 2 0 0 1 2 -2 h9"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Ticket stack beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 10 h8 a2 2 0 0 1 2 2 v7 a2 2 0 0 1 -2 2 h-8 a2 2 0 0 1 -2 -2 v-7 a2 2 0 0 1 2 -2 z M6 17 v-8 a2 2 0 0 1 2 -2 h9 M3 13 v-8 a2 2 0 0 1 2 -2 h9"/></svg></div>
+    <div class="txt"><strong>3. Ticket stack</strong><p>A pile of tickets, the front one whole.</p></div></div>
+  <dl><dt>From lap</dt><dd>Same weight and corner radius as the rest of the set.</dd><dt>Risk</dt><dd>VS Code's Copy icon is a similar pair of rectangles.</dd></dl>
+</button><button type="button" class="card" data-project="board" data-index="3" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5 l2.5 2.5 l5 -5.5 M21 12 A9 9 0 1 1 17.5 4.9"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Loop to done beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5 l2.5 2.5 l5 -5.5 M21 12 A9 9 0 1 1 17.5 4.9"/></svg></div>
+    <div class="txt"><strong>4. Loop to done</strong><p>An open ring closing on a check: a pass that ends done.</p></div></div>
+  <dl><dt>From lap</dt><dd>The open outer arc is lap's last pass.</dd><dt>Risk</dt><dd>Close to the codicon <code>pass</code> and many “task complete” icons.</dd></dl>
+</button><button type="button" class="card" data-project="board" data-index="4" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M21 12 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M21 19 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M5.5 7.5 V16 a3 3 0 0 0 3 3 H16 M5.5 12 H16"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Epic tree beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M21 12 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M21 19 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M5.5 7.5 V16 a3 3 0 0 0 3 3 H16 M5.5 12 H16"/></svg></div>
+    <div class="txt"><strong>5. Epic tree</strong><p>An epic with two children: what the tree in the sidebar holds.</p></div></div>
+  <dl><dt>From lap</dt><dd>Round caps and joins, one weight.</dd><dt>Risk</dt><dd>Looks like the codicon <code>git-branch</code>, which sits in the same activity bar as Source Control.</dd></dl>
+</button></div><h2 id="artifacts">4. Artifacts</h2>
+<p class="muted">Today: <svg class="cur" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2 2h12l1 1v10l-1 1H2l-1-1V3l1-1zm0 11h12V3H2v10zm11-9H3v3h10V4zm-1 2H4V5h8v1zm-3 6h4V8H9v4zm1-3h2v2h-2V9zM7 8H3v1h4V8zm-4 3h4v1H3v-1z"/></svg> <code>preview</code> from the codicons.</p>
+<div class="grid"><button type="button" class="card" data-project="artifacts" data-index="0" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7 A1.25 1.25 0 1 0 5.5 7 A2.5 2.5 0 1 0 10.5 7 A3.75 3.75 0 1 0 3 7 V19 a2 2 0 0 0 2 2 H19 a2 2 0 0 0 2 -2 V5 a2 2 0 0 0 -2 -2 H11"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Page from the spiral beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7 A1.25 1.25 0 1 0 5.5 7 A2.5 2.5 0 1 0 10.5 7 A3.75 3.75 0 1 0 3 7 V19 a2 2 0 0 0 2 2 H19 a2 2 0 0 0 2 -2 V5 a2 2 0 0 0 -2 -2 H11"/></svg></div>
+    <div class="txt"><strong>1. Page from the spiral</strong><p>A page whose corner curls into lap's spiral: a page that came out of the work.</p></div></div>
+  <dl><dt>From lap</dt><dd>The strongest tie: it is lap's spiral, three passes, turned into the page's edge.</dd><dt>Risk</dt><dd>At 24px the spiral is small and can read as a sticker or a page curl.</dd></dl>
+</button><button type="button" class="card" data-project="artifacts" data-index="1" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3 H7 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h10 a2 2 0 0 0 2 -2 V8 z M14 3 v5 h5 M8.5 16 q2 -4 3.5 -1.5 t3.5 -2"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Folded page beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3 H7 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h10 a2 2 0 0 0 2 -2 V8 z M14 3 v5 h5 M8.5 16 q2 -4 3.5 -1.5 t3.5 -2"/></svg></div>
+    <div class="txt"><strong>2. Folded page</strong> <span class="tag ok">recommended</span><p>A document with a folded corner and a line drawn on it.</p></div></div>
+  <dl><dt>From lap</dt><dd>Same corner radius and weight.</dd><dt>Risk</dt><dd>Generic: many extensions use a file shape.</dd></dl>
+</button><button type="button" class="card" data-project="artifacts" data-index="2" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 C12 8.5 14.5 11.5 21 12 C14.5 12.5 12 15.5 12 21 C12 15.5 9.5 12.5 3 12 C9.5 11.5 12 8.5 12 3 z"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Spark beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 C12 8.5 14.5 11.5 21 12 C14.5 12.5 12 15.5 12 21 C12 15.5 9.5 12.5 3 12 C9.5 11.5 12 8.5 12 3 z"/></svg></div>
+    <div class="txt"><strong>3. Spark</strong><p>A four-point spark: finished work, handed over.</p></div></div>
+  <dl><dt>From lap</dt><dd>One continuous stroke, like lap.</dd><dt>Risk</dt><dd>Widely used for AI features; it says “AI” more than “page”.</dd></dl>
+</button><button type="button" class="card" data-project="artifacts" data-index="3" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3 h14 a2 2 0 0 1 2 2 v14 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-14 a2 2 0 0 1 2 -2 z M12 7.5 C12 10.5 13 11.5 16.5 12 C13 12.5 12 13.5 12 16.5 C12 13.5 11 12.5 7.5 12 C11 11.5 12 10.5 12 7.5 z"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Framed spark beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3 h14 a2 2 0 0 1 2 2 v14 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-14 a2 2 0 0 1 2 -2 z M12 7.5 C12 10.5 13 11.5 16.5 12 C13 12.5 12 13.5 12 16.5 C12 13.5 11 12.5 7.5 12 C11 11.5 12 10.5 12 7.5 z"/></svg></div>
+    <div class="txt"><strong>4. Framed spark</strong><p>The spark in a frame: a finished piece, on display.</p></div></div>
+  <dl><dt>From lap</dt><dd>Same frame as Report, so the two read as one family.</dd><dt>Risk</dt><dd>The spark inside is small at 24px.</dd></dl>
+</button><button type="button" class="card" data-project="artifacts" data-index="4" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3 h14 a2 2 0 0 1 2 2 v14 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-14 a2 2 0 0 1 2 -2 z M7 16 l3.5 -4 l3 2.5 l3.5 -5.5"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Report beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3 h14 a2 2 0 0 1 2 2 v14 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-14 a2 2 0 0 1 2 -2 z M7 16 l3.5 -4 l3 2.5 l3.5 -5.5"/></svg></div>
+    <div class="txt"><strong>5. Report</strong><p>A frame with a rising line: a report.</p></div></div>
+  <dl><dt>From lap</dt><dd>Same frame and weight; the line has lap's round joins.</dd><dt>Risk</dt><dd>Says “analytics”, and only some artifacts are charts.</dd></dl>
+</button></div><h2 id="knowledge">5. Knowledge</h2>
+<p class="muted">Today: <svg class="cur" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M14.5 2H9l-.35.15-.65.64-.65-.64L7 2H1.5l-.5.5v10l.5.5h5.29l.86.85h.7l.86-.85h5.29l.5-.5v-10l-.5-.5zm-7 10.32l-.18-.17L7 12H2V3h4.79l.74.74-.03 8.58zM14 12H9l-.35.15-.14.13V3.7l.7-.7H14v9zM6 5H3v1h3V5zm0 4H3v1h3V9zM3 7h3v1H3V7zm10-2h-3v1h3V5zm-3 2h3v1h-3V7zm0 2h3v1h-3V9z"/></svg> <code>book</code> from the codicons.</p>
+<div class="grid"><button type="button" class="card" data-project="knowledge" data-index="0" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 10.5 A1.5 1.5 0 1 1 7.5 10.5 A3 3 0 1 1 13.5 10.5 A4.5 4.5 0 1 1 4.5 10.5 A6 6 0 1 1 16.5 10.5 M15.3 15.3 L21 21"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Spiral lens beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 10.5 A1.5 1.5 0 1 1 7.5 10.5 A3 3 0 1 1 13.5 10.5 A4.5 4.5 0 1 1 4.5 10.5 A6 6 0 1 1 16.5 10.5 M15.3 15.3 L21 21"/></svg></div>
+    <div class="txt"><strong>1. Spiral lens</strong> <span class="tag ok">recommended</span><p>lap's spiral as a magnifier: searching what was filed.</p></div></div>
+  <dl><dt>From lap</dt><dd>The strongest tie: the spiral itself, four passes, with a handle.</dd><dt>Risk</dt><dd>Two spirals in one activity bar (lap's and this) may be read as two views of the same thing.</dd></dl>
+</button><button type="button" class="card" data-project="knowledge" data-index="1" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7 C9.5 5 6 4.5 3 5.5 V19 C6 18 9.5 18.5 12 20.5 C14.5 18.5 18 18 21 19 V5.5 C18 4.5 14.5 5 12 7 V20.5"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Open book beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7 C9.5 5 6 4.5 3 5.5 V19 C6 18 9.5 18.5 12 20.5 C14.5 18.5 18 18 21 19 V5.5 C18 4.5 14.5 5 12 7 V20.5"/></svg></div>
+    <div class="txt"><strong>2. Open book</strong><p>An open book, redrawn in lap's stroke.</p></div></div>
+  <dl><dt>From lap</dt><dd>Same weight and round joins.</dd><dt>Risk</dt><dd>Close to today's <code>book</code> codicon: little changes.</dd></dl>
+</button><button type="button" class="card" data-project="knowledge" data-index="2" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M20.5 9 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M13.5 18 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M8.4 6.6 L15.6 8.4 M7 8.3 L10 15.7 M16.4 10.8 L12.6 15.9"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Linked notes beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M20.5 9 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M13.5 18 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M8.4 6.6 L15.6 8.4 M7 8.3 L10 15.7 M16.4 10.8 L12.6 15.9"/></svg></div>
+    <div class="txt"><strong>3. Linked notes</strong><p>Three documents and the links between them: the graph view.</p></div></div>
+  <dl><dt>From lap</dt><dd>Round caps; nodes about the size of lap's inner pass.</dd><dt>Risk</dt><dd>Reads as “share” or “network” as often as “knowledge”.</dd></dl>
+</button><button type="button" class="card" data-project="knowledge" data-index="3" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 L21 7.5 L12 12 L3 7.5 Z M3 12 L12 16.5 L21 12 M3 16.5 L12 21 L21 16.5"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Strata beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 L21 7.5 L12 12 L3 7.5 Z M3 12 L12 16.5 L21 12 M3 16.5 L12 21 L21 16.5"/></svg></div>
+    <div class="txt"><strong>4. Strata</strong><p>Layers of documents, stacked.</p></div></div>
+  <dl><dt>From lap</dt><dd>Same weight; sharp joins where the layers meet.</dd><dt>Risk</dt><dd>Generic “layers” icon, used by many tools.</dd></dl>
+</button><button type="button" class="card" data-project="knowledge" data-index="4" aria-pressed="false">
+  <div class="stage"><svg class="ic" width="88" height="88" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4 v16 M9.5 7 v13 M14 4 v16 M17.5 7.5 l3 12.5 M3 21 h18"/></svg></div>
+  <div class="row"><div class="abar" role="img" aria-label="Shelf beside lap at 24 pixels"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125"/></svg><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4 v16 M9.5 7 v13 M14 4 v16 M17.5 7.5 l3 12.5 M3 21 h18"/></svg></div>
+    <div class="txt"><strong>5. Shelf</strong><p>Books on a shelf, one leaning.</p></div></div>
+  <dl><dt>From lap</dt><dd>One weight, round caps.</dd><dt>Risk</dt><dd>At a glance it can read as a bar chart.</dd></dl>
+</button></div>
+
+<h2 id="open">6. Not checked yet</h2>
+<details open>
+  <summary>How they look in VS Code itself</summary>
+  <p>
+    These were drawn and checked in a browser at 24px and at 88px, with the stroke in the theme's text colour.
+    VS Code masks the icon and colours it with the activity bar's own foreground, and dims inactive views. None has
+    been installed in the extension yet, so the dimmed state and the badge that overlaps the corner are unchecked.
+  </p>
+</details>
+<details>
+  <summary>High-contrast themes and 16px</summary>
+  <p>Not checked. The activity bar uses 24px; an icon reused at 16px in a tab or a menu may need a simpler variant, the spirals most of all.</p>
+</details>
+
+<h2>Next</h2>
+<ol>
+  <li>Choose one per view: tell me the three numbers, for example “Board 2, Artifacts 2, Knowledge 1”.</li>
+  <li>I add the chosen SVGs next to <code>lap.svg</code>, point each view container at its file, and check them in the real activity bar, inactive and with a badge.</li>
+</ol>
+
+<p class="muted">
+  Drawn for this page. lap's icon is <code>packages/lap-vscode/media/lap.svg</code>. Today's icons are codicons
+  <code>project</code>, <code>preview</code> and <code>book</code> from <code>@vscode/codicons</code> (CC BY 4.0), as set in each extension's <code>package.json</code>.
+</p>
+
+<script>
+  const PATHS = {"board": ["M12 12 h4 v-4 h-8 v8 h12 v-12 h-16 v16", "M4.5 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v15 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-15 a1.5 1.5 0 0 1 1.5 -1.5 z M11.25 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 a1.5 1.5 0 0 1 1.5 -1.5 z M18 3 h1.5 a1.5 1.5 0 0 1 1.5 1.5 v5.5 a1.5 1.5 0 0 1 -1.5 1.5 h-1.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-5.5 a1.5 1.5 0 0 1 1.5 -1.5 z", "M11 10 h8 a2 2 0 0 1 2 2 v7 a2 2 0 0 1 -2 2 h-8 a2 2 0 0 1 -2 -2 v-7 a2 2 0 0 1 2 -2 z M6 17 v-8 a2 2 0 0 1 2 -2 h9 M3 13 v-8 a2 2 0 0 1 2 -2 h9", "M8.5 12.5 l2.5 2.5 l5 -5.5 M21 12 A9 9 0 1 1 17.5 4.9", "M8 5 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M21 12 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M21 19 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M5.5 7.5 V16 a3 3 0 0 0 3 3 H16 M5.5 12 H16"], "artifacts": ["M8 7 A1.25 1.25 0 1 0 5.5 7 A2.5 2.5 0 1 0 10.5 7 A3.75 3.75 0 1 0 3 7 V19 a2 2 0 0 0 2 2 H19 a2 2 0 0 0 2 -2 V5 a2 2 0 0 0 -2 -2 H11", "M14 3 H7 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h10 a2 2 0 0 0 2 -2 V8 z M14 3 v5 h5 M8.5 16 q2 -4 3.5 -1.5 t3.5 -2", "M12 3 C12 8.5 14.5 11.5 21 12 C14.5 12.5 12 15.5 12 21 C12 15.5 9.5 12.5 3 12 C9.5 11.5 12 8.5 12 3 z", "M5 3 h14 a2 2 0 0 1 2 2 v14 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-14 a2 2 0 0 1 2 -2 z M12 7.5 C12 10.5 13 11.5 16.5 12 C13 12.5 12 13.5 12 16.5 C12 13.5 11 12.5 7.5 12 C11 11.5 12 10.5 12 7.5 z", "M5 3 h14 a2 2 0 0 1 2 2 v14 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-14 a2 2 0 0 1 2 -2 z M7 16 l3.5 -4 l3 2.5 l3.5 -5.5"], "knowledge": ["M10.5 10.5 A1.5 1.5 0 1 1 7.5 10.5 A3 3 0 1 1 13.5 10.5 A4.5 4.5 0 1 1 4.5 10.5 A6 6 0 1 1 16.5 10.5 M15.3 15.3 L21 21", "M12 7 C9.5 5 6 4.5 3 5.5 V19 C6 18 9.5 18.5 12 20.5 C14.5 18.5 18 18 21 19 V5.5 C18 4.5 14.5 5 12 7 V20.5", "M8.5 6 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M20.5 9 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M13.5 18 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M8.4 6.6 L15.6 8.4 M7 8.3 L10 15.7 M16.4 10.8 L12.6 15.9", "M12 3 L21 7.5 L12 12 L3 7.5 Z M3 12 L12 16.5 L21 12 M3 16.5 L12 21 L21 16.5", "M5 4 v16 M9.5 7 v13 M14 4 v16 M17.5 7.5 l3 12.5 M3 21 h18"]};
+  const NAMES = {"board": ["Square spiral", "Lanes", "Ticket stack", "Loop to done", "Epic tree"], "artifacts": ["Page from the spiral", "Folded page", "Spark", "Framed spark", "Report"], "knowledge": ["Spiral lens", "Open book", "Linked notes", "Strata", "Shelf"]};
+  const LAP = "M12 13.125 A2.25 2.25 0 1 1 7.5 13.125 A4.5 4.5 0 1 1 16.5 13.125 A6.75 6.75 0 1 1 3 13.125 A9 9 0 1 1 21 13.125";
+  const chosen = {"board": 1, "artifacts": 1, "knowledge": 0};
+  const picked = {};
+  const svg = (d) => '<svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="' + d + '"/></svg>';
+  function draw() {
+    const order = ["board", "artifacts", "knowledge"];
+    document.getElementById("mine").innerHTML =
+      '<div class="abar" role="img" aria-label="Your lineup">' + svg(LAP) + order.map((k) => svg(PATHS[k][chosen[k]])).join("") + "</div>";
+    const done = order.filter((k) => k in picked);
+    document.getElementById("pick").textContent = done.length === 0
+      ? "click a card in each section"
+      : order.map((k) => (k in picked ? k[0].toUpperCase() + k.slice(1) + " " + (picked[k] + 1) : null)).filter(Boolean).join(", ");
+  }
+  for (const card of document.querySelectorAll(".card")) {
+    card.addEventListener("click", () => {
+      const k = card.dataset.project, i = Number(card.dataset.index);
+      chosen[k] = i; picked[k] = i;
+      for (const c of document.querySelectorAll('.card[data-project="' + k + '"]')) c.setAttribute("aria-pressed", String(c === card));
+      draw();
+    });
+  }
+</script>
+</body>
+</html>
