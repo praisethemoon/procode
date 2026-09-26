@@ -18,6 +18,7 @@ import { Board } from "coboard";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "coboard-host-"));
 const commands = new Map<string, (...a: unknown[]) => unknown>();
 const posted: unknown[] = [];
+const prompts: string[] = [];
 const executed: unknown[][] = [];
 const threads: { uri: { path: string }; range: { startLine: number; endLine: number }; comments: { author: { name: string }; body: { value: string } }[]; canReply: boolean; label: string }[] = [];
 let content: { provideTextDocumentContent(uri: { toString(): string }): string } | null = null;
@@ -80,6 +81,10 @@ const fake = {
             },
         }),
         showErrorMessage: (m: string) => assert.fail(`the host reported an error: ${m}`),
+        showInputBox: async (o: { title?: string }) => {
+            prompts.push(o.title ?? "");
+            return "shipped";
+        },
     },
     commands: {
         registerCommand: (name: string, fn: (...a: unknown[]) => unknown) => {
@@ -119,7 +124,18 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
         Module._load = load;
     }
 
-    for (const c of ["coboard.newEpic", "coboard.newMilestone", "coboard.newTicket", "coboard.open", "coboard.delete", "coboard.startSession", "coboard.refresh", "coboard.collapseAll"]) {
+    for (const c of [
+        "coboard.newEpic",
+        "coboard.newMilestone",
+        "coboard.newTicket",
+        "coboard.open",
+        "coboard.delete",
+        "coboard.archive",
+        "coboard.unarchive",
+        "coboard.startSession",
+        "coboard.refresh",
+        "coboard.collapseAll",
+    ]) {
         assert.ok(commands.has(c), `${c} is registered`);
     }
     assert.equal(commands.has("coboard.goTo"), false, "the filter bar replaces Go to Item");
@@ -159,6 +175,19 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
     await new Promise((r) => setTimeout(r, 10));
     const t = b.get("T-3");
     assert.ok(t.kind === "ticket" && t.comments.length === 1);
+
+    // Archive from a row's right-click: it says what goes with it, asks why,
+    // and the sidebar is sent the archived items, marked, to filter itself.
+    await commands.get("coboard.archive")!({ webviewSection: "milestone", id: "M-1", coboardArchived: false });
+    assert.equal(prompts.at(-1), "Archive M-1 and the 2 items under it");
+    const archived = b.get("T-1").archived;
+    assert.deepEqual(archived && [archived.via, archived.reason], ["M-1", "shipped"]);
+    const after = toSidebar.filter((m) => m.type === "items").at(-1) as { items: { id: string; archived?: true }[] };
+    assert.deepEqual(after.items.filter((i) => i.archived).map((i) => i.id), ["M-1", "T-1", "T-3"]);
+    // And back, from the archived milestone's page.
+    onMessage!({ type: "unarchive", id: "M-1" });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(b.get("T-1").archived, undefined);
 });
 
 test("clicking a lap edit on a ticket opens it as a diff at the edited line", { skip: !fs.existsSync(LAP) && "lap is not built" }, async () => {
