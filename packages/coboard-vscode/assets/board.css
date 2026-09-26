@@ -617,22 +617,39 @@ body {
 
 /* ---- a session's review ------------------------------------------------ */
 
-.cb-review-button {
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 1px 8px;
+/* A ticket's sessions, each a card: the section's Start session stays in
+ * the header, and each session's Review sits inside its own card, well apart. */
+.cb-runs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+}
+.cb-run {
     border: 1px solid var(--bk-color-border);
     border-radius: 4px;
-    background: transparent;
-    color: var(--bk-color-foreground);
-    font: inherit;
-    font-size: 0.92em;
-    cursor: pointer;
 }
-.cb-review-button:hover {
-    background: var(--bk-color-list-hover, var(--bk-color-background-secondary));
+.cb-run-head {
+    align-items: flex-start;
+    padding: 8px 10px;
+}
+.cb-run-head:hover {
+    background: var(--bk-color-list-hover);
+}
+.cb-run-head > .codicon {
+    margin-top: 2px;
+}
+.cb-run-title {
+    flex: 1;
+    min-width: 0;
+    line-height: 20px;
+}
+.cb-run-actions {
+    flex: none;
+    cursor: default;
+}
+.cb-run .cb-commits {
+    padding: 0 10px 8px 34px;
 }
 .cb-review-stat {
     margin-left: auto;

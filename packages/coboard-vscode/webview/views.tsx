@@ -350,37 +350,40 @@ function SessionsSection(props: { ticket: string; sessions: Sessions | null; com
                     <code>lap session start "{props.ticket}: …" --meta ticket={props.ticket}</code>.
                 </p>
             ) : (
-                <ul className="cb-sessions">
+                <ul className="cb-sessions cb-runs">
                     {s.sessions.map((x) => {
                         const expanded = openRows[x.id] === true;
                         const commits = props.commits[x.id];
                         return (
-                            <li key={x.id}>
+                            <li key={x.id} className="cb-run">
                                 <div
-                                    className="cb-session"
+                                    className="cb-session cb-run-head"
                                     onClick={() => {
                                         setOpen({ ...openRows, [x.id]: !expanded });
                                         if (!expanded && commits === undefined) send({ type: "commits", session: x.id });
                                     }}
                                 >
                                     <Icon name={expanded ? "chevron-down" : "chevron-right"} />
-                                    <strong>{x.id}</strong> <span>{x.msg.split("\n")[0]}</span>
-                                    <span className="cb-muted">
-                                        {" "}
-                                        · {x.commits} commit{x.commits === 1 ? "" : "s"} · {x.started.slice(0, 10)}
-                                        {x.active ? " · active" : x.ended ? "" : " · open"}
+                                    <span className="cb-run-title">
+                                        <strong>{x.id}</strong> <span>{x.msg.split("\n")[0]}</span>
+                                        <span className="cb-muted">
+                                            {" "}
+                                            · {x.commits} commit{x.commits === 1 ? "" : "s"} · {x.started.slice(0, 10)}
+                                            {x.active ? " · active" : x.ended ? "" : " · open"}
+                                        </span>
                                     </span>
-                                    <button
-                                        type="button"
-                                        className="cb-review-button"
-                                        title={`Review ${x.id}: what it changed and how`}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            send({ type: "review", session: x.id, ticket: props.ticket });
-                                        }}
-                                    >
-                                        <Icon name="git-pull-request" /> Review
-                                    </button>
+                                    {/* The session's own action, inside its card and away from the
+                                      * section's Start session. */}
+                                    <span className="cb-run-actions" onClick={(e) => e.stopPropagation()}>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            title={`Review ${x.id}: what it changed and how`}
+                                            onClick={() => send({ type: "review", session: x.id, ticket: props.ticket })}
+                                        >
+                                            <Icon name="git-pull-request" /> Review
+                                        </Button>
+                                    </span>
                                 </div>
                                 {expanded && (
                                     <ul className="cb-commits">
