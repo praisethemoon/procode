@@ -25,9 +25,12 @@ import {
 } from "coboard";
 
 import { commentText, regionLabel, regionLines } from "./lapview";
+import type { ViewMode } from "./kanban";
 import type { Choices, SidebarToHost, SidebarToView, ToHost, ToView } from "./protocol";
 
 let board: Board | null = null;
+/* List or Kanban for epic and milestone tabs, remembered per workspace. */
+let viewMode: ViewMode = "list";
 
 function folder(): string | null {
     const f = vscode.workspace.workspaceFolders?.find((w) => w.uri.scheme === "file");
@@ -133,7 +136,7 @@ function push(id: string, panel: vscode.WebviewPanel, all: Item[] = items()): vo
     // The id alone: the page's header carries the title, and a tab strip of
     // full titles leaves no room for anything else.
     panel.title = v ? id : `${id} (deleted)`;
-    const msg: ToView = { type: "data", id, view: v, choices: choices(all) };
+    const msg: ToView = { type: "data", id, view: v, choices: choices(all), mode: viewMode };
     void panel.webview.postMessage(msg);
 }
 
@@ -215,6 +218,11 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string
                 return;
             case "open":
                 open(ctx, tree, m.id);
+                return;
+            case "mode":
+                viewMode = m.mode === "kanban" ? "kanban" : "list";
+                await ctx.workspaceState.update("coboard.viewMode", viewMode);
+                refreshAll(tree);
                 return;
             case "update":
                 requireBoard().update(m.id, m.fields);
@@ -317,6 +325,7 @@ function idOf(arg: unknown): string | undefined {
 }
 
 export function activate(ctx: vscode.ExtensionContext): void {
+    viewMode = ctx.workspaceState.get<ViewMode>("coboard.viewMode") === "kanban" ? "kanban" : "list";
     const tree: Sidebar = new Sidebar(ctx, (id) => open(ctx, tree, id));
     ctx.subscriptions.push(
         vscode.window.registerWebviewViewProvider("coboard.tree", tree, { webviewOptions: { retainContextWhenHidden: true } }),

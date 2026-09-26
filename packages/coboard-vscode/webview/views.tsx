@@ -7,6 +7,7 @@ import { useState } from "react";
 import type { LapCommit } from "coboard/lap";
 import { EPIC_STATUSES, MILESTONE_STATUSES, PRIORITIES, SIZES, TICKET_STATUSES } from "coboard/model";
 import type { EpicView, MilestoneView, Summary, TicketView } from "coboard/query";
+import { ViewMode, columns, moves } from "../src/kanban";
 import type { Choices, Fields, Sessions } from "../src/protocol";
 import { Description, IdLink, InlineText, Markdown, Pick, Progress, QuickAdd, StatusBadge } from "./parts";
 import { send } from "./rpc";
@@ -81,10 +82,97 @@ function TicketTable(props: { tickets: readonly Summary[]; empty: string }): JSX
     );
 }
 
+/* ------------------------------------------------------------- the board */
+
+/* List or Kanban: one choice for the workspace, kept by the host, so every
+ * epic and milestone tab switches together. */
+function ModeToggle(props: { mode: ViewMode }): JSX.Element {
+    const item = (mode: ViewMode, icon: string, label: string) => (
+        <button
+            type="button"
+            className={`cb-mode${props.mode === mode ? " cb-mode-on" : ""}`}
+            aria-pressed={props.mode === mode}
+            title={`Show tickets as a ${label.toLowerCase()}`}
+            onClick={() => send({ type: "mode", mode })}
+        >
+            <i className={`codicon codicon-${icon}`} aria-hidden="true" /> {label}
+        </button>
+    );
+    return (
+        <div className="cb-modes" role="group" aria-label="Show tickets as">
+            {item("list", "list-unordered", "List")}
+            {item("kanban", "layout", "Board")}
+        </div>
+    );
+}
+
+/* One column per status. A card is dragged to another column to change its
+ * status — through the same update the ticket's own Status field sends — and
+ * opened by clicking it. `showMilestone` names each card's milestone, for an
+ * epic's board where cards from several milestones sit together. */
+function Kanban(props: { tickets: readonly Summary[]; showMilestone?: boolean }): JSX.Element {
+    const [over, setOver] = useState<string | null>(null);
+    const byId = new Map(props.tickets.map((t) => [t.id, t]));
+    return (
+        <div className="cb-kanban">
+            {columns(props.tickets).map((col) => (
+                <div
+                    key={col.status}
+                    className={`cb-column${over === col.status ? " cb-over" : ""}`}
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        setOver(col.status);
+                    }}
+                    onDragLeave={() => setOver((o) => (o === col.status ? null : o))}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        setOver(null);
+                        const t = byId.get(e.dataTransfer.getData("text/plain"));
+                        if (t && moves(t, col.status)) update(t.id, { status: col.status });
+                    }}
+                >
+                    <div className="cb-column-head">
+                        <StatusBadge status={col.status} />
+                        <span className="cb-muted">{col.tickets.length}</span>
+                    </div>
+                    {col.tickets.map((t) => (
+                        <div
+                            key={t.id}
+                            className="cb-card"
+                            draggable
+                            role="button"
+                            tabIndex={0}
+                            onDragStart={(e) => {
+                                e.dataTransfer.setData("text/plain", t.id);
+                                e.dataTransfer.effectAllowed = "move";
+                            }}
+                            onClick={() => send({ type: "open", id: t.id })}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") send({ type: "open", id: t.id });
+                            }}
+                        >
+                            <div className="cb-card-title">{t.title}</div>
+                            <div className="cb-card-meta">
+                                <span className="cb-id">{t.id}</span>
+                                {props.showMilestone && t.milestone ? <span className="cb-card-tag">{t.milestone}</span> : null}
+                                {t.priority && t.priority !== "medium" ? (
+                                    <span className={`cb-card-tag cb-pri-${t.priority}`}>{t.priority}</span>
+                                ) : null}
+                                {t.size ? <span className="cb-card-tag">{t.size}</span> : null}
+                                {t.assignee ? <span className="cb-card-who">{t.assignee}</span> : null}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ))}
+        </div>
+    );
+}
+
 /* ------------------------------------------------------------------ epic */
 
-export function Epic(props: { v: EpicView }): JSX.Element {
-    const { epic, milestones, tickets, counts } = props.v;
+export function Epic(props: { v: EpicView; mode: ViewMode }): JSX.Element {
+    const { epic, milestones, tickets, allTickets, counts } = props.v;
     return (
         <article>
             <Header id={epic.id} title={epic.title} trail={[]} />
@@ -96,8 +184,21 @@ export function Epic(props: { v: EpicView }): JSX.Element {
                 </label>
             </div>
             <Description value={epic.description} onSave={(description) => update(epic.id, { description })} />
+            {props.mode === "kanban" ? (
+                <section className="cb-section">
+                    <div className="cb-section-head">
+                        <h3>Tickets</h3>
+                        <ModeToggle mode={props.mode} />
+                    </div>
+                    <Kanban tickets={allTickets} showMilestone />
+                    <QuickAdd placeholder="New ticket title" onAdd={(title) => send({ type: "create", kind: "ticket", title, epic: epic.id })} />
+                </section>
+            ) : null}
             <section className="cb-section">
-                <h3>Milestones</h3>
+                <div className="cb-section-head">
+                    <h3>Milestones</h3>
+                    {props.mode === "list" ? <ModeToggle mode={props.mode} /> : null}
+                </div>
                 {milestones.length === 0 ? (
                     <p className="cb-muted">No milestones yet.</p>
                 ) : (
@@ -124,18 +225,20 @@ export function Epic(props: { v: EpicView }): JSX.Element {
                 )}
                 <QuickAdd placeholder="New milestone title" onAdd={(title) => send({ type: "create", kind: "milestone", title, epic: epic.id })} />
             </section>
-            <section className="cb-section">
-                <h3>Tickets in no milestone</h3>
-                <TicketTable tickets={tickets} empty="Every ticket in this epic is in a milestone." />
-                <QuickAdd placeholder="New ticket title" onAdd={(title) => send({ type: "create", kind: "ticket", title, epic: epic.id })} />
-            </section>
+            {props.mode === "list" ? (
+                <section className="cb-section">
+                    <h3>Tickets in no milestone</h3>
+                    <TicketTable tickets={tickets} empty="Every ticket in this epic is in a milestone." />
+                    <QuickAdd placeholder="New ticket title" onAdd={(title) => send({ type: "create", kind: "ticket", title, epic: epic.id })} />
+                </section>
+            ) : null}
         </article>
     );
 }
 
 /* ------------------------------------------------------------- milestone */
 
-export function Milestone(props: { v: MilestoneView; choices: Choices }): JSX.Element {
+export function Milestone(props: { v: MilestoneView; choices: Choices; mode: ViewMode }): JSX.Element {
     const { milestone, epic, tickets, counts } = props.v;
     return (
         <article>
@@ -155,8 +258,15 @@ export function Milestone(props: { v: MilestoneView; choices: Choices }): JSX.El
             </div>
             <Description value={milestone.description} onSave={(description) => update(milestone.id, { description })} />
             <section className="cb-section">
-                <h3>Tickets</h3>
-                <TicketTable tickets={tickets} empty="No tickets in this milestone yet." />
+                <div className="cb-section-head">
+                    <h3>Tickets</h3>
+                    <ModeToggle mode={props.mode} />
+                </div>
+                {props.mode === "kanban" ? (
+                    <Kanban tickets={tickets} />
+                ) : (
+                    <TicketTable tickets={tickets} empty="No tickets in this milestone yet." />
+                )}
                 <QuickAdd placeholder="New ticket title" onAdd={(title) => send({ type: "create", kind: "ticket", title, milestone: milestone.id })} />
             </section>
         </article>

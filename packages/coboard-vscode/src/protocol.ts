@@ -3,6 +3,8 @@
 
 import type { LapCommit, LapSession, Summary, View } from "coboard";
 
+import type { ViewMode } from "./kanban";
+
 export interface Choices {
     /* Every epic and milestone, for the "move to" pickers. */
     readonly epics: readonly Summary[];
@@ -16,7 +18,7 @@ export interface Sessions {
 }
 
 export type ToView =
-    | { readonly type: "data"; readonly view: View | null; readonly id: string; readonly choices: Choices }
+    | { readonly type: "data"; readonly view: View | null; readonly id: string; readonly choices: Choices; readonly mode: ViewMode }
     | { readonly type: "sessions"; readonly ticket: string; readonly sessions: Sessions }
     | { readonly type: "commits"; readonly session: string; readonly commits: readonly LapCommit[]; readonly error?: string }
     | { readonly type: "error"; readonly message: string };
@@ -41,7 +43,10 @@ export type ToHost =
     | { readonly type: "delete"; readonly id: string }
     | { readonly type: "startSession"; readonly ticket: string }
     | { readonly type: "commits"; readonly session: string }
-    | { readonly type: "showEdit"; readonly commit: string; readonly sessionMsg?: string };
+    | { readonly type: "showEdit"; readonly commit: string; readonly sessionMsg?: string }
+    /* An epic's or milestone's tickets as a list or a Kanban board; one
+     * choice for the workspace, so every open tab follows it. */
+    | { readonly type: "mode"; readonly mode: ViewMode };
 
 /* The sidebar: the whole board as summaries, and what a row can ask for. */
 export type SidebarToView =

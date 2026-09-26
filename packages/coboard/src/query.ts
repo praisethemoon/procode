@@ -46,6 +46,8 @@ export interface EpicView {
     readonly milestones: readonly (Summary & { readonly counts: Counts })[];
     /* Tickets in this epic that are in no milestone. */
     readonly tickets: readonly Summary[];
+    /* Every ticket in this epic, milestone or not: what its Kanban board shows. */
+    readonly allTickets: readonly Summary[];
     readonly counts: Counts;
 }
 
@@ -87,6 +89,7 @@ export function view(items: readonly Item[], id: string): View | null {
                 .filter((i): i is Milestone => i.kind === "milestone" && i.epic === item.id)
                 .map((m) => ({ ...summarize(m), counts: countByStatus(mine.filter((t) => t.milestone === m.id)) })),
             tickets: mine.filter((t) => t.milestone === null).map(summarize),
+            allTickets: mine.map(summarize),
             counts: countByStatus(mine),
         };
     }

@@ -50,9 +50,9 @@ function App(props: { id: string }): JSX.Element {
             {v === null ? (
                 <p className="cb-muted">{props.id} is no longer on the board.</p>
             ) : v.kind === "epic" ? (
-                <Epic v={v} />
+                <Epic v={v} mode={data.mode} />
             ) : v.kind === "milestone" ? (
-                <Milestone v={v} choices={choices} />
+                <Milestone v={v} choices={choices} mode={data.mode} />
             ) : (
                 <Ticket v={v} choices={choices} sessions={sessions} commits={commits} />
             )}

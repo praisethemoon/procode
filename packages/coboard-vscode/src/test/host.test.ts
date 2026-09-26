@@ -114,7 +114,7 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
     Module._load = (req, parent, isMain) => (req === "vscode" ? fake : load(req, parent, isMain));
     try {
         const ext = require(path.resolve(__dirname, "..", "extension.js")) as { activate(ctx: unknown): void };
-        ext.activate({ subscriptions: [], extensionUri: { fsPath: "/ext" } });
+        ext.activate({ subscriptions: [], extensionUri: { fsPath: "/ext" }, workspaceState: { get: () => undefined, update: async () => undefined } });
     } finally {
         Module._load = load;
     }

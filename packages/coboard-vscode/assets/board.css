@@ -483,3 +483,105 @@ body {
     font: inherit;
     cursor: pointer;
 }
+
+/* ---- list or Kanban ---------------------------------------------------- */
+
+.cb-modes {
+    display: inline-flex;
+    border: 1px solid var(--bk-color-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.cb-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 0;
+    background: transparent;
+    color: var(--bk-color-foreground-muted);
+    font: inherit;
+    font-size: 0.92em;
+    cursor: pointer;
+}
+.cb-mode + .cb-mode {
+    border-left: 1px solid var(--bk-color-border);
+}
+.cb-mode:hover {
+    color: var(--bk-color-foreground);
+}
+.cb-mode.cb-mode-on {
+    background: var(--bk-color-background-secondary);
+    color: var(--bk-color-foreground);
+}
+
+.cb-kanban {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+}
+.cb-column {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 120px;
+    padding: 6px;
+    border: 1px solid var(--bk-color-border);
+    border-radius: 6px;
+    background: var(--bk-color-background-secondary);
+}
+.cb-column.cb-over {
+    border-color: var(--bk-color-focus);
+    background: var(--bk-color-list-hover, var(--bk-color-background-secondary));
+}
+.cb-column-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px 2px;
+}
+.cb-card {
+    padding: 6px 8px;
+    border: 1px solid var(--bk-color-border);
+    border-radius: 4px;
+    background: var(--bk-color-background);
+    cursor: grab;
+}
+.cb-card:hover {
+    border-color: var(--bk-color-focus);
+}
+.cb-card:focus-visible {
+    outline: 1px solid var(--bk-color-focus);
+}
+.cb-card-title {
+    line-height: 1.35;
+    margin-bottom: 4px;
+}
+.cb-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85em;
+}
+.cb-card-tag {
+    padding: 0 5px;
+    border: 1px solid var(--bk-color-border);
+    border-radius: 3px;
+    color: var(--bk-color-foreground-muted);
+}
+.cb-pri-high {
+    color: var(--bk-color-warning);
+    border-color: var(--bk-color-warning);
+}
+.cb-pri-urgent {
+    color: var(--bk-color-danger);
+    border-color: var(--bk-color-danger);
+}
+.cb-card-who {
+    margin-left: auto;
+    color: var(--bk-color-foreground-muted);
+}
