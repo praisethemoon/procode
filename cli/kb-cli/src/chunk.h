@@ -44,6 +44,10 @@ const char *chunk_lang_name(Lang l);
  * them (§11's unsupported_mime) instead of falling back. */
 bool chunk_mime_supported(const char *mime);
 
+/* The mime a file's name says, for the documentation and source types kb
+ * knows; NULL for any other name. */
+const char *chunk_mime_from_path(const char *path);
+
 /* Tokens are estimated from bytes until a real tokenizer exists (§8). */
 uint32_t chunk_tokens_of(size_t bytes);
 

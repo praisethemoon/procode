@@ -1,5 +1,6 @@
 #include "platform.h"
 
+#include <stdio.h>
 #include <time.h>
 
 #ifdef _WIN32
@@ -138,6 +139,14 @@ bool plat_getcwd(char *buf, size_t bufsz) {
     return true;
 #else
     return getcwd(buf, bufsz) != NULL;
+#endif
+}
+
+bool plat_stderr_tty(void) {
+#ifdef _WIN32
+    return _isatty(_fileno(stderr)) != 0;
+#else
+    return isatty(fileno(stderr)) != 0;
 #endif
 }
 

@@ -7,12 +7,13 @@ A local, offline knowledge base over documentation, reference source and
 papers. Research an agent has already done is indexed rather than discarded,
 and both the agent and the reader search it afterwards.
 
-It holds what was **read**, never the code being **written**. Reference source
-— another project's API, a kernel's io_uring code at a pinned version — belongs
-here, because it is research. The workspace's own code does not: it changes
-with every edit, so an index of it is stale the moment it is built, and grep
-and the language server already answer questions about it exactly and
-currently. This is why there is no directory walk (§2).
+It holds what was **read**, and, when the reader asks for it, code: another
+project's API, a kernel's io_uring code at a pinned version, or a folder of the
+workspace's own. A folder is filed with `kb add --dir` (§2.1), which reads it
+as git sees it and files it again incrementally, so keeping an index of code
+that changes costs one re-run, not a rebuild. grep and the language server
+still answer exact questions about the workspace's code; the index answers the
+ones nobody can phrase as a pattern.
 
 No service, no daemon, no container. Embeddings are produced in-process by a
 model loaded from disk (§8).
@@ -48,7 +49,7 @@ is self-describing in a search result, a citation, a log line or a prompt.
 ### 1.2 Entities
 
 ```
-Source    { id, kind: url | file | inline, locator, title, collection,
+Source    { id, kind: url | file | dir | inline, locator, title, collection,
             fetchedAt, contentHash, etag?, docCount, bytes, status }
 
 Document  { id, source, path, title, mime, contentHash, bytes,
@@ -60,8 +61,10 @@ Chunk     { id, document, ordinal, heading?, span: { start, end },
 Link      { from, to, type }
 ```
 
-`Source` is what was ingested from — a URL, a file, or content handed in
-directly. `Document` is one addressable item within it.
+`Source` is what was ingested from — a URL, a file, a folder, or content
+handed in directly. `Document` is one addressable item within it: a folder's
+documents are its files, each at its `path` under the folder; every other
+source has one document, at path `""`.
 `Chunk` is the retrieval unit.
 
 `meta` is free-form per-document: for a paper, its authors and year; for a
@@ -158,12 +161,12 @@ than in the log, so re-ingesting an unchanged page writes nothing.
 
 | route | purpose |
 |---|---|
-| `POST /sources` | ingest by locator. `{ kind: file, locator, collection, meta? }`. A file is read, one at a time: a directory walk pointed at `.` would index the workspace itself. A `url` is not fetched by the binary (§12.2); whoever fetched the page files it through `POST /documents` |
+| `POST /sources` | ingest by locator. `{ kind: file \| dir, locator, collection, meta? }`. A file is read; a folder is walked (§2.1). A `url` is not fetched by the binary (§12.2); whoever fetched the page files it through `POST /documents` |
 | `POST /documents` | **ingest content directly**: `{ url?, title, content, mime?, collection, meta? }`. The caller already has the text — an agent that has just read a page hands it over instead of causing a second fetch |
 | `POST /documents/batch` | many at once, one transaction |
 | `GET /sources` | rows. `?collection=&kind=&status=&q=` |
 | `GET /sources/{id}` | full, with document count and fetch history |
-| `POST /sources/{id}/refresh` | refetch, compare by hash, re-embed only what changed. A `file` source is read again; a `url` one is re-filed through `POST /documents` while §12.2 keeps HTTP out of the binary |
+| `POST /sources/{id}/refresh` | refetch, compare by hash, re-embed only what changed. A `file` source is read again, a `dir` source walked again (§2.1); a `url` one is re-filed through `POST /documents` while §12.2 keeps HTTP out of the binary |
 | `DELETE /sources/{id}` | forget it and every document under it |
 | `GET /documents` | rows. `?collection=&source=&mime=&q=&since=&meta=`. `collection` is a comma list as in §4; `since` a timestamp or a date; `meta` a JSON object whose every key must match, an array value matching any one element |
 | `GET /documents/{id}` | metadata. `?include=text,chunks,links` |
@@ -175,6 +178,45 @@ as it goes — so the second question on the same topic is answered from disk.
 
 Ingest is idempotent by content hash: the same text at the same locator
 re-indexes nothing and updates `fetchedAt`.
+
+### 2.1 Folders
+
+`kb add --dir <folder> --collection <c>` files a folder as **one `dir`
+source**, located by the folder's absolute path, with one document per file at
+its path under the folder and titled `<folder name>/<path>`. The same folder
+into the same collection again finds that source and each document by path:
+
+- a file whose text is unchanged is touched, not re-indexed;
+- a changed file is a new version of its document, under the same id;
+- a new file is a new document;
+- a file that is gone, deleted or now ignored, is **forgotten**. With
+  `--no-forget` it is kept and reported as `missing` instead; the MCP tool
+  always files that way, because forgetting is not an agent's decision (§9).
+
+**Which files.** The folder is read as git would track it: every `.gitignore`
+from the repository's root down (the nearest directory at or above the folder
+holding `.git`), with git's rules — negation, anchoring, directory-only
+patterns, `**` — and `.git/info/exclude`. The user's global excludes file is
+not read, since kb reads nothing in the home directory. Beyond git, a file is
+left out when it is hidden (a segment starting with `.`), under a directory of
+someone else's code (`node_modules`, `vendor`, `third_party`,
+`bower_components`, `__pycache__`, `venv`, `site-packages`), not a source or
+documentation type kb knows by its name, generated (a lock file, a minified
+bundle, generated protobuf code, or a `@generated` / "DO NOT EDIT" marker in its
+first five lines), not text (a NUL byte, or not UTF-8), empty, or over 1 MiB
+(JSON over 64 KiB: past that it is data). The answer counts each reason:
+
+```json
+{ "ok": true, "source": "S-4", "root": "/work/lap/cli/kb-cli", "collection": "code",
+  "files": 92, "added": 3, "updated": 1, "unchanged": 88,
+  "forgotten": ["D-51"], "missing": [],
+  "skipped": { "ignored": 2, "hidden": 0, "vendored": 1, "generated": 0,
+               "binary": 0, "large": 1, "unreadable": 0, "otherTypes": 0 },
+  "embedded": 14 }
+```
+
+The whole folder is one locked section, one keyword rebuild and one embedding
+pass. Progress goes to standard error when it is a terminal.
 
 ## 3. Chunking
 

@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "dirscan.h"
 #include "modelrec.h"
 #include "vectors.h"
 
@@ -14,39 +15,9 @@
 
 static const char *const VALUE_FLAGS[] = {
     "--title", "--collection", "--url",  "--mime", "--etag",
-    "--file",  "--meta",       "--meta-file", NULL};
-static const char *const BOOL_FLAGS[] = {"--json", "--batch", NULL};
-
-/* Extension to mime, for the common documentation and source types. The
- * chunker also looks at the path, so this only has to be right often enough
- * to be useful — an explicit --mime always wins. */
-static const char *mime_from_path(const char *path) {
-    static const struct {
-        const char *ext;
-        const char *mime;
-    } map[] = {{".md", "text/markdown"},        {".markdown", "text/markdown"},
-               {".mdx", "text/markdown"},       {".html", "text/html"},
-               {".htm", "text/html"},           {".txt", "text/plain"},
-               {".c", "text/x-c"},              {".h", "text/x-c"},
-               {".cc", "text/x-c++"},           {".cpp", "text/x-c++"},
-               {".hpp", "text/x-c++"},          {".py", "text/x-python"},
-               {".rs", "text/x-rust"},          {".go", "text/x-go"},
-               {".java", "text/x-java"},        {".js", "text/javascript"},
-               {".mjs", "text/javascript"},     {".ts", "application/typescript"},
-               {".tsx", "application/typescript"}, {".json", "application/json"},
-               {".sh", "application/x-sh"},     {".css", "text/x-css"},
-               {".sql", "text/x-sql"},          {".tc", "text/x-typec"},
-               {NULL, NULL}};
-    if (!path || !path[0])
-        return NULL;
-    size_t n = strlen(path);
-    for (int32_t i = 0; map[i].ext; i++) {
-        size_t m = strlen(map[i].ext);
-        if (n > m && strcmp(path + n - m, map[i].ext) == 0)
-            return map[i].mime;
-    }
-    return NULL;
-}
+    "--file",  "--meta",       "--meta-file", "--dir", NULL};
+static const char *const BOOL_FLAGS[] = {"--json", "--batch", "--no-forget",
+                                         NULL};
 
 /* The type of text that came with no name to read it from — piped, or handed
  * over in a batch. Only the two structured types are recognised, and only on
@@ -154,6 +125,10 @@ typedef struct {
     const char *mime; /* NULL: inferred from the url or the file */
     const char *meta; /* a JSON object's text, or NULL */
     const char *etag; /* the ETag the caller's fetch saw, or NULL */
+    /* A document within its source: a file's path under a filed folder.
+     * NULL is the source's one document (""). */
+    const char *path;
+    const char *source_title; /* NULL: the document's title */
     const char *content;
     size_t len;
     /* Filled by prepare. */
@@ -218,14 +193,14 @@ static bool prepare(Arena *a, Filing *f, const char **code, char *err,
      * ".../iocp" has none while the file beside it is a .md. Take whichever
      * says something. */
     const char *path_hint = NULL;
-    if (f->url && f->url[0] && mime_from_path(f->url))
+    if (f->url && f->url[0] && chunk_mime_from_path(f->url))
         path_hint = f->url;
-    else if (have_file && mime_from_path(f->file))
+    else if (have_file && chunk_mime_from_path(f->file))
         path_hint = f->file;
     else
         path_hint = (f->url && f->url[0]) ? f->url : f->file;
     if (!f->mime)
-        f->mime = mime_from_path(path_hint);
+        f->mime = chunk_mime_from_path(path_hint);
     if (!f->mime)
         f->mime = mime_from_content(f->content, f->len);
     if (!f->mime)
@@ -247,8 +222,9 @@ static bool ingest(Arena *a, Store *s, const Filing *f, const char *now,
                    Filed *out, char *err, size_t errsz) {
     const Source *existing_src =
         src_by_key(&s->sources, f->kind, f->locator, f->collection);
+    const char *path = f->path ? f->path : "";
     const Document *existing_doc =
-        existing_src ? doc_by_source_path(&s->documents, existing_src->id, "")
+        existing_src ? doc_by_source_path(&s->documents, existing_src->id, path)
                      : NULL;
     out->blob_written = false;
     if (existing_doc) {
@@ -267,11 +243,12 @@ static bool ingest(Arena *a, Store *s, const Filing *f, const char *now,
     if (!store_put_blob(s, f->content, f->len, (char *)f->hash,
                         &out->blob_written, err, errsz))
         return false;
-    /* Derived from what the record will carry, never from the path hint. The
-     * hint is how the mime was guessed; it is not stored, and a reader that
+    /* Derived from what the record will carry (its mime, and its path within
+     * a filed folder), never from the path hint. The hint is how the mime
+     * was guessed; it is not stored, and a reader that
      * only has the record has to reach the same splitter or the chunk range
      * in that record stops describing the chunks on disk (see doc_lang). */
-    out->lang = doc_lang(f->mime, "");
+    out->lang = doc_lang(f->mime, path);
     ChunkParams cp = store_chunk_params(a, s);
     Chunks chunks = chunk_split(a, f->content, f->len, out->lang,
                                 (size_t)cp.chunk_tokens * KB_BYTES_PER_TOKEN,
@@ -294,7 +271,7 @@ static bool ingest(Arena *a, Store *s, const Filing *f, const char *now,
         src.id = kb_id_make(a, 'S', src_n);
         src.kind = f->kind;
         src.locator = f->locator;
-        src.title = f->title;
+        src.title = f->source_title ? f->source_title : f->title;
         src.collection = f->collection;
         src.created_at = now;
         size_t slen;
@@ -311,7 +288,7 @@ static bool ingest(Arena *a, Store *s, const Filing *f, const char *now,
     memset(d, 0, sizeof *d);
     d->id = kb_id_make(a, 'D', doc_n);
     d->source = source_id;
-    d->path = "";
+    d->path = path;
     d->title = f->title;
     d->mime = f->mime;
     d->content_hash = arena_strdup(a, f->hash);
@@ -536,6 +513,213 @@ static int32_t add_batch(Arena *a, bool json) {
     return KB_EXIT_OK;
 }
 
+/* ---- kb add --dir ------------------------------------------------------
+ *
+ * A folder, as its repository sees it (dirscan.h says which files), filed as
+ * ONE `dir` source whose locator is the folder's absolute path, with one
+ * document per file at its path under the folder. Filing the same folder into
+ * the same collection again finds that source and each document by path, so
+ * it is incremental without any state of its own:
+ *
+ *   - a file whose text is unchanged is touched (§2), not re-indexed;
+ *   - a changed file is a new version of its document, same id;
+ *   - a new file is a new document;
+ *   - a file that is gone — deleted, or now ignored — is forgotten, unless
+ *     `forget` is off (the MCP tool: forgetting is not an agent's call, §9),
+ *     and then it is reported as missing instead.
+ *
+ * One lock, one keyword rebuild and one embedding pass for the whole folder,
+ * as a batch has.
+ */
+
+static int32_t cmp_str(const void *x, const void *y) {
+    return strcmp(*(const char *const *)x, *(const char *const *)y);
+}
+
+int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
+                bool forget) {
+    char err[512];
+    char root[KB_PATH_MAX];
+    if (!plat_realpath(dir, root, sizeof root) || !plat_is_dir(root)) {
+        err_out(json, "not_found", "%s is not a directory", dir);
+        return KB_EXIT_ERR;
+    }
+    if (!collection || !collection[0] || strchr(collection, '/') ||
+        strchr(collection, '\\')) {
+        err_out(json, "usage", collection && collection[0]
+                                   ? "collection names do not nest"
+                                   : "kb add --dir requires --collection");
+        return KB_EXIT_ERR;
+    }
+    const bool tty = plat_stderr_tty();
+    DirScan scan;
+    if (tty)
+        fprintf(stderr, "scanning %s\n", root);
+    if (!dir_scan(a, root, &scan, err, sizeof err)) {
+        err_out(json, "not_found", "%s", err);
+        return KB_EXIT_ERR;
+    }
+    const char *base = strrchr(root, '/');
+    base = base && base[1] ? base + 1 : root;
+
+    Store s;
+    int32_t rc = KB_EXIT_OK;
+    if (!open_store(a, &s, json, &rc))
+        return rc;
+    char now[32];
+    plat_timestamp(now);
+    size_t added = 0, updated = 0, unchanged = 0;
+    const char *source_id = NULL;
+    for (size_t i = 0; i < scan.n; i++) {
+        const DirFile *df = &scan.v[i];
+        Filing f;
+        memset(&f, 0, sizeof f);
+        f.title = arena_printf(a, "%s/%s", base, df->rel);
+        f.source_title = base;
+        f.collection = collection;
+        f.path = df->rel;
+        f.mime = df->mime;
+        f.content = df->content;
+        f.len = df->len;
+        f.kind = "dir";
+        f.locator = root;
+        sha256_hex(f.content, f.len, f.hash);
+        Filed r;
+        /* The first file creates the source; every later one has to find
+         * it, so the logs are read again once, then. Documents are looked
+         * up by path only for files seen before, which are in the fold. */
+        const bool had_source = source_id != NULL;
+        if (!ingest(a, &s, &f, now, &r, err, sizeof err) ||
+            (!had_source && !reread(a, &s, err, sizeof err))) {
+            store_close(&s);
+            err_out(json, "internal", "%s", err);
+            return KB_EXIT_FATAL;
+        }
+        source_id = r.d.source;
+        if (r.created)
+            added++;
+        else if (r.reindexed)
+            updated++;
+        else
+            unchanged++;
+        if (tty)
+            fprintf(stderr, "\rfiling %zu/%zu files", i + 1, scan.n);
+    }
+    if (tty && scan.n)
+        fputc('\n', stderr);
+    if (!reread(a, &s, err, sizeof err)) {
+        store_close(&s);
+        err_out(json, "internal", "%s", err);
+        return KB_EXIT_FATAL;
+    }
+    if (!source_id) {
+        const Source *src = src_by_key(&s.sources, "dir", root, collection);
+        source_id = src ? src->id : NULL;
+    }
+
+    /* What the source holds that the folder no longer does. */
+    const char **seen = (const char **)arena_alloc(
+        a, (scan.n ? scan.n : 1) * sizeof(char *));
+    for (size_t i = 0; i < scan.n; i++)
+        seen[i] = scan.v[i].rel;
+    qsort(seen, scan.n, sizeof(char *), cmp_str);
+    const char **gone_ids = (const char **)arena_alloc(
+        a, (s.documents.n ? s.documents.n : 1) * sizeof(char *));
+    const char **gone_paths = (const char **)arena_alloc(
+        a, (s.documents.n ? s.documents.n : 1) * sizeof(char *));
+    size_t ngone = 0;
+    for (size_t i = 0; source_id && i < s.documents.n; i++) {
+        const Document *d = &s.documents.v[i];
+        if (strcmp(d->source, source_id) != 0)
+            continue;
+        if (bsearch(&d->path, seen, scan.n, sizeof(char *), cmp_str))
+            continue;
+        gone_ids[ngone] = d->id;
+        gone_paths[ngone++] = d->path;
+    }
+    if (forget && ngone &&
+        (!forget_records(a, &s, gone_ids, ngone, NULL, 0, err, sizeof err) ||
+         !reread(a, &s, err, sizeof err))) {
+        store_close(&s);
+        err_out(json, "internal", "%s", err);
+        return KB_EXIT_FATAL;
+    }
+
+    VecSync vs;
+    memset(&vs, 0, sizeof vs);
+    bool embedded = false;
+    bool changed = added || updated || (forget && ngone);
+    if ((changed && !rebuild(a, &s, err, sizeof err)) ||
+        !model_record_if_absent(a, &s, err, sizeof err) ||
+        (changed &&
+         !vec_update(a, &s, false, tty, &vs, &embedded, err, sizeof err))) {
+        store_close(&s);
+        err_out(json, "internal", "%s", err);
+        return KB_EXIT_FATAL;
+    }
+
+    StrBuf sb;
+    sb_init(&sb, a);
+    if (json) {
+        sb_puts(&sb, "{\"ok\":true,\"source\":");
+        if (source_id)
+            json_escape_c(&sb, source_id);
+        else
+            sb_puts(&sb, "null");
+        sb_puts(&sb, ",\"root\":");
+        json_escape_c(&sb, root);
+        sb_puts(&sb, ",\"collection\":");
+        json_escape_c(&sb, collection);
+        sb_printf(&sb,
+                  ",\"files\":%zu,\"added\":%zu,\"updated\":%zu,"
+                  "\"unchanged\":%zu,\"forgotten\":[",
+                  scan.n, added, updated, unchanged);
+        for (size_t i = 0; forget && i < ngone; i++) {
+            sb_puts(&sb, i ? "," : "");
+            json_escape_c(&sb, gone_ids[i]);
+        }
+        sb_puts(&sb, "],\"missing\":[");
+        for (size_t i = 0; !forget && i < ngone; i++) {
+            sb_puts(&sb, i ? "," : "");
+            json_escape_c(&sb, gone_paths[i]);
+        }
+        sb_printf(&sb,
+                  "],\"skipped\":{\"ignored\":%zu,\"hidden\":%zu,"
+                  "\"vendored\":%zu,\"generated\":%zu,\"binary\":%zu,"
+                  "\"large\":%zu,\"unreadable\":%zu,\"otherTypes\":%zu},"
+                  "\"embedded\":%zu}",
+                  scan.ignored, scan.hidden, scan.vendored, scan.generated,
+                  scan.binary, scan.large, scan.unreadable, scan.other,
+                  vs.embedded);
+    } else {
+        sb_printf(&sb, "%s  ", source_id ? source_id : "-");
+        sb_puts_safe(&sb, collection);
+        sb_printf(&sb, "  %s: %zu file%s, %zu new, %zu updated, %zu unchanged",
+                  base, scan.n, scan.n == 1 ? "" : "s", added, updated,
+                  unchanged);
+        if (ngone)
+            sb_printf(&sb, ", %zu %s", ngone, forget ? "forgotten" : "missing");
+        sb_printf(&sb, "\nskipped: %zu ignored by .gitignore, %zu hidden, "
+                       "%zu vendored, %zu generated, %zu binary or empty, "
+                       "%zu too large, %zu other types",
+                  scan.ignored, scan.hidden, scan.vendored, scan.generated,
+                  scan.binary, scan.large, scan.other);
+        if (scan.unreadable)
+            sb_printf(&sb, ", %zu unreadable", scan.unreadable);
+        if (vs.embedded)
+            sb_printf(&sb, "\nembedded %zu chunk%s", vs.embedded,
+                      vs.embedded == 1 ? "" : "s");
+        for (size_t i = 0; !forget && i < ngone; i++)
+            sb_printf(&sb, "\nmissing: %s", gone_paths[i]);
+        sb_putc(&sb, '\n');
+    }
+    fputs(sb_finish(&sb), stdout);
+    if (json)
+        fputc('\n', stdout);
+    store_close(&s);
+    return KB_EXIT_OK;
+}
+
 /* ---- kb add ------------------------------------------------------------- */
 
 int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
@@ -557,6 +741,29 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
             }
         }
         return add_batch(a, json);
+    }
+    const char *dir = flag_value(argc, argv, VALUE_FLAGS, "--dir");
+    if (dir) {
+        /* Each file is its own document with its own name and type; only
+         * the collection is the folder's. */
+        static const char *const per_file[] = {"--title", "--url", "--mime",
+                                               "--etag", "--file", "--meta",
+                                               "--meta-file", NULL};
+        for (int32_t i = 0; per_file[i]; i++) {
+            if (flag_value(argc, argv, VALUE_FLAGS, per_file[i])) {
+                err_out(json, "usage", "--dir files each file under its own "
+                                       "path and type, not %s",
+                        per_file[i]);
+                return KB_EXIT_ERR;
+            }
+        }
+        return add_dir(a, json, dir,
+                       flag_value(argc, argv, VALUE_FLAGS, "--collection"),
+                       !has_flag(argc, argv, VALUE_FLAGS, "--no-forget"));
+    }
+    if (has_flag(argc, argv, VALUE_FLAGS, "--no-forget")) {
+        err_out(json, "usage", "--no-forget goes with --dir");
+        return KB_EXIT_ERR;
     }
     Filing f;
     memset(&f, 0, sizeof f);

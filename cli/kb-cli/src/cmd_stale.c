@@ -182,7 +182,7 @@ int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
 /* Whether a locator could be read again at all, which is the one thing a
  * report about refetching can usefully say. A `url` needs the HTTP client
  * this binary does not have; a `file` or `dir` is still on disk and can be
- * re-ingested with `kb add --file`; an `inline` source is content somebody
+ * re-ingested with `kb add --file` or `kb add --dir`; an `inline` source is content somebody
  * handed over and there is nowhere to go back to. */
 static const char *refetch_route(const char *kind) {
     if (strcmp(kind, "url") == 0)
@@ -194,8 +194,8 @@ static const char *refetch_route(const char *kind) {
 
 /* §2's POST /sources/{id}/refresh: read one source again, compare by hash,
  * and re-index only if the text changed — through refile_document, the same
- * path `kb add` takes for a document it has seen before. Only a `file`
- * source can be read again here: a `url` needs the HTTP client this binary
+ * path `kb add` takes for a document it has seen before. A `dir` source is
+ * filed again with `kb add --dir`'s walk. Only those two can be read again: a `url` needs the HTTP client this binary
  * does not have (§12.2), and an `inline` source was content handed over,
  * with nowhere to go back to. Both are refused and say how to re-file. */
 static int32_t refresh_source(Arena *a, bool json, const char *id) {
@@ -212,6 +212,14 @@ static int32_t refresh_source(Arena *a, bool json, const char *id) {
         return strcmp(code, "internal") == 0 ? KB_EXIT_FATAL : KB_EXIT_ERR;
     }
     const Source *src = src_by_id(&s.sources, id);
+    if (src && strcmp(src->kind, "dir") == 0) {
+        /* A folder is read again by filing it again: the walk decides what
+         * changed, what is new and what is gone. */
+        const char *root = arena_strdup(a, src->locator);
+        const char *collection = arena_strdup(a, src->collection);
+        store_close(&s);
+        return add_dir(a, json, root, collection, true);
+    }
     const Document *doc = src ? doc_by_source_path(&s.documents, src->id, "") : NULL;
     if (!src || !doc) {
         store_close(&s);
