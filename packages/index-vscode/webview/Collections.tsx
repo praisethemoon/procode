@@ -68,7 +68,9 @@ function Row(props: { row: CollectionRow; onChanged: () => void }): JSX.Element 
             if (!confirmed) {
                 return;
             }
-            call("deleteCollection", { name: row.name })
+            /* The confirmation above names the documents that go with it, so
+             * the store is asked to forget them rather than to refuse. */
+            call("deleteCollection", { name: row.name, withDocuments: true })
                 .then(() => props.onChanged())
                 .catch((e: unknown) => problem(e, "delete a collection"));
         });

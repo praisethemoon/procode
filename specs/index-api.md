@@ -260,7 +260,7 @@ will state that relationship.
 | `POST /compact` | drop superseded blobs no live document references |
 | `GET /collections` | names with counts |
 | `PATCH /collections/{name}` | rename |
-| `DELETE /collections/{name}` | forget a whole topic |
+| `DELETE /collections/{name}` | forget a whole topic; refused with `collection_in_use` while it holds documents unless asked to forget them too (`?withDocuments=true`) |
 
 ## 8. The model
 

@@ -28,7 +28,8 @@ SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/platform.c \
            src/cmd_init.c src/cmd_add.c src/cmd_ls.c src/cmd_get.c \
            src/cmd_search.c src/cmd_chunk.c src/cmd_rebuild.c \
            src/cmd_collections.c src/cmd_status.c \
-           src/cmd_stale.c src/cmd_links.c src/cmd_maint.c
+           src/cmd_stale.c src/cmd_links.c src/cmd_maint.c \
+           src/cmd_forget.c
 SRC_MAIN := src/main.c
 SRC_TESTS := $(wildcard tests/unit/*.c)
 

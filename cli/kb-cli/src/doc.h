@@ -18,7 +18,8 @@
  * exists nowhere but on a Source (§1.3).
  *
  * documents.jsonl holds `document` records folded last-wins by id, plus
- * `touch` records that carry a new fetchedAt and nothing else. A re-ingest
+ * `touch` records that carry a new fetchedAt and nothing else, and `forget`
+ * records that remove one (§2's DELETE /documents/{id}). A re-ingest
  * of unchanged content is exactly a touch: §2 says it re-indexes nothing
  * and updates fetchedAt, and in an append-only log an update is a later
  * record that supersedes an earlier one.
@@ -139,10 +140,17 @@ char *doc_encode_touch(Arena *a, const char *id, const char *fetched_at,
  * (from, rel, to) triple, so removing an edge and restoring it are the same
  * append-only motion as superseding a document. */
 char *doc_encode_link(Arena *a, const Link *l, bool present, size_t *out_len);
-/* Removes a source from the fold. §7's DELETE /collections/{name} is the only
- * writer: it refuses while any document remains (§11's collection_in_use), so
- * what this forgets is a source that has none. */
+/* Removes a source from the fold (§2's DELETE /sources/{id}, and §7's
+ * DELETE /collections/{name} for each source in the topic). Its documents are
+ * forgotten first, each with its own record below, so no document is ever
+ * left pointing at a source the fold no longer has. */
 char *doc_encode_source_forget(Arena *a, const char *id, size_t *out_len);
+/* Removes a document from the fold (§2's DELETE /documents/{id}). The id and
+ * its chunk range stay reserved — the counters floor on every record ever
+ * written — so nothing can be handed a forgotten identifier (§1.1). Links
+ * that named it keep reading, as `resolved: false` (§6). Its blob stays until
+ * `kb compact` finds nothing referring to it. */
+char *doc_encode_document_forget(Arena *a, const char *id, size_t *out_len);
 
 /* Loaders. A torn (unterminated) final line is dropped and reported; a
  * complete line that does not parse is an error, because silently skipping

@@ -14,6 +14,7 @@ import {
     chunkArgv,
     collectionsArgv,
     deleteCollectionArgv,
+    forgetArgv,
     getArgv,
     initArgv,
     linkArgv,
@@ -308,6 +309,8 @@ test("no builder ever emits --store, because the CLI no longer has one", () => {
         refreshArgv({ collection: "c", olderThan: "30d" }),
         renameCollectionArgv("a", "b"),
         deleteCollectionArgv("a"),
+        deleteCollectionArgv("a", true),
+        forgetArgv("D-1"),
         linksArgv("D-1"),
         linkArgv("D-1", "analogue_of", "D-2"),
         statsArgv(),
@@ -320,4 +323,13 @@ test("no builder ever emits --store, because the CLI no longer has one", () => {
             `a builder emitted --store=: ${JSON.stringify(argv)}`,
         );
     }
+});
+
+test("forgetting is asked for by id, and a collection's documents only by name", () => {
+    assert.deepEqual(forgetArgv("D-241"), ["forget", "D-241"]);
+    assert.deepEqual(forgetArgv("S-3"), ["forget", "S-3"]);
+    assert.deepEqual(deleteCollectionArgv("io-uring"), ["collections", "delete", "--", "io-uring"]);
+    assert.deepEqual(deleteCollectionArgv("io-uring", true), ["collections", "delete", "--with-documents", "--", "io-uring"]);
+    // A collection name that looks like the flag is still a name.
+    assert.deepEqual(deleteCollectionArgv("--with-documents"), ["collections", "delete", "--", "--with-documents"]);
 });

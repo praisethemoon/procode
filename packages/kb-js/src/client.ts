@@ -34,6 +34,7 @@ import {
     chunkArgv,
     collectionsArgv,
     deleteCollectionArgv,
+    forgetArgv,
     getArgv,
     initArgv,
     linkArgv,
@@ -54,6 +55,7 @@ import {
     readCollection,
     readDocument,
     readDocumentRead,
+    readForgotten,
     readHit,
     readLinkWritten,
     readLinks,
@@ -69,6 +71,7 @@ import {
     KbCollection,
     KbDocument,
     KbDocumentRead,
+    KbForgotten,
     KbHit,
     KbLinkWritten,
     KbLinks,
@@ -243,8 +246,14 @@ export class Kb {
     /* §7's `DELETE /collections/{name}`. §11 has `collection_in_use` for the
      * case this refuses, carrying the document count — which is exactly what a
      * confirmation dialog needs to be able to say. */
-    async deleteCollection(name: string): Promise<void> {
-        await run(deleteCollectionArgv(name), this.options);
+    async deleteCollection(name: string, options: { withDocuments?: boolean } = {}): Promise<void> {
+        await run(deleteCollectionArgv(name, options.withDocuments === true), this.options);
+    }
+
+    /* §2's DELETE /documents/{id} and DELETE /sources/{id}. Not offered to
+     * agents (§9): forgetting is the reader's decision. */
+    async forget(id: string): Promise<KbForgotten> {
+        return readForgotten(await run(forgetArgv(id), this.options));
     }
 
     /* §1.4's store, created in this client's directory. `init` does not adopt

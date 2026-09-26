@@ -261,6 +261,33 @@ const Document *doc_by_chunk(const DocList *l, int64_t chunk_num,
 
 /* ---- the keyword index ------------------------------------------------- */
 
+bool forget_records(Arena *a, Store *s, const char *const *docs, size_t ndocs,
+                    const char *const *srcs, size_t nsrcs, char *err,
+                    size_t errsz) {
+    for (size_t i = 0; i < ndocs; i++) {
+        size_t len;
+        char *line = doc_encode_document_forget(a, docs[i], &len);
+        if (!store_append(s, STORE_DOCUMENTS, line, len, err, errsz))
+            return false;
+    }
+    for (size_t i = 0; i < nsrcs; i++) {
+        size_t len;
+        char *line = doc_encode_source_forget(a, srcs[i], &len);
+        if (!store_append(s, STORE_SOURCES, line, len, err, errsz))
+            return false;
+    }
+    /* Re-read what was just appended, so the index describes the log as it
+     * now is — the same reason `kb add` re-reads before rebuilding. */
+    if (!doclog_load(a, s->documents_path, &s->documents, err, errsz) ||
+        !srclog_load(a, s->sources_path, &s->sources, err, errsz))
+        return false;
+    if (ndocs == 0)
+        return true; /* only empty sources went: no text left the index */
+    uint32_t nd = 0, missing = 0;
+    FtsBuildStats stats;
+    return index_rebuild(a, s, &nd, &missing, &stats, err, errsz);
+}
+
 bool index_rebuild(Arena *a, Store *s, uint32_t *docs, uint32_t *missing_blobs,
                    FtsBuildStats *stats, char *err, size_t errsz) {
     *docs = *missing_blobs = 0;

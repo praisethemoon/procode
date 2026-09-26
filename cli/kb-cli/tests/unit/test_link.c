@@ -249,6 +249,54 @@ static void test_forget(Arena *a) {
     tmp_rm(a, root);
 }
 
+/* ---- the document tombstone -------------------------------------------- */
+
+static void test_document_forget(Arena *a) {
+    char root[KB_PATH_MAX];
+    tmp_dir(root, sizeof root);
+    char *path = jn(a, root, "documents.jsonl");
+    char err[512];
+    DocList l;
+
+    t_begin("forget: a forget record removes its document from the fold");
+    ASSERT_TRUE(put(path, "{\"type\":\"document\",\"id\":\"D-1\",\"source\":"
+                          "\"S-1\",\"path\":\"\",\"contentHash\":\"a\","
+                          "\"chunkBase\":1,\"chunkCount\":3}"));
+    ASSERT_TRUE(put(path, "{\"type\":\"document\",\"id\":\"D-2\",\"source\":"
+                          "\"S-1\",\"path\":\"b\",\"contentHash\":\"b\","
+                          "\"chunkBase\":4,\"chunkCount\":2}"));
+    ASSERT_TRUE(put(path, "{\"type\":\"link\",\"from\":\"D-2\",\"rel\":"
+                          "\"cites\",\"to\":\"D-1\"}"));
+    size_t len = 0;
+    char *line = doc_encode_document_forget(a, "D-1", &len);
+    ASSERT_EQ_S(line, "{\"type\":\"forget\",\"id\":\"D-1\"}");
+    ASSERT_TRUE(put(path, line));
+    ASSERT_TRUE(doclog_load(a, path, &l, err, sizeof err));
+    ASSERT_EQ_I(l.n, 1);
+    ASSERT_EQ_S(l.v[0].id, "D-2");
+    ASSERT_TRUE(doc_by_id(&l, "D-1") == NULL);
+
+    t_begin("forget: the id and its chunk range stay spent");
+    /* §1.1: never reused. The next D- and C- ids come after everything ever
+     * written, forgotten or not. */
+    ASSERT_EQ_I(l.max_id, 2);
+    ASSERT_EQ_I(l.max_chunk_id, 5);
+
+    t_begin("forget: an edge to a forgotten document stays in the fold");
+    /* §6: it reads as resolved:false rather than disappearing, so the
+     * dangling edge is shown instead of hidden. */
+    ASSERT_EQ_I(l.nlinks, 1);
+    ASSERT_TRUE(link_find(&l, "D-2", "cites", "D-1") != NULL);
+
+    t_begin("forget: a touch for a forgotten document brings nothing back");
+    ASSERT_TRUE(put(path, "{\"type\":\"touch\",\"id\":\"D-1\","
+                          "\"fetchedAt\":\"2026-01-01T00:00:00Z\"}"));
+    ASSERT_TRUE(doclog_load(a, path, &l, err, sizeof err));
+    ASSERT_EQ_I(l.n, 1);
+
+    tmp_rm(a, root);
+}
+
 /* ---- blob names -------------------------------------------------------- */
 
 static void test_blob_names(void) {
@@ -295,6 +343,7 @@ void test_link(void) {
     test_encoding(a);
     test_fold(a);
     test_forget(a);
+    test_document_forget(a);
     test_blob_names();
     arena_free(a);
 }

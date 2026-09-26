@@ -115,6 +115,12 @@ char *doc_encode_source_forget(Arena *a, const char *id, size_t *out_len) {
     return sb_finish(&sb);
 }
 
+/* The same record shape as a source's: the log it is in says which kind of
+ * id it removes. */
+char *doc_encode_document_forget(Arena *a, const char *id, size_t *out_len) {
+    return doc_encode_source_forget(a, id, out_len);
+}
+
 /* ---- loading ---------------------------------------------------------- */
 
 /* Splits a log file into complete lines. A crash mid-append leaves an
@@ -253,6 +259,20 @@ bool doclog_load(Arena *a, const char *path, DocList *out, char *err,
             snprintf(err, errsz, "%s line %d: record missing \"type\"", path,
                      i + 1);
             return false;
+        }
+        if (strcmp(type, "forget") == 0) {
+            /* §2's DELETE /documents/{id}. The id and chunk range were
+             * floored into max_id and max_chunk_id above, so neither can be
+             * handed out again. A later `document` record under the same id
+             * cannot happen: the counters never go back. */
+            for (size_t k = 0; k < n; k++) {
+                if (id && strcmp(v[k].id, id) == 0) {
+                    memmove(&v[k], &v[k + 1], (n - k - 1) * sizeof(Document));
+                    n--;
+                    break;
+                }
+            }
+            continue;
         }
         if (strcmp(type, "touch") == 0) {
             const char *at = jobj_str(j, "fetchedAt");

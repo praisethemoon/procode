@@ -23,6 +23,7 @@ import {
     KbCollection,
     KbDocument,
     KbDocumentRead,
+    KbForgotten,
     KbHit,
     KbLink,
     KbLinkWritten,
@@ -321,6 +322,11 @@ export function readLinkWritten(payload: Record<string, unknown>): KbLinkWritten
         changed: bool(payload["changed"]),
         at: str(payload["at"]),
     };
+}
+
+export function readForgotten(payload: Record<string, unknown>): KbForgotten {
+    const ids = (v: unknown) => arr(v).filter((x): x is string => typeof x === "string");
+    return { documents: ids(payload["documents"]), sources: ids(payload["sources"]), note: str(payload["note"]) };
 }
 
 export function readChunkRead(payload: Record<string, unknown>): KbChunkRead {

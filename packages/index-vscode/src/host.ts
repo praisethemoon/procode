@@ -168,7 +168,7 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
         case "renameCollection":
             return kb.renameCollection(text("from") ?? "", text("to") ?? "");
         default:
-            return kb.deleteCollection(text("name") ?? "");
+            return kb.deleteCollection(text("name") ?? "", { withDocuments: input["withDocuments"] === true });
     }
 }
 

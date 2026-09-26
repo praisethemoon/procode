@@ -28,8 +28,8 @@ import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 
 import { Kb } from "../client";
-import { KbError } from "../errors";
-import { lsArgv, refreshArgv, searchArgv } from "../argv";
+import { KbError, isKbError } from "../errors";
+import { deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, searchArgv } from "../argv";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const BIN = path.resolve(ROOT, "..", "..", "cli", "kb-cli", "bin", "kb");
@@ -84,6 +84,8 @@ test("every flag this package spells for an implemented command is one the CLI n
         ["status"],
         ["init"],
         ["add", "--title", "t", "--collection", "c", "--url", "u", "--mime", "m", "--meta", "{}", "--file", "-"],
+        forgetArgv("D-1"),
+        deleteCollectionArgv("c", true),
     ];
     for (const argv of argvs) {
         assert.ok(text.includes(`  ${argv[0]} `) || text.includes(`  ${argv[0]}\n`), `kb --help does not name the ${argv[0]} command`);
@@ -447,6 +449,36 @@ test("refresh takes the two narrowings §5 gives it, and no invented ones", asyn
     assert.equal(/refresh[^\n]*--source\b/.test(text), false);
 });
 
+test("forgetting through this package: a document, a source, and a collection with its documents", async (t) => {
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await work.kb.init();
+        const a = await work.kb.add("zzone\n", { title: "one", collection: "keep" });
+        const b = await work.kb.add("zztwo\n", { title: "two", collection: "keep" });
+        const gone = await work.kb.forget(a.document);
+        assert.deepEqual(gone.documents, [a.document]);
+        assert.deepEqual(gone.sources, []);
+        assert.match(gone.note, /compact/);
+        assert.equal((await work.kb.search("zzone")).count, 0);
+
+        const bySource = await work.kb.forget(b.source);
+        assert.deepEqual(bySource.documents, [b.document]);
+        assert.deepEqual(bySource.sources, [b.source]);
+
+        await work.kb.add("zzthree\n", { title: "three", collection: "topic" });
+        await assert.rejects(work.kb.deleteCollection("topic"), (e: unknown) => isKbError(e) && e.code === "collection_in_use");
+        await work.kb.deleteCollection("topic", { withDocuments: true });
+        assert.deepEqual(await work.kb.collections(), []);
+        await assert.rejects(work.kb.forget(a.document), (e: unknown) => isKbError(e) && e.code === "not_found");
+    } finally {
+        work.dispose();
+    }
+});
+
 test("every reader answers exactly the keys the real binary prints", async (t) => {
     if (!built()) {
         t.skip("cli/kb-cli/bin/kb is not built");
@@ -473,6 +505,9 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
             argv: string[];
             read: object;
             dropped?: Record<string, string>;
+            /* For a command that writes: the keys its answer carries, taken
+             * from a run of its own rather than by running it again. */
+            printed?: string[];
         }[] = [
             { what: "add", argv: [], read: added },
             { what: "stale", argv: ["stale", "--older-than", "1d"], read: await work.kb.stale({ olderThan: "1d" }) },
@@ -507,6 +542,20 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
                     return work.kb.get(added.document, { text: true, chunks: true, links: true });
                 })(),
             },
+            await (async () => {
+                /* Forgetting writes, like add, so it cannot be run twice on
+                 * one document: the binary's own answer is taken from
+                 * forgetting a document filed for the purpose, and the
+                 * reader's from forgetting the second one, which nothing
+                 * above reads afterwards. */
+                const spare = await work.kb.add("zzspare\n", { title: "spare", collection: "spare" });
+                return {
+                    what: "forget",
+                    argv: [],
+                    printed: printed(raw(work, ["forget", spare.document])),
+                    read: await work.kb.forget(second.document),
+                };
+            })(),
             {
                 what: "stats",
                 argv: ["stats"],
@@ -523,7 +572,9 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
             const keys =
                 c.what === "add"
                     ? answered(added)
-                    : printed(raw(work, c.argv)).filter(
+                    : c.printed !== undefined
+                      ? c.printed
+                      : printed(raw(work, c.argv)).filter(
                           (k) => !Object.keys(c.dropped ?? {}).includes(k),
                       );
             assert.deepEqual(

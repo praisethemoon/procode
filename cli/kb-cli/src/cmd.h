@@ -21,6 +21,7 @@ int32_t cmd_links(Arena *a, int32_t argc, char **argv);
 int32_t cmd_stats(Arena *a, int32_t argc, char **argv);
 int32_t cmd_reindex(Arena *a, int32_t argc, char **argv);
 int32_t cmd_compact(Arena *a, int32_t argc, char **argv);
+int32_t cmd_forget(Arena *a, int32_t argc, char **argv);
 
 /* ---- staleness (§5) ----------------------------------------------------
  *
@@ -87,6 +88,15 @@ bool doc_chunks(Arena *a, Store *s, const Document *d, char **text,
  * within it. NULL when no document claims it. */
 const Document *doc_by_chunk(const DocList *l, int64_t chunk_num,
                              uint32_t *ordinal);
+
+/* Forgets documents, then sources, in a store already open for write: one
+ * forget record each, documents first so no document is ever left naming a
+ * source the fold no longer has, then the keyword index rebuilt so a search
+ * stops finding them the moment this returns. Blobs stay until `kb compact`.
+ * The one path every forgetting command goes through. */
+bool forget_records(Arena *a, Store *s, const char *const *docs, size_t ndocs,
+                    const char *const *srcs, size_t nsrcs, char *err,
+                    size_t errsz);
 
 /* Rebuilds index/fts.db for a store already open for write. Its caller
  * holds the lock, so the logs it reads cannot move underneath it. */

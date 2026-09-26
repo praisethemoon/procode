@@ -49,6 +49,20 @@ test("--json is appended exactly once, whatever the command", async () => {
     });
 });
 
+test("--json goes in front of a -- separator, where kb still reads it as a flag", async () => {
+    /* Past `--` every argument is a positional, so a trailing --json would be
+     * read as a name and the answer would come back as text: renaming or
+     * deleting a collection, and searching for a query that starts with a
+     * dash, all put `--` in front of their subject. */
+    await withFake([{ stdout: ok({}) }, { stdout: ok({ hits: [] }) }], async (fake) => {
+        await run(["collections", "delete", "--", "io-uring"], { bin: fake.bin, env: fake.env() });
+        await run(["search", "--", "-O2"], { bin: fake.bin, env: fake.env() });
+        const [del, search] = fake.calls();
+        assert.deepEqual(del.argv, ["collections", "delete", "--json", "--", "io-uring"]);
+        assert.deepEqual(search.argv, ["search", "--json", "--", "-O2"]);
+    });
+});
+
 test("a hostile value arrives as one argument, with its metacharacters in it", async () => {
     /* THE CLAIM THE WHOLE PACKAGE MAKES. There is no command string anywhere
      * in it, so a query a reader typed cannot become syntax. Stated against a

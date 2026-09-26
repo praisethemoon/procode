@@ -203,6 +203,14 @@ export interface KbDocumentRead {
     readonly links?: { readonly outgoing: readonly KbLink[]; readonly incoming: readonly KbLink[] };
 }
 
+/* What `kb forget` answers: every id that left the fold. `note` says the text
+ * stays in the store until `kb compact`. */
+export interface KbForgotten {
+    readonly documents: readonly DocumentId[];
+    readonly sources: readonly SourceId[];
+    readonly note: string;
+}
+
 /* §4's `GET /chunks/{id}`: "the full chunk text and its neighbours". */
 export interface KbChunkRead {
     readonly chunk: KbChunk;

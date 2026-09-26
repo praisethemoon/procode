@@ -55,6 +55,7 @@ export {
     KbCollection,
     KbDocument,
     KbDocumentRead,
+    KbForgotten,
     KbCollectionStats,
     KbHit,
     KbLink,

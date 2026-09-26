@@ -1435,6 +1435,71 @@ out=$(kbr reindex --json)
 has "reindex" "$out" '"path":'
 hasnt "reindex" "$out" '"stores":'
 
+# ----------------------------------------------------------------- forget
+mkdir -p forget
+kbf() { ( cd "$WORK/forget" && "$KB" "$@" ); }
+kbf init > /dev/null
+printf 'zzfirst alpha\n' | kbf add --title first --collection topic --json > /dev/null
+printf 'zzsecond beta\n' | kbf add --title second --collection topic \
+    --url https://example.test/second --json > /dev/null
+printf 'zzthird gamma\n' | kbf add --title third --collection other --json > /dev/null
+kbf links add D-2 cites D-1 --json > /dev/null
+
+t "forget removes a document from every read, and the index follows"
+out=$(kbf forget D-1 --json)
+has "forget" "$out" '"documents":\["D-1"\]'
+has "forget" "$out" '"sources":\[\]'
+expect_grep '"error":"not_found"' kbf get D-1 --json
+expect_not_grep '"id":"D-1"' kbf ls --json
+expect_grep '"count":0' kbf search zzfirst --json
+expect_grep '"current":true' kbf status --json
+expect_grep '"type":"forget","id":"D-1"' cat forget/.kb/documents.jsonl
+expect_grep 'forgot D-2' kbf forget D-2
+
+t "a link to a forgotten document reads as unresolved"
+printf 'zzfourth\n' | kbf add --title fourth --collection other --json > /dev/null
+kbf links add D-4 see_also D-3 --json > /dev/null
+kbf forget D-3 --json > /dev/null
+expect_grep '"resolved":false' kbf links D-4 --json
+
+t "a forgotten id is never handed out again"
+out=$(printf 'zzfirst alpha\n' | kbf add --title first --collection topic --json)
+has "reuse" "$out" '"document":"D-5"'
+
+t "forgetting a source forgets every document under it"
+src=$(kbf get D-5 --json | sed -n 's/.*"source":"\(S-[0-9]*\)".*/\1/p')
+out=$(kbf forget "$src" --json)
+has "source" "$out" "\"sources\":\\[\"$src\"\\]"
+has "source" "$out" '"documents":\["D-5"\]'
+expect_grep '"error":"not_found"' kbf get D-5 --json
+
+t "forget refuses what is not there and what is not an id"
+expect_code 1 kbf forget D-99
+expect_grep '"error":"not_found"' kbf forget D-99 --json
+expect_grep '"error":"not_found"' kbf forget S-99 --json
+expect_grep '"error":"usage"' kbf forget C-1 --json
+expect_grep '"error":"usage"' kbf forget --json
+expect_grep '"error":"usage"' kbf forget D-4 D-5 --json
+
+t "compact then drops the text nothing refers to any more"
+out=$(kbf compact --json)
+dropped=$(printf '%s' "$out" | sed -n 's/.*"dropped":\([0-9]*\).*/\1/p')
+[ "${dropped:-0}" -ge 1 ] || fail "compact dropped nothing after a forget: $out"
+
+t "a collection is forgotten with its documents only when asked to"
+printf 'zzsixth\n' | kbf add --title sixth --collection doomed --json > /dev/null
+printf 'zzseventh\n' | kbf add --title seventh --collection doomed --json > /dev/null
+out=$(kbf collections delete doomed --json)
+has "delete" "$out" '"error":"collection_in_use"'
+has "delete" "$out" 'with-documents'
+out=$(kbf collections delete doomed --with-documents --json)
+has "delete" "$out" '"action":"delete"'
+has "delete" "$out" '"documents":2'
+expect_not_grep '"name":"doomed"' kbf collections --json
+expect_grep '"count":0' kbf search zzsixth --json
+expect_grep '"current":true' kbf status --json
+expect_grep '"error":"usage"' kbf collections rename other elsewhere --with-documents --json
+
 # ---------------------------------------------------------------- compact
 mkdir -p comp
 kbc() { ( cd "$WORK/comp" && "$KB" "$@" ); }

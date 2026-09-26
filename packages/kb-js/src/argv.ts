@@ -276,10 +276,21 @@ export function renameCollectionArgv(from: string, to: string): string[] {
     return argv;
 }
 
-export function deleteCollectionArgv(name: string): string[] {
+/* `withDocuments` forgets what the collection holds instead of being refused
+ * with `collection_in_use`; it has to be asked for by name. */
+export function deleteCollectionArgv(name: string, withDocuments = false): string[] {
     const argv = ["collections", "delete"];
+    if (withDocuments) {
+        argv.push("--with-documents");
+    }
     argv.push("--", name);
     return argv;
+}
+
+/* §2's DELETE /documents/{id} and DELETE /sources/{id}: `D-n` forgets one
+ * document, `S-n` a source and every document under it. */
+export function forgetArgv(id: string): string[] {
+    return ["forget", id];
 }
 
 /* §6's read and its write, as subcommands of the noun they are about —

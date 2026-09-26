@@ -37,7 +37,7 @@
  * be work for nothing. */
 
 static const char *const VALUE_FLAGS[] = {NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+static const char *const BOOL_FLAGS[] = {"--json", "--with-documents", NULL};
 
 typedef struct {
     const char *name;
@@ -58,9 +58,10 @@ static int compare(const void *x, const void *y) {
     return strcmp(a->name, b->name);
 }
 
-/* The write half. `to` is NULL for a delete. */
+/* The write half. `to` is NULL for a delete; `with_documents` lets a delete
+ * forget the documents the collection holds instead of refusing. */
 static int32_t collection_write(Arena *a, bool json, const char *from,
-                                const char *to) {
+                                const char *to, bool with_documents) {
     if (!from || !from[0]) {
         err_out(json, "usage", "kb collections %s expects a collection name",
                 to ? "rename" : "delete");
@@ -105,14 +106,15 @@ static int32_t collection_write(Arena *a, bool json, const char *from,
         err_out(json, "not_found", "no collection \"%s\"", from);
         return KB_EXIT_ERR;
     }
-    if (!to && ndocs > 0) {
+    if (!to && ndocs > 0 && !with_documents) {
         /* §11's collection_in_use, with the count §11 asks for. Forgetting a
-         * topic that still holds documents would orphan every one of them,
-         * and §7 gives no route that would put them anywhere else. */
+         * topic forgets what it holds, so that is asked for by name rather
+         * than done because a collection happened to be non-empty. */
         store_close(&s);
         err_out(json, "collection_in_use",
-                "\"%s\" still holds %lu document%s; forget those first", from,
-                (unsigned long)ndocs, ndocs == 1 ? "" : "s");
+                "\"%s\" still holds %lu document%s; pass --with-documents to "
+                "forget them with it",
+                from, (unsigned long)ndocs, ndocs == 1 ? "" : "s");
         return KB_EXIT_ERR;
     }
     if (to && strcmp(from, to) == 0) {
@@ -123,20 +125,39 @@ static int32_t collection_write(Arena *a, bool json, const char *from,
 
     char now[32];
     plat_timestamp(now);
-    for (size_t i = 0; i < s.sources.n; i++) {
-        const Source *src = &s.sources.v[i];
-        if (strcmp(src->collection, from) != 0)
-            continue;
-        size_t len;
-        char *line;
-        if (to) {
+    if (to) {
+        for (size_t i = 0; i < s.sources.n; i++) {
+            const Source *src = &s.sources.v[i];
+            if (strcmp(src->collection, from) != 0)
+                continue;
             Source rev = *src;
             rev.collection = to;
-            line = doc_encode_source(a, &rev, &len);
-        } else {
-            line = doc_encode_source_forget(a, src->id, &len);
+            size_t len;
+            char *line = doc_encode_source(a, &rev, &len);
+            if (!store_append(&s, STORE_SOURCES, line, len, err, sizeof err)) {
+                store_close(&s);
+                err_out(json, "internal", "%s", err);
+                return KB_EXIT_FATAL;
+            }
         }
-        if (!store_append(&s, STORE_SOURCES, line, len, err, sizeof err)) {
+    } else {
+        /* The documents, then their sources, through the one path every
+         * forgetting command takes. */
+        const char **docs =
+            (const char **)arena_alloc(a, (ndocs ? ndocs : 1) * sizeof(char *));
+        const char **srcs = (const char **)arena_alloc(
+            a, (nsources ? nsources : 1) * sizeof(char *));
+        size_t nd = 0, ns = 0;
+        for (size_t i = 0; i < s.documents.n; i++) {
+            const Source *src = src_by_id(&s.sources, s.documents.v[i].source);
+            if (src && strcmp(src->collection, from) == 0)
+                docs[nd++] = s.documents.v[i].id;
+        }
+        for (size_t i = 0; i < s.sources.n; i++) {
+            if (strcmp(s.sources.v[i].collection, from) == 0)
+                srcs[ns++] = s.sources.v[i].id;
+        }
+        if (!forget_records(a, &s, docs, nd, srcs, ns, err, sizeof err)) {
             store_close(&s);
             err_out(json, "internal", "%s", err);
             return KB_EXIT_FATAL;
@@ -167,8 +188,9 @@ static int32_t collection_write(Arena *a, bool json, const char *from,
                (unsigned long)ndocs, ndocs == 1 ? "" : "s",
                target_exists ? "  (merged into an existing collection)" : "");
     } else {
-        printf("forgot %s (%lu empty source%s)\n", from,
-               (unsigned long)nsources, nsources == 1 ? "" : "s");
+        printf("forgot %s (%lu source%s, %lu document%s)\n", from,
+               (unsigned long)nsources, nsources == 1 ? "" : "s",
+               (unsigned long)ndocs, ndocs == 1 ? "" : "s");
     }
     store_close(&s);
     return KB_EXIT_OK;
@@ -196,11 +218,16 @@ int32_t cmd_collections(Arena *a, int32_t argc, char **argv) {
                     "kb collections rename expects <old> <new>");
             return KB_EXIT_ERR;
         }
-        return collection_write(a, json, from, to);
+        if (has_flag(argc, argv, VALUE_FLAGS, "--with-documents")) {
+            err_out(json, "usage", "--with-documents belongs to delete");
+            return KB_EXIT_ERR;
+        }
+        return collection_write(a, json, from, to, false);
     }
     if (verb && strcmp(verb, "delete") == 0)
         return collection_write(
-            a, json, positional_arg(argc, argv, VALUE_FLAGS, 1), NULL);
+            a, json, positional_arg(argc, argv, VALUE_FLAGS, 1), NULL,
+            has_flag(argc, argv, VALUE_FLAGS, "--with-documents"));
     if (verb) {
         err_out(json, "usage",
                 "kb collections takes no argument, or \"rename <old> <new>\", "

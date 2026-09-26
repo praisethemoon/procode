@@ -21,8 +21,12 @@ static const char *USAGE =
     "  chunk <C-n> [--expand N]   one chunk in full, with its neighbours\n"
     "  collections                names, counts, bytes, oldest fetch\n"
     "  collections rename <old> <new>\n"
-    "  collections delete <name>  refuses while the topic holds documents\n"
+    "  collections delete <name> [--with-documents]\n"
+    "                             forget a topic; refuses while it holds\n"
+    "                             documents unless told to forget them too\n"
     "  stats                      per collection: documents, chunks, bytes\n"
+    "  forget <D-n|S-n>           forget a document, or a source and its\n"
+    "                             documents; kb compact drops the text\n"
     "\n"
     "provenance:\n"
     "  stale [--older-than 90d] [--collection C] [--limit N]\n"
@@ -96,6 +100,8 @@ int main(int argc, char **argv) {
         rc = cmd_stale(a, argc2, argv2);
     else if (strcmp(cmd, "refresh") == 0)
         rc = cmd_refresh(a, argc2, argv2);
+    else if (strcmp(cmd, "forget") == 0)
+        rc = cmd_forget(a, argc2, argv2);
     else if (strcmp(cmd, "links") == 0)
         rc = cmd_links(a, argc2, argv2);
     else if (strcmp(cmd, "stats") == 0)

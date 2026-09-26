@@ -216,7 +216,11 @@ export async function run(
     options: KbOptions = {},
     stdin: string | null = null,
 ): Promise<Record<string, unknown>> {
-    const full = [...argv, "--json"];
+    /* In front of a `--`, never after it: past the separator kb reads every
+     * argument as a positional, so a trailing `--json` would be taken for a
+     * name and the answer would come back as text. */
+    const end = argv.indexOf("--");
+    const full = end < 0 ? [...argv, "--json"] : [...argv.slice(0, end), "--json", ...argv.slice(end)];
     const done = await spawnKb(full, options, stdin);
     const payload = parse(done.stdout);
 
