@@ -17,7 +17,7 @@ import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type { Summary } from "coboard";
-import { EMPTY, FIELDS, FIELD_LABELS, Filter, counts, fieldCount, isActive, options, toggle, visible } from "../src/filter";
+import { EMPTY, FIELDS, FIELD_LABELS, Filter, clear, counts, fieldCount, hasQuery, isActive, options, toggle, visible } from "../src/filter";
 import type { SidebarToHost, SidebarToView } from "../src/protocol";
 
 declare function acquireVsCodeApi(): {
@@ -39,7 +39,7 @@ function restore(): Saved {
     const f = s?.filter;
     const filter: Filter =
         f && typeof f.text === "string" && f.fields
-            ? { text: f.text, fields: { ...EMPTY.fields, ...f.fields } }
+            ? { text: f.text, fields: { ...EMPTY.fields, ...f.fields }, openOnly: f.openOnly === true }
             : EMPTY;
     return { filter, collapsed: Array.isArray(s?.collapsed) ? s!.collapsed : [] };
 }
@@ -76,7 +76,7 @@ function FilterBar(props: {
     const opts = useMemo(() => options(props.all), [props.all]);
     const tally = useMemo(() => counts(props.all, filter), [props.all, filter]);
     const count = fieldCount(filter);
-    const active = isActive(filter);
+    const active = hasQuery(filter);
 
     return (
         <div className="sb-filter">
@@ -111,13 +111,23 @@ function FilterBar(props: {
                         title="Clear all filters"
                         aria-label="Clear all filters"
                         onClick={() => {
-                            onChange(EMPTY);
+                            onChange(clear(filter));
                             input.current?.focus();
                         }}
                     >
                         <Codicon name="close" />
                     </button>
                 ) : null}
+                <button
+                    type="button"
+                    className={`sb-quick${filter.openOnly ? " sb-on" : ""}`}
+                    title={filter.openOnly ? "Showing open items only: click to show done ones too" : "Open items only: hide done tickets, epics and milestones"}
+                    aria-label="Open items only"
+                    aria-pressed={filter.openOnly}
+                    onClick={() => onChange({ ...filter, openOnly: !filter.openOnly })}
+                >
+                    <Codicon name="issues" />
+                </button>
             </div>
             {open ? (
                 <div className="sb-fields">
@@ -336,7 +346,7 @@ function App(): JSX.Element {
                             n={n}
                             depth={0}
                             collapsed={collapsed}
-                            forceOpen={filtering}
+                            forceOpen={hasQuery(filter)}
                             matched={matched}
                             filtering={filtering}
                             onToggle={toggleNode}

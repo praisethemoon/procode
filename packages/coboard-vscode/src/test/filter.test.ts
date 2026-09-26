@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { Summary } from "coboard";
 
-import { EMPTY, UNASSIGNED, counts, fieldCount, isActive, matches, options, toggle, visible } from "../filter";
+import { EMPTY, UNASSIGNED, clear, counts, fieldCount, hasQuery, isActive, matches, options, toggle, visible } from "../filter";
 
 const s = (id: string, title: string, extra: Partial<Summary> = {}): Summary =>
     ({
@@ -92,4 +92,21 @@ test("counts say how many items each value would match, given the other fields a
     assert.equal(c.status.get("done"), undefined);
     assert.equal(c.label.get("coboard-vscode"), 1, "choosing another label would add T-34");
     assert.equal(counts(board, { ...EMPTY, text: "gaps" }).kind.get("ticket"), 1);
+});
+
+test("open only hides what is done, keeps a done parent as context, and survives clearing", () => {
+    const b = [...board, s("M-9", "Shipped", { epic: "E-4", status: "done" }), s("T-40", "Late fix", { epic: "E-4", milestone: "M-9", status: "todo" })];
+    const f = { ...EMPTY, openOnly: true };
+    assert.equal(isActive(f), true);
+    assert.equal(hasQuery(f), false, "the ✕ has nothing to clear");
+    const v = visible(b, f);
+    assert.equal(v.matched.has("T-12"), false, "a done ticket is hidden");
+    assert.equal(v.shown.has("T-12"), false, "even under its open epic");
+    assert.equal(v.matched.has("M-9"), false);
+    assert.equal(v.shown.has("M-9"), true, "a done milestone stays above its open ticket");
+    assert.ok(v.matched.has("T-40") && v.matched.has("E-4"));
+    assert.equal(counts(b, f).status.get("done"), undefined, "counts respect it");
+    const g = clear({ ...toggle(f, "label", "spec"), text: "gaps" });
+    assert.equal(g.openOnly, true);
+    assert.equal(hasQuery(g), false);
 });

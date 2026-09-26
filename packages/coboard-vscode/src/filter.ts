@@ -31,19 +31,33 @@ export interface Filter {
     /* For each field, the values any one of which an item must have; empty
      * means the field does not filter. */
     readonly fields: Readonly<Record<Field, readonly string[]>>;
+    /* Hide what is finished: done tickets, and done epics and milestones. A
+     * standing preference rather than a query, so clearing leaves it set. */
+    readonly openOnly: boolean;
 }
 
 export const EMPTY: Filter = {
     text: "",
     fields: { status: [], kind: [], priority: [], size: [], assignee: [], label: [] },
+    openOnly: false,
 };
 
 export function fieldCount(f: Filter): number {
     return FIELDS.reduce((n, k) => n + f.fields[k].length, 0);
 }
 
-export function isActive(f: Filter): boolean {
+/* Text or a field is set: what the ✕ clears. */
+export function hasQuery(f: Filter): boolean {
     return f.text.trim() !== "" || fieldCount(f) > 0;
+}
+
+export function isActive(f: Filter): boolean {
+    return hasQuery(f) || f.openOnly;
+}
+
+/* The ✕: the text and every field, but not the open-only preference. */
+export function clear(f: Filter): Filter {
+    return { ...EMPTY, openOnly: f.openOnly };
 }
 
 export function toggle(f: Filter, field: Field, value: string): Filter {
@@ -80,6 +94,7 @@ function values(s: Summary, field: Field): readonly string[] {
 }
 
 export function matches(s: Summary, f: Filter): boolean {
+    if (f.openOnly && s.status === "done") return false;
     if (!textMatches(s, f.text)) return false;
     for (const field of FIELDS) {
         const want = f.fields[field];
@@ -104,7 +119,9 @@ export function visible(all: readonly Summary[], f: Filter): { shown: Set<string
         if (m?.epic) shown.add(m.epic);
     }
     for (const s of all) {
-        // Down: everything under a matching epic or milestone.
+        // Down: everything under a matching epic or milestone, except what
+        // open-only hides.
+        if (f.openOnly && s.status === "done") continue;
         if ((s.epic && matched.has(s.epic)) || (s.milestone && matched.has(s.milestone))) shown.add(s.id);
         if (s.kind === "ticket" && s.milestone && s.epic && matched.has(s.epic)) shown.add(s.milestone);
     }

@@ -323,6 +323,36 @@ body {
     outline-offset: -1px;
 }
 
+/* The open-only toggle, drawn like Find's Match Case: an icon inside the
+ * bar that gets an outline and a tint while it is on. */
+.sb-quick {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 18px;
+    margin: 0 2px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--bk-color-foreground-muted);
+    cursor: pointer;
+}
+.sb-quick:hover {
+    color: var(--bk-color-foreground);
+    background: color-mix(in srgb, var(--bk-color-foreground) 10%, transparent);
+}
+.sb-quick.sb-on {
+    color: var(--bk-color-foreground);
+    border-color: var(--bk-color-focus);
+    background: color-mix(in srgb, var(--bk-color-focus) 22%, transparent);
+}
+.sb-quick:focus-visible {
+    outline: 1px solid var(--bk-color-focus);
+    outline-offset: -1px;
+}
+
 .sb-count {
     min-width: 14px;
     padding: 0 3px;
