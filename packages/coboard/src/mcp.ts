@@ -1,8 +1,8 @@
 /* The board as MCP tools, over stdio: newline-delimited JSON-RPC 2.0.
  *
- * Agents find, read, create, update, move and comment on items, and look up
- * the lap sessions linked to a ticket. Deleting is left to people, in the
- * editor.
+ * Agents find, read, create, update, move, comment on and archive items, and
+ * look up the lap sessions linked to a ticket. Deleting is left to people, in
+ * the editor; archiving is not deleting — it is reversible and loses nothing.
  *
  * The board is the `.coboard/` found by walking up from the directory the
  * server was started in. With none, reads answer an empty board and the first
@@ -15,7 +15,7 @@ import * as path from "node:path";
 import * as readline from "node:readline";
 
 import { ticketSessions, sessionCommits, sessionCommand } from "./lap";
-import { PRIORITIES, SIZES, TICKET_STATUSES } from "./model";
+import { ARCHIVED_MODES, ArchivedMode, PRIORITIES, SIZES, TICKET_STATUSES } from "./model";
 import { search, view } from "./query";
 import { Board, BoardError, CreateInput, Fields, findBoard } from "./store";
 
@@ -26,7 +26,8 @@ Epics (E-<n>) contain milestones (M-<n>); tickets (T-<n>) always belong to an ep
 Always refer to items by these ids. Descriptions and comments are Markdown; mention other items by id (e.g. "blocked by T-4").
 Ticket statuses: ${TICKET_STATUSES.join(", ")}. Sizes: ${SIZES.join(", ")}. Priorities: ${PRIORITIES.join(", ")}.
 When you work on a ticket, move it to "doing", and record your edits in a lap session linked to it: ${sessionCommand("T-<n>")}.
-board_sessions then shows the work done for a ticket.`;
+board_sessions then shows the work done for a ticket.
+Finished work can be archived (board_archive) to keep lists short: an archived epic or milestone takes everything under it, lists and search leave archived items out unless asked (archived: "include" or "only"), board_get still reads them, and board_unarchive brings them back. Archive only what is finished or abandoned, and say why. Never delete.`;
 
 type Json = Record<string, unknown>;
 
@@ -50,6 +51,11 @@ const FILTERS: Json = {
     milestone: { type: "string", description: 'M-<n>, or "none" for tickets in no milestone' },
     assignee: str,
     label: str,
+    archived: {
+        type: "string",
+        enum: [...ARCHIVED_MODES],
+        description: 'Archived items: "exclude" (the default) leaves them out, "include" adds them, "only" lists just them',
+    },
 };
 const FIELDS: Json = {
     title: str,
@@ -93,8 +99,10 @@ function writeBoard(ctx: Ctx): Board {
     }
 }
 
+/* Every item, archived or not: each tool applies its own `archived` filter,
+ * and an archived item can still be read by id. */
 function items(ctx: Ctx) {
-    return readBoard(ctx)?.all() ?? [];
+    return readBoard(ctx)?.all({ archived: "include" }) ?? [];
 }
 
 function pick<T extends object>(args: Json, keys: readonly string[]): T {
@@ -106,7 +114,7 @@ function pick<T extends object>(args: Json, keys: readonly string[]): T {
 }
 
 const FIELD_KEYS = ["title", "description", "status", "size", "priority", "assignee", "labels"] as const;
-const FILTER_KEYS = ["kind", "status", "epic", "milestone", "assignee", "label"] as const;
+const FILTER_KEYS = ["kind", "status", "epic", "milestone", "assignee", "label", "archived"] as const;
 
 export const TOOLS: readonly Tool[] = [
     {
@@ -125,11 +133,11 @@ export const TOOLS: readonly Tool[] = [
     {
         name: "board_get",
         description:
-            "Read one item by id with its context: an epic with its milestones (and progress) and the tickets in no milestone; a milestone with its tickets; a ticket with its description, comments, epic, milestone and linked lap sessions.",
-        inputSchema: schema({ id: { type: "string", description: "E-<n>, M-<n> or T-<n>" } }, ["id"]),
+            "Read one item by id with its context: an epic with its milestones (and progress) and the tickets in no milestone; a milestone with its tickets; a ticket with its description, comments, epic, milestone and linked lap sessions. Archived items are read too, and say so (archived: at, via, by, reason); an epic's or milestone's archived contents are left out unless archived is \"include\".",
+        inputSchema: schema({ id: { type: "string", description: "E-<n>, M-<n> or T-<n>" }, archived: FILTERS["archived"] as Json }, ["id"]),
         call: async (args, ctx) => {
             const id = String(args["id"] ?? "");
-            const v = view(items(ctx), id);
+            const v = view(items(ctx), id, { archived: (args["archived"] as ArchivedMode | undefined) ?? "exclude" });
             if (!v) throw new BoardError("not_found", `no ${id.trim().toUpperCase()} on this board`);
             if (v.kind !== "ticket") return v;
             const root = findBoard(ctx.cwd)!;
@@ -167,6 +175,24 @@ export const TOOLS: readonly Tool[] = [
         call: (args, ctx) => writeBoard(ctx).comment(String(args["ticket"] ?? ""), String(args["body"] ?? ""), ctx.author),
     },
     {
+        name: "board_archive",
+        description:
+            "Archive an item: finished or abandoned work, out of lists and search. Archiving an epic or milestone archives everything under it. Reversible with board_unarchive; nothing is lost. Give the reason.",
+        inputSchema: schema({ id: str, reason: { type: "string", description: "Why, in a sentence" } }, ["id"]),
+        call: (args, ctx) =>
+            writeBoard(ctx).archive(String(args["id"] ?? ""), {
+                by: ctx.author,
+                ...(args["reason"] !== undefined ? { reason: String(args["reason"]) } : {}),
+            }),
+    },
+    {
+        name: "board_unarchive",
+        description:
+            "Bring back an archived item, and with it everything under it. An item archived with its epic or milestone comes back when that is unarchived.",
+        inputSchema: schema({ id: str }, ["id"]),
+        call: (args, ctx) => writeBoard(ctx).unarchive(String(args["id"] ?? "")),
+    },
+    {
         name: "board_sessions",
         description: `The lap sessions linked to a ticket, each with its commits: the work done for it. Link a session with: ${sessionCommand("T-<n>")}`,
         inputSchema: schema({ ticket: str }, ["ticket"]),
@@ -188,6 +214,10 @@ export const TOOLS: readonly Tool[] = [
 /* ------------------------------------------------------------ JSON-RPC */
 
 function checkArgs(tool: Tool, args: Json): void {
+    const mode = args["archived"];
+    if (mode !== undefined && !ARCHIVED_MODES.includes(mode as ArchivedMode)) {
+        throw new BoardError("invalid", `archived "${String(mode)}" is not one of ${ARCHIVED_MODES.join(", ")}`);
+    }
     const props = (tool.inputSchema["properties"] ?? {}) as Json;
     for (const k of Object.keys(args)) {
         if (!(k in props)) {

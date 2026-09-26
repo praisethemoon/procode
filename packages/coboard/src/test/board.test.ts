@@ -221,7 +221,18 @@ test("mcp: the tools create, move, comment, search and get by id", async () => {
     fs.mkdirSync(path.join(dir, ".git"));
     const list = await handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { cwd: dir, author: "a" });
     const names = ((list as { result: { tools: { name: string }[] } }).result.tools).map((t) => t.name);
-    assert.deepEqual(names, ["board_list", "board_search", "board_get", "board_create", "board_update", "board_move", "board_comment", "board_sessions"]);
+    assert.deepEqual(names, [
+        "board_list",
+        "board_search",
+        "board_get",
+        "board_create",
+        "board_update",
+        "board_move",
+        "board_comment",
+        "board_archive",
+        "board_unarchive",
+        "board_sessions",
+    ]);
 
     assert.equal((await call(dir, "board_list", {})).text, "[]", "no board yet reads as empty");
     const e = JSON.parse((await call(dir, "board_create", { kind: "epic", title: "E" })).text);
@@ -425,4 +436,39 @@ test("search and view leave archived items out unless asked, and an archived ite
     const ms = view(all, ids.m1);
     assert.ok(ms && ms.kind === "milestone");
     assert.deepEqual(ms.tickets.map((t) => t.id), [ids.t1], "an archived milestone shows what it holds");
+});
+
+test("mcp: archive and unarchive, and the archived filter on list, search and get", async () => {
+    const dir = tmp();
+    fs.mkdirSync(path.join(dir, ".git"));
+    await call(dir, "board_create", { kind: "epic", title: "Old work" });
+    await call(dir, "board_create", { kind: "epic", title: "New work" });
+    await call(dir, "board_create", { kind: "ticket", title: "Old parser fix", epic: "E-1" });
+    await call(dir, "board_create", { kind: "ticket", title: "New parser fix", epic: "E-2" });
+    const ids = async (name: string, args: object) => JSON.parse((await call(dir, name, args)).text).map((h: { id: string }) => h.id);
+
+    // Before anything is archived, a call without the parameter is unchanged.
+    assert.deepEqual(await ids("board_list", {}), ["E-1", "E-2", "T-1", "T-2"]);
+
+    const a = JSON.parse((await call(dir, "board_archive", { id: "E-1", reason: "shipped in 0.1" })).text);
+    assert.deepEqual([a.archived.by, a.archived.reason, a.archived.via], ["agent", "shipped in 0.1", null]);
+
+    assert.deepEqual(await ids("board_list", {}), ["E-2", "T-2"]);
+    assert.deepEqual(await ids("board_list", { archived: "only" }), ["E-1", "T-1"]);
+    assert.deepEqual(await ids("board_search", { query: "parser" }), ["T-2"]);
+    assert.deepEqual(await ids("board_search", { query: "parser", archived: "include" }), ["T-1", "T-2"]);
+
+    const t1 = JSON.parse((await call(dir, "board_get", { id: "T-1" })).text);
+    assert.equal(t1.ticket.archived.via, "E-1", "get reads an archived ticket and says what it is archived with");
+    const e1 = JSON.parse((await call(dir, "board_get", { id: "E-1" })).text);
+    assert.deepEqual(e1.tickets.map((t: { id: string }) => t.id), ["T-1"], "an archived epic shows what it holds");
+
+    const refused = await call(dir, "board_unarchive", { id: "T-1" });
+    assert.ok(refused.error && /archived with E-1/.test(refused.text));
+    assert.ok((await call(dir, "board_create", { kind: "ticket", title: "x", epic: "E-1" })).error, "nothing new goes into it");
+    const bad = await call(dir, "board_list", { archived: "some" });
+    assert.ok(bad.error && /exclude, include, only/.test(bad.text), "an unknown mode is refused, not read as the default");
+
+    await call(dir, "board_unarchive", { id: "E-1" });
+    assert.deepEqual(await ids("board_list", {}), ["E-1", "E-2", "T-1", "T-2"]);
 });

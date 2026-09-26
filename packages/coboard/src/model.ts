@@ -32,10 +32,14 @@ export interface Comment {
 /* Whether an item is archived, as the board reads it: never stored on the
  * item (archive records are their own lines in the log), and present only
  * when the item is archived. `via` is the milestone or epic it is archived
- * with, or null when it was archived itself. */
+ * with, or null when it was archived itself; `by` and `reason` are the
+ * archive's, wherever it was made. */
 export interface Archived {
     readonly at: string;
     readonly via: string | null;
+    /* Who archived it and why, when they said. */
+    readonly by?: string;
+    readonly reason?: string;
 }
 
 /* Which items a read returns: the default leaves archived ones out. */

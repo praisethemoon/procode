@@ -3,7 +3,7 @@
  *   {"op":"put","item":{...}}                    an epic, milestone or ticket, whole
  *   {"op":"comment","ticket":"T-3","author":..,"body":..,"at":..}
  *   {"op":"delete","id":"T-3","at":..}
- *   {"op":"archive","id":"E-2","at":..}
+ *   {"op":"archive","id":"E-2","at":..,"by":..,"reason":..}   by and reason optional
  *   {"op":"unarchive","id":"E-2","at":..}
  *
  * The board is the fold of the log: the last `put` of an id wins, a `delete`
@@ -99,8 +99,8 @@ export interface Placement {
 interface State {
     items: Map<string, Item>;
     comments: Map<string, Comment[]>;
-    /* The items archived themselves, with when. */
-    archived: Map<string, string>;
+    /* The items archived themselves, with their archive record. */
+    archived: Map<string, Omit<Archived, "via">>;
     next: Record<Kind, number>;
 }
 
@@ -108,13 +108,13 @@ interface State {
 function archivedOf(st: State, item: Item): Archived | undefined {
     const own = st.archived.get(item.id);
     if (own !== undefined) {
-        return { at: own, via: null };
+        return { ...own, via: null };
     }
     const up = item.kind === "ticket" ? [item.milestone, item.epic] : item.kind === "milestone" ? [item.epic] : [];
     for (const id of up) {
-        const at = id ? st.archived.get(id) : undefined;
-        if (at !== undefined) {
-            return { at, via: id! };
+        const a = id ? st.archived.get(id) : undefined;
+        if (a !== undefined) {
+            return { ...a, via: id! };
         }
     }
     return undefined;
@@ -183,7 +183,7 @@ export class Board {
             } else if (rec["op"] === "archive") {
                 const id = String(rec["id"]);
                 if (st.items.has(id)) {
-                    st.archived.set(id, String(rec["at"] ?? ""));
+                    st.archived.set(id, archiveOf(rec));
                 }
             } else if (rec["op"] === "unarchive") {
                 st.archived.delete(String(rec["id"]));
@@ -393,15 +393,15 @@ export class Board {
 
     /* Archive an item, and with it everything under it. Reversible, and
      * nothing is written to the children. */
-    archive(id: string): Item {
+    archive(id: string, note: { by?: string; reason?: string } = {}): Item {
         return this.write((st) => {
             const item = need(st, id, null, "");
             if (st.archived.has(item.id)) {
                 throw new BoardError("invalid", `${item.id} is already archived`);
             }
-            const at = now();
-            st.archived.set(item.id, at);
-            return { records: [{ op: "archive", id: item.id, at }], result: this.withComments(st, item) };
+            const record = { op: "archive", id: item.id, at: now(), ...optional("by", note.by), ...optional("reason", note.reason) };
+            st.archived.set(item.id, archiveOf(record));
+            return { records: [record], result: this.withComments(st, item) };
         });
     }
 
@@ -443,6 +443,19 @@ export class Board {
 }
 
 /* ------------------------------------------------------------ validation */
+
+function optional(key: string, v: string | undefined): Record<string, string> {
+    const s = (v ?? "").trim();
+    return s ? { [key]: s } : {};
+}
+
+function archiveOf(rec: Record<string, unknown>): Omit<Archived, "via"> {
+    return {
+        at: String(rec["at"] ?? ""),
+        ...(typeof rec["by"] === "string" ? { by: rec["by"] } : {}),
+        ...(typeof rec["reason"] === "string" ? { reason: rec["reason"] } : {}),
+    };
+}
 
 /* A container something is being put into must not be archived: the new
  * item would be archived the moment it was made. */
