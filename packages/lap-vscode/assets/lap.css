@@ -59,8 +59,7 @@ body {
     color: var(--bk-color-foreground);
 }
 .lh-chevron:focus-visible,
-.lh-clear:focus-visible,
-.lh-range:focus-visible {
+.lh-clear:focus-visible {
     outline: 1px solid var(--bk-color-focus);
     outline-offset: -1px;
 }
@@ -91,43 +90,26 @@ body {
     color: var(--bk-color-input-placeholder);
 }
 
-/* The time range: a small select at the bar's right end, set off by a rule,
- * drawn plain with a codicon caret rather than the platform's own box. */
-.lh-range-wrap {
-    position: relative;
-    display: inline-flex;
+/* The bar and, beside it, the time range: baukasten's Select, small, so its
+ * menu is the editor's rather than the platform's. */
+.lh-top {
+    display: flex;
     align-items: center;
-    flex: none;
-    height: 100%;
-    border-left: 1px solid var(--bk-color-input-border, var(--bk-color-divider));
+    gap: 4px;
 }
-.lh-range-caret {
-    position: absolute;
-    right: 3px;
-    font-size: 12px !important;
-    pointer-events: none;
-    color: var(--bk-color-foreground-muted);
+.lh-top .lh-bar {
+    flex: 1;
+    min-width: 0;
 }
 .lh-range {
-    appearance: none;
-    -webkit-appearance: none;
-    height: 100%;
-    max-width: 110px;
-    padding: 0 18px 0 6px;
-    border: 0;
-    outline: none;
-    background: transparent;
-    color: var(--bk-color-foreground-muted);
-    font: inherit;
-    font-size: 11px;
-    cursor: pointer;
+    flex: none;
+    width: 108px;
 }
-.lh-range.lh-on {
-    color: var(--bk-color-foreground);
-}
-.lh-range option {
-    background: var(--bk-color-dropdown-background, var(--bk-color-background));
-    color: var(--bk-color-foreground);
+.lh-range > *,
+.lh-range [role="combobox"] {
+    width: 100%;
+    min-width: 0 !important;
+    box-sizing: border-box;
 }
 
 /* One row per field: the label in a fixed column, its chips beside it. */

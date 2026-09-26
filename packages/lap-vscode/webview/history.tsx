@@ -11,6 +11,7 @@
  * what is open survive the view being hidden and VS Code restarting.
  */
 
+import { Select } from "baukasten-ui/core";
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -96,54 +97,48 @@ function FilterBar(props: { filter: HistoryFilter; users: readonly string[]; onC
     ];
     return (
         <div className="lh-filter">
-            <div className="lh-bar">
-                <button type="button" className="lh-chevron" title={open ? "Hide filters" : "More filters"} aria-expanded={open} onClick={() => setOpen(!open)}>
-                    <Codicon name={open ? "chevron-down" : "chevron-right"} />
-                    {count > 0 ? <span className="lh-count">{count}</span> : null}
-                </button>
-                <input
-                    ref={input}
-                    className="lh-input"
-                    type="text"
-                    placeholder="Filter by id, message or file"
-                    aria-label="Filter the history"
-                    value={filter.text}
-                    spellCheck={false}
-                    onChange={(e) => onChange({ ...filter, text: e.currentTarget.value })}
-                    onKeyDown={(e) => {
-                        if (e.key === "Escape") onChange({ ...filter, text: "" });
-                    }}
-                />
-                {isFiltering(filter) ? (
-                    <button
-                        type="button"
-                        className="lh-clear"
-                        title="Clear all filters"
-                        aria-label="Clear all filters"
-                        onClick={() => {
-                            onChange(EMPTY_FILTER);
-                            input.current?.focus();
-                        }}
-                    >
-                        <Codicon name="close" />
+            <div className="lh-top">
+                <div className="lh-bar">
+                    <button type="button" className="lh-chevron" title={open ? "Hide filters" : "More filters"} aria-expanded={open} onClick={() => setOpen(!open)}>
+                        <Codicon name={open ? "chevron-down" : "chevron-right"} />
+                        {count > 0 ? <span className="lh-count">{count}</span> : null}
                     </button>
-                ) : null}
-                <span className="lh-range-wrap">
-                    <select
-                        className={`lh-range${filter.range !== "recent" ? " lh-on" : ""}`}
-                        aria-label="Time range"
-                        title="Time range"
+                    <input
+                        ref={input}
+                        className="lh-input"
+                        type="text"
+                        placeholder="Filter by id, message or file"
+                        aria-label="Filter the history"
+                        value={filter.text}
+                        spellCheck={false}
+                        onChange={(e) => onChange({ ...filter, text: e.currentTarget.value })}
+                        onKeyDown={(e) => {
+                            if (e.key === "Escape") onChange({ ...filter, text: "" });
+                        }}
+                    />
+                    {isFiltering(filter) ? (
+                        <button
+                            type="button"
+                            className="lh-clear"
+                            title="Clear all filters"
+                            aria-label="Clear all filters"
+                            onClick={() => {
+                                onChange(EMPTY_FILTER);
+                                input.current?.focus();
+                            }}
+                        >
+                            <Codicon name="close" />
+                        </button>
+                    ) : null}
+                </div>
+                <div className={`lh-range${filter.range !== "recent" ? " lh-on" : ""}`} title="Time range">
+                    <Select<Range>
+                        size="sm"
                         value={filter.range}
-                        onChange={(e) => onChange({ ...filter, range: e.currentTarget.value as Range })}
-                    >
-                        {RANGES.map((r) => (
-                            <option key={r} value={r}>
-                                {RANGE_LABELS[r]}
-                            </option>
-                        ))}
-                    </select>
-                    <Codicon name="chevron-down" className="lh-range-caret" />
-                </span>
+                        options={RANGES.map((r) => ({ value: r, label: RANGE_LABELS[r] }))}
+                        onChange={(range) => onChange({ ...filter, range })}
+                    />
+                </div>
             </div>
             {open ? (
                 <div className="lh-fields">
