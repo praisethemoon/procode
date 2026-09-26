@@ -142,7 +142,9 @@ function choices(all: Item[]): Choices {
 
 function push(id: string, panel: vscode.WebviewPanel, all: Item[] = items()): void {
     const v = view(all, id);
-    panel.title = v ? `${id} ${all.find((i) => i.id === id)?.title ?? ""}` : `${id} (deleted)`;
+    // The id alone: the page's header carries the title, and a tab strip of
+    // full titles leaves no room for anything else.
+    panel.title = v ? id : `${id} (deleted)`;
     const msg: ToView = { type: "data", id, view: v, choices: choices(all) };
     void panel.webview.postMessage(msg);
 }
