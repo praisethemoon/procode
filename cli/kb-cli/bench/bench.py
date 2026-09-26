@@ -46,6 +46,9 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 SETS = ("docs", "code")
 MODES = ("keyword", "semantic", "hybrid")
+# Not run unless asked for (--modes ...,rerank,rrf): hybrid then the reranker
+# over the fused top 20, and hybrid fused by reciprocal rank.
+EXTRA_MODES = ("rerank", "rrf")
 K = 10
 RESAMPLES = 2000
 
@@ -191,9 +194,13 @@ def run_queries(kb, store, home, queries, s, modes, texts, chunks):
         for m in modes:
             # The query goes after `--`: an identifier query can itself start
             # with a dash (`--no-forget`), and kb would take it for an option.
-            out = json.loads(kb_run(kb, ["search", "--mode", m, "--k", str(K),
+            args = {"rerank": ["--mode", "hybrid", "--rerank"],
+                    "rrf": ["--mode", "hybrid", "--fusion", "rrf"]}.get(m, ["--mode", m])
+            t0 = time.time()
+            out = json.loads(kb_run(kb, ["search", *args, "--k", str(K),
                                          "--collection", s, "--json", "--", q["q"]],
                                     store, home, check=False) or "{}")
+            row.setdefault("ms", {})[m] = round((time.time() - t0) * 1000, 1)
             if not out.get("ok"):
                 sys.exit(f"{q['id']} {m}: {out}")
             rank = None
@@ -241,8 +248,11 @@ def summarise(per, modes):
                 ranks = [r["ranks"][m] for r in rows]
                 point = metrics(ranks)
                 ci = interval(ranks, rng)
+                ms = sorted(r["ms"][m] for r in rows if m in r.get("ms", {}))
                 summary[f"{s}/{tag}/{m}"] = {
                     "n": len(ranks),
+                    "p50_ms": ms[len(ms) // 2] if ms else None,
+                    "p95_ms": ms[min(len(ms) - 1, int(0.95 * len(ms)))] if ms else None,
                     "hit1": point[0], "hit3": point[1], "mrr": point[2],
                     "hit1_ci": ci[0], "hit3_ci": ci[1], "mrr_ci": ci[2],
                     "missed": sum(1 for r in ranks if r is None),
@@ -251,12 +261,13 @@ def summarise(per, modes):
 
 
 def show(summary):
-    print(f"{'set/tag':22} {'mode':9} {'n':>4}  {'hit@1':>17}  {'hit@3':>17}  {'MRR@10':>17}  missed")
+    print(f"{'set/tag':22} {'mode':9} {'n':>4}  {'hit@1':>17}  {'hit@3':>17}  {'MRR@10':>17}  missed  p50/p95 ms")
     for key, v in summary.items():
         s, tag, m = key.split("/")
         cell = lambda x, ci: f"{x:.2f} [{ci[0]:.2f}–{ci[1]:.2f}]"
         print(f"{s + '/' + tag:22} {m:9} {v['n']:>4}  {cell(v['hit1'], v['hit1_ci']):>17}  "
-              f"{cell(v['hit3'], v['hit3_ci']):>17}  {cell(v['mrr'], v['mrr_ci']):>17}  {v['missed']:>6}")
+              f"{cell(v['hit3'], v['hit3_ci']):>17}  {cell(v['mrr'], v['mrr_ci']):>17}  {v['missed']:>6}  "
+              f"{v.get('p50_ms') or 0:.0f}/{v.get('p95_ms') or 0:.0f}")
 
 
 def compare(a_path, b_path):
@@ -273,7 +284,7 @@ def compare(a_path, b_path):
         tags = ["all"] + sorted({ra[i]["tag"] for i in ids})
         for tag in tags:
             sel = [i for i in ids if tag == "all" or ra[i]["tag"] == tag]
-            for m in MODES:
+            for m in MODES + EXTRA_MODES:
                 if m not in ra[sel[0]]["ranks"] or m not in rb[sel[0]]["ranks"]:
                     continue
                 pa = [ra[i]["ranks"][m] for i in sel]
@@ -352,10 +363,14 @@ def main():
     ap.add_argument("--name")
     ap.add_argument("--kb", default=os.path.join(HERE, "..", "bin", "kb"))
     ap.add_argument("--model", help="an embedding model file; without one only keyword runs")
+    ap.add_argument("--reranker", help="the reranker model file, for --modes ...,rerank")
     ap.add_argument("--set", default="all", choices=("docs", "code", "all"))
     ap.add_argument("--modes", default=",".join(MODES))
     ap.add_argument("--store", help="a folder to keep the built store in and reuse")
     ap.add_argument("--rebuild", action="store_true")
+    ap.add_argument("--trust-store", action="store_true",
+                    help="reuse --store even if kb changed since it was built; only for "
+                         "a change that touches search and not indexing (a reranker, fusion)")
     ap.add_argument("--out", help="default: results/<name>.json")
     ap.add_argument("--compare", nargs=2, metavar=("A", "B"))
     ap.add_argument("--check", nargs="*", metavar="QUERIES")
@@ -381,8 +396,10 @@ def main():
     if args.store:
         work = os.path.abspath(args.store)
         stamp_path = os.path.join(work, "stamp.json")
-        fresh = (not args.rebuild and os.path.exists(stamp_path)
-                 and json.load(open(stamp_path)) == stamp)
+        old = json.load(open(stamp_path)) if os.path.exists(stamp_path) else None
+        if old and args.trust_store:
+            old = dict(old, kb=stamp["kb"])
+        fresh = not args.rebuild and old == stamp
         if not fresh and os.path.exists(os.path.join(work, "store")):
             sys.exit(f"{work} holds a store built from something else; pick an empty "
                      f"folder (the benchmark never deletes one)")
@@ -396,6 +413,18 @@ def main():
         store, home = build(root, CORPUS, kb, model, work, SETS)
         if args.store:
             json.dump(stamp, open(os.path.join(work, "stamp.json"), "w"))
+
+    if "rerank" in modes:
+        if not args.reranker:
+            sys.exit("--modes rerank needs --reranker <file.gguf>")
+        models = os.path.join(home, ".kb", "models")
+        os.makedirs(models, exist_ok=True)
+        dst = os.path.join(models, os.path.basename(args.reranker))
+        if not os.path.exists(dst):
+            try:
+                os.link(os.path.abspath(args.reranker), dst)
+            except OSError:
+                shutil.copyfile(args.reranker, dst)
 
     texts = {}
     for s in SETS:

@@ -453,7 +453,7 @@ has "status" "$out" '"nextIds"'
 t "the chunking parameters are recorded in index/model.json"
 [ -f .kb/index/model.json ] || fail "index/model.json missing"
 expect_grep '"chunkTokens":400' cat .kb/index/model.json
-expect_grep '"chunker":"structural-3"' cat .kb/index/model.json
+expect_grep '"chunker":"structural-4"' cat .kb/index/model.json
 
 t "a store built with other chunking parameters says a reindex is owed"
 cp .kb/index/model.json model.json.bak
@@ -803,9 +803,9 @@ has "scores" "$out" '"stale":false'
 t "every hit carries its fused score, and the list is ordered by it"
 fused=$(kbi search port --json | tr '}' '\n' | sed -n 's/.*"fused":\([0-9.]*\).*/\1/p')
 [ "$(printf '%s\n' "$fused" | wc -l | tr -d ' ')" -gt 1 ] || fail "expected several hits for port"
-# The best hit of one ranked list is 1/(60 + 1).
-[ "$(printf '%s\n' "$fused" | sed -n 1p)" = "0.016393" ] || \
-    fail "the top fused score is $(printf '%s\n' "$fused" | sed -n 1p), not 1/61"
+# Score fusion normalises each list to [0, 1]: the best hit of one list is 1.
+[ "$(printf '%s\n' "$fused" | sed -n 1p)" = "1.000000" ] || \
+    fail "the top fused score is $(printf '%s\n' "$fused" | sed -n 1p), not 1"
 printf '%s\n' "$fused" | awk 'NR > 1 && $1 > prev { bad = 1 } { prev = $1 } END { exit bad }' || \
     fail "hits are not in fused order: $fused"
 
@@ -815,6 +815,12 @@ snip=$(printf '%s' "$out" | sed -n 's/.*"snippet":"\([^"]*\)".*/\1/p')
 [ -n "$snip" ] || fail "no snippet returned"
 [ "${#snip}" -le 260 ] || fail "snippet is ${#snip} bytes; the cap is 240"
 hasnt "snippet" "$snip" '\\n'
+
+t "reciprocal rank fusion is kept as a mode"
+# Reciprocal rank fusion, kept as a mode: the best hit of one list is 1/(60 + 1).
+rrf=$(kbi search port --fusion rrf --json | tr '}' '\n' | sed -n 's/.*"fused":\([0-9.]*\).*/\1/p' | sed -n 1p)
+[ "$rrf" = "0.016393" ] || fail "the top rrf score is $rrf, not 1/61"
+expect_grep '"error":"usage"' kbi search port --fusion telepathy --json
 
 t "hybrid and semantic refuse rather than quietly answering with keyword"
 expect_code 1 kbi search anything --mode hybrid
@@ -868,7 +874,7 @@ printf '%s\n' "$kept" | awk -v f="$floor" '$1 < f { bad = 1 } END { exit bad }' 
     fail "a hit below the floor $floor survived: $kept"
 [ "$(printf '%s\n' "$kept" | wc -l | tr -d ' ')" -lt "$(printf '%s\n' "$bm" | wc -l | tr -d ' ')" ] || \
     fail "the floor $floor dropped nothing"
-has "minScore" "$out" '"fused":0.016393'
+has "minScore" "$out" '"fused":1.000000'
 
 t "k defaults to 10 and expand returns neighbouring snippets"
 out=$(kbi search port --expand 1 --json)
@@ -1547,7 +1553,7 @@ base_after=$(kbr get D-1 --json | \
 
 t "reindex rewrites index/model.json and rebuild then obeys it"
 expect_grep '"chunkTokens":400' cat rechunk/.kb/index/model.json
-expect_grep '"chunker":"structural-3"' cat rechunk/.kb/index/model.json
+expect_grep '"chunker":"structural-4"' cat rechunk/.kb/index/model.json
 expect_grep '"current":true' kbr status --json
 out=$(kbr rebuild --json)
 has "after reindex" "$out" '"mismatched":0'
@@ -1908,6 +1914,43 @@ if [ -n "${KB_TEST_MODEL:-}" ] && [ -f "$KB_TEST_MODEL" ]; then
     has "fallback" "$(kbm search zzmodel --json)" '"mode":"keyword"'
     has "rebuild embeds" "$(kbm rebuild --json)" '"embedded":2'
     has "hybrid again" "$(kbm search zzmodel --json)" '"mode":"hybrid"'
+fi
+
+# ------------------------------------------------------------------ pending embeddings
+# A document filed without waiting for its embeddings is searchable by
+# keyword at once; a vector search uses what exists and says what is missing;
+# kb embed finishes. Needs KB_TEST_MODEL.
+if [ -n "${KB_TEST_MODEL:-}" ] && [ -f "$KB_TEST_MODEL" ]; then
+    mkdir -p pend
+    kbp() { ( cd "$WORK/pend" && "$KB" "$@" ); }
+    kbp init > /dev/null
+    printf '# Rings\n\nThe kernel shares zzpendring submission and completion rings.\n' |
+        kbp add --title rings --collection io --json --wait > /dev/null
+
+    t "add --embed-budget 0 files at once and leaves the embedding pending"
+    out=$( { printf '# Ports\n\nzzpendport: worker threads wait on a completion port.\n\n'
+             i=0; while [ $i -lt 40 ]; do printf '## Part %d\n\nMore about ports and threads, part %d of the notes.\n\n' $i $i; i=$((i + 1)); done; } |
+        kbp add --title ports --collection io --embed-budget 0 --json)
+    has "pending" "$out" '"pending":[1-9]'
+    has "keyword at once" "$(kbp search zzpendport --mode keyword --json)" '"count":1'
+
+    t "a vector search over partial vectors runs and says how many are missing"
+    out=$(kbp search "threads waiting for completions" --mode hybrid --json)
+    has "hybrid runs" "$out" '"ok":true'
+    has "says so" "$out" '"unembedded":[1-9]'
+    out=$(kbp search "threads waiting for completions" --mode semantic --json)
+    has "semantic runs" "$out" '"ok":true'
+    has "semantic says so" "$out" '"unembedded":[1-9]'
+
+    t "kb embed finishes, and then nothing is missing"
+    out=$(kbp embed --json)
+    has "embed" "$out" '"ok":true'
+    has "embed" "$out" '"pending":0'
+    hasnt "complete" "$(kbp search "threads waiting for completions" --mode hybrid --json)" 'unembedded'
+
+    t "--embed-budget takes seconds, and not with --wait"
+    expect_grep '"error":"usage"' kbp add --title x --collection io --embed-budget soon --json
+    expect_grep '"error":"usage"' kbp add --title x --collection io --embed-budget 1 --wait --json
 fi
 
 # ------------------------------------------------------------------ default model

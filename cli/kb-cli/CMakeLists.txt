@@ -36,6 +36,7 @@ set(KB_LIB_SOURCES
     src/gitignore.c
     src/dirscan.c
     src/syntax.c
+    src/syntax_tags.c
     src/third_party/utf8proc/utf8proc.c
     src/embed.c
     src/modelrec.c

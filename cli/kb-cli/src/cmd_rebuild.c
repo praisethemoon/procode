@@ -63,7 +63,7 @@ int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
      * chunks without one are embedded. */
     VecSync vs;
     bool embedded = false;
-    if (!vec_update(a, &s, false, !json, &vs, &embedded, err, sizeof err)) {
+    if (!vec_update(a, &s, false, !json, VEC_NO_BUDGET, &vs, &embedded, err, sizeof err)) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
@@ -110,5 +110,53 @@ int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
         fputs(sb_finish(&sb), stdout);
     }
     store_close(&s);
+    return KB_EXIT_OK;
+}
+
+/* kb embed: the chunks a budgeted add left without a vector (vectors.h),
+ * embedded now, with progress on a terminal. The same pass `kb rebuild` ends
+ * with, without rebuilding the keyword index first. */
+int32_t cmd_embed(Arena *a, int32_t argc, char **argv) {
+    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
+    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
+    if (bad) {
+        err_out(json, "usage", "unknown option \"%s\"", bad);
+        return KB_EXIT_ERR;
+    }
+    char err[512];
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
+        err_out(json, "not_found", "%s", err);
+        return KB_EXIT_ERR;
+    }
+    Store s;
+    const char *code;
+    if (!store_open(a, &s, dir, true, err, sizeof err, &code)) {
+        err_out(json, code, "%s", err);
+        return strcmp(code, "internal") == 0 ? KB_EXIT_FATAL : KB_EXIT_ERR;
+    }
+    VecSync vs;
+    bool embedded = false;
+    if (!vec_update(a, &s, false, !json && plat_stderr_tty(), VEC_NO_BUDGET, &vs, &embedded,
+                    err, sizeof err)) {
+        store_close(&s);
+        err_out(json, "internal", "%s", err);
+        return KB_EXIT_FATAL;
+    }
+    store_close(&s);
+    if (!embedded) {
+        /* No recorded model, no model on disk, or not the recorded one:
+         * status says which. */
+        err_out(json, "model_missing",
+                "nothing to embed with: the store records no model, or ~/.kb/models "
+                "does not hold it (kb status says which)");
+        return KB_EXIT_ERR;
+    }
+    if (json)
+        printf("{\"ok\":true,\"embedded\":%zu,\"kept\":%zu,\"skipped\":%zu,\"pending\":0}\n",
+               vs.embedded, vs.kept, vs.skipped);
+    else
+        printf("%zu chunk%s embedded, %zu already were\n", vs.embedded,
+               vs.embedded == 1 ? "" : "s", vs.kept);
     return KB_EXIT_OK;
 }

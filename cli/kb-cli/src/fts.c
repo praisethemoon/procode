@@ -169,6 +169,11 @@ char *fts_build(Arena *a, const FtsDocInput *in, size_t n, size_t target_bytes,
     uint32_t mismatched = 0;
 
     for (size_t d = 0; d < n; d++) {
+        /* The file's definitions, for the symbol field below. */
+        SyntaxSymbol *syms = NULL;
+        size_t nsyms = 0;
+        if (in[d].lang == LANG_CODE && in[d].syn != SYNTAX_NONE)
+            syntax_symbols(a, in[d].syn, in[d].text, in[d].len, &syms, &nsyms);
         Chunks ch = chunk_split(a, in[d].text, in[d].len, in[d].lang, in[d].syn,
                                 target_bytes, overlap_bytes);
         /* Never past the range the log reserved: chunk ids are public and
@@ -202,6 +207,15 @@ char *fts_build(Arena *a, const FtsDocInput *in, size_t n, size_t target_bytes,
             for (int32_t f = 0; f < 3; f++)
                 for (int32_t r = 0; fields[f] && r < weight[f]; r++)
                     token_scan(fields[f], strlen(fields[f]), scan_term, &c);
+            /* And the names it defines, three times: a search for
+             * `store_open` should land on the chunk that defines it before
+             * the twenty that call it. */
+            for (size_t k = 0; k < nsyms; k++) {
+                if (syms[k].start < ch.v[i].start || syms[k].start >= ch.v[i].end)
+                    continue;
+                for (int32_t r = 0; r < 3; r++)
+                    token_scan(syms[k].name, strlen(syms[k].name), scan_term, &c);
+            }
             token_scan(in[d].text + ch.v[i].start, ch.v[i].end - ch.v[i].start,
                        scan_term, &c);
             postings += c.postings;

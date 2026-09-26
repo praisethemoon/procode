@@ -70,4 +70,11 @@ Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang, SyntaxLang
  * search matches. NULL when there is nothing to say. */
 char *chunk_header(Arena *a, Lang lang, const char *title, const Chunk *c);
 
+/* Whether a chunk's text is worth an embedding. Text that is mostly digits,
+ * punctuation or markup — an inline SVG, a table of numbers, a hex dump — and
+ * text with almost no whitespace — minified code, base64 — means little to
+ * the model and costs as much to embed as prose. Such a chunk is indexed for
+ * keyword search only. */
+bool chunk_embeddable(const char *text, size_t len);
+
 #endif /* KB_CHUNK_H */

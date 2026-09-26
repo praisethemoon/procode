@@ -30,7 +30,64 @@ static double cosine(const float *a, const JVal *b, uint32_t n) {
     return dot / (sqrt(na) * sqrt(nb));
 }
 
+/* The reranker against the reference logits (sentence-transformers'
+ * CrossEncoder, float32 weights). kb runs the F16 file, whose weights are
+ * rounded, and the logit is an unnormalised sum over 768 values: measured, it
+ * lands within 1.3e-3 of the reference (1e-5 for most pairs), so the test
+ * allows 2e-3. What ranking depends on is exact: the pairs sort in the
+ * reference's order. Needs KB_TEST_RERANKER. */
+static void test_reranker(void) {
+    const char *model = getenv("KB_TEST_RERANKER");
+    if (!model || !*model || !plat_is_file(model)) {
+        t_begin("reranker: skipped (KB_TEST_RERANKER names no model file)");
+        return;
+    }
+    Arena *a = arena_new(1 << 24);
+    char err[512];
+    Embedder e;
+    t_begin("reranker: the file opens as a reranker and not as an embedder");
+    ASSERT_TRUE(rerank_open(a, model, &e, err, sizeof err));
+    ASSERT_TRUE(e.reranker && e.pool_mean);
+    Embedder not_an_embedder;
+    ASSERT_TRUE(!embed_open(a, model, &not_an_embedder, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "reranker") != NULL);
+
+    char *data;
+    size_t len;
+    ASSERT_TRUE(plat_read_file(a, "tests/fixtures/modernbert/reference.json", &data, &len));
+    JVal *ref = json_parse(a, data, len, err, sizeof err);
+    JVal *pairs = jobj_get(ref, "pairs"), *logits = jobj_get(ref, "reranker_logits");
+    ASSERT_TRUE(pairs && logits && pairs->arr.n == logits->arr.n);
+
+    t_begin("reranker: every fixture pair scores the reference logit (within 2e-3), in its order");
+    double worst = 0;
+    float scores[16];
+    for (size_t k = 0; pairs && k < pairs->arr.n; k++) {
+        const Str *q = &pairs->arr.items[k]->arr.items[0]->s;
+        const Str *p = &pairs->arr.items[k]->arr.items[1]->s;
+        float got = 0;
+        ASSERT_TRUE(rerank_score(&e, q->ptr, q->len, p->ptr, p->len, 0, &got));
+        double d = fabs((double)got - logits->arr.items[k]->num);
+        if (getenv("KB_TEST_VERBOSE"))
+            fprintf(stderr, "  pair %zu: %.5f vs %.5f\n", k, got, logits->arr.items[k]->num);
+        if (d > worst)
+            worst = d;
+        ASSERT_TRUE(d <= 2e-3);
+        if (k < 16)
+            scores[k] = got;
+    }
+    for (size_t i = 0; pairs && i < pairs->arr.n && i < 16; i++)
+        for (size_t j = 0; j < pairs->arr.n && j < 16; j++)
+            if (logits->arr.items[i]->num > logits->arr.items[j]->num)
+                ASSERT_TRUE(scores[i] > scores[j]);
+    if (getenv("KB_TEST_VERBOSE"))
+        fprintf(stderr, "  worst difference %.2e\n", worst);
+    embed_close(&e);
+    arena_free(a);
+}
+
 void test_modernbert(void) {
+    test_reranker();
     const char *model = getenv("KB_TEST_MODERNBERT");
     if (!model || !*model || !plat_is_file(model)) {
         t_begin("modernbert: skipped (KB_TEST_MODERNBERT names no model file)");

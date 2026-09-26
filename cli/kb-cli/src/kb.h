@@ -48,8 +48,16 @@
  * KB_CHUNKER_ID versions the *algorithm*. §8 records only the sizes, but two
  * indexes built with identical sizes and different splitting rules are just
  * as incompatible, and a later reindex has no other way to notice. */
-#define KB_CHUNKER_ID "structural-3"
+#define KB_CHUNKER_ID "structural-4"
 #define KB_CHUNK_TOKENS 400u
+/* Reranking (§4): how many fused candidates the cross-encoder rescores, and
+ * the token budget of one (query, passage) pair, the passage cut first. */
+#define KB_RERANK_DEPTH 20u
+/* How long `kb add` spends embedding before it answers, in seconds; the rest
+ * is left pending for `kb embed` (vectors.h). Well inside an agent's tool
+ * timeout. */
+#define KB_EMBED_BUDGET_S 20.0
+#define KB_RERANK_TOKENS 512u
 #define KB_CHUNK_OVERLAP 60u
 /* No tokenizer exists until the model loads, so a token is approximated as
  * four bytes — the usual ratio for English prose and close enough for code.
@@ -83,6 +91,17 @@
 
 /* Reciprocal rank fusion's constant (rank.h). */
 #define KB_RRF_K 60u
+/* Score fusion (rank.h's score_fuse), the default: the semantic list's weight
+ * for an ordinary query and for an identifier-shaped one (the keyword list
+ * gets the rest), and the lead by which the semantic list's first answer
+ * keeps rank 1 whatever the fused order says. Chosen by cross-validation on
+ * the benchmark (bench/tune_fusion.py). */
+#define KB_FUSION_SEMANTIC 0.60
+#define KB_FUSION_SEMANTIC_IDENT 0.30
+/* 1.0 (a cosine lead no pair can have): off. Cross-validation tried leads
+ * from 0.02 to 0.10 and every one lowered hit@1; the rule stays for a model
+ * whose confidence it would help. */
+#define KB_FUSION_LEAD 1.0
 
 /* §4: k defaults to 10 and is capped at 100. The cap is the same rule as
  * "search returns snippets only" — a caller must not be able to ask for a

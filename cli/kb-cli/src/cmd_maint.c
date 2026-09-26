@@ -271,7 +271,7 @@ int32_t cmd_reindex(Arena *a, int32_t argc, char **argv) {
     VecSync vs;
     bool embedded = false;
     if ((model.found && !model_record(a, &s, &model, err, sizeof err)) ||
-        !vec_update(a, &s, true, !json, &vs, &embedded, err, sizeof err)) {
+        !vec_update(a, &s, true, !json, VEC_NO_BUDGET, &vs, &embedded, err, sizeof err)) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;

@@ -16,6 +16,7 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv);
 int32_t cmd_search(Arena *a, int32_t argc, char **argv);
 int32_t cmd_chunk(Arena *a, int32_t argc, char **argv);
 int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv);
+int32_t cmd_embed(Arena *a, int32_t argc, char **argv);
 int32_t cmd_stale(Arena *a, int32_t argc, char **argv);
 int32_t cmd_refresh(Arena *a, int32_t argc, char **argv);
 int32_t cmd_links(Arena *a, int32_t argc, char **argv);
@@ -27,7 +28,7 @@ int32_t cmd_forget(Arena *a, int32_t argc, char **argv);
 /* Files a folder into a collection, incrementally (cmd_add.c); `kb refresh`
  * of a `dir` source runs it again. */
 int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
-                bool forget);
+                bool forget, double budget_s);
 int32_t cmd_sources(Arena *a, int32_t argc, char **argv);
 
 /* ---- staleness (§5) ----------------------------------------------------

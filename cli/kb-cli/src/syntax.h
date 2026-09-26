@@ -110,4 +110,26 @@ typedef struct {
 bool syntax_cuts(Arena *a, SyntaxLang l, const char *text, size_t len,
                  size_t target, SyntaxCut **cuts, size_t *n);
 
+/* THE DEFINITIONS IN A FILE: what its grammar's tags query (upstream's
+ * queries/tags.scm, compiled into kb by tools/gen_syntax_tags.py) names as a
+ * definition — functions, methods, classes, structs, types, modules — and,
+ * for assembly, its labels. What code search needs to know about a file
+ * before it reads it: the keyword index boosts these names (a chunk's
+ * symbols count three times), and a filed folder's documents carry them in
+ * their meta. */
+typedef struct {
+    const char *name;
+    const char *kind;      /* "function", "method", "class", "type", "label", ... */
+    const char *signature; /* the definition's first line */
+    const char *doc;       /* the comment right above it, or NULL */
+    uint32_t start, end;   /* the definition's span */
+    uint32_t line;         /* 1-based line it starts on */
+} SyntaxSymbol;
+
+bool syntax_symbols(Arena *a, SyntaxLang l, const char *text, size_t len,
+                    SyntaxSymbol **out, size_t *n);
+
+/* The generated patterns, per language (syntax_tags.c). */
+extern const char *const *const SYNTAX_TAGS[SYNTAX_COUNT];
+
 #endif /* KB_SYNTAX_H */

@@ -15,9 +15,34 @@
 
 static const char *const VALUE_FLAGS[] = {
     "--title", "--collection", "--url",  "--mime", "--etag",
-    "--file",  "--meta",       "--meta-file", "--dir", NULL};
+    "--file",  "--meta",       "--meta-file", "--dir", "--embed-budget", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", "--batch", "--no-forget",
-                                         NULL};
+                                         "--wait", NULL};
+
+/* --embed-budget S: seconds to spend embedding before answering (0: none
+ * now); --wait: as long as it takes. What is left is pending for `kb embed`
+ * and searchable by keyword at once. */
+static bool budget_arg(int32_t argc, char **argv, bool json, double *out) {
+    *out = KB_EMBED_BUDGET_S;
+    const char *s = flag_value(argc, argv, VALUE_FLAGS, "--embed-budget");
+    bool wait = has_flag(argc, argv, VALUE_FLAGS, "--wait");
+    if (s && wait) {
+        err_out(json, "usage", "--embed-budget and --wait are alternatives");
+        return false;
+    }
+    if (wait)
+        *out = VEC_NO_BUDGET;
+    if (s) {
+        char *end;
+        double v = strtod(s, &end);
+        if (*s == '\0' || *end != '\0' || v < 0 || v > 86400) {
+            err_out(json, "usage", "--embed-budget takes a number of seconds, not \"%s\"", s);
+            return false;
+        }
+        *out = v;
+    }
+    return true;
+}
 
 /* The type of text that came with no name to read it from — piped, or handed
  * over in a batch. Only the two structured types are recognised, and only on
@@ -393,6 +418,13 @@ static bool open_store(Arena *a, Store *s, bool json, int32_t *rc) {
     return true;
 }
 
+/* The line a person gets when embedding was left for later. */
+static void pending_note(size_t pending) {
+    if (pending)
+        printf("%zu chunk%s left to embed: searchable by keyword now; kb embed finishes them\n",
+               pending, pending == 1 ? "" : "s");
+}
+
 /* ---- kb add --batch ------------------------------------------------------
  *
  * §2's POST /documents/batch: "many at once, one transaction". One JSON
@@ -404,7 +436,7 @@ static bool open_store(Arena *a, Store *s, bool json, int32_t *rc) {
  * with its line number and nothing is written. What can still fail midway is
  * the disk itself, and that is reported as `internal` like any other write.
  */
-static int32_t add_batch(Arena *a, bool json) {
+static int32_t add_batch(Arena *a, bool json, double budget_s) {
     char *text;
     size_t len;
     if (!read_text_arg(a, "-", &text, &len)) {
@@ -489,7 +521,7 @@ static int32_t add_batch(Arena *a, bool json) {
     bool embedded;
     if ((any_reindexed && !rebuild(a, &s, err, sizeof err)) ||
         !model_record_if_absent(a, &s, err, sizeof err) ||
-        !vec_update(a, &s, false, false, &vs, &embedded, err, sizeof err)) {
+        !vec_update(a, &s, false, false, budget_s, &vs, &embedded, err, sizeof err)) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
@@ -503,11 +535,12 @@ static int32_t add_batch(Arena *a, bool json) {
             filed_json(&sb, &v[i], &r[i], now);
             sb_putc(&sb, '}');
         }
-        sb_printf(&sb, "],\"count\":%zu}", n);
+        sb_printf(&sb, "],\"count\":%zu,\"pending\":%zu}", n, vs.pending);
         puts(sb_finish(&sb));
     } else {
         for (size_t i = 0; i < n; i++)
             filed_human(a, &v[i], &r[i]);
+        pending_note(vs.pending);
     }
     store_close(&s);
     return KB_EXIT_OK;
@@ -532,12 +565,37 @@ static int32_t add_batch(Arena *a, bool json) {
  * as a batch has.
  */
 
+/* A code file's meta (§1.2): its language and the definitions in it, name,
+ * kind and line, the first KB_META_SYMBOLS of them. NULL for anything else. */
+#define KB_META_SYMBOLS 500
+
+static const char *code_meta(Arena *a, const char *path, const char *mime,
+                             const char *text, size_t len) {
+    SyntaxLang l = doc_syntax(mime, path);
+    SyntaxSymbol *syms;
+    size_t n;
+    if (l == SYNTAX_NONE || !syntax_symbols(a, l, text, len, &syms, &n))
+        return NULL;
+    StrBuf sb;
+    sb_init(&sb, a);
+    sb_printf(&sb, "{\"language\":\"%s\",\"symbols\":[", syntax_lang_name(l));
+    for (size_t i = 0; i < n && i < KB_META_SYMBOLS; i++) {
+        sb_puts(&sb, i ? ",{\"name\":" : "{\"name\":");
+        json_escape_c(&sb, syms[i].name);
+        sb_puts(&sb, ",\"kind\":");
+        json_escape_c(&sb, syms[i].kind);
+        sb_printf(&sb, ",\"line\":%u}", syms[i].line);
+    }
+    sb_puts(&sb, "]}");
+    return sb_finish(&sb);
+}
+
 static int32_t cmp_str(const void *x, const void *y) {
     return strcmp(*(const char *const *)x, *(const char *const *)y);
 }
 
 int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
-                bool forget) {
+                bool forget, double budget_s) {
     char err[512];
     char root[KB_PATH_MAX];
     if (!plat_realpath(dir, root, sizeof root) || !plat_is_dir(root)) {
@@ -583,6 +641,7 @@ int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
         f.len = df->len;
         f.kind = "dir";
         f.locator = root;
+        f.meta = code_meta(a, df->rel, df->mime, df->content, df->len);
         sha256_hex(f.content, f.len, f.hash);
         Filed r;
         /* The first file creates the source; every later one has to find
@@ -652,7 +711,7 @@ int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
     if ((changed && !rebuild(a, &s, err, sizeof err)) ||
         !model_record_if_absent(a, &s, err, sizeof err) ||
         (changed &&
-         !vec_update(a, &s, false, tty, &vs, &embedded, err, sizeof err))) {
+         !vec_update(a, &s, false, tty, budget_s, &vs, &embedded, err, sizeof err))) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
@@ -687,10 +746,10 @@ int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
                   "],\"skipped\":{\"ignored\":%zu,\"hidden\":%zu,"
                   "\"vendored\":%zu,\"generated\":%zu,\"binary\":%zu,"
                   "\"large\":%zu,\"unreadable\":%zu,\"otherTypes\":%zu},"
-                  "\"embedded\":%zu}",
+                  "\"embedded\":%zu,\"pending\":%zu}",
                   scan.ignored, scan.hidden, scan.vendored, scan.generated,
                   scan.binary, scan.large, scan.unreadable, scan.other,
-                  vs.embedded);
+                  vs.embedded, vs.pending);
     } else {
         sb_printf(&sb, "%s  ", source_id ? source_id : "-");
         sb_puts_safe(&sb, collection);
@@ -711,6 +770,10 @@ int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
                       vs.embedded == 1 ? "" : "s");
         for (size_t i = 0; !forget && i < ngone; i++)
             sb_printf(&sb, "\nmissing: %s", gone_paths[i]);
+        if (vs.pending)
+            sb_printf(&sb, "\n%zu chunk%s left to embed: searchable by keyword now; "
+                           "kb embed finishes them",
+                      vs.pending, vs.pending == 1 ? "" : "s");
         sb_putc(&sb, '\n');
     }
     fputs(sb_finish(&sb), stdout);
@@ -733,6 +796,8 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
         /* Every document says its own title, collection and the rest, so a
          * flag for one of them would say it for none. */
         for (int32_t i = 0; VALUE_FLAGS[i]; i++) {
+            if (strcmp(VALUE_FLAGS[i], "--embed-budget") == 0)
+                continue; /* how long to embed is the batch's, not a field */
             if (flag_value(argc, argv, VALUE_FLAGS, VALUE_FLAGS[i])) {
                 err_out(json, "usage", "--batch takes each document's fields "
                                        "from its own line, not %s",
@@ -740,7 +805,10 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
                 return KB_EXIT_ERR;
             }
         }
-        return add_batch(a, json);
+        double budget;
+        if (!budget_arg(argc, argv, json, &budget))
+            return KB_EXIT_ERR;
+        return add_batch(a, json, budget);
     }
     const char *dir = flag_value(argc, argv, VALUE_FLAGS, "--dir");
     if (dir) {
@@ -757,9 +825,12 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
                 return KB_EXIT_ERR;
             }
         }
+        double budget;
+        if (!budget_arg(argc, argv, json, &budget))
+            return KB_EXIT_ERR;
         return add_dir(a, json, dir,
                        flag_value(argc, argv, VALUE_FLAGS, "--collection"),
-                       !has_flag(argc, argv, VALUE_FLAGS, "--no-forget"));
+                       !has_flag(argc, argv, VALUE_FLAGS, "--no-forget"), budget);
     }
     if (has_flag(argc, argv, VALUE_FLAGS, "--no-forget")) {
         err_out(json, "usage", "--no-forget goes with --dir");
@@ -773,6 +844,9 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
     f.file = flag_value(argc, argv, VALUE_FLAGS, "--file");
     f.mime = flag_value(argc, argv, VALUE_FLAGS, "--mime");
     f.etag = flag_value(argc, argv, VALUE_FLAGS, "--etag");
+    double budget;
+    if (!budget_arg(argc, argv, json, &budget))
+        return KB_EXIT_ERR;
     if (!f.title || !f.title[0]) {
         err_out(json, "usage", "kb add requires --title");
         return KB_EXIT_ERR;
@@ -811,13 +885,14 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
     plat_timestamp(now);
     Filed r;
     VecSync vs;
+    memset(&vs, 0, sizeof vs);
     bool embedded;
     if (!ingest(a, &s, &f, now, &r, err, sizeof err) ||
         (r.reindexed &&
          (!reread(a, &s, err, sizeof err) || !rebuild(a, &s, err, sizeof err))) ||
         !model_record_if_absent(a, &s, err, sizeof err) ||
         (r.reindexed &&
-         !vec_update(a, &s, false, false, &vs, &embedded, err, sizeof err))) {
+         !vec_update(a, &s, false, false, budget, &vs, &embedded, err, sizeof err))) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
@@ -827,10 +902,11 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
         sb_init(&sb, a);
         sb_puts(&sb, "{\"ok\":true,");
         filed_json(&sb, &f, &r, now);
-        sb_putc(&sb, '}');
+        sb_printf(&sb, ",\"pending\":%zu}", vs.pending);
         puts(sb_finish(&sb));
     } else {
         filed_human(a, &f, &r);
+        pending_note(vs.pending);
     }
     store_close(&s);
     return KB_EXIT_OK;

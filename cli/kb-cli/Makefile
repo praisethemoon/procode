@@ -50,7 +50,7 @@ obj/%.o: %.c
 
 SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/errdet.c src/platform.c \
            src/doc.c src/store.c src/chunk.c src/token.c src/fts.c \
-           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/bpe.c src/gitignore.c src/dirscan.c src/syntax.c src/embed.c src/modelrec.c src/vectors.c \
+           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/bpe.c src/gitignore.c src/dirscan.c src/syntax.c src/syntax_tags.c src/embed.c src/modelrec.c src/vectors.c \
            src/third_party/utf8proc/utf8proc.c \
            src/rank.c src/cmd_common.c \
            src/cmd_init.c src/cmd_add.c src/cmd_ls.c src/cmd_get.c \
@@ -94,9 +94,10 @@ bin/kb-syntax-dump: $(SRC_LIB) tests/tools/syntax_dump.c src/*.h $(OBJ_TS)
 # The BPE and ModernBERT tests read gte-modernbert-base's model file
 # (read-only) and are skipped without it.
 KB_TEST_MODERNBERT ?= $(firstword $(wildcard $(HOME)/.kb/models/gte-modernbert-base*.gguf))
+KB_TEST_RERANKER ?= $(firstword $(wildcard $(HOME)/.kb/models/gte-reranker-modernbert-base*.gguf))
 
 unit: $(TEST_BIN)
-	KB_TEST_MODERNBERT="$(KB_TEST_MODERNBERT)" ./$(TEST_BIN)
+	KB_TEST_MODERNBERT="$(KB_TEST_MODERNBERT)" KB_TEST_RERANKER="$(KB_TEST_RERANKER)" ./$(TEST_BIN)
 
 # The model tests run against the real weights when this machine has them
 # (the one .gguf in ~/.kb/models, linked into the run's throwaway HOME) and

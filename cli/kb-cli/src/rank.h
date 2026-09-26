@@ -33,6 +33,7 @@
 typedef struct {
     uint64_t key; /* two entries with the same key are the same item */
     void *item;
+    double score; /* the list's own score, for score_fuse; rrf_fuse ignores it */
 } RankEntry;
 
 typedef struct {
@@ -56,5 +57,15 @@ typedef struct {
 
 size_t rrf_fuse(Arena *a, const RankList *lists, size_t nlists, uint32_t k,
                 size_t limit, RankResult **out);
+
+/* SCORE FUSION, the default since the benchmark (bench/tune_fusion.py) showed
+ * it ahead of RRF: each list's scores are min-max normalised over that list —
+ * the best entry 1, the worst 0, so a cosine and a BM25 score meet on a common
+ * scale for this one query — and weighted, and an item's score is the sum of
+ * its weighted scores over the lists that hold it. An item a list does not
+ * hold scores 0 there. RRF discards how far ahead the first answer is; this
+ * keeps it. Ties break as in rrf_fuse. `weight[i]` is list i's weight. */
+size_t score_fuse(Arena *a, const RankList *lists, size_t nlists, const double *weight,
+                  size_t limit, RankResult **out);
 
 #endif /* KB_RANK_H */

@@ -64,7 +64,17 @@ typedef struct {
     size_t embedded; /* chunks embedded now */
     size_t dropped;  /* vectors for chunks no longer in the store */
     size_t truncated;/* chunks longer than the model's context */
+    size_t skipped;  /* chunks not worth embedding (chunk_embeddable) */
+    size_t pending;  /* chunks left for later: the time budget ran out */
 } VecSync;
+
+/* The time an embedding pass may take, in seconds, for vec_sync and
+ * vec_update. VEC_NO_BUDGET embeds everything; 0 embeds nothing now. A pass
+ * that runs out leaves the rest `pending`: their chunks are searchable by
+ * keyword already, a vector search uses the vectors that exist and says how
+ * many are missing, and `kb embed` (or the next add, rebuild or reindex)
+ * finishes them. */
+#define VEC_NO_BUDGET (-1.0)
 
 /* Brings vectors.bin in line with the store under an open model: embeds every
  * live chunk that has no vector, drops vectors for chunks that are gone, and
@@ -72,13 +82,13 @@ typedef struct {
  * nothing. `progress` prints a line per chunk to stderr when set. Needs the
  * write lock. */
 bool vec_sync(Arena *a, Store *s, Embedder *e, bool all, bool progress,
-              VecSync *stats, char *err, size_t errsz);
+              double budget_s, VecSync *stats, char *err, size_t errsz);
 
 /* vec_sync when it can run: the store records a model and the one in
  * ~/.kb/models is that model. Otherwise nothing is written and *ran is false —
  * a keyword-only store, a missing model or a mismatch leaves the vectors as
  * they were, and `kb status` and a vector search say why. */
-bool vec_update(Arena *a, Store *s, bool all, bool progress, VecSync *stats,
-                bool *ran, char *err, size_t errsz);
+bool vec_update(Arena *a, Store *s, bool all, bool progress, double budget_s,
+                VecSync *stats, bool *ran, char *err, size_t errsz);
 
 #endif

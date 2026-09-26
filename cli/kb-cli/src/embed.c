@@ -213,8 +213,20 @@ static void alloc_scratch(Arena *a, Embedder *e, uint32_t ff_width);
 static bool open_modernbert(Arena *a, const char *path, Embedder *e, char *err,
                             size_t errsz);
 
+static bool open_file(Arena *a, const char *path, Embedder *e, char *err,
+                      size_t errsz, bool want_reranker);
+
 bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
                 size_t errsz) {
+    return open_file(a, path, e, err, errsz, false);
+}
+
+bool rerank_open(Arena *a, const char *path, Embedder *e, char *err, size_t errsz) {
+    return open_file(a, path, e, err, errsz, true);
+}
+
+static bool open_file(Arena *a, const char *path, Embedder *e, char *err,
+                      size_t errsz, bool want_reranker) {
     memset(e, 0, sizeof(*e));
     e->a = a;
     snprintf(e->path, sizeof e->path, "%s", path);
@@ -233,8 +245,11 @@ bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
      * forward pass and cannot be read from anywhere. So the name picks one
      * of the two this build has, and a file naming anything else is refused
      * rather than run with the wrong wiring. */
-    if (strcmp(gguf_str(&e->g, "kb.role", "embedder"), "reranker") == 0) {
-        snprintf(err, errsz, "%s is a reranker, not an embedding model", path);
+    const bool is_reranker = strcmp(gguf_str(&e->g, "kb.role", "embedder"), "reranker") == 0;
+    if (is_reranker != want_reranker) {
+        snprintf(err, errsz, is_reranker ? "%s is a reranker, not an embedding model"
+                                         : "%s is an embedding model, not a reranker",
+                 path);
         embed_close(e);
         return false;
     }
@@ -451,6 +466,21 @@ static bool open_modernbert(Arena *a, const char *path, Embedder *e, char *err,
     e->tok_embd = need(g, "token_embd.weight", err, errsz, &ok);
     e->embd_norm_w = need(g, "token_embd_norm.weight", err, errsz, &ok);
     e->final_norm_w = need(g, "output_norm.weight", err, errsz, &ok);
+    e->reranker = strcmp(gguf_str(g, "kb.role", "embedder"), "reranker") == 0;
+    if (e->reranker) {
+        e->cls_dense_w = need(g, "cls.dense.weight", err, errsz, &ok);
+        e->cls_norm_w = need(g, "cls.norm.weight", err, errsz, &ok);
+        e->cls_out_w = need(g, "cls.output.weight", err, errsz, &ok);
+        e->cls_out_b = need(g, "cls.output.bias", err, errsz, &ok);
+        if (ok && (!shape2(e->cls_dense_w, e->n_embd, e->n_embd, "cls.dense", err, errsz) ||
+                   !shape2(e->cls_out_w, e->n_embd, 1, "cls.output", err, errsz)))
+            ok = false;
+        if (ok && strcmp(gguf_str(g, "modernbert.classifier_activation", "gelu"), "gelu") != 0) {
+            snprintf(err, errsz, "%s: classifier activation \"%s\"; this build runs gelu",
+                     path, gguf_str(g, "modernbert.classifier_activation", ""));
+            ok = false;
+        }
+    }
     if (!ok || !shape2(e->tok_embd, e->n_embd, e->tok_embd->ne[1], "token_embd.weight", err, errsz)) {
         embed_close(e);
         return false;
@@ -1097,4 +1127,83 @@ void model_params_diff(const ModelParams *s, const ModelParams *l, char *out,
         return;
     }
     snprintf(out, outsz, "the configurations differ");
+}
+
+/* ---- the reranker ------------------------------------------------------- */
+
+static WalkAction reranker_visit(const char *rel, bool is_dir, void *ud) {
+    GgufScan *s = (GgufScan *)ud;
+    if (is_dir)
+        return WALK_SKIP_DIR;
+    size_t n = strlen(rel);
+    if (n < 6 || strcmp(rel + n - 5, ".gguf") != 0)
+        return WALK_CONT;
+    char *path = arena_printf(s->a, "%s/%s", s->dir, rel);
+    if (!is_reranker(s->a, path))
+        return WALK_CONT;
+    s->n++;
+    if (!s->first)
+        s->first = path;
+    return WALK_CONT;
+}
+
+bool embed_find_reranker(Arena *a, char *out, size_t outsz, char *err, size_t errsz) {
+    char models[KB_PATH_MAX];
+    if (!embed_models_dir(models, sizeof models)) {
+        snprintf(err, errsz, "no reranker: HOME is not set, so there is no ~/.kb/models");
+        return false;
+    }
+    GgufScan s;
+    memset(&s, 0, sizeof s);
+    s.a = a;
+    s.dir = models;
+    if (plat_is_dir(models))
+        plat_walk(a, models, reranker_visit, &s);
+    if (s.n == 0) {
+        snprintf(err, errsz,
+                 "no reranker in %s; make gte-reranker-modernbert-base.F16.gguf with "
+                 KB_MODEL_HOWTO,
+                 models);
+        return false;
+    }
+    if (s.n > 1) {
+        snprintf(err, errsz, "%lu rerankers in %s; keep exactly one", (unsigned long)s.n, models);
+        return false;
+    }
+    if (snprintf(out, outsz, "%s", s.first) >= (int32_t)outsz) {
+        snprintf(err, errsz, "the reranker's path is longer than a path may be");
+        return false;
+    }
+    return true;
+}
+
+bool rerank_score(Embedder *e, const char *query, size_t qlen, const char *passage,
+                  size_t plen, size_t max_tokens, float *logit) {
+    if (!e->reranker)
+        return false;
+    bpe_strip(&query, &qlen);
+    bpe_strip(&passage, &plen);
+    size_t cap = max_tokens && max_tokens < KB_EMBED_MAX_TOKENS ? max_tokens : KB_EMBED_MAX_TOKENS;
+    bool truncated = false;
+    size_t T = bpe_encode_pair(e->a, &e->bpe, query, qlen, passage, plen, e->ids, cap, &truncated);
+    if (T == 0)
+        return false;
+    const uint32_t D = e->n_embd;
+    float *pooled = e->row, *z = e->row + D, *bias = e->row + 2 * D;
+    if (!embed_tokens(e, e->ids, T, pooled))
+        return false;
+    /* The head: dense, GELU, LayerNorm, then one output and its bias. */
+    if (!matmul(e->cls_dense_w, pooled, 1, z))
+        return false;
+    for (uint32_t i = 0; i < D; i++)
+        z[i] = gelu(z[i]);
+    if (!quant_row(e->cls_norm_w->type, e->cls_norm_w->data, D, e->lw))
+        return false;
+    layernorm(z, e->lw, NULL, D, e->eps);
+    float out = 0.0f;
+    if (!matmul(e->cls_out_w, z, 1, &out) ||
+        !quant_row(e->cls_out_b->type, e->cls_out_b->data, 1, bias))
+        return false;
+    *logit = out + bias[0];
+    return true;
 }

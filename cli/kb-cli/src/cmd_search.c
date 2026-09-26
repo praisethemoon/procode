@@ -5,6 +5,10 @@
 #include "rank.h"
 #include "snippet.h"
 
+#include <math.h>
+#include <stdlib.h>
+#include <time.h>
+
 /* GET /search (§4).
  *
  * WHAT THIS BUILD CAN ANSWER. §4's default is hybrid, and hybrid needs stored
@@ -32,8 +36,8 @@ static const char *const VALUE_FLAGS[] = {
     "--collection", "--mode",       "--k",         "--expand",
     "--source",     "--mime",       "--since",     "--min-score",
     "--minScore",   "--older-than", "--olderThan", "--meta",
-    NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+    "--fusion",     NULL};
+static const char *const BOOL_FLAGS[] = {"--json", "--rerank", NULL};
 
 typedef enum { MODE_KEYWORD, MODE_HYBRID, MODE_SEMANTIC } SearchMode;
 static const char *const MODE_NAMES[] = {"keyword", "hybrid", "semantic"};
@@ -53,7 +57,8 @@ static const char *const MODE_NAMES[] = {"keyword", "hybrid", "semantic"};
  * that do not cover the store. With `report` false it only answers whether,
  * which is how the default mode is chosen. */
 static bool semantic_open(Arena *a, Store *s, bool json, const char *mode,
-                          bool report, Embedder *e, VecSet *v) {
+                          bool report, Embedder *e, VecSet *v, size_t *unembedded) {
+    *unembedded = 0;
     ModelProbe probe;
     model_probe(a, &probe);
     if (!probe.found) {
@@ -98,6 +103,14 @@ static bool semantic_open(Arena *a, Store *s, bool json, const char *mode,
     if (strcmp(v->fingerprint, fp) != 0)
         v->n = 0;
     size_t missing = vec_missing(s, v);
+    /* Vectors under this model for some chunks and not yet for others (an
+     * add that ran out of its embedding budget): the search runs over the
+     * ones there are and says how many are missing, rather than refusing or
+     * pretending the gap is not there. */
+    if (has_recorded && strcmp(v->fingerprint, fp) == 0 && missing > 0) {
+        *unembedded = missing;
+        missing = 0;
+    }
     if (!has_recorded || strcmp(v->fingerprint, fp) != 0 || missing > 0) {
         if (!report)
             return false;
@@ -217,7 +230,145 @@ static void put_matched(StrBuf *sb, uint32_t tags) {
 
 /* ---- the command ------------------------------------------------------- */
 
+/* Whether a query is one word that looks like a name in code: an underscore,
+ * an inner capital, a digit, `::`, `->`, a dot or `()` in it, or a leading
+ * dash (a flag). Such a query is looking for that exact name, so keyword
+ * search, which matches it exactly, is weighted up. */
+static bool identifier_shaped(const char *q) {
+    while (*q == ' ')
+        q++;
+    size_t n = strlen(q);
+    while (n && q[n - 1] == ' ')
+        n--;
+    if (n == 0 || memchr(q, ' ', n))
+        return false;
+    if (q[0] == '-')
+        return true;
+    for (size_t i = 0; i < n; i++) {
+        char c = q[i];
+        if (c == '_' || c == '.' || (c >= '0' && c <= '9'))
+            return true;
+        if (i > 0 && c >= 'A' && c <= 'Z' && q[i - 1] >= 'a' && q[i - 1] <= 'z')
+            return true;
+        if (i + 1 < n && ((c == ':' && q[i + 1] == ':') || (c == '-' && q[i + 1] == '>') ||
+                          (c == '(' && q[i + 1] == ')')))
+            return true;
+    }
+    return false;
+}
+
+/* A semantic first answer far enough ahead of its second — by KB_FUSION_LEAD
+ * in cosine — is one the model is sure of, and keeps rank 1 whatever the
+ * keyword list thinks. */
+static void keep_confident_first(const RankList *lists, size_t nlists, RankResult *fused,
+                                 size_t nfused) {
+    for (size_t i = 0; i < nlists; i++) {
+        if (lists[i].tag != RANK_TAG_SEMANTIC || lists[i].n < 2)
+            continue;
+        if (lists[i].v[0].score - lists[i].v[1].score < KB_FUSION_LEAD)
+            return;
+        const uint64_t key = lists[i].v[0].key;
+        for (size_t j = 1; j < nfused; j++) {
+            if (fused[j].key != key)
+                continue;
+            RankResult winner = fused[j];
+            memmove(&fused[1], &fused[0], j * sizeof(RankResult));
+            fused[0] = winner;
+            return;
+        }
+    }
+}
+
+/* --rerank: the cross-encoder rescores the first KB_RERANK_DEPTH fused
+ * candidates, each read as its header line and text (what it was embedded
+ * as), and they are put in the order of its scores; those below the depth
+ * keep the fused order after them. *rr[i] is the score of the i-th hit after
+ * reordering, for the first *nrr hits. */
+typedef struct {
+    RankResult r;
+    float score;
+} Rescored;
+
+static int rescored_cmp(const void *pa, const void *pb) {
+    const Rescored *x = (const Rescored *)pa, *y = (const Rescored *)pb;
+    if (x->score != y->score)
+        return x->score > y->score ? -1 : 1;
+    return x->r.key < y->r.key ? -1 : x->r.key > y->r.key;
+}
+
+static bool rerank_fused(Arena *a, Store *s, bool json, const char *query, RankResult *fused,
+                         size_t nfused, DocText *cache, size_t *ncache, float **rr, size_t *nrr) {
+    char path[KB_PATH_MAX], err[512];
+    Embedder re;
+    if (!embed_find_reranker(a, path, sizeof path, err, sizeof err)) {
+        errdet_begin("model_missing");
+        errdet_str("path", "~/.kb/models");
+        err_out(json, "model_missing", "--rerank needs the reranker: %s", err);
+        return false;
+    }
+    if (!rerank_open(a, path, &re, err, sizeof err)) {
+        err_out(json, "model_missing", "--rerank needs the reranker: %s", err);
+        return false;
+    }
+    size_t depth = nfused < KB_RERANK_DEPTH ? nfused : KB_RERANK_DEPTH;
+    Rescored *v = (Rescored *)arena_alloc(a, depth * sizeof(Rescored));
+    for (size_t i = 0; i < depth; i++) {
+        Cand *c = (Cand *)fused[i].item;
+        const Document *d = &s->documents.v[c->doc_index];
+        DocText *dt = doc_text(a, s, c->doc_index, cache, ncache);
+        v[i].r = fused[i];
+        v[i].score = -INFINITY;
+        if (!dt->ok || c->ordinal >= dt->ch.n)
+            continue;
+        const Chunk *ch = &dt->ch.v[c->ordinal];
+        const char *body = dt->text + ch->start;
+        size_t blen = ch->end - ch->start;
+        const char *header = chunk_header(a, doc_lang(d->mime, d->path), d->title, ch);
+        if (header) {
+            body = arena_printf(a, "%s\n%.*s", header, (int)blen, body);
+            blen = strlen(body);
+        }
+        if (!rerank_score(&re, query, strlen(query), body, blen, KB_RERANK_TOKENS,
+                          &v[i].score)) {
+            embed_close(&re);
+            err_out(json, "internal", "reranking C-%lld failed",
+                    (long long)(d->chunk_base + (int64_t)c->ordinal));
+            return false;
+        }
+    }
+    embed_close(&re);
+    qsort(v, depth, sizeof(Rescored), rescored_cmp);
+    *rr = (float *)arena_alloc(a, depth * sizeof(float));
+    for (size_t i = 0; i < depth; i++) {
+        fused[i] = v[i].r;
+        (*rr)[i] = v[i].score;
+    }
+    *nrr = depth;
+    return true;
+}
+
+/* KB_TIMING=1 in the environment: where a search's time went, one line per
+ * phase on stderr, for the performance benchmark (bench/perf.py). */
+static double timing_t0, timing_last;
+static bool timing_on;
+
+static double timing_ms(void) {
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6;
+}
+
+static void mark(const char *phase) {
+    if (!timing_on)
+        return;
+    double now = timing_ms();
+    fprintf(stderr, "kb timing %-16s %8.2f ms\n", phase, now - timing_last);
+    timing_last = now;
+}
+
 int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
+    timing_on = getenv("KB_TIMING") != NULL;
+    timing_t0 = timing_last = timing_ms();
     bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
     const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
     if (bad) {
@@ -318,16 +469,19 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         err_out(json, code, "%s", err);
         return KB_EXIT_ERR;
     }
+    mark("open store");
     Embedder emb;
     VecSet vs;
+    size_t unembedded = 0;
     if (mode == MODE_HYBRID && !mode_s) {
-        if (!semantic_open(a, &s, json, "hybrid", false, &emb, &vs))
+        if (!semantic_open(a, &s, json, "hybrid", false, &emb, &vs, &unembedded))
             mode = MODE_KEYWORD;
     } else if (mode != MODE_KEYWORD &&
-               !semantic_open(a, &s, json, mode_s, true, &emb, &vs)) {
+               !semantic_open(a, &s, json, mode_s, true, &emb, &vs, &unembedded)) {
         store_close(&s);
         return KB_EXIT_ERR;
     }
+    mark("open model");
     if (mode != MODE_SEMANTIC &&
         !fts_open_store(a, &s, &ix, &code, err, sizeof err)) {
         if (mode != MODE_KEYWORD)
@@ -337,6 +491,7 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         return KB_EXIT_ERR;
     }
 
+    mark("load index");
     TermList q = token_terms(a, query, strlen(query));
     f.s = &s;
     const size_t depth = FUSE_DEPTH(k);
@@ -364,12 +519,15 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             c->has_bm25 = true;
             entries[i].key = (uint64_t)c->id;
             entries[i].item = c;
+            entries[i].score = c->bm25;
         }
         lists[nlists].v = entries;
         lists[nlists].n = n;
         lists[nlists].tag = RANK_TAG_KEYWORD;
         nlists++;
     }
+
+    mark("keyword search");
 
     /* The vector list: the query embedded with the query prefix (§8), scored
      * against every stored vector the filter keeps. A chunk the keyword list
@@ -379,6 +537,7 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         bool truncated;
         bool ok = embed_text(&emb, query, strlen(query), true, qv, &truncated);
         embed_close(&emb);
+        mark("embed query");
         if (!ok) {
             store_close(&s);
             err_out(json, "internal", "the query could not be embedded");
@@ -392,7 +551,8 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
                 continue;
             for (uint32_t j = 0; j < d->chunk_count; j++) {
                 int64_t at = vec_find(&vs, d->chunk_base + (int64_t)j);
-                if (at < 0)
+                /* Scale 0: a chunk indexed for keywords only. */
+                if (at < 0 || vs.scales[at] == 0.0f)
                     continue;
                 vh[nv].id = d->chunk_base + (int64_t)j;
                 vh[nv].doc_index = (uint32_t)di;
@@ -402,6 +562,7 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             }
         }
         qsort(vh, nv, sizeof(VecHit), vechit_cmp);
+        mark("vector scan");
         size_t take = nv < (mode == MODE_SEMANTIC ? (size_t)k : depth)
                           ? nv
                           : (mode == MODE_SEMANTIC ? (size_t)k : depth);
@@ -423,6 +584,7 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             c->has_vector = true;
             entries[i].key = (uint64_t)vh[i].id;
             entries[i].item = c;
+            entries[i].score = vh[i].score;
         }
         lists[nlists].v = entries;
         lists[nlists].n = take;
@@ -430,12 +592,49 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         nlists++;
     }
 
+    /* With --rerank the fused list goes at least KB_RERANK_DEPTH deep, so
+     * the cross-encoder has candidates to promote from below the cut. */
+    const bool rerank = has_flag(argc, argv, VALUE_FLAGS, "--rerank");
+    size_t fuse_k = (size_t)k;
+    if (rerank && fuse_k < KB_RERANK_DEPTH)
+        fuse_k = KB_RERANK_DEPTH;
     RankResult *fused = NULL;
-    size_t nfused = rrf_fuse(a, lists, nlists, KB_RRF_K, (size_t)k, &fused);
+    size_t nfused;
+    const char *fusion = flag_value(argc, argv, VALUE_FLAGS, "--fusion");
+    if (fusion && strcmp(fusion, "rrf") != 0 && strcmp(fusion, "score") != 0) {
+        store_close(&s);
+        err_out(json, "usage", "--fusion is rrf or score, not \"%s\"", fusion);
+        return KB_EXIT_ERR;
+    }
+    if (fusion && strcmp(fusion, "rrf") == 0) {
+        nfused = rrf_fuse(a, lists, nlists, KB_RRF_K, fuse_k, &fused);
+    } else {
+        const double sem = identifier_shaped(query) ? KB_FUSION_SEMANTIC_IDENT
+                                                    : KB_FUSION_SEMANTIC;
+        double weight[2];
+        for (size_t i = 0; i < nlists; i++)
+            weight[i] = lists[i].tag == RANK_TAG_SEMANTIC ? sem : 1.0 - sem;
+        /* A list alone is its own order, whatever its weight. */
+        if (nlists == 1)
+            weight[0] = 1.0;
+        nfused = score_fuse(a, lists, nlists, weight, fuse_k, &fused);
+        keep_confident_first(lists, nlists, fused, nfused);
+    }
 
     DocText *cache =
-        (DocText *)arena_alloc0(a, ((size_t)k + 1) * sizeof(DocText));
+        (DocText *)arena_alloc0(a, (fuse_k + 1) * sizeof(DocText));
     size_t ncache = 0;
+
+    float *rr = NULL;
+    size_t nrr = 0;
+    if (rerank && nfused) {
+        if (!rerank_fused(a, &s, json, query, fused, nfused, cache, &ncache, &rr, &nrr)) {
+            store_close(&s);
+            return KB_EXIT_ERR;
+        }
+    }
+    if (nfused > (size_t)k)
+        nfused = (size_t)k;
 
     StrBuf sb;
     sb_init(&sb, a);
@@ -485,6 +684,8 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
                 sb_printf(&sb, "\"bm25\":%.6f,", c->bm25);
             if (c->has_vector)
                 sb_printf(&sb, "\"vector\":%.6f,", (double)c->vector);
+            if (i < nrr)
+                sb_printf(&sb, "\"rerank\":%.6f,", (double)rr[i]);
             sb_printf(&sb, "\"fused\":%.6f}", fused[i].score);
             /* §5: every hit carries how old it is AND the verdict on that
              * age, from the one definition in cmd_common.c. */
@@ -558,14 +759,27 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
          * reproduces the previous answer" a thing anyone can check. `kb
          * stale` and `kb refresh` do carry it, because there the cutoff is
          * the question rather than a footnote to it. */
-        sb_printf(&sb, "],\"count\":%zu,\"olderThan\":\"%s\"}", nfused,
-                  st.spec);
+        if (unembedded)
+            sb_printf(&sb, "],\"unembedded\":%zu,\"count\":%zu,\"olderThan\":\"%s\"}",
+                      unembedded, nfused, st.spec);
+        else
+            sb_printf(&sb, "],\"count\":%zu,\"olderThan\":\"%s\"}", nfused,
+                      st.spec);
         puts(sb_finish(&sb));
     } else if (nfused == 0) {
         puts("no hits");
+        if (unembedded)
+            printf("(%zu chunks are not embedded yet; kb embed finishes them)\n", unembedded);
     } else {
+        if (unembedded)
+            sb_printf(&sb, "(%zu chunks are not embedded yet: the semantic side of this "
+                           "search did not see them; kb embed finishes them)\n",
+                      unembedded);
         fputs(sb_finish(&sb), stdout);
     }
+    mark("fuse and render");
+    if (timing_on)
+        fprintf(stderr, "kb timing %-16s %8.2f ms\n", "total", timing_ms() - timing_t0);
     store_close(&s);
     return KB_EXIT_OK;
 }

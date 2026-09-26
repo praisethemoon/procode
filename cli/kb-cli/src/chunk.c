@@ -596,6 +596,30 @@ Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang, SyntaxLang
     case LANG_TEXT: break;
     }
 
+    /* Tiny siblings merge: a run of short sections under the same parent (a
+     * glossary of one-line entries, a list of options each under its own
+     * heading) goes into one chunk while it fits, headed by the first. A
+     * chunk of one heading and a line is too little text to embed or to
+     * rank on its own. */
+    if (lang == LANG_MARKDOWN || lang == LANG_HTML) {
+        const size_t tiny = target_bytes / 8;
+        size_t k = 0;
+        for (size_t i = 0; i < sec.n; i++) {
+            if (k > 0) {
+                Section *p = &sec.v[k - 1];
+                size_t pend = sec.v[i].start;
+                size_t end = i + 1 < sec.n ? sec.v[i + 1].start : len;
+                bool siblings = (p->context == NULL) == (sec.v[i].context == NULL) &&
+                                (!p->context || strcmp(p->context, sec.v[i].context) == 0);
+                if (siblings && p->heading && sec.v[i].heading && pend - p->start < tiny &&
+                    end - sec.v[i].start < tiny && end - p->start <= target_bytes)
+                    continue; /* merged into p, whose span now runs on */
+            }
+            sec.v[k++] = sec.v[i];
+        }
+        sec.n = k;
+    }
+
     ChunkBuf b = {a, NULL, 0, 0};
     for (size_t i = 0; i < sec.n; i++) {
         size_t start = sec.v[i].start;
@@ -611,4 +635,25 @@ Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang, SyntaxLang
     out.v = b.v;
     out.n = b.n;
     return out;
+}
+
+bool chunk_embeddable(const char *text, size_t len) {
+    size_t letters = 0, spaces = 0;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)text[i];
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
+            spaces++;
+        else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')
+            letters++;
+        else if (c >= 0x80)
+            letters++; /* a byte of a non-ASCII letter, most likely */
+    }
+    const size_t visible = len - spaces;
+    if (visible == 0)
+        return false;
+    if (letters * 100 < visible * 40)
+        return false; /* digits, punctuation, markup */
+    if (len >= 400 && spaces * 100 < len * 2)
+        return false; /* no whitespace to speak of: minified, encoded */
+    return true;
 }

@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <time.h>
 
 #define VEC_MAGIC "KBVEC001"
 #define VEC_HEADER 88u /* magic 8, dim 4, reserved 4, count 8, fingerprint 64 */
@@ -135,9 +136,16 @@ static void quantise(const float *x, uint32_t dim, int8_t *q, float *scale) {
     }
 }
 
+static double seconds_now(void) {
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+
 bool vec_sync(Arena *a, Store *s, Embedder *e, bool all, bool progress,
-              VecSync *stats, char *err, size_t errsz) {
+              double budget_s, VecSync *stats, char *err, size_t errsz) {
     memset(stats, 0, sizeof *stats);
+    const double deadline = budget_s >= 0 ? seconds_now() + budget_s : 0;
     if (!s->lock) {
         snprintf(err, errsz, "internal: vectors written without the lock");
         return false;
@@ -189,6 +197,12 @@ bool vec_sync(Arena *a, Store *s, Embedder *e, bool all, bool progress,
                 done++;
                 continue;
             }
+            /* Out of time: left for `kb embed`. Checked per chunk, so a
+             * pass overruns its budget by at most one chunk's embedding. */
+            if (budget_s >= 0 && (budget_s == 0 || seconds_now() > deadline)) {
+                stats->pending++;
+                continue;
+            }
             if (!have_text) {
                 tmp = arena_new(1 << 20);
                 have_text = doc_chunks(tmp, s, d, &text, &len, &ch);
@@ -197,9 +211,21 @@ bool vec_sync(Arena *a, Store *s, Embedder *e, bool all, bool progress,
             }
             if (j >= ch.n)
                 break; /* the log's range and the text disagree: reindex */
+            if (!chunk_embeddable(text + ch.v[j].start, ch.v[j].end - ch.v[j].start)) {
+                /* Keyword search only: an entry with scale 0, which no
+                 * embedding can produce, so the chunk counts as done and
+                 * semantic search passes it over. */
+                next.ids[k] = id;
+                next.scales[k] = 0.0f;
+                memset(next.q + k * next.dim, 0, next.dim);
+                next.n++;
+                stats->skipped++;
+                done++;
+                continue;
+            }
             bool truncated = false;
-            /* A code chunk is embedded under its header line: which file,
-             * which function (chunk_header). */
+            /* A chunk is embedded under its header line: the document,
+             * the section or function it is in (chunk_header). */
             const char *body = text + ch.v[j].start;
             size_t blen = ch.v[j].end - ch.v[j].start;
             const char *header = chunk_header(tmp, doc_lang(d->mime, d->path),
@@ -257,8 +283,8 @@ bool vec_sync(Arena *a, Store *s, Embedder *e, bool all, bool progress,
     return vec_save(a, s, &next, err, errsz);
 }
 
-bool vec_update(Arena *a, Store *s, bool all, bool progress, VecSync *stats,
-                bool *ran, char *err, size_t errsz) {
+bool vec_update(Arena *a, Store *s, bool all, bool progress, double budget_s,
+                VecSync *stats, bool *ran, char *err, size_t errsz) {
     memset(stats, 0, sizeof *stats);
     *ran = false;
     ModelParams recorded;
@@ -275,7 +301,7 @@ bool vec_update(Arena *a, Store *s, bool all, bool progress, VecSync *stats,
         snprintf(err, errsz, "%s", why);
         return false;
     }
-    bool ok = vec_sync(a, s, &e, all, progress, stats, err, errsz);
+    bool ok = vec_sync(a, s, &e, all, progress, budget_s, stats, err, errsz);
     embed_close(&e);
     *ran = ok;
     return ok;

@@ -1,0 +1,6756 @@
+{
+ "name": "t61",
+ "commit": "b75153badecea4e11b9cfa9574c920c29a30208d",
+ "model": {
+  "recorded": {
+   "model": "gte-modernbert-base",
+   "arch": "modernbert",
+   "dim": 768,
+   "pooling": "cls",
+   "maxTokens": 1024,
+   "queryPrefix": "",
+   "documentPrefix": "",
+   "normalize": true,
+   "quantization": "int8",
+   "weights": "F16",
+   "tokenizer": 1,
+   "fingerprint": "c7a8cd3dc55d9df4fd9b53618004a457bc52735885e75331b2deeeee5259b6c4",
+   "sha256": "2587e31accb3a0f107f57baa2a4bfc60d1a9173b0942d393d6a9c678cb8a12b3"
+  },
+  "available": {
+   "path": "/var/folders/ys/xztl8fb506d9j_kc_p24dvnm0000gn/T/kb-t61.BrlEy3GfUR/gte/home/.kb/models/gte-modernbert-base.F16.gguf",
+   "bytes": 299876256,
+   "model": "gte-modernbert-base",
+   "arch": "modernbert",
+   "dim": 768,
+   "pooling": "cls",
+   "maxTokens": 1024,
+   "queryPrefix": "",
+   "documentPrefix": "",
+   "normalize": true,
+   "quantization": "int8",
+   "weights": "F16",
+   "tokenizer": 1,
+   "fingerprint": "c7a8cd3dc55d9df4fd9b53618004a457bc52735885e75331b2deeeee5259b6c4"
+  },
+  "current": true
+ },
+ "stamp": {
+  "commit": "b75153badecea4e11b9cfa9574c920c29a30208d",
+  "corpus": "05cdd8b88adfed55db6e87698777a46e35391238c6a99ba2b784601cba88e474",
+  "model": "gte-modernbert-base.F16.gguf:5c18427547a9d62ff643fa26004616d1b8c6fc036bf14bfd8fb9d0c6cd3e9a59",
+  "kb": "ab45f1ccd57a88656b21e204fc183090e0249762a22f326ab9c616027aacfe5e"
+ },
+ "modes": [
+  "keyword",
+  "semantic",
+  "hybrid",
+  "rrf"
+ ],
+ "summary": {
+  "docs/all/keyword": {
+   "n": 152,
+   "p50_ms": 5.3,
+   "p95_ms": 5.7,
+   "hit1": 0.6447368421052632,
+   "hit3": 0.8223684210526315,
+   "mrr": 0.7412280701754386,
+   "hit1_ci": [
+    0.5657894736842105,
+    0.7171052631578947
+   ],
+   "hit3_ci": [
+    0.7631578947368421,
+    0.881578947368421
+   ],
+   "mrr_ci": [
+    0.6834795321637427,
+    0.7998538011695906
+   ],
+   "missed": 10
+  },
+  "docs/all/semantic": {
+   "n": 152,
+   "p50_ms": 44.7,
+   "p95_ms": 47.8,
+   "hit1": 0.631578947368421,
+   "hit3": 0.7894736842105263,
+   "mrr": 0.7213110902255638,
+   "hit1_ci": [
+    0.5526315789473685,
+    0.7039473684210527
+   ],
+   "hit3_ci": [
+    0.7236842105263158,
+    0.8552631578947368
+   ],
+   "mrr_ci": [
+    0.6609649122807016,
+    0.7789003759398495
+   ],
+   "missed": 14
+  },
+  "docs/all/hybrid": {
+   "n": 152,
+   "p50_ms": 45.2,
+   "p95_ms": 48.1,
+   "hit1": 0.743421052631579,
+   "hit3": 0.9013157894736842,
+   "mrr": 0.8292945906432748,
+   "hit1_ci": [
+    0.6710526315789473,
+    0.8092105263157895
+   ],
+   "hit3_ci": [
+    0.8486842105263158,
+    0.9473684210526315
+   ],
+   "mrr_ci": [
+    0.7801535087719296,
+    0.8776315789473684
+   ],
+   "missed": 3
+  },
+  "docs/all/rrf": {
+   "n": 152,
+   "p50_ms": 45.4,
+   "p95_ms": 48.7,
+   "hit1": 0.6710526315789473,
+   "hit3": 0.8618421052631579,
+   "mrr": 0.7788090016708438,
+   "hit1_ci": [
+    0.5921052631578947,
+    0.743421052631579
+   ],
+   "hit3_ci": [
+    0.8026315789473685,
+    0.9144736842105263
+   ],
+   "mrr_ci": [
+    0.7223475355054303,
+    0.8314144736842106
+   ],
+   "missed": 5
+  },
+  "docs/purpose/keyword": {
+   "n": 49,
+   "p50_ms": 5.3,
+   "p95_ms": 5.7,
+   "hit1": 0.6326530612244898,
+   "hit3": 0.8163265306122449,
+   "mrr": 0.7282312925170067,
+   "hit1_ci": [
+    0.4897959183673469,
+    0.7551020408163265
+   ],
+   "hit3_ci": [
+    0.6938775510204082,
+    0.9183673469387755
+   ],
+   "mrr_ci": [
+    0.6210884353741497,
+    0.8282312925170069
+   ],
+   "missed": 5
+  },
+  "docs/purpose/semantic": {
+   "n": 49,
+   "p50_ms": 45.1,
+   "p95_ms": 47.8,
+   "hit1": 0.7346938775510204,
+   "hit3": 0.8367346938775511,
+   "mrr": 0.794922254616132,
+   "hit1_ci": [
+    0.5918367346938775,
+    0.8571428571428571
+   ],
+   "hit3_ci": [
+    0.7346938775510204,
+    0.9387755102040817
+   ],
+   "mrr_ci": [
+    0.6874149659863946,
+    0.8928571428571429
+   ],
+   "missed": 3
+  },
+  "docs/purpose/hybrid": {
+   "n": 49,
+   "p50_ms": 45.3,
+   "p95_ms": 48.1,
+   "hit1": 0.7346938775510204,
+   "hit3": 0.8775510204081632,
+   "mrr": 0.8194444444444446,
+   "hit1_ci": [
+    0.6122448979591837,
+    0.8571428571428571
+   ],
+   "hit3_ci": [
+    0.7755102040816326,
+    0.9591836734693877
+   ],
+   "mrr_ci": [
+    0.7304421768707484,
+    0.9056122448979592
+   ],
+   "missed": 2
+  },
+  "docs/purpose/rrf": {
+   "n": 49,
+   "p50_ms": 45.8,
+   "p95_ms": 48.9,
+   "hit1": 0.673469387755102,
+   "hit3": 0.8775510204081632,
+   "mrr": 0.7854308390022676,
+   "hit1_ci": [
+    0.5306122448979592,
+    0.7959183673469388
+   ],
+   "hit3_ci": [
+    0.7755102040816326,
+    0.9591836734693877
+   ],
+   "mrr_ci": [
+    0.6859410430839002,
+    0.8690476190476191
+   ],
+   "missed": 2
+  },
+  "docs/identifier/keyword": {
+   "n": 42,
+   "p50_ms": 5.3,
+   "p95_ms": 5.6,
+   "hit1": 0.8809523809523809,
+   "hit3": 0.9523809523809523,
+   "mrr": 0.9212962962962963,
+   "hit1_ci": [
+    0.7857142857142857,
+    0.9761904761904762
+   ],
+   "hit3_ci": [
+    0.8809523809523809,
+    1.0
+   ],
+   "mrr_ci": [
+    0.8511904761904762,
+    0.9821428571428571
+   ],
+   "missed": 0
+  },
+  "docs/identifier/semantic": {
+   "n": 42,
+   "p50_ms": 43.5,
+   "p95_ms": 55.1,
+   "hit1": 0.5,
+   "hit3": 0.6428571428571429,
+   "mrr": 0.5941609977324264,
+   "hit1_ci": [
+    0.3333333333333333,
+    0.6666666666666666
+   ],
+   "hit3_ci": [
+    0.5,
+    0.7857142857142857
+   ],
+   "mrr_ci": [
+    0.4609977324263038,
+    0.7230725623582765
+   ],
+   "missed": 6
+  },
+  "docs/identifier/hybrid": {
+   "n": 42,
+   "p50_ms": 44.3,
+   "p95_ms": 47.9,
+   "hit1": 0.8809523809523809,
+   "hit3": 0.9761904761904762,
+   "mrr": 0.9246031746031746,
+   "hit1_ci": [
+    0.7619047619047619,
+    0.9761904761904762
+   ],
+   "hit3_ci": [
+    0.9285714285714286,
+    1.0
+   ],
+   "mrr_ci": [
+    0.853174603174603,
+    0.984126984126984
+   ],
+   "missed": 0
+  },
+  "docs/identifier/rrf": {
+   "n": 42,
+   "p50_ms": 44.4,
+   "p95_ms": 48.1,
+   "hit1": 0.6904761904761905,
+   "hit3": 0.8809523809523809,
+   "mrr": 0.7859410430839001,
+   "hit1_ci": [
+    0.5476190476190477,
+    0.8095238095238095
+   ],
+   "hit3_ci": [
+    0.7857142857142857,
+    0.9761904761904762
+   ],
+   "mrr_ci": [
+    0.6844671201814058,
+    0.8798185941043085
+   ],
+   "missed": 2
+  },
+  "docs/paraphrase/keyword": {
+   "n": 61,
+   "p50_ms": 5.3,
+   "p95_ms": 5.7,
+   "hit1": 0.4918032786885246,
+   "hit3": 0.7377049180327869,
+   "mrr": 0.6276867030965393,
+   "hit1_ci": [
+    0.36065573770491804,
+    0.6229508196721312
+   ],
+   "hit3_ci": [
+    0.6229508196721312,
+    0.8524590163934426
+   ],
+   "mrr_ci": [
+    0.5278688524590165,
+    0.724225865209472
+   ],
+   "missed": 5
+  },
+  "docs/paraphrase/semantic": {
+   "n": 61,
+   "p50_ms": 44.4,
+   "p95_ms": 46.6,
+   "hit1": 0.639344262295082,
+   "hit3": 0.8524590163934426,
+   "mrr": 0.7497267759562842,
+   "hit1_ci": [
+    0.5245901639344263,
+    0.7540983606557377
+   ],
+   "hit3_ci": [
+    0.7540983606557377,
+    0.9344262295081968
+   ],
+   "mrr_ci": [
+    0.6622950819672131,
+    0.8322404371584702
+   ],
+   "missed": 5
+  },
+  "docs/paraphrase/hybrid": {
+   "n": 61,
+   "p50_ms": 45.4,
+   "p95_ms": 47.8,
+   "hit1": 0.6557377049180327,
+   "hit3": 0.8688524590163934,
+   "mrr": 0.7715846994535521,
+   "hit1_ci": [
+    0.5409836065573771,
+    0.7704918032786885
+   ],
+   "hit3_ci": [
+    0.7704918032786885,
+    0.9508196721311475
+   ],
+   "mrr_ci": [
+    0.6893442622950822,
+    0.853551912568306
+   ],
+   "missed": 1
+  },
+  "docs/paraphrase/rrf": {
+   "n": 61,
+   "p50_ms": 45.5,
+   "p95_ms": 47.8,
+   "hit1": 0.6557377049180327,
+   "hit3": 0.8360655737704918,
+   "mrr": 0.7685792349726777,
+   "hit1_ci": [
+    0.5409836065573771,
+    0.7704918032786885
+   ],
+   "hit3_ci": [
+    0.7377049180327869,
+    0.9180327868852459
+   ],
+   "mrr_ci": [
+    0.6808743169398906,
+    0.8519125683060109
+   ],
+   "missed": 1
+  },
+  "code/all/keyword": {
+   "n": 110,
+   "p50_ms": 10.7,
+   "p95_ms": 14.3,
+   "hit1": 0.5818181818181818,
+   "hit3": 0.8,
+   "mrr": 0.7122222222222224,
+   "hit1_ci": [
+    0.4909090909090909,
+    0.6727272727272727
+   ],
+   "hit3_ci": [
+    0.7181818181818181,
+    0.8727272727272727
+   ],
+   "mrr_ci": [
+    0.6450252525252527,
+    0.7798232323232326
+   ],
+   "missed": 3
+  },
+  "code/all/semantic": {
+   "n": 110,
+   "p50_ms": 50.9,
+   "p95_ms": 57.0,
+   "hit1": 0.6363636363636364,
+   "hit3": 0.8181818181818182,
+   "mrr": 0.7421572871572872,
+   "hit1_ci": [
+    0.5454545454545454,
+    0.7272727272727273
+   ],
+   "hit3_ci": [
+    0.7454545454545455,
+    0.8909090909090909
+   ],
+   "mrr_ci": [
+    0.6736940836940837,
+    0.8090404040404039
+   ],
+   "missed": 5
+  },
+  "code/all/hybrid": {
+   "n": 110,
+   "p50_ms": 51.0,
+   "p95_ms": 55.7,
+   "hit1": 0.7909090909090909,
+   "hit3": 0.9363636363636364,
+   "mrr": 0.865328282828283,
+   "hit1_ci": [
+    0.7090909090909091,
+    0.8636363636363636
+   ],
+   "hit3_ci": [
+    0.8909090909090909,
+    0.9818181818181818
+   ],
+   "mrr_ci": [
+    0.8123737373737374,
+    0.9172222222222223
+   ],
+   "missed": 0
+  },
+  "code/all/rrf": {
+   "n": 110,
+   "p50_ms": 50.6,
+   "p95_ms": 55.8,
+   "hit1": 0.7545454545454545,
+   "hit3": 0.9272727272727272,
+   "mrr": 0.8397330447330447,
+   "hit1_ci": [
+    0.6727272727272727,
+    0.8363636363636363
+   ],
+   "hit3_ci": [
+    0.8818181818181818,
+    0.9727272727272728
+   ],
+   "mrr_ci": [
+    0.7834559884559882,
+    0.8924242424242423
+   ],
+   "missed": 1
+  },
+  "code/paraphrase/keyword": {
+   "n": 36,
+   "p50_ms": 10.6,
+   "p95_ms": 14.2,
+   "hit1": 0.3333333333333333,
+   "hit3": 0.5833333333333334,
+   "mrr": 0.520216049382716,
+   "hit1_ci": [
+    0.19444444444444445,
+    0.5
+   ],
+   "hit3_ci": [
+    0.4166666666666667,
+    0.75
+   ],
+   "mrr_ci": [
+    0.4028549382716049,
+    0.6472222222222223
+   ],
+   "missed": 1
+  },
+  "code/paraphrase/semantic": {
+   "n": 36,
+   "p50_ms": 51.2,
+   "p95_ms": 57.0,
+   "hit1": 0.5,
+   "hit3": 0.8055555555555556,
+   "mrr": 0.6553240740740741,
+   "hit1_ci": [
+    0.3333333333333333,
+    0.6666666666666666
+   ],
+   "hit3_ci": [
+    0.6666666666666666,
+    0.9166666666666666
+   ],
+   "mrr_ci": [
+    0.5351851851851852,
+    0.7694444444444444
+   ],
+   "missed": 2
+  },
+  "code/paraphrase/hybrid": {
+   "n": 36,
+   "p50_ms": 51.8,
+   "p95_ms": 62.4,
+   "hit1": 0.6944444444444444,
+   "hit3": 0.8333333333333334,
+   "mrr": 0.7783179012345679,
+   "hit1_ci": [
+    0.5277777777777778,
+    0.8333333333333334
+   ],
+   "hit3_ci": [
+    0.7222222222222222,
+    0.9444444444444444
+   ],
+   "mrr_ci": [
+    0.6659722222222222,
+    0.8784722222222221
+   ],
+   "missed": 0
+  },
+  "code/paraphrase/rrf": {
+   "n": 36,
+   "p50_ms": 51.0,
+   "p95_ms": 56.3,
+   "hit1": 0.6944444444444444,
+   "hit3": 0.8888888888888888,
+   "mrr": 0.7811287477954144,
+   "hit1_ci": [
+    0.5277777777777778,
+    0.8333333333333334
+   ],
+   "hit3_ci": [
+    0.7777777777777778,
+    0.9722222222222222
+   ],
+   "mrr_ci": [
+    0.6663139329805996,
+    0.8944444444444445
+   ],
+   "missed": 1
+  },
+  "code/identifier/keyword": {
+   "n": 38,
+   "p50_ms": 10.4,
+   "p95_ms": 13.6,
+   "hit1": 0.868421052631579,
+   "hit3": 0.9473684210526315,
+   "mrr": 0.9166666666666667,
+   "hit1_ci": [
+    0.7368421052631579,
+    0.9736842105263158
+   ],
+   "hit3_ci": [
+    0.868421052631579,
+    1.0
+   ],
+   "mrr_ci": [
+    0.8333333333333334,
+    0.982456140350877
+   ],
+   "missed": 0
+  },
+  "code/identifier/semantic": {
+   "n": 38,
+   "p50_ms": 49.7,
+   "p95_ms": 66.4,
+   "hit1": 0.8421052631578947,
+   "hit3": 0.9473684210526315,
+   "mrr": 0.8989035087719298,
+   "hit1_ci": [
+    0.7105263157894737,
+    0.9473684210526315
+   ],
+   "hit3_ci": [
+    0.868421052631579,
+    1.0
+   ],
+   "mrr_ci": [
+    0.8177631578947367,
+    0.9657894736842106
+   ],
+   "missed": 0
+  },
+  "code/identifier/hybrid": {
+   "n": 38,
+   "p50_ms": 50.8,
+   "p95_ms": 54.8,
+   "hit1": 0.9210526315789473,
+   "hit3": 1.0,
+   "mrr": 0.9605263157894737,
+   "hit1_ci": [
+    0.8157894736842105,
+    1.0
+   ],
+   "hit3_ci": [
+    1.0,
+    1.0
+   ],
+   "mrr_ci": [
+    0.9078947368421053,
+    1.0
+   ],
+   "missed": 0
+  },
+  "code/identifier/rrf": {
+   "n": 38,
+   "p50_ms": 50.2,
+   "p95_ms": 56.5,
+   "hit1": 0.8947368421052632,
+   "hit3": 1.0,
+   "mrr": 0.9473684210526315,
+   "hit1_ci": [
+    0.7894736842105263,
+    0.9736842105263158
+   ],
+   "hit3_ci": [
+    1.0,
+    1.0
+   ],
+   "mrr_ci": [
+    0.8947368421052632,
+    0.9868421052631579
+   ],
+   "missed": 0
+  },
+  "code/purpose/keyword": {
+   "n": 36,
+   "p50_ms": 11.0,
+   "p95_ms": 16.6,
+   "hit1": 0.5277777777777778,
+   "hit3": 0.8611111111111112,
+   "mrr": 0.6884259259259259,
+   "hit1_ci": [
+    0.3611111111111111,
+    0.6944444444444444
+   ],
+   "hit3_ci": [
+    0.75,
+    0.9722222222222222
+   ],
+   "mrr_ci": [
+    0.5689814814814816,
+    0.7972222222222222
+   ],
+   "missed": 2
+  },
+  "code/purpose/semantic": {
+   "n": 36,
+   "p50_ms": 51.9,
+   "p95_ms": 56.8,
+   "hit1": 0.5555555555555556,
+   "hit3": 0.6944444444444444,
+   "mrr": 0.6635361552028218,
+   "hit1_ci": [
+    0.3888888888888889,
+    0.7222222222222222
+   ],
+   "hit3_ci": [
+    0.5277777777777778,
+    0.8333333333333334
+   ],
+   "mrr_ci": [
+    0.531084656084656,
+    0.7902777777777777
+   ],
+   "missed": 3
+  },
+  "code/purpose/hybrid": {
+   "n": 36,
+   "p50_ms": 51.0,
+   "p95_ms": 56.4,
+   "hit1": 0.75,
+   "hit3": 0.9722222222222222,
+   "mrr": 0.8518518518518519,
+   "hit1_ci": [
+    0.6111111111111112,
+    0.8888888888888888
+   ],
+   "hit3_ci": [
+    0.9166666666666666,
+    1.0
+   ],
+   "mrr_ci": [
+    0.7638888888888888,
+    0.9305555555555556
+   ],
+   "missed": 0
+  },
+  "code/purpose/rrf": {
+   "n": 36,
+   "p50_ms": 50.4,
+   "p95_ms": 54.1,
+   "hit1": 0.6666666666666666,
+   "hit3": 0.8888888888888888,
+   "mrr": 0.7847222222222222,
+   "hit1_ci": [
+    0.5277777777777778,
+    0.8055555555555556
+   ],
+   "hit3_ci": [
+    0.7777777777777778,
+    0.9722222222222222
+   ],
+   "mrr_ci": [
+    0.6898148148148147,
+    0.8796296296296297
+   ],
+   "missed": 0
+  }
+ },
+ "queries": {
+  "docs": [
+   {
+    "id": "da001",
+    "tag": "purpose",
+    "q": "should i commit the .kb directory to git",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Commands",
+     "semantic": "docs/specs/index-api.md \u00bb 1.5 What to commit",
+     "hybrid": "docs/specs/index-api.md \u00bb 1.5 What to commit",
+     "rrf": "docs/specs/index-api.md \u00bb 1.5 What to commit"
+    },
+    "ms": {
+     "keyword": 4.7,
+     "semantic": 43.8,
+     "hybrid": 46.7,
+     "rrf": 44.8
+    }
+   },
+   {
+    "id": "da002",
+    "tag": "identifier",
+    "q": "model.json fingerprint modelFile sha256",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 8. The model",
+     "semantic": "docs/specs/index-api.md \u00bb 8. The model",
+     "hybrid": "docs/specs/index-api.md \u00bb 8. The model",
+     "rrf": "docs/specs/index-api.md \u00bb 8. The model"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 44.0,
+     "hybrid": 45.6,
+     "rrf": 44.7
+    }
+   },
+   {
+    "id": "da003",
+    "tag": "paraphrase",
+    "q": "search refuses after swapping in a different embedding model file",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 8. The model",
+     "semantic": "docs/specs/index-api.md \u00bb 8. The model",
+     "hybrid": "docs/specs/index-api.md \u00bb 8. The model",
+     "rrf": "docs/specs/index-api.md \u00bb 8. The model"
+    },
+    "ms": {
+     "keyword": 5.8,
+     "semantic": 44.1,
+     "hybrid": 45.2,
+     "rrf": 46.1
+    }
+   },
+   {
+    "id": "da004",
+    "tag": "purpose",
+    "q": "why is hybrid search the default instead of pure vector search",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 4. Search",
+     "semantic": "docs/specs/index-api.md \u00bb 4. Search",
+     "hybrid": "docs/specs/index-api.md \u00bb 4. Search",
+     "rrf": "docs/specs/index-api.md \u00bb 4. Search"
+    },
+    "ms": {
+     "keyword": 5.7,
+     "semantic": 44.4,
+     "hybrid": 45.1,
+     "rrf": 46.9
+    }
+   },
+   {
+    "id": "da005",
+    "tag": "paraphrase",
+    "q": "what does search do when no chunks have been embedded yet",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 6,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-js/README.md \u00bb Commands that do not exist yet",
+     "semantic": "docs/specs/index-api.md \u00bb 4. Search",
+     "hybrid": "docs/specs/index-api.md \u00bb 4. Search",
+     "rrf": "docs/specs/index-api.md \u00bb 4. Search"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 44.4,
+     "hybrid": 43.8,
+     "rrf": 44.8
+    }
+   },
+   {
+    "id": "da006",
+    "tag": "identifier",
+    "q": "minScore search parameter",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 4. Search",
+     "semantic": "docs/specs/index-api.md \u00bb 4. Search",
+     "hybrid": "docs/specs/index-api.md \u00bb 4. Search",
+     "rrf": "docs/specs/index-api.md \u00bb 4. Search"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 43.6,
+     "hybrid": 43.0,
+     "rrf": 42.9
+    }
+   },
+   {
+    "id": "da007",
+    "tag": "identifier",
+    "q": "--no-forget",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 7,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 7. Maintenance",
+     "semantic": "docs/packages/kb-js/README.md \u00bb No shell, ever",
+     "hybrid": "docs/specs/index-api.md \u00bb 7. Maintenance",
+     "rrf": "docs/packages/kb-js/README.md \u00bb No shell, ever"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 60.0,
+     "hybrid": 43.8,
+     "rrf": 43.6
+    }
+   },
+   {
+    "id": "da008",
+    "tag": "paraphrase",
+    "q": "biggest file kb will index from a directory",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 2.1 Folders",
+     "semantic": "docs/specs/index-api.md \u00bb 2.1 Folders",
+     "hybrid": "docs/specs/index-api.md \u00bb 2.1 Folders",
+     "rrf": "docs/specs/index-api.md \u00bb 2.1 Folders"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 44.4,
+     "hybrid": 46.2,
+     "rrf": 46.9
+    }
+   },
+   {
+    "id": "da009",
+    "tag": "paraphrase",
+    "q": "does rebuild re-embed chunks that already have a vector",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 8. The model",
+     "semantic": "docs/specs/index-api.md \u00bb 1.6 Storage shape",
+     "hybrid": "docs/specs/index-api.md \u00bb 8. The model",
+     "rrf": "docs/specs/index-api.md \u00bb 8. The model"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 43.8,
+     "hybrid": 47.8,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "da010",
+    "tag": "paraphrase",
+    "q": "does kb respect gitignore rules when adding a folder",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 2.1 Folders",
+     "semantic": "docs/specs/index-api.md \u00bb 2.1 Folders",
+     "hybrid": "docs/specs/index-api.md \u00bb 2.1 Folders",
+     "rrf": "docs/specs/index-api.md \u00bb 2.1 Folders"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 44.7,
+     "hybrid": 45.0,
+     "rrf": 45.9
+    }
+   },
+   {
+    "id": "da011",
+    "tag": "paraphrase",
+    "q": "what happens to a document when its file is edited and the folder added again",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 1.2 Entities",
+     "semantic": "docs/specs/index-api.md \u00bb 2.1 Folders",
+     "hybrid": "docs/specs/index-api.md \u00bb 2.1 Folders",
+     "rrf": "docs/specs/index-api.md \u00bb 2.1 Folders"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 45.8,
+     "hybrid": 45.9,
+     "rrf": 46.9
+    }
+   },
+   {
+    "id": "da012",
+    "tag": "purpose",
+    "q": "why doesn't the kb binary download web pages itself",
+    "ranks": {
+     "keyword": null,
+     "semantic": null,
+     "hybrid": null,
+     "rrf": null
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/tickets/SKILL.md \u00bb tickets \u2014 one ticket, start to finish",
+     "semantic": "docs/packages/kb-js/README.md \u00bb The two entry points",
+     "hybrid": "docs/packages/kb-js/README.md \u00bb kb-js",
+     "rrf": "docs/packages/kb-js/README.md \u00bb kb-js"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 43.9,
+     "hybrid": 45.6,
+     "rrf": 43.9
+    }
+   },
+   {
+    "id": "da013",
+    "tag": "purpose",
+    "q": "how do i refresh a source that came from a url",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 2,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/packages/kb-js/README.md \u00bb Commands that do not exist yet",
+     "semantic": "docs/specs/index-api.md \u00bb 5. Provenance and staleness",
+     "hybrid": "docs/specs/index-api.md \u00bb 5. Provenance and staleness",
+     "rrf": "docs/specs/index-api.md \u00bb 5. Provenance and staleness"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 44.4,
+     "hybrid": 45.0,
+     "rrf": 44.9
+    }
+   },
+   {
+    "id": "da014",
+    "tag": "purpose",
+    "q": "how should an agent save a page it has already read into kb",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 10,
+     "hybrid": 4,
+     "rrf": 4
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 2. Ingest",
+     "semantic": "docs/specs/index-api.md \u00bb 1.6 Storage shape",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb And the seventh, which does not exist",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb And the seventh, which does not exist"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 47.8,
+     "hybrid": 46.1,
+     "rrf": 46.7
+    }
+   },
+   {
+    "id": "da015",
+    "tag": "paraphrase",
+    "q": "does filing the same page twice redo the indexing work",
+    "ranks": {
+     "keyword": null,
+     "semantic": 2,
+     "hybrid": 4,
+     "rrf": 5
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb Repository layout",
+     "hybrid": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb And the seventh, which does not exist"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 43.4,
+     "hybrid": 45.0,
+     "rrf": 45.5
+    }
+   },
+   {
+    "id": "da016",
+    "tag": "identifier",
+    "q": "S-3 D-241 C-99812 id prefixes",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 1.1 Identifiers",
+     "semantic": "docs/specs/index-api.md \u00bb 1.1 Identifiers",
+     "hybrid": "docs/specs/index-api.md \u00bb 1.1 Identifiers",
+     "rrf": "docs/specs/index-api.md \u00bb 1.1 Identifiers"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 47.1,
+     "hybrid": 47.9,
+     "rrf": 45.3
+    }
+   },
+   {
+    "id": "da017",
+    "tag": "paraphrase",
+    "q": "can a document belong to more than one topic scope",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 1.3 Collections",
+     "semantic": "docs/specs/index-api.md \u00bb 1.3 Collections",
+     "hybrid": "docs/specs/index-api.md \u00bb 1.3 Collections",
+     "rrf": "docs/specs/index-api.md \u00bb 1.3 Collections"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 44.0,
+     "hybrid": 44.7,
+     "rrf": 45.9
+    }
+   },
+   {
+    "id": "da018",
+    "tag": "purpose",
+    "q": "why is there no shared store in the home directory",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "semantic": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "hybrid": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "rrf": "docs/specs/index-api.md \u00bb 1.4 The store"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 45.3,
+     "hybrid": 43.9,
+     "rrf": 46.2
+    }
+   },
+   {
+    "id": "da019",
+    "tag": "identifier",
+    "q": "init_failed",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 7,
+     "hybrid": 1,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb `lap init`",
+     "hybrid": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb `lap init`"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 42.3,
+     "hybrid": 43.7,
+     "rrf": 42.4
+    }
+   },
+   {
+    "id": "da020",
+    "tag": "paraphrase",
+    "q": "does kb fall back to some other store when no .kb is found above the cwd",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "semantic": "docs/packages/kb-mcp/README.md \u00bb Where a write lands",
+     "hybrid": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "rrf": "docs/specs/index-api.md \u00bb 1.4 The store"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 46.0,
+     "hybrid": 46.8,
+     "rrf": 46.4
+    }
+   },
+   {
+    "id": "da021",
+    "tag": "paraphrase",
+    "q": "how are markdown files and source code split into passages",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-mcp/README.md \u00bb And the seventh, which does not exist",
+     "semantic": "docs/specs/index-api.md \u00bb 3. Chunking",
+     "hybrid": "docs/specs/index-api.md \u00bb 3. Chunking",
+     "rrf": "docs/specs/index-api.md \u00bb 3. Chunking"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 45.2,
+     "hybrid": 44.9,
+     "rrf": 44.2
+    }
+   },
+   {
+    "id": "da022",
+    "tag": "purpose",
+    "q": "why does changing chunk size force a reindex",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 3. Chunking",
+     "semantic": "docs/specs/index-api.md \u00bb 3. Chunking",
+     "hybrid": "docs/specs/index-api.md \u00bb 3. Chunking",
+     "rrf": "docs/specs/index-api.md \u00bb 3. Chunking"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 46.2,
+     "hybrid": 45.2,
+     "rrf": 46.2
+    }
+   },
+   {
+    "id": "da023",
+    "tag": "identifier",
+    "q": "GET /stale olderThan=90d",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 5. Provenance and staleness",
+     "semantic": "docs/specs/index-api.md \u00bb 5. Provenance and staleness",
+     "hybrid": "docs/specs/index-api.md \u00bb 5. Provenance and staleness",
+     "rrf": "docs/specs/index-api.md \u00bb 5. Provenance and staleness"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 45.4,
+     "hybrid": 49.7,
+     "rrf": 45.8
+    }
+   },
+   {
+    "id": "da024",
+    "tag": "purpose",
+    "q": "why does search return snippets rather than whole documents",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-mcp/README.md \u00bb And the seventh, which does not exist",
+     "semantic": "docs/specs/index-api.md \u00bb 4. Search",
+     "hybrid": "docs/specs/index-api.md \u00bb 4. Search",
+     "rrf": "docs/specs/index-api.md \u00bb 4. Search"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 42.5,
+     "hybrid": 44.2,
+     "rrf": 44.1
+    }
+   },
+   {
+    "id": "da025",
+    "tag": "identifier",
+    "q": "analogue_of link type",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 6. Links",
+     "semantic": "docs/specs/index-api.md \u00bb 6. Links",
+     "hybrid": "docs/specs/index-api.md \u00bb 6. Links",
+     "rrf": "docs/specs/index-api.md \u00bb 6. Links"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 43.4,
+     "hybrid": 44.6,
+     "rrf": 43.2
+    }
+   },
+   {
+    "id": "da026",
+    "tag": "purpose",
+    "q": "why aren't api symbols or concepts modelled as graph nodes",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 6. Links",
+     "semantic": "docs/specs/index-api.md \u00bb 6. Links",
+     "hybrid": "docs/specs/index-api.md \u00bb 6. Links",
+     "rrf": "docs/specs/index-api.md \u00bb 6. Links"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 43.1,
+     "hybrid": 44.9,
+     "rrf": 45.5
+    }
+   },
+   {
+    "id": "da027",
+    "tag": "identifier",
+    "q": "collection_in_use withDocuments",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 10,
+     "hybrid": 1,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 7. Maintenance",
+     "semantic": "docs/specs/index-api.md \u00bb 1.3 Collections",
+     "hybrid": "docs/specs/index-api.md \u00bb 7. Maintenance",
+     "rrf": "docs/specs/index-api.md \u00bb 2. Ingest"
+    },
+    "ms": {
+     "keyword": 5.6,
+     "semantic": 42.3,
+     "hybrid": 44.2,
+     "rrf": 44.4
+    }
+   },
+   {
+    "id": "da028",
+    "tag": "paraphrase",
+    "q": "reclaim disk space from old blobs nothing points to anymore",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 2,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 7. Maintenance",
+     "semantic": "docs/specs/index-api.md \u00bb 1.6 Storage shape",
+     "hybrid": "docs/specs/index-api.md \u00bb 1.6 Storage shape",
+     "rrf": "docs/specs/index-api.md \u00bb 1.6 Storage shape"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 44.3,
+     "hybrid": 46.3,
+     "rrf": 45.6
+    }
+   },
+   {
+    "id": "da029",
+    "tag": "purpose",
+    "q": "why no approximate nearest neighbour index for the vectors",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 8. The model",
+     "semantic": "docs/specs/index-api.md \u00bb 8. The model",
+     "hybrid": "docs/specs/index-api.md \u00bb 8. The model",
+     "rrf": "docs/specs/index-api.md \u00bb 8. The model"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 45.5,
+     "hybrid": 45.9,
+     "rrf": 45.7
+    }
+   },
+   {
+    "id": "da030",
+    "tag": "paraphrase",
+    "q": "which gguf gets used when several models sit in the models folder",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 8. The model",
+     "semantic": "docs/specs/index-api.md \u00bb 8. The model",
+     "hybrid": "docs/specs/index-api.md \u00bb 8. The model",
+     "rrf": "docs/specs/index-api.md \u00bb 8. The model"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 45.2,
+     "hybrid": 45.9,
+     "rrf": 65.1
+    }
+   },
+   {
+    "id": "da031",
+    "tag": "identifier",
+    "q": "model_missing",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 11. Errors",
+     "semantic": "docs/specs/index-api.md \u00bb 8. The model",
+     "hybrid": "docs/specs/index-api.md \u00bb 8. The model",
+     "rrf": "docs/specs/index-api.md \u00bb 8. The model"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 42.1,
+     "hybrid": 45.6,
+     "rrf": 42.2
+    }
+   },
+   {
+    "id": "da032",
+    "tag": "purpose",
+    "q": "why does kb-js shell out to the cli instead of searching in javascript",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-js/README.md \u00bb kb-js",
+     "semantic": "docs/specs/index-api.md \u00bb 10. The JS layer",
+     "hybrid": "docs/specs/index-api.md \u00bb 10. The JS layer",
+     "rrf": "docs/specs/index-api.md \u00bb 10. The JS layer"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 46.0,
+     "hybrid": 45.9,
+     "rrf": 46.3
+    }
+   },
+   {
+    "id": "da033",
+    "tag": "purpose",
+    "q": "why is the knowledge sidebar a webview and not a tree view",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-ui.md \u00bb 1. Surface",
+     "semantic": "docs/specs/index-ui.md \u00bb 1. Surface",
+     "hybrid": "docs/specs/index-ui.md \u00bb 1. Surface",
+     "rrf": "docs/specs/index-ui.md \u00bb 1. Surface"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 47.8,
+     "hybrid": 45.7,
+     "rrf": 47.5
+    }
+   },
+   {
+    "id": "da034",
+    "tag": "paraphrase",
+    "q": "what the knowledge sidebar shows before you type anything",
+    "ranks": {
+     "keyword": 6,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Use",
+     "semantic": "docs/specs/index-ui.md \u00bb 1. Surface",
+     "hybrid": "docs/specs/index-ui.md \u00bb 2. Sidebar",
+     "rrf": "docs/specs/index-ui.md \u00bb 2. Sidebar"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 42.8,
+     "hybrid": 46.1,
+     "rrf": 44.8
+    }
+   },
+   {
+    "id": "da035",
+    "tag": "paraphrase",
+    "q": "does the knowledge search need a submit button",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 2,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/specs/index-ui.md \u00bb 5. Quick open",
+     "semantic": "docs/specs/index-ui.md \u00bb 5. Quick open",
+     "hybrid": "docs/specs/index-ui.md \u00bb 5. Quick open",
+     "rrf": "docs/specs/index-ui.md \u00bb 5. Quick open"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 43.4,
+     "hybrid": 45.4,
+     "rrf": 43.3
+    }
+   },
+   {
+    "id": "da036",
+    "tag": "paraphrase",
+    "q": "what information each result row in the sidebar displays",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-ui.md \u00bb 2. Sidebar",
+     "semantic": "docs/specs/index-ui.md \u00bb 2. Sidebar",
+     "hybrid": "docs/specs/index-ui.md \u00bb 2. Sidebar",
+     "rrf": "docs/specs/index-ui.md \u00bb 2. Sidebar"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.9,
+     "hybrid": 44.7,
+     "rrf": 46.1
+    }
+   },
+   {
+    "id": "da037",
+    "tag": "purpose",
+    "q": "why can't i edit an indexed document in the viewer",
+    "ranks": {
+     "keyword": null,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/specs/artifacts.md \u00bb 5. The viewer",
+     "semantic": "docs/specs/index-ui.md \u00bb 3.2 Body",
+     "hybrid": "docs/specs/artifacts.md \u00bb 5. The viewer",
+     "rrf": "docs/specs/artifacts.md \u00bb 5. The viewer"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.7,
+     "hybrid": 44.3,
+     "rrf": 47.6
+    }
+   },
+   {
+    "id": "da038",
+    "tag": "paraphrase",
+    "q": "does opening a search hit mark up the matched words",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 3,
+     "hybrid": 3,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 4. Search",
+     "semantic": "docs/specs/index-ui.md \u00bb 5. Quick open",
+     "hybrid": "docs/specs/index-api.md \u00bb 4. Search",
+     "rrf": "docs/specs/index-api.md \u00bb 4. Search"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 43.8,
+     "hybrid": 47.3,
+     "rrf": 44.0
+    }
+   },
+   {
+    "id": "da039",
+    "tag": "identifier",
+    "q": "kb:/collections",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-ui.md \u00bb 4. Collections",
+     "semantic": "docs/specs/index-ui.md \u00bb 4. Collections",
+     "hybrid": "docs/specs/index-ui.md \u00bb 4. Collections",
+     "rrf": "docs/specs/index-ui.md \u00bb 4. Collections"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 43.5,
+     "hybrid": 44.6,
+     "rrf": 43.0
+    }
+   },
+   {
+    "id": "da040",
+    "tag": "identifier",
+    "q": "Knowledge: Search command",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-ui.md \u00bb 5. Quick open",
+     "semantic": "docs/specs/index-ui.md \u00bb 5. Quick open",
+     "hybrid": "docs/specs/index-ui.md \u00bb 5. Quick open",
+     "rrf": "docs/specs/index-ui.md \u00bb 5. Quick open"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 45.4,
+     "hybrid": 44.4,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "da041",
+    "tag": "identifier",
+    "q": "kb:/graph",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-ui.md \u00bb 6. URIs",
+     "semantic": "docs/specs/index-api.md \u00bb 10. The JS layer",
+     "hybrid": "docs/specs/index-ui.md \u00bb 6. URIs",
+     "rrf": "docs/specs/index-ui.md \u00bb 6. URIs"
+    },
+    "ms": {
+     "keyword": 4.9,
+     "semantic": 42.4,
+     "hybrid": 43.5,
+     "rrf": 43.2
+    }
+   },
+   {
+    "id": "da042",
+    "tag": "purpose",
+    "q": "where do chunk size and model choice get configured if not in the ui",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-ui.md \u00bb 7. Not included",
+     "semantic": "docs/specs/index-api.md \u00bb 3. Chunking",
+     "hybrid": "docs/specs/index-ui.md \u00bb 7. Not included",
+     "rrf": "docs/specs/index-ui.md \u00bb 7. Not included"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 44.7,
+     "hybrid": 47.1,
+     "rrf": 46.1
+    }
+   },
+   {
+    "id": "da043",
+    "tag": "identifier",
+    "q": "bpe_strip",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "rrf": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models"
+    },
+    "ms": {
+     "keyword": 4.8,
+     "semantic": 41.8,
+     "hybrid": 43.2,
+     "rrf": 43.3
+    }
+   },
+   {
+    "id": "da044",
+    "tag": "paraphrase",
+    "q": "which encoder layers attend to every token and which use a window",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Encoder (both models)",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Encoder (both models)",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Encoder (both models)",
+     "rrf": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Encoder (both models)"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 45.7,
+     "hybrid": 44.9,
+     "rrf": 45.4
+    }
+   },
+   {
+    "id": "da045",
+    "tag": "identifier",
+    "q": "kb.role reranker",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 6,
+     "rrf": 6
+    },
+    "top": {
+     "keyword": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "rrf": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 41.9,
+     "hybrid": 43.2,
+     "rrf": 44.4
+    }
+   },
+   {
+    "id": "da046",
+    "tag": "paraphrase",
+    "q": "how is the relevance score computed from the reranker hidden states",
+    "ranks": {
+     "keyword": 10,
+     "semantic": 1,
+     "hybrid": 3,
+     "rrf": 4
+    },
+    "top": {
+     "keyword": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Heads",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "rrf": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb ModernBERT in kb: the facts"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 45.8,
+     "hybrid": 47.3,
+     "rrf": 47.5
+    }
+   },
+   {
+    "id": "da047",
+    "tag": "purpose",
+    "q": "how do i regenerate the gguf file from the hugging face weights",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 8. The model",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Sources and files",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Sources and files",
+     "rrf": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Sources and files"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 46.9,
+     "hybrid": 47.1,
+     "rrf": 46.7
+    }
+   },
+   {
+    "id": "da048",
+    "tag": "paraphrase",
+    "q": "how does the tokenizer handle runs of indentation spaces",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "rrf": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 45.8,
+     "hybrid": 45.0,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "da049",
+    "tag": "identifier",
+    "q": "blk.0.attn_norm.weight",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)",
+     "rrf": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)"
+    },
+    "ms": {
+     "keyword": 5.6,
+     "semantic": 43.7,
+     "hybrid": 43.4,
+     "rrf": 45.9
+    }
+   },
+   {
+    "id": "da050",
+    "tag": "paraphrase",
+    "q": "in the feed-forward block which half of the projection is the gate",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Encoder (both models)",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)",
+     "rrf": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 45.4,
+     "hybrid": 45.0,
+     "rrf": 45.7
+    }
+   },
+   {
+    "id": "da051",
+    "tag": "identifier",
+    "q": "rope.freq_base_local",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 1,
+     "rrf": null
+    },
+    "top": {
+     "keyword": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Reference values worth knowing",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb GGUF layout (written by convert.py)",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Limitations"
+    },
+    "ms": {
+     "keyword": 4.9,
+     "semantic": 44.9,
+     "hybrid": 47.7,
+     "rrf": 46.0
+    }
+   },
+   {
+    "id": "da052",
+    "tag": "identifier",
+    "q": "KbCrash",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract",
+     "semantic": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract",
+     "hybrid": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract",
+     "rrf": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 46.9,
+     "hybrid": 43.7,
+     "rrf": 44.4
+    }
+   },
+   {
+    "id": "da053",
+    "tag": "purpose",
+    "q": "why can't a webview import the full kb-js package",
+    "ranks": {
+     "keyword": 6,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "docs/packages/kb-js/README.md \u00bb kb-js",
+     "semantic": "docs/packages/kb-js/README.md \u00bb The two entry points",
+     "hybrid": "docs/packages/kb-js/README.md \u00bb The two entry points",
+     "rrf": "docs/packages/kb-js/README.md \u00bb kb-js"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 45.6,
+     "hybrid": 48.0,
+     "rrf": 48.9
+    }
+   },
+   {
+    "id": "da054",
+    "tag": "purpose",
+    "q": "how does kb-js stop user search text from being run by the shell",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-js/README.md \u00bb No shell, ever",
+     "semantic": "docs/packages/kb-js/README.md \u00bb No shell, ever",
+     "hybrid": "docs/packages/kb-js/README.md \u00bb No shell, ever",
+     "rrf": "docs/packages/kb-js/README.md \u00bb No shell, ever"
+    },
+    "ms": {
+     "keyword": 5.6,
+     "semantic": 45.4,
+     "hybrid": 45.0,
+     "rrf": 46.0
+    }
+   },
+   {
+    "id": "da055",
+    "tag": "paraphrase",
+    "q": "what happens when kb-js calls a command the cli hasn't implemented",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-js/README.md \u00bb Commands that do not exist yet",
+     "semantic": "docs/packages/kb-js/README.md \u00bb Commands that do not exist yet",
+     "hybrid": "docs/packages/kb-js/README.md \u00bb Commands that do not exist yet",
+     "rrf": "docs/packages/kb-js/README.md \u00bb Commands that do not exist yet"
+    },
+    "ms": {
+     "keyword": 5.6,
+     "semantic": 46.7,
+     "hybrid": 45.8,
+     "rrf": 46.0
+    }
+   },
+   {
+    "id": "da056",
+    "tag": "identifier",
+    "q": "isKbError e.spec",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 6,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-js/README.md \u00bb kb-js",
+     "semantic": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract",
+     "hybrid": "docs/packages/kb-js/README.md \u00bb kb-js",
+     "rrf": "docs/packages/kb-js/README.md \u00bb kb-js"
+    },
+    "ms": {
+     "keyword": 8.6,
+     "semantic": 55.1,
+     "hybrid": 44.3,
+     "rrf": 43.8
+    }
+   },
+   {
+    "id": "da057",
+    "tag": "paraphrase",
+    "q": "can the js wrapper tests run without compiling the kb binary",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-js/README.md \u00bb Tests",
+     "semantic": "docs/packages/kb-js/README.md \u00bb Tests",
+     "hybrid": "docs/packages/kb-js/README.md \u00bb Tests",
+     "rrf": "docs/packages/kb-js/README.md \u00bb Tests"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.9,
+     "hybrid": 46.7,
+     "rrf": 44.6
+    }
+   },
+   {
+    "id": "da058",
+    "tag": "purpose",
+    "q": "why kb-mcp has no mcp sdk dependency",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-mcp/README.md \u00bb kb-mcp",
+     "semantic": "docs/packages/kb-mcp/README.md \u00bb kb-mcp",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb kb-mcp",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb kb-mcp"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 45.0,
+     "hybrid": 48.0,
+     "rrf": 46.4
+    }
+   },
+   {
+    "id": "da059",
+    "tag": "paraphrase",
+    "q": "which kb operations are not available to agents",
+    "ranks": {
+     "keyword": 9,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/tickets/SKILL.md \u00bb Rules",
+     "semantic": "docs/packages/kb-mcp/README.md \u00bb And the seventh, which does not exist",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb kb-mcp",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb kb-mcp"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 45.8,
+     "hybrid": 44.2,
+     "rrf": 45.3
+    }
+   },
+   {
+    "id": "da060",
+    "tag": "identifier",
+    "q": "Content-Length headers vs newline-delimited json stdio",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "semantic": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb Framing"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 47.8,
+     "hybrid": 46.2,
+     "rrf": 48.8
+    }
+   },
+   {
+    "id": "da061",
+    "tag": "paraphrase",
+    "q": "difference between a protocol error and a failed tool call in kb-mcp",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "semantic": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb Framing"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.9,
+     "hybrid": 45.4,
+     "rrf": 45.3
+    }
+   },
+   {
+    "id": "da062",
+    "tag": "identifier",
+    "q": "KB_BIN",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 1,
+     "rrf": 5
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Install",
+     "semantic": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract",
+     "hybrid": "docs/README.md \u00bb Install",
+     "rrf": "docs/packages/kb-js/README.md \u00bb Tests"
+    },
+    "ms": {
+     "keyword": 4.9,
+     "semantic": 42.5,
+     "hybrid": 42.8,
+     "rrf": 44.1
+    }
+   },
+   {
+    "id": "da063",
+    "tag": "purpose",
+    "q": "why does kb-mcp forbid console.log",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-mcp/README.md \u00bb Running it",
+     "semantic": "docs/packages/kb-mcp/README.md \u00bb Running it",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb Running it",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb Running it"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 43.5,
+     "hybrid": 43.4,
+     "rrf": 46.0
+    }
+   },
+   {
+    "id": "da064",
+    "tag": "paraphrase",
+    "q": "multibyte character split across two pipe reads",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Tokenizer (identical ids for both models",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb Framing"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 43.3,
+     "hybrid": 44.9,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "da065",
+    "tag": "purpose",
+    "q": "why kb_add doesn't let the agent pick the global store",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/kb-mcp/README.md \u00bb Where a write lands",
+     "semantic": "docs/packages/kb-mcp/README.md \u00bb Where a write lands",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb Where a write lands",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb Where a write lands"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 46.1,
+     "hybrid": 48.1,
+     "rrf": 46.5
+    }
+   },
+   {
+    "id": "da066",
+    "tag": "paraphrase",
+    "q": "where are published artifact pages stored on disk",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "semantic": "docs/specs/artifacts.md \u00bb 1. Where artifacts live",
+     "hybrid": "docs/specs/artifacts.md \u00bb 1. Where artifacts live",
+     "rrf": "docs/_claude/skills/artifacts/SKILL.md \u00bb How"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 46.6,
+     "hybrid": 43.4,
+     "rrf": 45.5
+    }
+   },
+   {
+    "id": "da067",
+    "tag": "purpose",
+    "q": "how to update an existing artifact without changing its creation date",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/artifacts.md \u00bb 4. MCP tools",
+     "semantic": "docs/specs/artifacts.md \u00bb 2. Identity and metadata",
+     "hybrid": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "rrf": "docs/specs/artifacts.md \u00bb 2. Identity and metadata"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 44.6,
+     "hybrid": 44.5,
+     "rrf": 46.3
+    }
+   },
+   {
+    "id": "da068",
+    "tag": "paraphrase",
+    "q": "can an artifact page load external scripts or fonts",
+    "ranks": {
+     "keyword": 9,
+     "semantic": 1,
+     "hybrid": 6,
+     "rrf": 4
+    },
+    "top": {
+     "keyword": "docs/specs/artifacts.md \u00bb 2. Identity and metadata",
+     "semantic": "docs/specs/artifacts.md \u00bb 3. The page",
+     "hybrid": "docs/specs/artifacts.md \u00bb 2. Identity and metadata",
+     "rrf": "docs/specs/artifacts.md \u00bb 2. Identity and metadata"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 44.0,
+     "hybrid": 47.8,
+     "rrf": 45.2
+    }
+   },
+   {
+    "id": "da069",
+    "tag": "identifier",
+    "q": "bad_id",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 7,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/artifacts.md \u00bb 4. MCP tools",
+     "semantic": "docs/specs/index-api.md \u00bb 1.1 Identifiers",
+     "hybrid": "docs/specs/artifacts.md \u00bb 4. MCP tools",
+     "rrf": "docs/specs/artifacts.md \u00bb 4. MCP tools"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 42.0,
+     "hybrid": 43.6,
+     "rrf": 42.0
+    }
+   },
+   {
+    "id": "da070",
+    "tag": "purpose",
+    "q": "why shouldn't artifact pages hard-code colours",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/artifacts/SKILL.md \u00bb Rules",
+     "semantic": "docs/specs/artifacts.md \u00bb 3. The page",
+     "hybrid": "docs/specs/artifacts.md \u00bb 3. The page",
+     "rrf": "docs/_claude/skills/artifacts/SKILL.md \u00bb artifacts \u2014 pages for people"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 45.7,
+     "hybrid": 44.5,
+     "rrf": 44.6
+    }
+   },
+   {
+    "id": "da071",
+    "tag": "paraphrase",
+    "q": "how are new artifact numbers allocated without two writers colliding",
+    "ranks": {
+     "keyword": 10,
+     "semantic": 1,
+     "hybrid": 3,
+     "rrf": 4
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "semantic": "docs/specs/artifacts.md \u00bb 2. Identity and metadata",
+     "hybrid": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "rrf": "docs/_claude/skills/artifacts/SKILL.md \u00bb How"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 46.1,
+     "hybrid": 44.4,
+     "rrf": 45.9
+    }
+   },
+   {
+    "id": "da072",
+    "tag": "identifier",
+    "q": "callout ok info warn danger",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/artifacts.md \u00bb 3. The page",
+     "semantic": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract",
+     "hybrid": "docs/specs/artifacts.md \u00bb 3. The page",
+     "rrf": "docs/_claude/skills/artifacts/SKILL.md \u00bb The shape that works"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 42.4,
+     "hybrid": 45.3,
+     "rrf": 43.3
+    }
+   },
+   {
+    "id": "da073",
+    "tag": "purpose",
+    "q": "how do i delete an artifact",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "semantic": "docs/specs/artifacts.md \u00bb 4. MCP tools",
+     "hybrid": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "rrf": "docs/_claude/skills/artifacts/SKILL.md \u00bb How"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 41.4,
+     "hybrid": 44.6,
+     "rrf": 42.6
+    }
+   },
+   {
+    "id": "da074",
+    "tag": "paraphrase",
+    "q": "what does the artifact viewer inject into the frame ahead of the page styles",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/artifacts.md \u00bb 5. The viewer",
+     "semantic": "docs/_claude/skills/artifacts/SKILL.md \u00bb Checking it",
+     "hybrid": "docs/specs/artifacts.md \u00bb 5. The viewer",
+     "rrf": "docs/specs/artifacts.md \u00bb 5. The viewer"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 44.3,
+     "hybrid": 45.5,
+     "rrf": 45.9
+    }
+   },
+   {
+    "id": "da075",
+    "tag": "paraphrase",
+    "q": "how are artifact files saved so a half-written state is never seen",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/artifacts.md \u00bb 2. Identity and metadata",
+     "semantic": "docs/specs/artifacts.md \u00bb 2. Identity and metadata",
+     "hybrid": "docs/specs/artifacts.md \u00bb 2. Identity and metadata",
+     "rrf": "docs/specs/artifacts.md \u00bb 2. Identity and metadata"
+    },
+    "ms": {
+     "keyword": 5.7,
+     "semantic": 44.4,
+     "hybrid": 44.7,
+     "rrf": 45.9
+    }
+   },
+   {
+    "id": "db001",
+    "tag": "paraphrase",
+    "q": "which node and vs code versions does the repo need",
+    "ranks": {
+     "keyword": 6,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Install",
+     "semantic": "docs/README.md \u00bb Requirements",
+     "hybrid": "docs/README.md \u00bb Install",
+     "rrf": "docs/README.md \u00bb Install"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 43.1,
+     "hybrid": 44.8,
+     "rrf": 44.5
+    }
+   },
+   {
+    "id": "db002",
+    "tag": "paraphrase",
+    "q": "build only the typescript packages without the C tools",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Build",
+     "semantic": "docs/README.md \u00bb Build",
+     "hybrid": "docs/README.md \u00bb Build",
+     "rrf": "docs/README.md \u00bb Build"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.2,
+     "hybrid": 46.1,
+     "rrf": 45.0
+    }
+   },
+   {
+    "id": "db003",
+    "tag": "purpose",
+    "q": "how to install lap and kb into ~/.local instead of /usr/local",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Install",
+     "semantic": "docs/README.md \u00bb Install",
+     "hybrid": "docs/README.md \u00bb Install",
+     "rrf": "docs/README.md \u00bb Install"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 46.5,
+     "hybrid": 45.9,
+     "rrf": 45.8
+    }
+   },
+   {
+    "id": "db005",
+    "tag": "purpose",
+    "q": "why does every kb mcp tool refuse with not_found",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 8,
+     "hybrid": 6,
+     "rrf": 6
+    },
+    "top": {
+     "keyword": "docs/specs/artifacts.md \u00bb 4. MCP tools",
+     "semantic": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb Framing",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb Framing"
+    },
+    "ms": {
+     "keyword": 6.0,
+     "semantic": 45.7,
+     "hybrid": 46.0,
+     "rrf": 57.9
+    }
+   },
+   {
+    "id": "db006",
+    "tag": "paraphrase",
+    "q": "where does the embedding model live and who puts it there",
+    "ranks": {
+     "keyword": null,
+     "semantic": 1,
+     "hybrid": 5,
+     "rrf": 6
+    },
+    "top": {
+     "keyword": "docs/specs/artifacts.md \u00bb 1. Where artifacts live",
+     "semantic": "docs/specs/index-api.md \u00bb 8. The model",
+     "hybrid": "docs/specs/artifacts.md \u00bb 1. Where artifacts live",
+     "rrf": "docs/specs/index-api.md \u00bb 8. The model"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 43.8,
+     "hybrid": 45.4,
+     "rrf": 44.9
+    }
+   },
+   {
+    "id": "db007",
+    "tag": "identifier",
+    "q": "nomic-embed-text-v1.5 gguf sha256",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Install",
+     "semantic": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Sources and files",
+     "hybrid": "docs/README.md \u00bb Install",
+     "rrf": "docs/README.md \u00bb Install"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 46.5,
+     "hybrid": 47.8,
+     "rrf": 48.6
+    }
+   },
+   {
+    "id": "db008",
+    "tag": "purpose",
+    "q": "how do I get claude code to use the kb and coboard mcp servers from procode",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Install",
+     "semantic": "docs/README.md \u00bb Install",
+     "hybrid": "docs/README.md \u00bb Install",
+     "rrf": "docs/README.md \u00bb Install"
+    },
+    "ms": {
+     "keyword": 5.8,
+     "semantic": 48.1,
+     "hybrid": 47.2,
+     "rrf": 49.3
+    }
+   },
+   {
+    "id": "db009",
+    "tag": "identifier",
+    "q": "knowledge.cliPath",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 1,
+     "rrf": 7
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Install",
+     "semantic": "docs/specs/index-api.md \u00bb 10. The JS layer",
+     "hybrid": "docs/README.md \u00bb Install",
+     "rrf": "docs/specs/index-api.md \u00bb 10. The JS layer"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 43.3,
+     "hybrid": 42.6,
+     "rrf": 43.4
+    }
+   },
+   {
+    "id": "db010",
+    "tag": "paraphrase",
+    "q": "where is the board data folder created if none exists",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 4,
+     "rrf": 5
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Install",
+     "semantic": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "hybrid": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb Where a write lands"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 43.9,
+     "hybrid": 43.9,
+     "rrf": 44.3
+    }
+   },
+   {
+    "id": "db011",
+    "tag": "identifier",
+    "q": "COBOARD_AUTHOR",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 6,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Install",
+     "semantic": "docs/README.md \u00bb The tools",
+     "hybrid": "docs/README.md \u00bb Install",
+     "rrf": "docs/README.md \u00bb The tools"
+    },
+    "ms": {
+     "keyword": 4.8,
+     "semantic": 43.0,
+     "hybrid": 43.4,
+     "rrf": 42.9
+    }
+   },
+   {
+    "id": "db012",
+    "tag": "purpose",
+    "q": "what should I set up before running mutation tests",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Test",
+     "semantic": "docs/README.md \u00bb Test",
+     "hybrid": "docs/README.md \u00bb Test",
+     "rrf": "docs/README.md \u00bb Test"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 46.8,
+     "hybrid": 46.0,
+     "rrf": 47.4
+    }
+   },
+   {
+    "id": "db013",
+    "tag": "paraphrase",
+    "q": "one vsix with lap history, knowledge and board together",
+    "ranks": {
+     "keyword": 2,
+     "semantic": null,
+     "hybrid": 4,
+     "rrf": 5
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Install",
+     "semantic": "docs/README.md \u00bb Install",
+     "hybrid": "docs/README.md \u00bb Install",
+     "rrf": "docs/README.md \u00bb Install"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 43.6,
+     "hybrid": 45.0,
+     "rrf": 46.4
+    }
+   },
+   {
+    "id": "db014",
+    "tag": "paraphrase",
+    "q": "can lap commit a file containing null bytes",
+    "ranks": {
+     "keyword": 6,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb For agents",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Limitations"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 44.0,
+     "hybrid": 45.8,
+     "rrf": 44.3
+    }
+   },
+   {
+    "id": "db015",
+    "tag": "paraphrase",
+    "q": "is trailing whitespace removed from a commit message",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb Core rules",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Commit messages",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb Core rules",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb Core rules"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 45.8,
+     "hybrid": 45.0,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "db016",
+    "tag": "purpose",
+    "q": "why are lap commit ids sequential rather than content hashes",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb Core rules",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb Core rules",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb Core rules",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb Core rules"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 46.3,
+     "hybrid": 45.0,
+     "rrf": 44.9
+    }
+   },
+   {
+    "id": "db017",
+    "tag": "identifier",
+    "q": ".lap/heads",
+    "ranks": {
+     "keyword": 3,
+     "semantic": null,
+     "hybrid": 3,
+     "rrf": null
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb Repository layout",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb ",
+     "hybrid": "docs/cli/kb-cli/tools/modernbert/MODERNBERT.md \u00bb Heads",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb lap \u2014 fine-grained edit recording"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 41.8,
+     "hybrid": 45.2,
+     "rrf": 44.0
+    }
+   },
+   {
+    "id": "db018",
+    "tag": "paraphrase",
+    "q": "is it safe to delete files inside the .lap folder",
+    "ranks": {
+     "keyword": 10,
+     "semantic": 6,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 2. Ingest",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Limitations"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.2,
+     "hybrid": 46.3,
+     "rrf": 44.7
+    }
+   },
+   {
+    "id": "db019",
+    "tag": "purpose",
+    "q": "why is the index header written after the entries",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb Repository layout",
+     "semantic": "docs/specs/index-ui.md \u00bb 3.1 Header",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb Repository layout",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb Repository layout"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 45.0,
+     "hybrid": 44.7,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "db020",
+    "tag": "identifier",
+    "q": "prev_same_file",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb The acceleration layer",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Using the history (do this before changi",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb The acceleration layer",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb The acceleration layer"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 42.7,
+     "hybrid": 42.8,
+     "rrf": 45.2
+    }
+   },
+   {
+    "id": "db021",
+    "tag": "paraphrase",
+    "q": "when does lap store a full copy of a file to speed up replay",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb The acceleration layer",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb The acceleration layer",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb The acceleration layer",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb The acceleration layer"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.0,
+     "hybrid": 45.4,
+     "rrf": 45.9
+    }
+   },
+   {
+    "id": "db023",
+    "tag": "identifier",
+    "q": "LAP_USER resolution order",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb The log",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb The log",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb The log",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb The log"
+    },
+    "ms": {
+     "keyword": 4.9,
+     "semantic": 42.3,
+     "hybrid": 43.3,
+     "rrf": 42.8
+    }
+   },
+   {
+    "id": "db024",
+    "tag": "paraphrase",
+    "q": "is new_start a position in the working file or the committed file",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb The log",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb The log",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb The log",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb The log"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 46.2,
+     "hybrid": 47.2,
+     "rrf": 45.8
+    }
+   },
+   {
+    "id": "db025",
+    "tag": "paraphrase",
+    "q": "what happens when a diff is so big lap stops splitting it",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb The rules",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb Edit detection",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb Edit detection",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb Edit detection"
+    },
+    "ms": {
+     "keyword": 5.6,
+     "semantic": 44.2,
+     "hybrid": 46.4,
+     "rrf": 47.8
+    }
+   },
+   {
+    "id": "db026",
+    "tag": "purpose",
+    "q": "why do changes separated only by whitespace lines get merged",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb Core rules",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb Edit detection",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb Core rules",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb Core rules"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 43.0,
+     "hybrid": 44.6,
+     "rrf": 45.7
+    }
+   },
+   {
+    "id": "db027",
+    "tag": "identifier",
+    "q": "multiple_edits",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 5,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb `lap commit <file> -m \"msg\" | -F <file|-",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb When a commit is rejected: \"N separate e",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb `lap commit <file> -m \"msg\" | -F <file|-",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb When a commit is rejected: \"N separate e"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 42.2,
+     "hybrid": 44.4,
+     "rrf": 42.9
+    }
+   },
+   {
+    "id": "db028",
+    "tag": "purpose",
+    "q": "how to commit a file whose name starts with a dash",
+    "ranks": {
+     "keyword": null,
+     "semantic": null,
+     "hybrid": null,
+     "rrf": null
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Use",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 45.7,
+     "hybrid": 45.2,
+     "rrf": 44.9
+    }
+   },
+   {
+    "id": "db029",
+    "tag": "identifier",
+    "q": "NO_COLOR overrides --color=always",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Colour",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Colour",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Colour",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Colour"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 47.0,
+     "hybrid": 45.0,
+     "rrf": 46.1
+    }
+   },
+   {
+    "id": "db030",
+    "tag": "purpose",
+    "q": "why are the colour flags spelled with an equals sign",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb Colour",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb Colour",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb Colour",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb Colour"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 44.9,
+     "hybrid": 45.7,
+     "rrf": 44.4
+    }
+   },
+   {
+    "id": "db031",
+    "tag": "identifier",
+    "q": "lap session list --meta ticket=T-12",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb `lap session [start \"purpose\" | end | li",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb `lap session [start \"purpose\" | end | li",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb `lap session [start \"purpose\" | end | li",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb `lap session [start \"purpose\" | end | li"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 42.6,
+     "hybrid": 46.4,
+     "rrf": 43.7
+    }
+   },
+   {
+    "id": "db032",
+    "tag": "paraphrase",
+    "q": "how does lap summarize a task so edits that were undone disappear",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 5,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Using the history (do this before changi",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb lap \u2014 fine-grained edit recording",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Using the history (do this before changi",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Using the history (do this before changi"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 45.4,
+     "hybrid": 45.1,
+     "rrf": 45.8
+    }
+   },
+   {
+    "id": "db033",
+    "tag": "paraphrase",
+    "q": "can I un-ignore a path with an exclamation pattern in lapignore",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb `.lapignore`",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb `.lapignore`",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb `.lapignore`",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb `.lapignore`"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 45.2,
+     "hybrid": 48.1,
+     "rrf": 66.4
+    }
+   },
+   {
+    "id": "db034",
+    "tag": "paraphrase",
+    "q": "what does lap do with a half-written last line after a crash",
+    "ranks": {
+     "keyword": null,
+     "semantic": 1,
+     "hybrid": 4,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Using the history (do this before changi",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb Concurrency & crash safety",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Using the history (do this before changi",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb lap"
+    },
+    "ms": {
+     "keyword": 5.7,
+     "semantic": 44.3,
+     "hybrid": 45.5,
+     "rrf": 45.6
+    }
+   },
+   {
+    "id": "db035",
+    "tag": "purpose",
+    "q": "how does lap recover when state.json lags behind the log",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb For agents",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb How it stores things",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb Concurrency & crash safety",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb Concurrency & crash safety"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 46.8,
+     "hybrid": 47.1,
+     "rrf": 47.5
+    }
+   },
+   {
+    "id": "db036",
+    "tag": "identifier",
+    "q": "lap exit code 2",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 7,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb Commands",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb License",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb Commands",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb Commands"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 41.5,
+     "hybrid": 44.0,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "db037",
+    "tag": "paraphrase",
+    "q": "what does lap tell you that git history cannot",
+    "ranks": {
+     "keyword": 10,
+     "semantic": 2,
+     "hybrid": 3,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Limitations"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.1,
+     "hybrid": 45.3,
+     "rrf": 44.9
+    }
+   },
+   {
+    "id": "db038",
+    "tag": "identifier",
+    "q": "make e2e",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/README.md \u00bb Test",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Build",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Build",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Build"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 46.2,
+     "hybrid": 43.6,
+     "rrf": 44.3
+    }
+   },
+   {
+    "id": "db039",
+    "tag": "purpose",
+    "q": "how to run the lap tests with address sanitizer",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Build",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb License",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Build",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Build"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 43.8,
+     "hybrid": 43.8,
+     "rrf": 44.1
+    }
+   },
+   {
+    "id": "db040",
+    "tag": "identifier",
+    "q": "cmake --install CMAKE_INSTALL_PREFIX lap",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 4,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Build",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb `lap init`",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Build",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Build"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 43.8,
+     "hybrid": 46.1,
+     "rrf": 46.7
+    }
+   },
+   {
+    "id": "db041",
+    "tag": "paraphrase",
+    "q": "after committing one of several edits do the numbers stay the same",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb When a commit is rejected: \"N separate e",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb When a commit is rejected: \"N separate e",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb When a commit is rejected: \"N separate e"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 45.2,
+     "hybrid": 46.5,
+     "rrf": 46.7
+    }
+   },
+   {
+    "id": "db042",
+    "tag": "purpose",
+    "q": "how do I record that I deleted a file in lap",
+    "ranks": {
+     "keyword": null,
+     "semantic": 1,
+     "hybrid": 8,
+     "rrf": 8
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb How it stores things",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Use",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb How it stores things",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb How it stores things"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 45.1,
+     "hybrid": 45.4,
+     "rrf": 45.4
+    }
+   },
+   {
+    "id": "db043",
+    "tag": "identifier",
+    "q": "lap search --added --removed",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb `lap search ...`",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb `lap search ...`",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb `lap search ...`",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb `lap search ...`"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 45.8,
+     "hybrid": 43.7,
+     "rrf": 45.0
+    }
+   },
+   {
+    "id": "db044",
+    "tag": "paraphrase",
+    "q": "can lap roll a file back to an older version",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb Repository layout",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Limitations"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.3,
+     "hybrid": 44.3,
+     "rrf": 45.0
+    }
+   },
+   {
+    "id": "db045",
+    "tag": "paraphrase",
+    "q": "lap status shows changes I didn't make after switching branches",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Limitations"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 42.3,
+     "hybrid": 48.2,
+     "rrf": 44.4
+    }
+   },
+   {
+    "id": "db046",
+    "tag": "purpose",
+    "q": "should .lap be committed to git or ignored",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 1.5 What to commit",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Limitations"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 43.2,
+     "hybrid": 44.6,
+     "rrf": 45.6
+    }
+   },
+   {
+    "id": "db047",
+    "tag": "purpose",
+    "q": "how to record a file rename in lap",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb How it stores things",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 44.4,
+     "hybrid": 44.2,
+     "rrf": 44.3
+    }
+   },
+   {
+    "id": "db048",
+    "tag": "paraphrase",
+    "q": "how long does lap status take on a large checkout",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Limitations",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Limitations"
+    },
+    "ms": {
+     "keyword": 5.7,
+     "semantic": 42.8,
+     "hybrid": 44.3,
+     "rrf": 45.4
+    }
+   },
+   {
+    "id": "db049",
+    "tag": "paraphrase",
+    "q": "what happens when two agents write to the same lap repo at once",
+    "ranks": {
+     "keyword": null,
+     "semantic": 5,
+     "hybrid": 5,
+     "rrf": 5
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb The rules",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb lap",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb lap",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb lap"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 47.2,
+     "hybrid": 46.6,
+     "rrf": 46.1
+    }
+   },
+   {
+    "id": "db050",
+    "tag": "purpose",
+    "q": "how to move a lap repository to another machine",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 7,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Commands",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb Portability",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Commands",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Commands"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 45.7,
+     "hybrid": 45.6,
+     "rrf": 44.1
+    }
+   },
+   {
+    "id": "db051",
+    "tag": "paraphrase",
+    "q": "does piped lap output contain terminal escape codes",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 44.7,
+     "hybrid": 45.2,
+     "rrf": 45.4
+    }
+   },
+   {
+    "id": "db052",
+    "tag": "identifier",
+    "q": "--no-session",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb `lap rr [<session>] [<from> <to>] [--no-",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb The rules",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb `lap rr [<session>] [<from> <to>] [--no-",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb The rules"
+    },
+    "ms": {
+     "keyword": 5.6,
+     "semantic": 43.3,
+     "hybrid": 42.4,
+     "rrf": 44.0
+    }
+   },
+   {
+    "id": "db053",
+    "tag": "paraphrase",
+    "q": "should an agent commit all its edits together at the end",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 3,
+     "hybrid": 3,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Commands",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb For agents",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb When a commit is rejected: \"N separate e",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Cadence (follow this strictly)"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 45.0,
+     "hybrid": 45.5,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "db054",
+    "tag": "purpose",
+    "q": "what to do if a session is already open when starting a new task",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Cadence (follow this strictly)",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Cadence (follow this strictly)",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Cadence (follow this strictly)",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Cadence (follow this strictly)"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 44.2,
+     "hybrid": 44.3,
+     "rrf": 45.5
+    }
+   },
+   {
+    "id": "db055",
+    "tag": "paraphrase",
+    "q": "example of a good versus bad lap commit message",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Commit messages",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Commit messages",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Commit messages",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Commit messages"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 45.2,
+     "hybrid": 47.1,
+     "rrf": 45.7
+    }
+   },
+   {
+    "id": "db056",
+    "tag": "purpose",
+    "q": "best way to commit a large new file with lap",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 44.0,
+     "hybrid": 44.0,
+     "rrf": 45.7
+    }
+   },
+   {
+    "id": "db057",
+    "tag": "identifier",
+    "q": "no active session error",
+    "ranks": {
+     "keyword": 9,
+     "semantic": 2,
+     "hybrid": 3,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "docs/packages/lap-vscode/README.md \u00bb What you get",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb For agents",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb Core rules",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb Core rules"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 59.8,
+     "hybrid": 45.9,
+     "rrf": 48.1
+    }
+   },
+   {
+    "id": "db058",
+    "tag": "purpose",
+    "q": "how to keep ansi escapes out when running lap through a pty",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Other situations"
+    },
+    "ms": {
+     "keyword": 5.6,
+     "semantic": 46.1,
+     "hybrid": 45.3,
+     "rrf": 46.3
+    }
+   },
+   {
+    "id": "db059",
+    "tag": "paraphrase",
+    "q": "how to see everything that was done in one task",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/README.md \u00bb Use",
+     "semantic": "docs/_claude/skills/tickets/SKILL.md \u00bb tickets \u2014 one ticket, start to finish",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Use",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Use"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 44.7,
+     "hybrid": 44.7,
+     "rrf": 45.9
+    }
+   },
+   {
+    "id": "db060",
+    "tag": "identifier",
+    "q": "lap rr <from> <to>",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb `lap rr [<session>] [<from> <to>] [--no-",
+     "semantic": "docs/cli/lap-cli/SPEC.md \u00bb `lap rr [<session>] [<from> <to>] [--no-",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb `lap rr [<session>] [<from> <to>] [--no-",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb `lap rr [<session>] [<from> <to>] [--no-"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 44.3,
+     "hybrid": 45.8,
+     "rrf": 45.5
+    }
+   },
+   {
+    "id": "db061",
+    "tag": "purpose",
+    "q": "when should I run lap rebuild",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb `lap rebuild [--verify]`",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Sanity",
+     "hybrid": "docs/cli/lap-cli/SPEC.md \u00bb `lap rebuild [--verify]`",
+     "rrf": "docs/cli/lap-cli/SPEC.md \u00bb `lap rebuild [--verify]`"
+    },
+    "ms": {
+     "keyword": 4.9,
+     "semantic": 41.8,
+     "hybrid": 43.4,
+     "rrf": 42.7
+    }
+   },
+   {
+    "id": "db062",
+    "tag": "paraphrase",
+    "q": "does the lap vs code extension need the lap binary installed",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/packages/lap-vscode/README.md \u00bb What you get",
+     "semantic": "docs/README.md \u00bb Install",
+     "hybrid": "docs/packages/lap-vscode/README.md \u00bb What you get",
+     "rrf": "docs/README.md \u00bb Install"
+    },
+    "ms": {
+     "keyword": 5.1,
+     "semantic": 45.8,
+     "hybrid": 45.7,
+     "rrf": 46.3
+    }
+   },
+   {
+    "id": "db063",
+    "tag": "identifier",
+    "q": "Lap view raw list toggle",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/packages/lap-vscode/README.md \u00bb What you get",
+     "semantic": "docs/cli/lap-cli/README.md \u00bb ",
+     "hybrid": "docs/packages/lap-vscode/README.md \u00bb What you get",
+     "rrf": "docs/packages/lap-vscode/README.md \u00bb Lap History \u2014 VSCode extension"
+    },
+    "ms": {
+     "keyword": 5.6,
+     "semantic": 43.0,
+     "hybrid": 43.9,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "db064",
+    "tag": "paraphrase",
+    "q": "where does the commit message show up when I open a commit's diff",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 2,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Using the history (do this before changi",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Commit messages",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Using the history (do this before changi",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Using the history (do this before changi"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 45.1,
+     "hybrid": 46.7,
+     "rrf": 45.2
+    }
+   },
+   {
+    "id": "db065",
+    "tag": "purpose",
+    "q": "why can't I start a session or commit from the lap history extension",
+    "ranks": {
+     "keyword": 6,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "semantic": "docs/packages/lap-vscode/README.md \u00bb Lap History \u2014 VSCode extension",
+     "hybrid": "docs/cli/lap-cli/README.md \u00bb Use",
+     "rrf": "docs/cli/lap-cli/README.md \u00bb Use"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 46.8,
+     "hybrid": 47.0,
+     "rrf": 45.2
+    }
+   },
+   {
+    "id": "db066",
+    "tag": "identifier",
+    "q": "board_update status=doing assignee=claude",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "semantic": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "hybrid": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "rrf": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop"
+    },
+    "ms": {
+     "keyword": 4.9,
+     "semantic": 45.9,
+     "hybrid": 44.8,
+     "rrf": 48.1
+    }
+   },
+   {
+    "id": "db067",
+    "tag": "purpose",
+    "q": "how to word lap messages when a big restructure breaks into lots of pieces",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 6,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "semantic": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Commit messages",
+     "hybrid": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Commit messages",
+     "rrf": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Commit messages"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 46.4,
+     "hybrid": 48.6,
+     "rrf": 46.0
+    }
+   },
+   {
+    "id": "db068",
+    "tag": "paraphrase",
+    "q": "what goes in the comment when closing a ticket",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "semantic": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "hybrid": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "rrf": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 44.9,
+     "hybrid": 46.4,
+     "rrf": 46.5
+    }
+   },
+   {
+    "id": "db069",
+    "tag": "purpose",
+    "q": "which check to run when an mcp server or manifest changed",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/tickets/SKILL.md \u00bb The loop",
+     "semantic": "docs/specs/artifacts.md \u00bb 4. MCP tools",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb kb-mcp",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb kb-mcp"
+    },
+    "ms": {
+     "keyword": 5.6,
+     "semantic": 44.8,
+     "hybrid": 45.0,
+     "rrf": 46.5
+    }
+   },
+   {
+    "id": "db070",
+    "tag": "paraphrase",
+    "q": "may an agent remove a ticket the user dropped",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/skill/lap/SKILL.md \u00bb Identity",
+     "semantic": "docs/_claude/skills/tickets/SKILL.md \u00bb Rules",
+     "hybrid": "docs/_claude/skills/tickets/SKILL.md \u00bb Rules",
+     "rrf": "docs/_claude/skills/tickets/SKILL.md \u00bb Rules"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 46.7,
+     "hybrid": 52.9,
+     "rrf": 51.5
+    }
+   },
+   {
+    "id": "db071",
+    "tag": "identifier",
+    "q": "artifact_template report",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "semantic": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "hybrid": "docs/_claude/skills/artifacts/SKILL.md \u00bb How",
+     "rrf": "docs/_claude/skills/artifacts/SKILL.md \u00bb How"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 42.5,
+     "hybrid": 49.1,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "db073",
+    "tag": "purpose",
+    "q": "when should I answer in chat instead of making an artifact",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/artifacts/SKILL.md \u00bb ",
+     "semantic": "docs/_claude/skills/artifacts/SKILL.md \u00bb When to make one",
+     "hybrid": "docs/_claude/skills/artifacts/SKILL.md \u00bb When to make one",
+     "rrf": "docs/_claude/skills/artifacts/SKILL.md \u00bb "
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 49.7,
+     "hybrid": 45.7,
+     "rrf": 45.5
+    }
+   },
+   {
+    "id": "db075",
+    "tag": "identifier",
+    "q": "td.num td.id tag",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/artifacts/SKILL.md \u00bb The shape that works",
+     "semantic": "docs/_claude/skills/artifacts/SKILL.md \u00bb The shape that works",
+     "hybrid": "docs/_claude/skills/artifacts/SKILL.md \u00bb The shape that works",
+     "rrf": "docs/_claude/skills/artifacts/SKILL.md \u00bb The shape that works"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.7,
+     "hybrid": 44.2,
+     "rrf": 43.4
+    }
+   },
+   {
+    "id": "dc001",
+    "tag": "paraphrase",
+    "q": "kb exit status for an internal failure versus a bad argument",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/cli/lap-cli/SPEC.md \u00bb Commands",
+     "semantic": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract",
+     "hybrid": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract",
+     "rrf": "docs/packages/kb-js/README.md \u00bb Exit codes are the contract"
+    },
+    "ms": {
+     "keyword": 5.3,
+     "semantic": 43.7,
+     "hybrid": 46.4,
+     "rrf": 45.3
+    }
+   },
+   {
+    "id": "dc002",
+    "tag": "purpose",
+    "q": "is it safe to delete the index folder inside .kb",
+    "ranks": {
+     "keyword": null,
+     "semantic": 4,
+     "hybrid": 9,
+     "rrf": 9
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 9. MCP tool surface",
+     "semantic": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "hybrid": "docs/specs/index-api.md \u00bb 1.4 The store",
+     "rrf": "docs/specs/index-api.md \u00bb 1.4 The store"
+    },
+    "ms": {
+     "keyword": 5.4,
+     "semantic": 44.1,
+     "hybrid": 45.1,
+     "rrf": 44.6
+    }
+   },
+   {
+    "id": "dc003",
+    "tag": "paraphrase",
+    "q": "what does a chunk record carry besides its text",
+    "ranks": {
+     "keyword": 2,
+     "semantic": null,
+     "hybrid": 3,
+     "rrf": 6
+    },
+    "top": {
+     "keyword": "docs/specs/index-api.md \u00bb 3. Chunking",
+     "semantic": "docs/specs/index-api.md \u00bb 3. Chunking",
+     "hybrid": "docs/specs/index-api.md \u00bb 3. Chunking",
+     "rrf": "docs/specs/index-api.md \u00bb 3. Chunking"
+    },
+    "ms": {
+     "keyword": 5.0,
+     "semantic": 43.4,
+     "hybrid": 43.8,
+     "rrf": 44.1
+    }
+   },
+   {
+    "id": "dc004",
+    "tag": "purpose",
+    "q": "where do a paper's authors and year go when filing it",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/specs/index-ui.md \u00bb 3.1 Header",
+     "semantic": "docs/specs/index-ui.md \u00bb 3.1 Header",
+     "hybrid": "docs/specs/index-ui.md \u00bb 3.1 Header",
+     "rrf": "docs/specs/index-ui.md \u00bb 3.1 Header"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 45.8,
+     "hybrid": 45.5,
+     "rrf": 47.3
+    }
+   },
+   {
+    "id": "dc005",
+    "tag": "paraphrase",
+    "q": "does kb need a background server running",
+    "ranks": {
+     "keyword": null,
+     "semantic": null,
+     "hybrid": null,
+     "rrf": null
+    },
+    "top": {
+     "keyword": "docs/packages/kb-mcp/README.md \u00bb Running it",
+     "semantic": "docs/packages/kb-js/README.md \u00bb The two entry points",
+     "hybrid": "docs/packages/kb-mcp/README.md \u00bb Running it",
+     "rrf": "docs/packages/kb-mcp/README.md \u00bb Running it"
+    },
+    "ms": {
+     "keyword": 5.5,
+     "semantic": 42.9,
+     "hybrid": 44.2,
+     "rrf": 45.1
+    }
+   },
+   {
+    "id": "dc006",
+    "tag": "purpose",
+    "q": "why mark search results that come from old sources",
+    "ranks": {
+     "keyword": 10,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "docs/_claude/skills/artifacts/SKILL.md \u00bb When to make one",
+     "semantic": "docs/specs/index-api.md \u00bb 5. Provenance and staleness",
+     "hybrid": "docs/specs/index-api.md \u00bb 5. Provenance and staleness",
+     "rrf": "docs/specs/index-api.md \u00bb 5. Provenance and staleness"
+    },
+    "ms": {
+     "keyword": 5.2,
+     "semantic": 43.4,
+     "hybrid": 48.1,
+     "rrf": 48.7
+    }
+   }
+  ],
+  "code": [
+   {
+    "id": "ca001",
+    "tag": "paraphrase",
+    "q": "how are non-printable bytes mapped to unicode chars before bpe merges",
+    "ranks": {
+     "keyword": 5,
+     "semantic": 3,
+     "hybrid": 5,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/bpe.h \u00bb #define KB_BPE_H",
+     "semantic": "code/cli/kb-cli/src/bpe.c \u00bb bool bpe_init(Arena *a, const Gguf *g, B",
+     "hybrid": "code/cli/kb-cli/src/bpe.h \u00bb #define KB_BPE_H",
+     "rrf": "code/cli/kb-cli/src/bpe.c \u00bb bool bpe_init(Arena *a, const Gguf *g, B"
+    },
+    "ms": {
+     "keyword": 8.0,
+     "semantic": 57.0,
+     "hybrid": 52.5,
+     "rrf": 51.1
+    }
+   },
+   {
+    "id": "ca002",
+    "tag": "identifier",
+    "q": "bpe_encode_pair truncation when query and passage are too long",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/bpe.h \u00bb size_t bpe_encode_pair(Arena *a, const B",
+     "semantic": "code/cli/kb-cli/src/bpe.h \u00bb size_t bpe_encode_pair(Arena *a, const B",
+     "hybrid": "code/cli/kb-cli/src/bpe.h \u00bb size_t bpe_encode_pair(Arena *a, const B",
+     "rrf": "code/cli/kb-cli/src/bpe.h \u00bb size_t bpe_encode_pair(Arena *a, const B"
+    },
+    "ms": {
+     "keyword": 11.4,
+     "semantic": 66.4,
+     "hybrid": 52.4,
+     "rrf": 50.2
+    }
+   },
+   {
+    "id": "ca003",
+    "tag": "paraphrase",
+    "q": "markdown heading detection skipping lines inside fenced code blocks",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/chunk.c \u00bb static bool fence_line(Str l) {",
+     "semantic": "code/cli/kb-cli/src/chunk.c \u00bb static bool fence_line(Str l) {",
+     "hybrid": "code/cli/kb-cli/src/chunk.c \u00bb static bool fence_line(Str l) {",
+     "rrf": "code/cli/kb-cli/src/chunk.c \u00bb static bool fence_line(Str l) {"
+    },
+    "ms": {
+     "keyword": 8.4,
+     "semantic": 47.8,
+     "hybrid": 47.3,
+     "rrf": 47.8
+    }
+   },
+   {
+    "id": "ca004",
+    "tag": "purpose",
+    "q": "why does a code chunk boundary move up above the doc comment",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 5,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/chunk.c \u00bb static void sections_code(Sections *out,",
+     "semantic": "code/cli/kb-cli/src/chunk.c \u00bb static void chunk_add(ChunkBuf *b, size_",
+     "hybrid": "code/cli/kb-cli/src/chunk.c \u00bb static void sections_code(Sections *out,",
+     "rrf": "code/cli/kb-cli/src/chunk.c \u00bb static void sections_code(Sections *out,"
+    },
+    "ms": {
+     "keyword": 16.0,
+     "semantic": 49.1,
+     "hybrid": 50.2,
+     "rrf": 49.6
+    }
+   },
+   {
+    "id": "ca005",
+    "tag": "paraphrase",
+    "q": "avoid ending a chunk in the middle of a word",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/src/view/code.ts \u00bb export function tokenize(source: string,",
+     "semantic": "code/cli/kb-cli/src/chunk.c \u00bb static void chunk_add(ChunkBuf *b, size_",
+     "hybrid": "code/cli/kb-cli/src/chunk.c \u00bb static void chunk_add(ChunkBuf *b, size_",
+     "rrf": "code/cli/kb-cli/src/chunk.c \u00bb static void chunk_add(ChunkBuf *b, size_"
+    },
+    "ms": {
+     "keyword": 12.8,
+     "semantic": 48.9,
+     "hybrid": 51.5,
+     "rrf": 50.8
+    }
+   },
+   {
+    "id": "ca006",
+    "tag": "identifier",
+    "q": "chunk_mime_from_path extension table",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/chunk.c \u00bb Lang chunk_lang(const char *mime, const ",
+     "semantic": "code/cli/kb-cli/src/chunk.c \u00bb const char *chunk_mime_from_path(const c",
+     "hybrid": "code/cli/kb-cli/src/chunk.c \u00bb Lang chunk_lang(const char *mime, const ",
+     "rrf": "code/cli/kb-cli/src/chunk.c \u00bb Lang chunk_lang(const char *mime, const "
+    },
+    "ms": {
+     "keyword": 12.1,
+     "semantic": 50.9,
+     "hybrid": 51.2,
+     "rrf": 53.3
+    }
+   },
+   {
+    "id": "ca007",
+    "tag": "paraphrase",
+    "q": "guess whether piped text is markdown or html from its content",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/src/view/mime.ts \u00bb export type Rendering = \"markdown\" | \"ht",
+     "semantic": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool starts_icase(const char *s, ",
+     "hybrid": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool starts_icase(const char *s, ",
+     "rrf": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool starts_icase(const char *s, "
+    },
+    "ms": {
+     "keyword": 12.1,
+     "semantic": 51.7,
+     "hybrid": 52.9,
+     "rrf": 54.0
+    }
+   },
+   {
+    "id": "ca008",
+    "tag": "purpose",
+    "q": "why is the source record appended before the document record on ingest",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_collections.c \u00bb static const char *const VALUE_FLAGS[] =",
+     "semantic": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool ingest(Arena *a, Store *s, c",
+     "hybrid": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool ingest(Arena *a, Store *s, c",
+     "rrf": "code/cli/kb-cli/src/doc.h \u00bb #ifndef KB_DOC_H"
+    },
+    "ms": {
+     "keyword": 16.6,
+     "semantic": 51.8,
+     "hybrid": 55.7,
+     "rrf": 53.4
+    }
+   },
+   {
+    "id": "ca009",
+    "tag": "purpose",
+    "q": "why does every kb add rebuild the whole keyword index instead of merging",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool ingest(Arena *a, Store *s, c",
+     "semantic": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool ingest(Arena *a, Store *s, c",
+     "hybrid": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool ingest(Arena *a, Store *s, c",
+     "rrf": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool ingest(Arena *a, Store *s, c"
+    },
+    "ms": {
+     "keyword": 11.8,
+     "semantic": 53.9,
+     "hybrid": 52.4,
+     "rrf": 53.6
+    }
+   },
+   {
+    "id": "ca010",
+    "tag": "paraphrase",
+    "q": "what happens to files deleted from a folder when it is filed again",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 8,
+     "hybrid": 8,
+     "rrf": null
+    },
+    "top": {
+     "keyword": "code/packages/kb-mcp/src/tools.ts \u00bb const KB_ADD: ToolDefinition = {",
+     "semantic": "code/packages/index-vscode/src/commands.ts \u00bb export async function addFiles(kb: Kb, a",
+     "hybrid": "code/packages/index-vscode/src/commands.ts \u00bb export async function addFiles(kb: Kb, a",
+     "rrf": "code/packages/index-vscode/src/commands.ts \u00bb export async function addFiles(kb: Kb, a"
+    },
+    "ms": {
+     "keyword": 11.0,
+     "semantic": 53.1,
+     "hybrid": 54.2,
+     "rrf": 51.3
+    }
+   },
+   {
+    "id": "ca011",
+    "tag": "identifier",
+    "q": "collection_in_use error --with-documents",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/webview/Collections.tsx \u00bb function inUse(e: unknown): number | nul",
+     "semantic": "code/cli/kb-cli/src/cmd_collections.c \u00bb static int32_t collection_write(Arena *a",
+     "hybrid": "code/cli/kb-cli/src/cmd_collections.c \u00bb static int32_t collection_write(Arena *a",
+     "rrf": "code/cli/kb-cli/src/cmd_collections.c \u00bb static int32_t collection_write(Arena *a"
+    },
+    "ms": {
+     "keyword": 9.7,
+     "semantic": 47.5,
+     "hybrid": 47.9,
+     "rrf": 49.7
+    }
+   },
+   {
+    "id": "ca012",
+    "tag": "purpose",
+    "q": "why can't i use months or years in the --older-than duration",
+    "ranks": {
+     "keyword": 5,
+     "semantic": 4,
+     "hybrid": 3,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd.h \u00bb bool duration_parse(const char *s, int64",
+     "semantic": "code/cli/kb-cli/src/platform.c \u00bb static int64_t days_from_civil(int64_t y",
+     "hybrid": "code/cli/kb-cli/src/cmd.h \u00bb bool duration_parse(const char *s, int64",
+     "rrf": "code/cli/kb-cli/src/cmd.h \u00bb bool duration_parse(const char *s, int64"
+    },
+    "ms": {
+     "keyword": 11.8,
+     "semantic": 52.2,
+     "hybrid": 55.8,
+     "rrf": 52.6
+    }
+   },
+   {
+    "id": "ca013",
+    "tag": "paraphrase",
+    "q": "metadata filter that matches when a field is a list containing the value",
+    "ranks": {
+     "keyword": 8,
+     "semantic": 3,
+     "hybrid": 6,
+     "rrf": 7
+    },
+    "top": {
+     "keyword": "code/packages/coboard-vscode/src/filter.ts \u00bb export function toggle(f: Filter, field:",
+     "semantic": "code/cli/lap-cli/src/cmd_session.c \u00bb static bool meta_match(const Rec *st, co",
+     "hybrid": "code/packages/coboard-vscode/src/filter.ts \u00bb export function toggle(f: Filter, field:",
+     "rrf": "code/packages/coboard-vscode/src/filter.ts \u00bb export function toggle(f: Filter, field:"
+    },
+    "ms": {
+     "keyword": 9.6,
+     "semantic": 54.9,
+     "hybrid": 52.0,
+     "rrf": 54.8
+    }
+   },
+   {
+    "id": "ca014",
+    "tag": "identifier",
+    "q": "refile_document same content hash touch record",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_common.c \u00bb bool refile_document(Arena *a, Store *s,",
+     "semantic": "code/cli/kb-cli/src/cmd_common.c \u00bb bool refile_document(Arena *a, Store *s,",
+     "hybrid": "code/cli/kb-cli/src/cmd_common.c \u00bb bool refile_document(Arena *a, Store *s,",
+     "rrf": "code/cli/kb-cli/src/cmd_common.c \u00bb bool refile_document(Arena *a, Store *s,"
+    },
+    "ms": {
+     "keyword": 14.3,
+     "semantic": 49.7,
+     "hybrid": 51.9,
+     "rrf": 52.3
+    }
+   },
+   {
+    "id": "ca015",
+    "tag": "paraphrase",
+    "q": "is a removed document's text deleted right away or kept until later",
+    "ranks": {
+     "keyword": null,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg",
+     "semantic": "code/cli/kb-cli/src/doc.h \u00bb char *doc_encode_source_forget(Arena *a,",
+     "hybrid": "code/cli/kb-cli/src/doc.h \u00bb char *doc_encode_source_forget(Arena *a,",
+     "rrf": "code/cli/kb-cli/src/doc.h \u00bb char *doc_encode_source_forget(Arena *a,"
+    },
+    "ms": {
+     "keyword": 12.7,
+     "semantic": 51.7,
+     "hybrid": 53.0,
+     "rrf": 56.3
+    }
+   },
+   {
+    "id": "ca016",
+    "tag": "purpose",
+    "q": "why does kb init refuse to create a store in the home directory",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/store.c \u00bb bool store_is_store(const char *parent, ",
+     "semantic": "code/cli/kb-cli/src/cmd_init.c \u00bb int32_t cmd_init(Arena *a, int32_t argc,",
+     "hybrid": "code/cli/kb-cli/src/cmd_init.c \u00bb int32_t cmd_init(Arena *a, int32_t argc,",
+     "rrf": "code/cli/kb-cli/src/cmd_init.c \u00bb int32_t cmd_init(Arena *a, int32_t argc,"
+    },
+    "ms": {
+     "keyword": 11.5,
+     "semantic": 48.3,
+     "hybrid": 51.0,
+     "rrf": 49.2
+    }
+   },
+   {
+    "id": "ca017",
+    "tag": "purpose",
+    "q": "why doesn't removing a link check that both documents still exist",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_links.c \u00bb static const char *const VALUE_FLAGS[] =",
+     "semantic": "code/cli/kb-cli/src/cmd_common.c \u00bb bool docquery_keep(Arena *a, const DocQu",
+     "hybrid": "code/cli/kb-cli/src/cmd_links.c \u00bb static const char *const VALUE_FLAGS[] =",
+     "rrf": "code/cli/kb-cli/src/cmd_links.c \u00bb static int32_t links_write(Arena *a, int"
+    },
+    "ms": {
+     "keyword": 12.3,
+     "semantic": 50.5,
+     "hybrid": 50.5,
+     "rrf": 50.4
+    }
+   },
+   {
+    "id": "ca018",
+    "tag": "purpose",
+    "q": "rebuild vs reindex which one may overwrite index/model.json",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_maint.c \u00bb int32_t cmd_reindex(Arena *a, int32_t ar",
+     "semantic": "code/cli/kb-cli/src/cmd_rebuild.c \u00bb static const char *const VALUE_FLAGS[] =",
+     "hybrid": "code/cli/kb-cli/src/cmd_maint.c \u00bb static const char *const VALUE_FLAGS[] =",
+     "rrf": "code/cli/kb-cli/src/cmd_maint.c \u00bb static const char *const VALUE_FLAGS[] ="
+    },
+    "ms": {
+     "keyword": 12.5,
+     "semantic": 53.3,
+     "hybrid": 53.0,
+     "rrf": 50.0
+    }
+   },
+   {
+    "id": "ca019",
+    "tag": "paraphrase",
+    "q": "rerunning a reindex that crashed partway should finish the job",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/kb-js/src/run.ts \u00bb export interface KbOptions {",
+     "semantic": "code/cli/kb-cli/src/cmd_maint.c \u00bb int32_t cmd_reindex(Arena *a, int32_t ar",
+     "hybrid": "code/cli/kb-cli/src/cmd_maint.c \u00bb int32_t cmd_reindex(Arena *a, int32_t ar",
+     "rrf": "code/cli/kb-cli/src/cmd_maint.c \u00bb int32_t cmd_reindex(Arena *a, int32_t ar"
+    },
+    "ms": {
+     "keyword": 14.2,
+     "semantic": 51.5,
+     "hybrid": 50.2,
+     "rrf": 50.6
+    }
+   },
+   {
+    "id": "ca020",
+    "tag": "identifier",
+    "q": "cmd_compact never drops a blob a live document references",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_maint.c \u00bb int32_t cmd_compact(Arena *a, int32_t ar",
+     "semantic": "code/cli/kb-cli/src/cmd_maint.c \u00bb int32_t cmd_compact(Arena *a, int32_t ar",
+     "hybrid": "code/cli/kb-cli/src/cmd_maint.c \u00bb int32_t cmd_compact(Arena *a, int32_t ar",
+     "rrf": "code/cli/kb-cli/src/cmd_maint.c \u00bb int32_t cmd_compact(Arena *a, int32_t ar"
+    },
+    "ms": {
+     "keyword": 7.8,
+     "semantic": 47.6,
+     "hybrid": 48.2,
+     "rrf": 49.7
+    }
+   },
+   {
+    "id": "ca021",
+    "tag": "identifier",
+    "q": "search --min-score floor applies to bm25 not the fused score",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg",
+     "semantic": "code/cli/kb-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg",
+     "hybrid": "code/cli/kb-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg",
+     "rrf": "code/cli/kb-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg"
+    },
+    "ms": {
+     "keyword": 11.0,
+     "semantic": 71.0,
+     "hybrid": 51.8,
+     "rrf": 51.7
+    }
+   },
+   {
+    "id": "ca022",
+    "tag": "purpose",
+    "q": "why does search fetch more candidates than k from each list before fusion",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 1,
+     "rrf": 6
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_search.c \u00bb typedef enum { MODE_KEYWORD, MODE_HYBRID",
+     "semantic": "code/cli/kb-cli/src/rank.c \u00bb size_t rrf_fuse(Arena *a, const RankList",
+     "hybrid": "code/cli/kb-cli/src/cmd_search.c \u00bb typedef enum { MODE_KEYWORD, MODE_HYBRID",
+     "rrf": "code/cli/kb-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg"
+    },
+    "ms": {
+     "keyword": 9.8,
+     "semantic": 49.3,
+     "hybrid": 51.6,
+     "rrf": 50.2
+    }
+   },
+   {
+    "id": "ca023",
+    "tag": "paraphrase",
+    "q": "default search falls back to keyword only when vectors are unavailable",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 4,
+     "hybrid": 3,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_search.c \u00bb typedef enum { MODE_KEYWORD, MODE_HYBRID",
+     "semantic": "code/cli/kb-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg",
+     "hybrid": "code/cli/kb-cli/src/cmd_search.c \u00bb typedef enum { MODE_KEYWORD, MODE_HYBRID",
+     "rrf": "code/cli/kb-cli/src/cmd_search.c \u00bb typedef enum { MODE_KEYWORD, MODE_HYBRID"
+    },
+    "ms": {
+     "keyword": 8.7,
+     "semantic": 50.4,
+     "hybrid": 47.8,
+     "rrf": 49.4
+    }
+   },
+   {
+    "id": "ca024",
+    "tag": "identifier",
+    "q": "refresh_source fetch_failed for a url source",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_stale.c \u00bb static int32_t refresh_source(Arena *a, ",
+     "semantic": "code/cli/kb-cli/src/cmd_stale.c \u00bb static int32_t refresh_source(Arena *a, ",
+     "hybrid": "code/cli/kb-cli/src/cmd_stale.c \u00bb static int32_t refresh_source(Arena *a, ",
+     "rrf": "code/cli/kb-cli/src/cmd_stale.c \u00bb static int32_t refresh_source(Arena *a, "
+    },
+    "ms": {
+     "keyword": 10.6,
+     "semantic": 47.6,
+     "hybrid": 48.4,
+     "rrf": 48.9
+    }
+   },
+   {
+    "id": "ca025",
+    "tag": "paraphrase",
+    "q": "recognising lockfiles minified bundles and codegen output when filing a folder",
+    "ranks": {
+     "keyword": 6,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/bpe.c \u00bb static void split_and_merge(const Bpe *b",
+     "semantic": "code/cli/kb-cli/src/dirscan.c \u00bb bool dir_name_generated(const char *name",
+     "hybrid": "code/cli/kb-cli/src/dirscan.h \u00bb #define KB_DIRSCAN_H",
+     "rrf": "code/cli/kb-cli/src/dirscan.h \u00bb #define KB_DIRSCAN_H"
+    },
+    "ms": {
+     "keyword": 11.7,
+     "semantic": 54.8,
+     "hybrid": 54.4,
+     "rrf": 50.6
+    }
+   },
+   {
+    "id": "ca026",
+    "tag": "purpose",
+    "q": "how does filing a subfolder honour the ignore rules of the enclosing git repo",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/gitignore.h \u00bb typedef struct GitIgnore GitIgnore;",
+     "semantic": "code/cli/kb-cli/src/gitignore.h \u00bb #define KB_GITIGNORE_H",
+     "hybrid": "code/cli/kb-cli/src/gitignore.h \u00bb typedef struct GitIgnore GitIgnore;",
+     "rrf": "code/cli/kb-cli/src/gitignore.h \u00bb #define KB_GITIGNORE_H"
+    },
+    "ms": {
+     "keyword": 9.8,
+     "semantic": 49.2,
+     "hybrid": 48.7,
+     "rrf": 50.4
+    }
+   },
+   {
+    "id": "ca027",
+    "tag": "paraphrase",
+    "q": "kb reading its jsonl logs when the last record was cut short by a crash",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/doc.h \u00bb #ifndef KB_DOC_H",
+     "semantic": "code/cli/kb-cli/src/doc.c \u00bb static bool log_lines(Arena *a, const ch",
+     "hybrid": "code/cli/kb-cli/src/doc.c \u00bb static bool log_lines(Arena *a, const ch",
+     "rrf": "code/cli/kb-cli/src/doc.h \u00bb #ifndef KB_DOC_H"
+    },
+    "ms": {
+     "keyword": 11.4,
+     "semantic": 53.4,
+     "hybrid": 52.9,
+     "rrf": 56.0
+    }
+   },
+   {
+    "id": "ca028",
+    "tag": "purpose",
+    "q": "why is the same url under two different collections treated as two sources",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/src/refresh.ts \u00bb export function refreshPlan(locator: str",
+     "semantic": "code/cli/kb-cli/src/doc.c \u00bb const Source *src_by_id(const SourceList",
+     "hybrid": "code/cli/kb-cli/src/doc.c \u00bb const Source *src_by_id(const SourceList",
+     "rrf": "code/cli/kb-cli/src/doc.c \u00bb const Source *src_by_id(const SourceList"
+    },
+    "ms": {
+     "keyword": 12.6,
+     "semantic": 52.4,
+     "hybrid": 53.6,
+     "rrf": 52.5
+    }
+   },
+   {
+    "id": "ca029",
+    "tag": "identifier",
+    "q": "kb_id_num returns 0 for malformed ids",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/doc.h \u00bb #define KB_DOC_H",
+     "semantic": "code/cli/kb-cli/src/doc.c \u00bb int64_t kb_id_num(const char *id, char p",
+     "hybrid": "code/cli/kb-cli/src/doc.c \u00bb int64_t kb_id_num(const char *id, char p",
+     "rrf": "code/cli/kb-cli/src/doc.h \u00bb #define KB_DOC_H"
+    },
+    "ms": {
+     "keyword": 12.3,
+     "semantic": 51.9,
+     "hybrid": 51.9,
+     "rrf": 52.5
+    }
+   },
+   {
+    "id": "ca030",
+    "tag": "purpose",
+    "q": "why does kb refuse when ~/.kb/models holds several models and none is the default",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/embed.c \u00bb bool embed_find_model(Arena *a, char *ou",
+     "semantic": "code/cli/kb-cli/src/embed.c \u00bb bool embed_find_model(Arena *a, char *ou",
+     "hybrid": "code/cli/kb-cli/src/embed.c \u00bb bool embed_find_model(Arena *a, char *ou",
+     "rrf": "code/cli/kb-cli/src/embed.c \u00bb bool embed_find_model(Arena *a, char *ou"
+    },
+    "ms": {
+     "keyword": 15.4,
+     "semantic": 52.8,
+     "hybrid": 58.2,
+     "rrf": 52.6
+    }
+   },
+   {
+    "id": "ca031",
+    "tag": "identifier",
+    "q": "default_prefixes search_query search_document for nomic",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/embed.c \u00bb static void default_prefixes(const char ",
+     "semantic": "code/cli/kb-cli/src/embed.c \u00bb static void default_prefixes(const char ",
+     "hybrid": "code/cli/kb-cli/src/embed.c \u00bb static void default_prefixes(const char ",
+     "rrf": "code/cli/kb-cli/src/embed.c \u00bb static void default_prefixes(const char "
+    },
+    "ms": {
+     "keyword": 13.1,
+     "semantic": 57.1,
+     "hybrid": 55.3,
+     "rrf": 54.7
+    }
+   },
+   {
+    "id": "ca032",
+    "tag": "paraphrase",
+    "q": "some transformer layers only attend to nearby tokens while every third sees the whole input",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 2,
+     "hybrid": 3,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/tools/modernbert/reference.py \u00bb def main():",
+     "semantic": "code/cli/kb-cli/src/embed.c \u00bb void embed_close(Embedder *e) {",
+     "hybrid": "code/cli/kb-cli/src/embed.c \u00bb static bool matmul(const GgufTensor *t, ",
+     "rrf": "code/cli/kb-cli/src/embed.c \u00bb static bool matmul(const GgufTensor *t, "
+    },
+    "ms": {
+     "keyword": 13.6,
+     "semantic": 52.2,
+     "hybrid": 53.5,
+     "rrf": 53.1
+    }
+   },
+   {
+    "id": "ca033",
+    "tag": "identifier",
+    "q": "errdet_json details only for the error code that began them",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/errdet.h \u00bb #define KB_ERRDET_H",
+     "semantic": "code/cli/kb-cli/src/errdet.h \u00bb const char *errdet_json(const char *code",
+     "hybrid": "code/cli/kb-cli/src/errdet.h \u00bb const char *errdet_json(const char *code",
+     "rrf": "code/cli/kb-cli/src/errdet.h \u00bb #define KB_ERRDET_H"
+    },
+    "ms": {
+     "keyword": 13.6,
+     "semantic": 51.2,
+     "hybrid": 51.5,
+     "rrf": 52.9
+    }
+   },
+   {
+    "id": "ca034",
+    "tag": "purpose",
+    "q": "why add 1 inside the log of the bm25 idf",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/fts.c \u00bb double fts_idf(const FtsIndex *ix, uint3",
+     "semantic": "code/cli/kb-cli/src/fts.c \u00bb double fts_idf(const FtsIndex *ix, uint3",
+     "hybrid": "code/cli/kb-cli/src/fts.c \u00bb double fts_idf(const FtsIndex *ix, uint3",
+     "rrf": "code/cli/kb-cli/src/fts.c \u00bb double fts_idf(const FtsIndex *ix, uint3"
+    },
+    "ms": {
+     "keyword": 11.4,
+     "semantic": 56.8,
+     "hybrid": 52.0,
+     "rrf": 53.2
+    }
+   },
+   {
+    "id": "ca035",
+    "tag": "identifier",
+    "q": "FTS_ENDIAN check for index written on another byte order",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/fts.c \u00bb bool fts_open(Arena *a, const char *data",
+     "semantic": "code/cli/kb-cli/src/fts.c \u00bb bool fts_open(Arena *a, const char *data",
+     "hybrid": "code/cli/kb-cli/src/fts.c \u00bb bool fts_open(Arena *a, const char *data",
+     "rrf": "code/cli/kb-cli/src/fts.c \u00bb bool fts_open(Arena *a, const char *data"
+    },
+    "ms": {
+     "keyword": 8.7,
+     "semantic": 49.4,
+     "hybrid": 50.7,
+     "rrf": 51.6
+    }
+   },
+   {
+    "id": "ca036",
+    "tag": "identifier",
+    "q": "gguf_open refuses GGUF version 1",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/gguf.c \u00bb bool gguf_open(Arena *a, const char *pat",
+     "semantic": "code/cli/kb-cli/src/gguf.c \u00bb bool gguf_open(Arena *a, const char *pat",
+     "hybrid": "code/cli/kb-cli/src/gguf.c \u00bb bool gguf_open(Arena *a, const char *pat",
+     "rrf": "code/cli/kb-cli/src/gguf.c \u00bb bool gguf_open(Arena *a, const char *pat"
+    },
+    "ms": {
+     "keyword": 10.0,
+     "semantic": 45.9,
+     "hybrid": 47.3,
+     "rrf": 45.5
+    }
+   },
+   {
+    "id": "ca037",
+    "tag": "paraphrase",
+    "q": "how does ** in an ignore pattern match any depth of directories",
+    "ranks": {
+     "keyword": 3,
+     "semantic": null,
+     "hybrid": 9,
+     "rrf": 9
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/ignore.h \u00bb #ifndef LAP_IGNORE_H",
+     "semantic": "code/cli/lap-cli/src/ignore.c \u00bb bool ignore_match_pattern(const char *pa",
+     "hybrid": "code/cli/lap-cli/src/ignore.c \u00bb bool ignore_match_pattern(const char *pa",
+     "rrf": "code/cli/lap-cli/src/ignore.c \u00bb bool ignore_match_pattern(const char *pa"
+    },
+    "ms": {
+     "keyword": 6.4,
+     "semantic": 46.6,
+     "hybrid": 46.3,
+     "rrf": 47.4
+    }
+   },
+   {
+    "id": "ca038",
+    "tag": "purpose",
+    "q": "why does the json parser keep each value's original bytes instead of reprinting",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/json.c \u00bb static JVal *parse_value(Parser *ps) {",
+     "semantic": "code/cli/kb-cli/src/json.c \u00bb static JVal *parse_value(Parser *ps) {",
+     "hybrid": "code/cli/kb-cli/src/json.c \u00bb static JVal *parse_value(Parser *ps) {",
+     "rrf": "code/cli/kb-cli/src/json.c \u00bb static JVal *parse_value(Parser *ps) {"
+    },
+    "ms": {
+     "keyword": 13.5,
+     "semantic": 48.8,
+     "hybrid": 49.7,
+     "rrf": 48.0
+    }
+   },
+   {
+    "id": "ca039",
+    "tag": "identifier",
+    "q": "model_record_if_absent writes model.json with the model file sha256",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/modelrec.h \u00bb bool model_recorded(Arena *a, const Stor",
+     "semantic": "code/cli/kb-cli/src/modelrec.c \u00bb bool model_record(Arena *a, Store *s, co",
+     "hybrid": "code/cli/kb-cli/src/modelrec.h \u00bb bool model_recorded(Arena *a, const Stor",
+     "rrf": "code/cli/kb-cli/src/modelrec.h \u00bb bool model_recorded(Arena *a, const Stor"
+    },
+    "ms": {
+     "keyword": 9.0,
+     "semantic": 53.5,
+     "hybrid": 52.0,
+     "rrf": 51.1
+    }
+   },
+   {
+    "id": "ca040",
+    "tag": "purpose",
+    "q": "reciprocal rank fusion why the best result counts as rank 1 not 0",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 4,
+     "hybrid": 3,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/rank.h \u00bb typedef struct {",
+     "semantic": "code/cli/kb-cli/src/rank.h \u00bb #define KB_RANK_H",
+     "hybrid": "code/cli/kb-cli/src/rank.h \u00bb #define KB_RANK_H",
+     "rrf": "code/cli/kb-cli/src/rank.h \u00bb #define KB_RANK_H"
+    },
+    "ms": {
+     "keyword": 9.1,
+     "semantic": 51.9,
+     "hybrid": 51.5,
+     "rrf": 54.1
+    }
+   },
+   {
+    "id": "ca041",
+    "tag": "paraphrase",
+    "q": "picking the part of a chunk with the most query words for the result preview",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/snippet.h \u00bb #define KB_SNIPPET_H",
+     "semantic": "code/cli/kb-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg",
+     "hybrid": "code/cli/kb-cli/src/snippet.h \u00bb #define KB_SNIPPET_H",
+     "rrf": "code/cli/kb-cli/src/snippet.h \u00bb #define KB_SNIPPET_H"
+    },
+    "ms": {
+     "keyword": 10.0,
+     "semantic": 52.1,
+     "hybrid": 51.5,
+     "rrf": 54.1
+    }
+   },
+   {
+    "id": "ca042",
+    "tag": "identifier",
+    "q": "store_locked error reports the pid holding the lock",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 3,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/platform.c \u00bb PlatLock *plat_lock_try(Arena *a, const ",
+     "semantic": "code/cli/kb-cli/src/platform.c \u00bb PlatLock *plat_lock_try(Arena *a, const ",
+     "hybrid": "code/cli/kb-cli/src/platform.c \u00bb PlatLock *plat_lock_try(Arena *a, const ",
+     "rrf": "code/cli/kb-cli/src/platform.c \u00bb PlatLock *plat_lock_try(Arena *a, const "
+    },
+    "ms": {
+     "keyword": 11.8,
+     "semantic": 52.1,
+     "hybrid": 51.0,
+     "rrf": 52.3
+    }
+   },
+   {
+    "id": "ca043",
+    "tag": "paraphrase",
+    "q": "what if the next-id counters file is stale or missing",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/store.c \u00bb static void counters_load(Store *s) {",
+     "semantic": "code/cli/kb-cli/src/store.c \u00bb static void counters_load(Store *s) {",
+     "hybrid": "code/cli/kb-cli/src/store.c \u00bb static void counters_load(Store *s) {",
+     "rrf": "code/cli/kb-cli/src/store.c \u00bb static void counters_load(Store *s) {"
+    },
+    "ms": {
+     "keyword": 10.3,
+     "semantic": 53.8,
+     "hybrid": 69.8,
+     "rrf": 53.9
+    }
+   },
+   {
+    "id": "ca044",
+    "tag": "purpose",
+    "q": "why does repairing an interrupted append only read the end of the log",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 2,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/repo.c \u00bb static bool log_repair_torn_tail(Arena *",
+     "semantic": "code/cli/lap-cli/src/repo.c \u00bb static bool log_repair_torn_tail(Arena *",
+     "hybrid": "code/cli/lap-cli/src/repo.c \u00bb static bool log_repair_torn_tail(Arena *",
+     "rrf": "code/cli/lap-cli/src/repo.c \u00bb static bool log_repair_torn_tail(Arena *"
+    },
+    "ms": {
+     "keyword": 14.2,
+     "semantic": 52.4,
+     "hybrid": 56.4,
+     "rrf": 54.1
+    }
+   },
+   {
+    "id": "ca045",
+    "tag": "identifier",
+    "q": "store_is_blob_name rejects anything but 64 lowercase hex digits",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/store.c \u00bb bool store_put_blob(Store *s, const void",
+     "semantic": "code/cli/kb-cli/src/store.c \u00bb bool store_put_blob(Store *s, const void",
+     "hybrid": "code/cli/kb-cli/src/store.c \u00bb bool store_put_blob(Store *s, const void",
+     "rrf": "code/cli/kb-cli/src/store.c \u00bb bool store_put_blob(Store *s, const void"
+    },
+    "ms": {
+     "keyword": 10.9,
+     "semantic": 48.5,
+     "hybrid": 52.5,
+     "rrf": 56.5
+    }
+   },
+   {
+    "id": "ca046",
+    "tag": "purpose",
+    "q": "why does the store lock fail immediately instead of blocking until free",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/platform.c \u00bb PlatLock *plat_lock_try(Arena *a, const ",
+     "semantic": "code/cli/kb-cli/src/store.c \u00bb bool store_open(Arena *a, Store *s, cons",
+     "hybrid": "code/cli/kb-cli/src/platform.c \u00bb PlatLock *plat_lock_try(Arena *a, const ",
+     "rrf": "code/cli/kb-cli/src/platform.c \u00bb PlatLock *plat_lock_try(Arena *a, const "
+    },
+    "ms": {
+     "keyword": 17.0,
+     "semantic": 50.0,
+     "hybrid": 52.7,
+     "rrf": 53.1
+    }
+   },
+   {
+    "id": "ca047",
+    "tag": "paraphrase",
+    "q": "does searching part of a camelCase or snake_case name match the whole identifier",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 4,
+     "hybrid": 2,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/token.h \u00bb #ifndef KB_TOKEN_H",
+     "semantic": "code/packages/index-vscode/src/view/headings.ts \u00bb export function headingId(heading: strin",
+     "hybrid": "code/cli/kb-cli/src/token.h \u00bb #ifndef KB_TOKEN_H",
+     "rrf": "code/cli/kb-cli/src/token.c \u00bb static void split_parts(TokenFn fn, void"
+    },
+    "ms": {
+     "keyword": 9.1,
+     "semantic": 54.1,
+     "hybrid": 52.0,
+     "rrf": 54.8
+    }
+   },
+   {
+    "id": "ca048",
+    "tag": "paraphrase",
+    "q": "how are embeddings squeezed into one byte per dimension with a scale",
+    "ranks": {
+     "keyword": 10,
+     "semantic": 2,
+     "hybrid": 3,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/quant.h \u00bb #ifndef KB_QUANT_H",
+     "semantic": "code/cli/kb-cli/src/embed.c \u00bb static void rope_apply(float *vec, uint3",
+     "hybrid": "code/cli/kb-cli/src/quant.h \u00bb #ifndef KB_QUANT_H",
+     "rrf": "code/cli/kb-cli/src/embed.c \u00bb void embed_close(Embedder *e) {"
+    },
+    "ms": {
+     "keyword": 10.8,
+     "semantic": 49.6,
+     "hybrid": 51.0,
+     "rrf": 50.7
+    }
+   },
+   {
+    "id": "ca049",
+    "tag": "paraphrase",
+    "q": "a word the vocabulary can't fully cover becomes unknown rather than partial pieces",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/wpm.h \u00bb #ifndef KB_WPM_H",
+     "semantic": "code/cli/kb-cli/src/wpm.c \u00bb size_t wpm_words(Arena *a, const char *t",
+     "hybrid": "code/cli/kb-cli/src/wpm.h \u00bb #ifndef KB_WPM_H",
+     "rrf": "code/cli/kb-cli/src/wpm.h \u00bb #ifndef KB_WPM_H"
+    },
+    "ms": {
+     "keyword": 10.6,
+     "semantic": 53.0,
+     "hybrid": 52.5,
+     "rrf": 53.8
+    }
+   },
+   {
+    "id": "ca050",
+    "tag": "purpose",
+    "q": "why strip accents like caf\u00e9 before the wordpiece lookup",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 4,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/wpm.h \u00bb #ifndef KB_WPM_H",
+     "semantic": "code/cli/kb-cli/src/wpm.c \u00bb static uint32_t fold_cp(uint32_t c) {",
+     "hybrid": "code/cli/kb-cli/src/wpm.h \u00bb #ifndef KB_WPM_H",
+     "rrf": "code/cli/kb-cli/src/wpm.h \u00bb #ifndef KB_WPM_H"
+    },
+    "ms": {
+     "keyword": 8.7,
+     "semantic": 53.3,
+     "hybrid": 49.4,
+     "rrf": 47.9
+    }
+   },
+   {
+    "id": "ca051",
+    "tag": "identifier",
+    "q": "utf8_dangling incomplete trailing sequence",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/str.c \u00bb size_t utf8_dangling(const char *s, size",
+     "semantic": "code/cli/kb-cli/src/str.c \u00bb size_t utf8_dangling(const char *s, size",
+     "hybrid": "code/cli/kb-cli/src/str.c \u00bb size_t utf8_dangling(const char *s, size",
+     "rrf": "code/cli/kb-cli/src/str.c \u00bb size_t utf8_dangling(const char *s, size"
+    },
+    "ms": {
+     "keyword": 10.9,
+     "semantic": 49.7,
+     "hybrid": 51.6,
+     "rrf": 50.6
+    }
+   },
+   {
+    "id": "ca052",
+    "tag": "identifier",
+    "q": "convert.py tensor renames blk attn_qkv ffn_up ffn_down",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/tools/modernbert/convert.py \u00bb def main(): > w.add_uint32(\"tokenizer.gg",
+     "semantic": "code/cli/kb-cli/tools/modernbert/convert.py \u00bb def main(): > w.add_uint32(\"tokenizer.gg",
+     "hybrid": "code/cli/kb-cli/tools/modernbert/convert.py \u00bb def main(): > w.add_uint32(\"tokenizer.gg",
+     "rrf": "code/cli/kb-cli/tools/modernbert/convert.py \u00bb def main(): > w.add_uint32(\"tokenizer.gg"
+    },
+    "ms": {
+     "keyword": 9.3,
+     "semantic": 52.7,
+     "hybrid": 54.8,
+     "rrf": 55.7
+    }
+   },
+   {
+    "id": "ca053",
+    "tag": "purpose",
+    "q": "why are reranker weights no longer exact after converting to gguf",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 9,
+     "hybrid": 2,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/tools/modernbert/convert.py \u00bb def load_json(path):",
+     "semantic": "code/cli/kb-cli/src/embed.c \u00bb #define KB_MODEL_FILE \"gte-modernbert-ba",
+     "hybrid": "code/cli/kb-cli/src/embed.c \u00bb #define KB_MODEL_FILE \"gte-modernbert-ba",
+     "rrf": "code/cli/kb-cli/src/embed.c \u00bb #define KB_MODEL_FILE \"gte-modernbert-ba"
+    },
+    "ms": {
+     "keyword": 9.8,
+     "semantic": 53.4,
+     "hybrid": 51.8,
+     "rrf": 52.3
+    }
+   },
+   {
+    "id": "ca054",
+    "tag": "identifier",
+    "q": "check_tokenizer.py compare kb-bpe-dump ids with the transformers tokenizer",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/tools/modernbert/check_tokenizer.py \u00bb \"\"\"Checks kb's byte-level BPE (bin/kb-bp",
+     "semantic": "code/cli/kb-cli/tools/modernbert/check_tokenizer.py \u00bb \"\"\"Checks kb's byte-level BPE (bin/kb-bp",
+     "hybrid": "code/cli/kb-cli/tools/modernbert/check_tokenizer.py \u00bb \"\"\"Checks kb's byte-level BPE (bin/kb-bp",
+     "rrf": "code/cli/kb-cli/tools/modernbert/check_tokenizer.py \u00bb \"\"\"Checks kb's byte-level BPE (bin/kb-bp"
+    },
+    "ms": {
+     "keyword": 11.4,
+     "semantic": 49.4,
+     "hybrid": 52.1,
+     "rrf": 50.1
+    }
+   },
+   {
+    "id": "ca055",
+    "tag": "purpose",
+    "q": "how to locate which layer of the modernbert port diverges from hugging face",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 10,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/tools/modernbert/reference.py \u00bb \"\"\"Reference outputs for kb's ModernBERT",
+     "semantic": "code/cli/kb-cli/src/embed.c \u00bb static bool forward_modernbert(Embedder ",
+     "hybrid": "code/cli/kb-cli/tools/modernbert/reference.py \u00bb \"\"\"Reference outputs for kb's ModernBERT",
+     "rrf": "code/cli/kb-cli/tools/modernbert/reference.py \u00bb \"\"\"Reference outputs for kb's ModernBERT"
+    },
+    "ms": {
+     "keyword": 10.5,
+     "semantic": 52.3,
+     "hybrid": 49.8,
+     "rrf": 52.4
+    }
+   },
+   {
+    "id": "cb001",
+    "tag": "paraphrase",
+    "q": "how does lap merge two changes separated only by empty lines into one edit",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/diff.h \u00bb #ifndef LAP_DIFF_H",
+     "semantic": "code/cli/lap-cli/src/diff.c \u00bb static void merge_blank_gaps(const Lines",
+     "hybrid": "code/cli/lap-cli/src/diff.c \u00bb static void merge_blank_gaps(const Lines",
+     "rrf": "code/cli/lap-cli/src/diff.c \u00bb static void merge_blank_gaps(const Lines"
+    },
+    "ms": {
+     "keyword": 10.9,
+     "semantic": 49.0,
+     "hybrid": 50.9,
+     "rrf": 48.9
+    }
+   },
+   {
+    "id": "cb002",
+    "tag": "purpose",
+    "q": "what happens when a file rewrite is too large for the myers diff",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 4,
+     "hybrid": 3,
+     "rrf": 4
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/diff.c \u00bb #define DIFF_D_CAP 1024",
+     "semantic": "code/cli/lap-cli/src/diff.c \u00bb static bool myers(Arena *a, RegionList *",
+     "hybrid": "code/cli/lap-cli/src/diff.c \u00bb static bool myers(Arena *a, RegionList *",
+     "rrf": "code/cli/lap-cli/src/diff.c \u00bb static bool myers(Arena *a, RegionList *"
+    },
+    "ms": {
+     "keyword": 12.1,
+     "semantic": 52.9,
+     "hybrid": 52.5,
+     "rrf": 51.8
+    }
+   },
+   {
+    "id": "cb003",
+    "tag": "purpose",
+    "q": "can I use ! to un-ignore a path in .lapignore",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/ignore.h \u00bb #ifndef LAP_IGNORE_H",
+     "semantic": "code/cli/lap-cli/src/ignore.c \u00bb static void add_pattern(Arena *a, Ignore",
+     "hybrid": "code/cli/lap-cli/src/ignore.h \u00bb #ifndef LAP_IGNORE_H",
+     "rrf": "code/cli/lap-cli/src/ignore.c \u00bb static void add_pattern(Arena *a, Ignore"
+    },
+    "ms": {
+     "keyword": 10.8,
+     "semantic": 49.4,
+     "hybrid": 48.1,
+     "rrf": 49.8
+    }
+   },
+   {
+    "id": "cb004",
+    "tag": "identifier",
+    "q": "snap_maybe snapshot threshold",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/snap.c \u00bb bool snap_maybe(Arena *a, const Repo *r,",
+     "semantic": "code/cli/lap-cli/src/snap.c \u00bb bool snap_maybe(Arena *a, const Repo *r,",
+     "hybrid": "code/cli/lap-cli/src/snap.c \u00bb bool snap_maybe(Arena *a, const Repo *r,",
+     "rrf": "code/cli/lap-cli/src/snap.c \u00bb bool snap_maybe(Arena *a, const Repo *r,"
+    },
+    "ms": {
+     "keyword": 7.7,
+     "semantic": 46.3,
+     "hybrid": 48.1,
+     "rrf": 49.2
+    }
+   },
+   {
+    "id": "cb005",
+    "tag": "purpose",
+    "q": "why is the index header written last when syncing the index cache",
+    "ranks": {
+     "keyword": 6,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/idx.c \u00bb static bool idx_load(Arena *a, const Rep",
+     "semantic": "code/cli/lap-cli/src/idx.c \u00bb static bool sync_write(const Repo *r, Sy",
+     "hybrid": "code/cli/lap-cli/src/idx.c \u00bb static bool sync_write(const Repo *r, Sy",
+     "rrf": "code/cli/lap-cli/src/idx.c \u00bb static bool sync_write(const Repo *r, Sy"
+    },
+    "ms": {
+     "keyword": 11.9,
+     "semantic": 51.1,
+     "hybrid": 50.5,
+     "rrf": 50.8
+    }
+   },
+   {
+    "id": "cb006",
+    "tag": "purpose",
+    "q": "how to commit just one of several separate edits in the same file",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/coboard-vscode/src/extension.ts \u00bb const EDIT_SCHEME = \"coboard-lap\";",
+     "semantic": "code/cli/lap-cli/src/cmd_commit.c \u00bb static void print_multi_edit_error(Arena",
+     "hybrid": "code/cli/lap-cli/src/cmd_commit.c \u00bb static void print_multi_edit_error(Arena",
+     "rrf": "code/cli/lap-cli/src/cmd_commit.c \u00bb static void print_multi_edit_error(Arena"
+    },
+    "ms": {
+     "keyword": 10.7,
+     "semantic": 50.3,
+     "hybrid": 50.2,
+     "rrf": 49.6
+    }
+   },
+   {
+    "id": "cb007",
+    "tag": "paraphrase",
+    "q": "line number recorded for a partial commit when other uncommitted changes sit above it",
+    "ranks": {
+     "keyword": 8,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg",
+     "semantic": "code/cli/lap-cli/src/cmd_search.c \u00bb static void emit(StrBuf *sb, const Rec *",
+     "hybrid": "code/cli/lap-cli/src/cmd_commit.c \u00bb int32_t cmd_commit(Arena *a, int32_t arg",
+     "rrf": "code/cli/lap-cli/src/cmd_commit.c \u00bb int32_t cmd_commit(Arena *a, int32_t arg"
+    },
+    "ms": {
+     "keyword": 11.1,
+     "semantic": 52.6,
+     "hybrid": 52.2,
+     "rrf": 52.5
+    }
+   },
+   {
+    "id": "cb008",
+    "tag": "paraphrase",
+    "q": "how lap cleans up a partial record a crash left at the end of its log before the next write",
+    "ranks": {
+     "keyword": 9,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/store.c \u00bb bool store_open(Arena *a, Store *s, cons",
+     "semantic": "code/cli/lap-cli/src/repo.c \u00bb static bool log_repair_torn_tail(Arena *",
+     "hybrid": "code/cli/lap-cli/src/repo.c \u00bb static bool log_repair_torn_tail(Arena *",
+     "rrf": "code/cli/lap-cli/src/repo.c \u00bb static bool log_repair_torn_tail(Arena *"
+    },
+    "ms": {
+     "keyword": 11.9,
+     "semantic": 56.7,
+     "hybrid": 62.4,
+     "rrf": 55.8
+    }
+   },
+   {
+    "id": "cb009",
+    "tag": "identifier",
+    "q": "LAP_USER author name fallback git config user.name",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/repo.c \u00bb bool repo_rebuild(Arena *a, Repo *r, cha",
+     "semantic": "code/cli/lap-cli/src/repo.c \u00bb bool repo_rebuild(Arena *a, Repo *r, cha",
+     "hybrid": "code/cli/lap-cli/src/repo.c \u00bb bool repo_rebuild(Arena *a, Repo *r, cha",
+     "rrf": "code/cli/lap-cli/src/repo.c \u00bb bool repo_rebuild(Arena *a, Repo *r, cha"
+    },
+    "ms": {
+     "keyword": 11.9,
+     "semantic": 51.9,
+     "hybrid": 52.9,
+     "rrf": 50.5
+    }
+   },
+   {
+    "id": "cb010",
+    "tag": "identifier",
+    "q": "NO_COLOR environment variable in lap",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/tty.c \u00bb bool tty_init(int32_t argc, char **argv)",
+     "semantic": "code/cli/lap-cli/src/tty.c \u00bb bool tty_init(int32_t argc, char **argv)",
+     "hybrid": "code/cli/lap-cli/src/tty.c \u00bb bool tty_init(int32_t argc, char **argv)",
+     "rrf": "code/cli/lap-cli/src/tty.c \u00bb bool tty_init(int32_t argc, char **argv)"
+    },
+    "ms": {
+     "keyword": 7.1,
+     "semantic": 46.6,
+     "hybrid": 47.1,
+     "rrf": 45.3
+    }
+   },
+   {
+    "id": "cb011",
+    "tag": "paraphrase",
+    "q": "commit message text that looks like a colour flag switching colours on",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 1,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/tty.c \u00bb static const char *const CODE[] = {",
+     "semantic": "code/cli/lap-cli/src/cmd.h \u00bb void render_commit_diff(StrBuf *sb, cons",
+     "hybrid": "code/cli/lap-cli/src/tty.c \u00bb static const char *const CODE[] = {",
+     "rrf": "code/cli/kb-cli/src/cmd.h \u00bb bool has_flag(int32_t argc, char **argv,"
+    },
+    "ms": {
+     "keyword": 8.3,
+     "semantic": 49.8,
+     "hybrid": 51.1,
+     "rrf": 50.5
+    }
+   },
+   {
+    "id": "cb012",
+    "tag": "identifier",
+    "q": "blame_chain",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/cmd_search.c \u00bb static int64_t blame_chain(const Idx *ix",
+     "semantic": "code/cli/lap-cli/src/cmd_search.c \u00bb static int64_t blame_chain(const Idx *ix",
+     "hybrid": "code/cli/lap-cli/src/cmd_search.c \u00bb static int64_t blame_chain(const Idx *ix",
+     "rrf": "code/cli/lap-cli/src/cmd_search.c \u00bb static int64_t blame_chain(const Idx *ix"
+    },
+    "ms": {
+     "keyword": 9.3,
+     "semantic": 52.5,
+     "hybrid": 49.9,
+     "rrf": 46.9
+    }
+   },
+   {
+    "id": "cb013",
+    "tag": "identifier",
+    "q": "lap search --text --msg index prefilter vs sequential scan",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/cmd_search.c \u00bb typedef struct {",
+     "semantic": "code/cli/lap-cli/src/cmd_search.c \u00bb typedef struct {",
+     "hybrid": "code/cli/lap-cli/src/cmd_search.c \u00bb typedef struct {",
+     "rrf": "code/cli/lap-cli/src/cmd_search.c \u00bb typedef struct {"
+    },
+    "ms": {
+     "keyword": 12.8,
+     "semantic": 49.3,
+     "hybrid": 48.6,
+     "rrf": 52.7
+    }
+   },
+   {
+    "id": "cb014",
+    "tag": "identifier",
+    "q": "what does lap rr show when reviewing a session",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/cmd_rr.c \u00bb typedef struct {",
+     "semantic": "code/packages/coboard/src/lap.ts \u00bb export async function sessionReview(root",
+     "hybrid": "code/cli/lap-cli/src/cmd_rr.c \u00bb typedef struct {",
+     "rrf": "code/cli/lap-cli/src/cmd_rr.c \u00bb typedef struct {"
+    },
+    "ms": {
+     "keyword": 9.1,
+     "semantic": 46.7,
+     "hybrid": 46.7,
+     "rrf": 49.5
+    }
+   },
+   {
+    "id": "cb015",
+    "tag": "identifier",
+    "q": "meta key given twice error for --meta",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/lap-cli/src/cmd_session.c \u00bb static const char *first_line(Arena *a, ",
+     "semantic": "code/cli/kb-cli/src/cmd_add.c \u00bb static bool meta_arg(Arena *a, int32_t a",
+     "hybrid": "code/cli/lap-cli/src/cmd_session.c \u00bb static const char *first_line(Arena *a, ",
+     "rrf": "code/cli/lap-cli/src/cmd_session.c \u00bb static const char *first_line(Arena *a, "
+    },
+    "ms": {
+     "keyword": 12.1,
+     "semantic": 51.9,
+     "hybrid": 53.7,
+     "rrf": 50.2
+    }
+   },
+   {
+    "id": "cb016",
+    "tag": "paraphrase",
+    "q": "how lap replaces a file so a reader never sees it half written",
+    "ranks": {
+     "keyword": 8,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/gguf.h \u00bb #define KB_GGUF_H",
+     "semantic": "code/cli/lap-cli/src/cmd_common.c \u00bb bool file_diff_load(Arena *a, Repo *r, c",
+     "hybrid": "code/cli/lap-cli/src/platform.c \u00bb bool plat_write_file_atomic(const char *",
+     "rrf": "code/cli/lap-cli/src/platform.c \u00bb bool plat_write_file_atomic(const char *"
+    },
+    "ms": {
+     "keyword": 14.9,
+     "semantic": 51.2,
+     "hybrid": 53.9,
+     "rrf": 53.3
+    }
+   },
+   {
+    "id": "cb017",
+    "tag": "paraphrase",
+    "q": "ordering of documents that have no fetch date in the newest-first list",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/kb-js/src/stale.ts \u00bb export const NO_DATE = Number.MIN_SAFE_I",
+     "semantic": "code/packages/kb-js/src/stale.ts \u00bb export function newestFirst<T extends { ",
+     "hybrid": "code/packages/kb-js/src/stale.ts \u00bb export const NO_DATE = Number.MIN_SAFE_I",
+     "rrf": "code/packages/kb-js/src/stale.ts \u00bb export const NO_DATE = Number.MIN_SAFE_I"
+    },
+    "ms": {
+     "keyword": 10.3,
+     "semantic": 49.1,
+     "hybrid": 48.2,
+     "rrf": 48.7
+    }
+   },
+   {
+    "id": "cb018",
+    "tag": "identifier",
+    "q": "KbCrash versus KbError exit code",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/packages/kb-js/src/errors.ts \u00bb export function isKbError(e: unknown): e",
+     "semantic": "code/packages/kb-js/src/errors.ts \u00bb export type KbCannotStart = \"binary\" | \"",
+     "hybrid": "code/packages/kb-js/src/errors.ts \u00bb export function isKbError(e: unknown): e",
+     "rrf": "code/packages/kb-js/src/errors.ts \u00bb export function isKbError(e: unknown): e"
+    },
+    "ms": {
+     "keyword": 7.2,
+     "semantic": 47.9,
+     "hybrid": 46.5,
+     "rrf": 46.0
+    }
+   },
+   {
+    "id": "cb019",
+    "tag": "purpose",
+    "q": "why does kb-js send document text on stdin instead of as an argument",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/kb-js/src/run.ts \u00bb function spawnKb( > (resolve, reject) =>",
+     "semantic": "code/packages/kb-js/src/run.ts \u00bb function spawnKb( > (resolve, reject) =>",
+     "hybrid": "code/packages/kb-js/src/run.ts \u00bb function spawnKb( > (resolve, reject) =>",
+     "rrf": "code/packages/kb-js/src/run.ts \u00bb function spawnKb( > (resolve, reject) =>"
+    },
+    "ms": {
+     "keyword": 9.0,
+     "semantic": 50.3,
+     "hybrid": 49.9,
+     "rrf": 50.3
+    }
+   },
+   {
+    "id": "cb020",
+    "tag": "paraphrase",
+    "q": "search query beginning with a hyphen mistaken for an option",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/src/cmd_search.c \u00bb int32_t cmd_search(Arena *a, int32_t arg",
+     "semantic": "code/packages/kb-js/src/argv.ts \u00bb export type SearchMode = \"hybrid\" | \"sem",
+     "hybrid": "code/packages/kb-js/src/argv.ts \u00bb export type SearchMode = \"hybrid\" | \"sem",
+     "rrf": "code/packages/kb-js/src/argv.ts \u00bb export type SearchMode = \"hybrid\" | \"sem"
+    },
+    "ms": {
+     "keyword": 10.7,
+     "semantic": 50.2,
+     "hybrid": 49.3,
+     "rrf": 49.3
+    }
+   },
+   {
+    "id": "cb021",
+    "tag": "purpose",
+    "q": "how does kb-js avoid shell injection when running the kb binary",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/combined/src/claude.ts \u00bb export function shellLine(argv: readonly",
+     "semantic": "code/packages/kb-js/src/run.ts \u00bb import { spawn } from \"node:child_proces",
+     "hybrid": "code/packages/kb-js/src/run.ts \u00bb import { spawn } from \"node:child_proces",
+     "rrf": "code/packages/kb-js/src/run.ts \u00bb import { spawn } from \"node:child_proces"
+    },
+    "ms": {
+     "keyword": 9.7,
+     "semantic": 46.8,
+     "hybrid": 49.2,
+     "rrf": 47.9
+    }
+   },
+   {
+    "id": "cb022",
+    "tag": "identifier",
+    "q": "DEFAULT_DIR_TIMEOUT_MS",
+    "ranks": {
+     "keyword": 4,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/kb-js/src/index.ts \u00bb export {",
+     "semantic": "code/packages/kb-js/src/run.ts \u00bb export interface KbOptions {",
+     "hybrid": "code/packages/kb-js/src/run.ts \u00bb export interface KbOptions {",
+     "rrf": "code/packages/kb-js/src/run.ts \u00bb export interface KbOptions {"
+    },
+    "ms": {
+     "keyword": 9.6,
+     "semantic": 50.8,
+     "hybrid": 50.8,
+     "rrf": 51.7
+    }
+   },
+   {
+    "id": "cb023",
+    "tag": "paraphrase",
+    "q": "a utf-8 character split between two pipe reads corrupting the message",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/kb-mcp/src/framing.ts \u00bb import { StringDecoder } from \"node:stri",
+     "semantic": "code/packages/kb-mcp/src/framing.ts \u00bb import { StringDecoder } from \"node:stri",
+     "hybrid": "code/packages/kb-mcp/src/framing.ts \u00bb import { StringDecoder } from \"node:stri",
+     "rrf": "code/packages/kb-mcp/src/framing.ts \u00bb import { StringDecoder } from \"node:stri"
+    },
+    "ms": {
+     "keyword": 8.2,
+     "semantic": 50.5,
+     "hybrid": 48.6,
+     "rrf": 49.8
+    }
+   },
+   {
+    "id": "cb024",
+    "tag": "purpose",
+    "q": "why does kb-mcp handle requests one after another instead of in parallel",
+    "ranks": {
+     "keyword": null,
+     "semantic": 7,
+     "hybrid": 6,
+     "rrf": 4
+    },
+    "top": {
+     "keyword": "code/packages/kb-mcp/src/jsonrpc.ts \u00bb async function answer(message: Incoming,",
+     "semantic": "code/packages/kb-mcp/src/server.ts \u00bb Kb",
+     "hybrid": "code/packages/kb-mcp/src/server.ts \u00bb Kb",
+     "rrf": "code/packages/kb-mcp/src/jsonrpc.ts \u00bb export const PARSE_ERROR = -32700;"
+    },
+    "ms": {
+     "keyword": 12.6,
+     "semantic": 46.9,
+     "hybrid": 52.1,
+     "rrf": 48.3
+    }
+   },
+   {
+    "id": "cb025",
+    "tag": "identifier",
+    "q": "NOT_EXPOSED tools list kb-mcp",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/kb-mcp/src/tools.ts \u00bb export const NOT_EXPOSED: readonly strin",
+     "semantic": "code/packages/kb-mcp/src/tools.ts \u00bb export const NOT_EXPOSED: readonly strin",
+     "hybrid": "code/packages/kb-mcp/src/tools.ts \u00bb export const NOT_EXPOSED: readonly strin",
+     "rrf": "code/packages/kb-mcp/src/tools.ts \u00bb export const NOT_EXPOSED: readonly strin"
+    },
+    "ms": {
+     "keyword": 7.0,
+     "semantic": 49.1,
+     "hybrid": 47.4,
+     "rrf": 49.3
+    }
+   },
+   {
+    "id": "cb026",
+    "tag": "paraphrase",
+    "q": "server must stay silent for a json-rpc message that has no id",
+    "ranks": {
+     "keyword": 5,
+     "semantic": 2,
+     "hybrid": 4,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "code/packages/kb-mcp/src/jsonrpc.ts \u00bb function readId(v: unknown): RpcId | nul",
+     "semantic": "code/packages/kb-mcp/src/jsonrpc.ts \u00bb function readId(v: unknown): RpcId | nul",
+     "hybrid": "code/packages/kb-mcp/src/jsonrpc.ts \u00bb function readId(v: unknown): RpcId | nul",
+     "rrf": "code/packages/kb-mcp/src/jsonrpc.ts \u00bb function readId(v: unknown): RpcId | nul"
+    },
+    "ms": {
+     "keyword": 6.6,
+     "semantic": 48.7,
+     "hybrid": 48.0,
+     "rrf": 47.2
+    }
+   },
+   {
+    "id": "cb027",
+    "tag": "purpose",
+    "q": "why does the kb search tool reject an argument named collections",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/kb-mcp/src/call.ts \u00bb import {",
+     "semantic": "code/packages/kb-mcp/src/call.ts \u00bb import {",
+     "hybrid": "code/packages/kb-mcp/src/call.ts \u00bb import {",
+     "rrf": "code/packages/kb-mcp/src/call.ts \u00bb import {"
+    },
+    "ms": {
+     "keyword": 7.2,
+     "semantic": 49.3,
+     "hybrid": 48.6,
+     "rrf": 47.1
+    }
+   },
+   {
+    "id": "cb028",
+    "tag": "purpose",
+    "q": "what happens if a coboard writer crashes while holding the lock",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/cli/kb-cli/tools/modernbert/reference.py \u00bb PAIRS = [",
+     "semantic": "code/packages/coboard/src/store.ts \u00bb export class Board { > private write<T>(",
+     "hybrid": "code/packages/coboard/src/store.ts \u00bb export class Board { > private write<T>(",
+     "rrf": "code/packages/coboard/src/store.ts \u00bb export class Board { > private write<T>("
+    },
+    "ms": {
+     "keyword": 11.0,
+     "semantic": 52.8,
+     "hybrid": 51.8,
+     "rrf": 52.1
+    }
+   },
+   {
+    "id": "cb029",
+    "tag": "paraphrase",
+    "q": "how board search ranks a title hit above a description hit",
+    "ranks": {
+     "keyword": 5,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/coboard/src/mcp.ts \u00bb export const TOOLS: readonly Tool[] = [",
+     "semantic": "code/packages/coboard/src/query.ts \u00bb export function search(items: readonly I",
+     "hybrid": "code/packages/coboard/src/query.ts \u00bb export function search(items: readonly I",
+     "rrf": "code/packages/coboard/src/query.ts \u00bb export function search(items: readonly I"
+    },
+    "ms": {
+     "keyword": 9.8,
+     "semantic": 49.2,
+     "hybrid": 54.6,
+     "rrf": 51.0
+    }
+   },
+   {
+    "id": "cb030",
+    "tag": "paraphrase",
+    "q": "rebuilding the file as it was before a lap commit for a side by side diff",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/coboard/src/lap.ts \u00bb export async function sessionReview(root",
+     "semantic": "code/packages/coboard/src/lap.ts \u00bb export async function sessionReview(root",
+     "hybrid": "code/packages/coboard/src/lap.ts \u00bb export async function sessionReview(root",
+     "rrf": "code/packages/coboard/src/lap.ts \u00bb export async function sessionReview(root"
+    },
+    "ms": {
+     "keyword": 10.1,
+     "semantic": 52.2,
+     "hybrid": 51.8,
+     "rrf": 67.6
+    }
+   },
+   {
+    "id": "cb031",
+    "tag": "purpose",
+    "q": "how does the artifacts store stop two processes getting the same id",
+    "ranks": {
+     "keyword": null,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 3
+    },
+    "top": {
+     "keyword": "code/packages/kb-js/src/types.ts \u00bb export interface KbRefreshSource {",
+     "semantic": "code/packages/artifacts/src/store.ts \u00bb export class Artifacts { > private claim",
+     "hybrid": "code/packages/artifacts/src/store.ts \u00bb export class Artifacts { > private claim",
+     "rrf": "code/packages/artifacts/src/store.ts \u00bb export const ARTIFACT_DIR = \".artifact\";"
+    },
+    "ms": {
+     "keyword": 8.5,
+     "semantic": 46.2,
+     "hybrid": 49.7,
+     "rrf": 47.0
+    }
+   },
+   {
+    "id": "cb032",
+    "tag": "identifier",
+    "q": "isArtifactId",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 8,
+     "hybrid": 1,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/packages/artifacts/src/store.ts \u00bb export interface PublishInput {",
+     "semantic": "code/packages/artifacts/src/store.ts \u00bb export class Artifacts { > private check",
+     "hybrid": "code/packages/artifacts/src/store.ts \u00bb export interface PublishInput {",
+     "rrf": "code/packages/artifacts/src/store.ts \u00bb export class Artifacts { > private check"
+    },
+    "ms": {
+     "keyword": 6.8,
+     "semantic": 45.1,
+     "hybrid": 45.2,
+     "rrf": 46.1
+    }
+   },
+   {
+    "id": "cb033",
+    "tag": "purpose",
+    "q": "how does an artifact page pick up the vs code theme colours",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/artifacts-vscode/src/frame.ts \u00bb export const FRAME_CSP = [",
+     "semantic": "code/packages/artifacts-vscode/src/frame.ts \u00bb export const FRAME_CSP = [",
+     "hybrid": "code/packages/artifacts-vscode/src/frame.ts \u00bb export const FRAME_CSP = [",
+     "rrf": "code/packages/artifacts-vscode/src/frame.ts \u00bb export const FRAME_CSP = ["
+    },
+    "ms": {
+     "keyword": 7.1,
+     "semantic": 46.4,
+     "hybrid": 47.2,
+     "rrf": 51.4
+    }
+   },
+   {
+    "id": "cb034",
+    "tag": "purpose",
+    "q": "detect a .mcp.json server entry left pointing at an old procode install",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/combined/src/claude.ts \u00bb export const CLAUDE_AUTHOR = \"claude\";",
+     "semantic": "code/packages/combined/src/mcpjson.ts \u00bb export function outdated(file: Json, ser",
+     "hybrid": "code/packages/combined/src/mcpjson.ts \u00bb export function outdated(file: Json, ser",
+     "rrf": "code/packages/combined/src/mcpjson.ts \u00bb export function outdated(file: Json, ser"
+    },
+    "ms": {
+     "keyword": 8.0,
+     "semantic": 52.3,
+     "hybrid": 50.8,
+     "rrf": 50.3
+    }
+   },
+   {
+    "id": "cb035",
+    "tag": "paraphrase",
+    "q": "claude command not found when the editor was opened from the macos dock",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/combined/src/claude.ts \u00bb export function shellLine(argv: readonly",
+     "semantic": "code/packages/combined/src/claude.ts \u00bb export function shellLine(argv: readonly",
+     "hybrid": "code/packages/combined/src/claude.ts \u00bb export function shellLine(argv: readonly",
+     "rrf": "code/packages/combined/src/claude.ts \u00bb export function shellLine(argv: readonly"
+    },
+    "ms": {
+     "keyword": 9.9,
+     "semantic": 49.2,
+     "hybrid": 48.6,
+     "rrf": 51.9
+    }
+   },
+   {
+    "id": "cb036",
+    "tag": "identifier",
+    "q": "describeWhen",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/artifacts-vscode/src/list.ts \u00bb export function sortForList(all: readonl",
+     "semantic": "code/packages/artifacts-vscode/src/list.ts \u00bb export function sortForList(all: readonl",
+     "hybrid": "code/packages/artifacts-vscode/src/list.ts \u00bb export function sortForList(all: readonl",
+     "rrf": "code/packages/artifacts-vscode/src/list.ts \u00bb export function sortForList(all: readonl"
+    },
+    "ms": {
+     "keyword": 10.4,
+     "semantic": 46.8,
+     "hybrid": 51.0,
+     "rrf": 47.9
+    }
+   },
+   {
+    "id": "cb037",
+    "tag": "identifier",
+    "q": "consumableBytes",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/lap-vscode/src/model.ts \u00bb export function consumableBytes(buf: Uin",
+     "semantic": "code/packages/lap-vscode/src/model.ts \u00bb export function consumableBytes(buf: Uin",
+     "hybrid": "code/packages/lap-vscode/src/model.ts \u00bb export function consumableBytes(buf: Uin",
+     "rrf": "code/packages/lap-vscode/src/model.ts \u00bb export function consumableBytes(buf: Uin"
+    },
+    "ms": {
+     "keyword": 11.2,
+     "semantic": 49.7,
+     "hybrid": 49.9,
+     "rrf": 51.0
+    }
+   },
+   {
+    "id": "cb038",
+    "tag": "paraphrase",
+    "q": "most recent filter still shows something on monday when today has no commits",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/lap-vscode/src/history.ts \u00bb export const RANGES = [\"recent\", \"today\"",
+     "semantic": "code/packages/lap-vscode/src/history.ts \u00bb export function rangeStart(range: Range,",
+     "hybrid": "code/packages/lap-vscode/src/history.ts \u00bb export const RANGES = [\"recent\", \"today\"",
+     "rrf": "code/packages/lap-vscode/src/history.ts \u00bb export function rangeStart(range: Range,"
+    },
+    "ms": {
+     "keyword": 10.1,
+     "semantic": 47.7,
+     "hybrid": 50.5,
+     "rrf": 49.5
+    }
+   },
+   {
+    "id": "cb039",
+    "tag": "identifier",
+    "q": "replaySeeded",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/lap-vscode/src/model.ts \u00bb export function replaySeeded( > : FileSt",
+     "semantic": "code/packages/lap-vscode/src/model.ts \u00bb export function replaySeeded(",
+     "hybrid": "code/packages/lap-vscode/src/model.ts \u00bb export function replaySeeded( > : FileSt",
+     "rrf": "code/packages/lap-vscode/src/model.ts \u00bb export function replaySeeded( > : FileSt"
+    },
+    "ms": {
+     "keyword": 10.8,
+     "semantic": 51.0,
+     "hybrid": 49.5,
+     "rrf": 57.4
+    }
+   },
+   {
+    "id": "cb040",
+    "tag": "paraphrase",
+    "q": "typing L12 in the history filter should not also match L120",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/lap-vscode/src/history.ts \u00bb export interface SessionRow {",
+     "semantic": "code/packages/lap-vscode/src/history.ts \u00bb export interface SessionRow {",
+     "hybrid": "code/packages/lap-vscode/src/history.ts \u00bb export interface SessionRow {",
+     "rrf": "code/packages/lap-vscode/src/history.ts \u00bb export interface SessionRow {"
+    },
+    "ms": {
+     "keyword": 11.4,
+     "semantic": 51.2,
+     "hybrid": 51.9,
+     "rrf": 52.3
+    }
+   },
+   {
+    "id": "cb041",
+    "tag": "purpose",
+    "q": "why are commits numbered (1/8) to (8/8) shown as a single row",
+    "ranks": {
+     "keyword": 1,
+     "semantic": null,
+     "hybrid": 1,
+     "rrf": 4
+    },
+    "top": {
+     "keyword": "code/packages/coboard-vscode/src/commits.ts \u00bb export interface CommitGroup {",
+     "semantic": "code/packages/lap-vscode/src/history.ts \u00bb export function rangeStart(range: Range,",
+     "hybrid": "code/packages/coboard-vscode/src/commits.ts \u00bb export interface CommitGroup {",
+     "rrf": "code/packages/lap-vscode/src/history.ts \u00bb export function query( > for (const s of"
+    },
+    "ms": {
+     "keyword": 8.8,
+     "semantic": 54.3,
+     "hybrid": 50.4,
+     "rrf": 53.7
+    }
+   },
+   {
+    "id": "cb042",
+    "tag": "identifier",
+    "q": "linkifyIds",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/coboard-vscode/src/linkify.ts \u00bb const ID = /(^|[^\\w\\-\\[/#])([EMT]-[1-9][",
+     "semantic": "code/packages/coboard-vscode/src/linkify.ts \u00bb const ID = /(^|[^\\w\\-\\[/#])([EMT]-[1-9][",
+     "hybrid": "code/packages/coboard-vscode/src/linkify.ts \u00bb const ID = /(^|[^\\w\\-\\[/#])([EMT]-[1-9][",
+     "rrf": "code/packages/coboard-vscode/src/linkify.ts \u00bb const ID = /(^|[^\\w\\-\\[/#])([EMT]-[1-9]["
+    },
+    "ms": {
+     "keyword": 12.9,
+     "semantic": 49.5,
+     "hybrid": 51.9,
+     "rrf": 51.5
+    }
+   },
+   {
+    "id": "cb043",
+    "tag": "identifier",
+    "q": "GAP_MS session timeline gap",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 5,
+     "hybrid": 2,
+     "rrf": 2
+    },
+    "top": {
+     "keyword": "code/packages/coboard-vscode/src/timeline.ts \u00bb export function timeline<S extends Timel",
+     "semantic": "code/packages/coboard-vscode/src/timeline.ts \u00bb export function timeline<S extends Timel",
+     "hybrid": "code/packages/coboard-vscode/src/timeline.ts \u00bb export function timeline<S extends Timel",
+     "rrf": "code/packages/coboard-vscode/src/timeline.ts \u00bb export function timeline<S extends Timel"
+    },
+    "ms": {
+     "keyword": 7.6,
+     "semantic": 47.3,
+     "hybrid": 48.4,
+     "rrf": 47.7
+    }
+   },
+   {
+    "id": "cb044",
+    "tag": "identifier",
+    "q": "kanban columns() priority sort",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/coboard-vscode/src/kanban.ts \u00bb export type ViewMode = \"list\" | \"kanban\"",
+     "semantic": "code/packages/coboard-vscode/src/kanban.ts \u00bb export type ViewMode = \"list\" | \"kanban\"",
+     "hybrid": "code/packages/coboard-vscode/src/kanban.ts \u00bb export type ViewMode = \"list\" | \"kanban\"",
+     "rrf": "code/packages/coboard-vscode/src/kanban.ts \u00bb export type ViewMode = \"list\" | \"kanban\""
+    },
+    "ms": {
+     "keyword": 10.3,
+     "semantic": 46.2,
+     "hybrid": 48.8,
+     "rrf": 49.7
+    }
+   },
+   {
+    "id": "cb045",
+    "tag": "paraphrase",
+    "q": "filtering the board sidebar keeps a matching ticket's epic and milestone visible",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 5,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/coboard-vscode/src/filter.ts \u00bb export const FIELDS = [\"status\", \"kind\",",
+     "semantic": "code/packages/coboard/src/store.ts \u00bb function resolvePlacement(st: State, epi",
+     "hybrid": "code/packages/coboard-vscode/src/filter.ts \u00bb export const FIELDS = [\"status\", \"kind\",",
+     "rrf": "code/packages/coboard-vscode/src/filter.ts \u00bb export const FIELDS = [\"status\", \"kind\","
+    },
+    "ms": {
+     "keyword": 11.2,
+     "semantic": 50.3,
+     "hybrid": 53.0,
+     "rrf": 50.9
+    }
+   },
+   {
+    "id": "cb046",
+    "tag": "purpose",
+    "q": "why not use github style slugs for heading anchors in kb documents",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/src/view/headings.ts \u00bb export function headingId(heading: strin",
+     "semantic": "code/packages/index-vscode/src/view/headings.ts \u00bb export function headingId(heading: strin",
+     "hybrid": "code/packages/index-vscode/src/view/headings.ts \u00bb export function headingId(heading: strin",
+     "rrf": "code/packages/index-vscode/src/view/headings.ts \u00bb export function headingId(heading: strin"
+    },
+    "ms": {
+     "keyword": 10.9,
+     "semantic": 51.3,
+     "hybrid": 48.2,
+     "rrf": 48.2
+    }
+   },
+   {
+    "id": "cb047",
+    "tag": "paraphrase",
+    "q": "opening a search hit jumps to the section title rather than the exact byte position",
+    "ranks": {
+     "keyword": 8,
+     "semantic": 10,
+     "hybrid": 6,
+     "rrf": 5
+    },
+    "top": {
+     "keyword": "code/packages/coboard/src/query.ts \u00bb export function search(items: readonly I",
+     "semantic": "code/packages/index-vscode/src/quickopen.ts \u00bb interface HitItem extends vscode.QuickPi",
+     "hybrid": "code/packages/index-vscode/src/quickopen.ts \u00bb function item(hit: KbHit): HitItem {",
+     "rrf": "code/packages/index-vscode/src/quickopen.ts \u00bb function item(hit: KbHit): HitItem {"
+    },
+    "ms": {
+     "keyword": 7.9,
+     "semantic": 49.7,
+     "hybrid": 50.0,
+     "rrf": 49.9
+    }
+   },
+   {
+    "id": "cb048",
+    "tag": "purpose",
+    "q": "why can't cmd-p quick open find kb documents",
+    "ranks": {
+     "keyword": 2,
+     "semantic": 1,
+     "hybrid": 2,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/webview/parts.tsx \u00bb export function CannotStart(props: { why",
+     "semantic": "code/packages/index-vscode/src/quickopen.ts \u00bb interface HitItem extends vscode.QuickPi",
+     "hybrid": "code/packages/index-vscode/webview/parts.tsx \u00bb export function CannotStart(props: { why",
+     "rrf": "code/packages/index-vscode/src/quickopen.ts \u00bb interface HitItem extends vscode.QuickPi"
+    },
+    "ms": {
+     "keyword": 12.7,
+     "semantic": 52.4,
+     "hybrid": 52.5,
+     "rrf": 52.8
+    }
+   },
+   {
+    "id": "cb049",
+    "tag": "identifier",
+    "q": "formatBytes KiB",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/src/view/facts.ts \u00bb export function formatBytes(bytes: numbe",
+     "semantic": "code/packages/index-vscode/src/view/facts.ts \u00bb const UNITS = [\"B\", \"KiB\", \"MiB\", \"GiB\",",
+     "hybrid": "code/packages/index-vscode/src/view/facts.ts \u00bb export function formatBytes(bytes: numbe",
+     "rrf": "code/packages/index-vscode/src/view/facts.ts \u00bb export function formatBytes(bytes: numbe"
+    },
+    "ms": {
+     "keyword": 9.5,
+     "semantic": 49.7,
+     "hybrid": 50.1,
+     "rrf": 46.5
+    }
+   },
+   {
+    "id": "cb050",
+    "tag": "purpose",
+    "q": "how are pdf papers filed into the knowledge base",
+    "ranks": {
+     "keyword": 3,
+     "semantic": 3,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/src/commands.ts \u00bb export async function addFiles(kb: Kb, a",
+     "semantic": "code/packages/kb-mcp/src/tools.ts \u00bb const KB_ADD: ToolDefinition = { > items",
+     "hybrid": "code/packages/index-vscode/src/commands.ts \u00bb export async function addFiles(kb: Kb, a",
+     "rrf": "code/packages/index-vscode/src/commands.ts \u00bb export async function addFiles(kb: Kb, a"
+    },
+    "ms": {
+     "keyword": 9.1,
+     "semantic": 53.8,
+     "hybrid": 51.8,
+     "rrf": 50.1
+    }
+   },
+   {
+    "id": "cb051",
+    "tag": "paraphrase",
+    "q": "adding a web page that returns 404 should not store the error page",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/src/commands.ts \u00bb export async function fetchPage(url: str",
+     "semantic": "code/packages/index-vscode/src/commands.ts \u00bb export async function fetchPage(url: str",
+     "hybrid": "code/packages/index-vscode/src/commands.ts \u00bb export async function fetchPage(url: str",
+     "rrf": "code/packages/index-vscode/src/commands.ts \u00bb export async function fetchPage(url: str"
+    },
+    "ms": {
+     "keyword": 10.6,
+     "semantic": 65.6,
+     "hybrid": 49.7,
+     "rrf": 50.0
+    }
+   },
+   {
+    "id": "cb052",
+    "tag": "identifier",
+    "q": "kb:/D-241?chunk= uri two tabs",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/src/uri.ts \u00bb export const KB_SCHEME = \"kb\";",
+     "semantic": "code/packages/index-vscode/src/uri.ts \u00bb export const KB_SCHEME = \"kb\";",
+     "hybrid": "code/packages/index-vscode/src/uri.ts \u00bb export const KB_SCHEME = \"kb\";",
+     "rrf": "code/packages/index-vscode/src/uri.ts \u00bb export const KB_SCHEME = \"kb\";"
+    },
+    "ms": {
+     "keyword": 7.1,
+     "semantic": 50.9,
+     "hybrid": 48.8,
+     "rrf": 48.9
+    }
+   },
+   {
+    "id": "cb053",
+    "tag": "paraphrase",
+    "q": "which html attributes are kept when a stored web page is rendered",
+    "ranks": {
+     "keyword": 6,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/src/commands.ts \u00bb export async function fetchPage(url: str",
+     "semantic": "code/packages/index-vscode/src/view/html.ts \u00bb export type HtmlNode =",
+     "hybrid": "code/packages/index-vscode/src/view/html.ts \u00bb export type HtmlNode =",
+     "rrf": "code/packages/index-vscode/src/view/html.ts \u00bb export type HtmlNode ="
+    },
+    "ms": {
+     "keyword": 10.8,
+     "semantic": 50.4,
+     "hybrid": 49.8,
+     "rrf": 48.4
+    }
+   },
+   {
+    "id": "cb054",
+    "tag": "identifier",
+    "q": "useDebounced DEBOUNCE_MS",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 1,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/packages/index-vscode/webview/Sidebar.tsx \u00bb const DEBOUNCE_MS = 180;",
+     "semantic": "code/packages/index-vscode/webview/parts.tsx \u00bb export function useDebounced<T>(value: T",
+     "hybrid": "code/packages/index-vscode/webview/parts.tsx \u00bb export function useDebounced<T>(value: T",
+     "rrf": "code/packages/index-vscode/webview/Sidebar.tsx \u00bb const DEBOUNCE_MS = 180;"
+    },
+    "ms": {
+     "keyword": 8.7,
+     "semantic": 53.2,
+     "hybrid": 54.3,
+     "rrf": 48.0
+    }
+   },
+   {
+    "id": "cb055",
+    "tag": "purpose",
+    "q": "how do I seed a playground project with a sample board, lap sessions and kb docs",
+    "ranks": {
+     "keyword": 1,
+     "semantic": 2,
+     "hybrid": 1,
+     "rrf": 1
+    },
+    "top": {
+     "keyword": "code/scripts/playground.mjs \u00bb const repo = path.resolve(path.dirname(f",
+     "semantic": "code/scripts/playground.mjs \u00bb lap(\"session\", \"start\", \"tidy the readme",
+     "hybrid": "code/scripts/playground.mjs \u00bb const repo = path.resolve(path.dirname(f",
+     "rrf": "code/scripts/playground.mjs \u00bb const repo = path.resolve(path.dirname(f"
+    },
+    "ms": {
+     "keyword": 8.1,
+     "semantic": 57.0,
+     "hybrid": 49.3,
+     "rrf": 49.5
+    }
+   }
+  ]
+ }
+}

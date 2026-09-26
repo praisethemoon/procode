@@ -18,14 +18,17 @@ static const char *USAGE =
     "                             a folder's source and docs, as git sees it;\n"
     "                             again: only what changed, and files gone\n"
     "                             are forgotten (--no-forget lists them)\n"
-    "  ls [--collection a,b] [--source S-n] [--mime M] [--since <date>]\n"
+    "  add ... [--embed-budget S | --wait]\n"
+    "                             embed for at most S seconds (default 20),\n"
+    "                             or until done; the rest is searchable by\n"
+    "                             keyword at once and kb embed finishes it\n"    "  ls [--collection a,b] [--source S-n] [--mime M] [--since <date>]\n"
     "     [--q text] [--meta <json>] [--limit N]\n"
     "  get <D-n> [--include text,chunks,links]\n"
     "  search <query> [--collection a,b] [--mode keyword] [--k 10]\n"
     "         [--expand N] [--source S-n] [--mime M] [--since <date>]\n"
     "         [--meta <json>]\n"
-    "         [--min-score X] [--older-than 90d]\n"
-    "                             snippets only; kb chunk fetches a passage\n"
+    "         [--min-score X] [--older-than 90d] [--rerank]\n"
+    "                             snippets only; kb chunk fetches a passage\n"    "                             --rerank: the reranker rescores the top 20\n"
     "  chunk <C-n> [--expand N]   one chunk in full, with its neighbours\n"
     "  collections                names, counts, bytes, oldest fetch\n"
     "  collections rename <old> <new>\n"
@@ -59,6 +62,7 @@ static const char *USAGE =
     "  links delete <D-n> <type> <D-m>\n"
     "\n"
     "maintenance:\n"
+    "  embed                      embed the chunks an add left pending\n"
     "  rebuild                    rebuild index/ from the logs and blobs\n"
     "  reindex                    rechunk after a chunker change; each\n"
     "                             rechunked document takes a FRESH chunk\n"
@@ -105,6 +109,8 @@ int main(int argc, char **argv) {
         rc = cmd_search(a, argc2, argv2);
     else if (strcmp(cmd, "chunk") == 0)
         rc = cmd_chunk(a, argc2, argv2);
+    else if (strcmp(cmd, "embed") == 0)
+        rc = cmd_embed(a, argc2, argv2);
     else if (strcmp(cmd, "rebuild") == 0)
         rc = cmd_rebuild(a, argc2, argv2);
     else if (strcmp(cmd, "collections") == 0)

@@ -53,7 +53,7 @@ static void spans_are_sane(const Chunks *c, size_t len, const char *what) {
 }
 
 static void test_markdown(Arena *a) {
-    const char *doc = "# First\n\nalpha beta\n\n# Second\n\ngamma delta\n";
+    const char *doc = "# First\n\nalpha beta, and enough words after them to make a section of its own\n\n# Second\n\ngamma delta, and enough words after them to make a section of its own\n";
     t_begin("chunk: markdown splits on headings and keeps them");
     Chunks c = split(a, doc, LANG_MARKDOWN);
     ASSERT_EQ_I((int64_t)c.n, 2);
@@ -162,8 +162,55 @@ static void test_heading_paths(void) {
     arena_free(a);
 }
 
+static void test_hygiene(void) {
+    Arena *a = arena_new(1 << 16);
+    t_begin("chunk: tiny sibling sections share a chunk, headed by the first");
+    const char *md = "# Options\n\n## --json\n\nmachine output\n\n## --k\n\nhow many\n\n"
+                     "## --mode\n\nkeyword, semantic or hybrid\n";
+    Chunks c = chunk_split(a, md, strlen(md), LANG_MARKDOWN, SYNTAX_NONE, 1600, 240);
+    size_t with_json = 0;
+    for (size_t i = 0; i < c.n; i++)
+        if (c.v[i].heading && strcmp(c.v[i].heading, "--json") == 0)
+            with_json = i + 1;
+    ASSERT_TRUE(with_json > 0);
+    if (with_json) {
+        const Chunk *j = &c.v[with_json - 1];
+        ASSERT_TRUE(memmem(md + j->start, j->end - j->start, "hybrid", 6) != NULL);
+    }
+    ASSERT_TRUE(c.n <= 2);
+    spans_are_sane(&c, strlen(md), "tiny siblings");
+
+    t_begin("chunk: sections under different parents are not siblings");
+    const char *md2 = "# A\n\n## x\n\none\n\n# B\n\n## x\n\ntwo\n";
+    c = chunk_split(a, md2, strlen(md2), LANG_MARKDOWN, SYNTAX_NONE, 1600, 240);
+    bool b_alone = false;
+    for (size_t i = 0; i < c.n; i++)
+        if (c.v[i].heading && strcmp(c.v[i].heading, "B") == 0)
+            b_alone = true;
+    ASSERT_TRUE(b_alone);
+
+    t_begin("chunk: text that is mostly digits, markup or unbroken is not embedded");
+    const char *prose = "The writer takes the lock, appends one record and flushes it.";
+    ASSERT_TRUE(chunk_embeddable(prose, strlen(prose)));
+    const char *svg = "<path d=\"M10.5 20.25 L30.75 40.1 C 12.3 45.6 78.9 10.2 33.4 55.6 Z\"/>"
+                      "<path d=\"M1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18\"/>";
+    ASSERT_TRUE(!chunk_embeddable(svg, strlen(svg)));
+    const char *digits = "12 34 56 78 90 12 34 56 78 90 0x1f 0x2e 0x3d";
+    ASSERT_TRUE(!chunk_embeddable(digits, strlen(digits)));
+    char minified[600];
+    for (size_t i = 0; i < sizeof minified - 1; i++)
+        minified[i] = "abcdefghij();"[i % 13];
+    minified[sizeof minified - 1] = '\0';
+    ASSERT_TRUE(!chunk_embeddable(minified, strlen(minified)));
+    ASSERT_TRUE(!chunk_embeddable("   \n  ", 6));
+    const char *code = "static int f(int x) {\n    return x * 2 + 1;\n}\n";
+    ASSERT_TRUE(chunk_embeddable(code, strlen(code)));
+    arena_free(a);
+}
+
 void test_chunk(void) {
     test_heading_paths();
+    test_hygiene();
     Arena *a = arena_new(1 << 16);
     test_lang();
     test_markdown(a);

@@ -88,6 +88,11 @@ typedef struct {
     float rope_base_local;
     uint32_t window, global_every;
     const GgufTensor *final_norm_w;
+    /* A reranker's classification head (kb.role "reranker"): mean-pooled
+     * encoder output through dense (D x D), GELU, LayerNorm, and one output
+     * with a bias. NULL for an embedder. */
+    bool reranker;
+    const GgufTensor *cls_dense_w, *cls_norm_w, *cls_out_w, *cls_out_b;
 
     const GgufTensor *tok_embd, *type_embd, *embd_norm_w, *embd_norm_b;
     EmbedLayer *layer;
@@ -121,6 +126,25 @@ bool embed_find_model(Arena *a, char *out, size_t outsz, char *err,
 bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
                 size_t errsz);
 void embed_close(Embedder *e);
+
+/* ---- the reranker ------------------------------------------------------
+ *
+ * A cross-encoder: the query and a passage read together, as [CLS] query
+ * [SEP] passage [SEP], and one relevance score out, a logit (higher is more
+ * relevant; sentence-transformers would apply a sigmoid, kb keeps the raw
+ * value). It lives in ~/.kb/models beside the embedder, as a ModernBERT file
+ * whose kb.role is "reranker" (tools/modernbert/convert.py). */
+
+/* The reranker in ~/.kb/models: the one file whose role is "reranker". */
+bool embed_find_reranker(Arena *a, char *out, size_t outsz, char *err, size_t errsz);
+
+/* Opens a reranker; a file that is not one is refused. */
+bool rerank_open(Arena *a, const char *path, Embedder *e, char *err, size_t errsz);
+
+/* Scores one pair. Both texts are stripped as sentence-transformers strips
+ * them; a pair longer than `max_tokens` is cut, the passage first. */
+bool rerank_score(Embedder *e, const char *query, size_t qlen, const char *passage,
+                  size_t plen, size_t max_tokens, float *logit);
 
 /* One text to one vector of e->n_embd floats. `is_query` picks which of the
  * two prefixes is glued on, and that is the ONLY difference between the two

@@ -218,7 +218,7 @@ static int32_t refresh_source(Arena *a, bool json, const char *id) {
         const char *root = arena_strdup(a, src->locator);
         const char *collection = arena_strdup(a, src->collection);
         store_close(&s);
-        return add_dir(a, json, root, collection, true);
+        return add_dir(a, json, root, collection, true, KB_EMBED_BUDGET_S);
     }
     const Document *doc = src ? doc_by_source_path(&s.documents, src->id, "") : NULL;
     if (!src || !doc) {

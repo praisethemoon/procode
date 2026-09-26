@@ -1,5 +1,6 @@
 #include "syntax.h"
 
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <tree_sitter/api.h>
@@ -429,5 +430,156 @@ bool syntax_cuts(Arena *a, SyntaxLang l, const char *text, size_t len,
         cut(&c, 0, NULL); /* unreachable: the first unit opens at 0 */
     *cuts = c.v;
     *n = c.n;
+    return true;
+}
+
+/* ---- symbols ------------------------------------------------------------ */
+
+/* One compiled query per language, built on first use from the patterns this
+ * grammar accepts: a pattern that names a node the grammar lacks (JavaScript's
+ * patterns run against TypeScript) is left out rather than failing the rest.
+ * kb is single-threaded outside the embedder, so a plain cache is enough. */
+static TSQuery *tag_queries[SYNTAX_COUNT];
+static bool tag_tried[SYNTAX_COUNT];
+
+static TSQuery *tag_query(SyntaxLang l) {
+    if (tag_tried[l])
+        return tag_queries[l];
+    tag_tried[l] = true;
+    const char *const *pats = SYNTAX_TAGS[l];
+    if (!pats)
+        return NULL;
+    const TSLanguage *lang = LANGS[l].language();
+    size_t cap = 1, used = 0;
+    for (size_t i = 0; pats[i]; i++)
+        cap += strlen(pats[i]) + 1;
+    char *src = (char *)malloc(cap);
+    if (!src)
+        return NULL;
+    src[0] = '\0';
+    for (size_t i = 0; pats[i]; i++) {
+        uint32_t off;
+        TSQueryError err;
+        TSQuery *one = ts_query_new(lang, pats[i], (uint32_t)strlen(pats[i]), &off, &err);
+        if (!one)
+            continue;
+        ts_query_delete(one);
+        size_t k = strlen(pats[i]);
+        memcpy(src + used, pats[i], k);
+        used += k;
+        src[used++] = '\n';
+        src[used] = '\0';
+    }
+    uint32_t off;
+    TSQueryError err;
+    tag_queries[l] = used ? ts_query_new(lang, src, (uint32_t)used, &off, &err) : NULL;
+    free(src);
+    return tag_queries[l];
+}
+
+static const char *first_line(Arena *a, const char *text, uint32_t start, uint32_t end) {
+    const char *p = text + start, *e = text + end;
+    const char *nl = memchr(p, '\n', (size_t)(e - p));
+    const char *q = nl ? nl : e;
+    while (q > p && (q[-1] == ' ' || q[-1] == '\t' || q[-1] == '\r'))
+        q--;
+    size_t k = (size_t)(q - p);
+    if (k > 160) {
+        k = 160;
+        while (k > 0 && ((unsigned char)p[k] & 0xC0) == 0x80)
+            k--;
+    }
+    return arena_strndup(a, p, k);
+}
+
+/* The comment directly above a definition, if its last line touches it. */
+static const char *doc_above(Arena *a, const char *text, TSNode def) {
+    TSNode prev = ts_node_prev_named_sibling(def);
+    if (ts_node_is_null(prev) || !strstr(ts_node_type(prev), "comment"))
+        return NULL;
+    if (ts_node_end_point(prev).row + 1 < ts_node_start_point(def).row)
+        return NULL;
+    uint32_t s = ts_node_start_byte(prev), e = ts_node_end_byte(prev);
+    if (e - s > 400)
+        e = s + 400;
+    return arena_strndup(a, text + s, e - s);
+}
+
+bool syntax_symbols(Arena *a, SyntaxLang l, const char *text, size_t len,
+                    SyntaxSymbol **out, size_t *n) {
+    *out = NULL;
+    *n = 0;
+    bool timed_out;
+    TSTree *tree = parse(l, text, len, &timed_out);
+    if (!tree)
+        return false;
+    TSNode root = ts_tree_root_node(tree);
+    SyntaxSymbol *v = NULL;
+    size_t k = 0, cap = 0;
+    if (l == SYNTAX_ASM) {
+        /* An assembler's definitions are its labels. */
+        uint32_t nc = ts_node_named_child_count(root);
+        for (uint32_t i = 0; i < nc; i++) {
+            TSNode c = ts_node_named_child(root, i);
+            if (strcmp(ts_node_type(c), "label") != 0)
+                continue;
+            uint32_t s = ts_node_start_byte(c), e = ts_node_end_byte(c);
+            while (e > s && (text[e - 1] == ':' || text[e - 1] == ' '))
+                e--;
+            if (e == s)
+                continue;
+            ARENA_GROW(a, v, k, cap, SyntaxSymbol);
+            v[k].name = arena_strndup(a, text + s, e - s);
+            v[k].kind = "label";
+            v[k].signature = v[k].name;
+            v[k].doc = doc_above(a, text, c);
+            v[k].start = s;
+            v[k].end = ts_node_end_byte(c);
+            v[k].line = ts_node_start_point(c).row + 1;
+            k++;
+        }
+    } else {
+        TSQuery *q = tag_query(l);
+        TSQueryCursor *cur = q ? ts_query_cursor_new() : NULL;
+        if (cur) {
+            ts_query_cursor_exec(cur, q, root);
+            TSQueryMatch m;
+            while (ts_query_cursor_next_match(cur, &m)) {
+                TSNode name = {0}, def = {0};
+                bool has_name = false, has_def = false;
+                const char *kind = NULL;
+                for (uint16_t i = 0; i < m.capture_count; i++) {
+                    uint32_t cl;
+                    const char *cn = ts_query_capture_name_for_id(q, m.captures[i].index, &cl);
+                    if (cl == 4 && strncmp(cn, "name", 4) == 0) {
+                        name = m.captures[i].node;
+                        has_name = true;
+                    } else if (cl > 11 && strncmp(cn, "definition.", 11) == 0) {
+                        def = m.captures[i].node;
+                        has_def = true;
+                        kind = arena_strndup(a, cn + 11, cl - 11);
+                    }
+                }
+                if (!has_name || !has_def)
+                    continue;
+                uint32_t ns = ts_node_start_byte(name), ne = ts_node_end_byte(name);
+                if (ne <= ns || ne - ns > 200)
+                    continue;
+                ARENA_GROW(a, v, k, cap, SyntaxSymbol);
+                v[k].name = arena_strndup(a, text + ns, ne - ns);
+                v[k].kind = kind;
+                v[k].start = ts_node_start_byte(def);
+                v[k].end = ts_node_end_byte(def);
+                v[k].signature = first_line(a, text, v[k].start, v[k].end);
+                v[k].doc = doc_above(a, text, def);
+                v[k].line = ts_node_start_point(def).row + 1;
+                k++;
+            }
+            ts_query_cursor_delete(cur);
+        }
+    }
+    ts_tree_delete(tree);
+    *out = v;
+    *n = k;
     return true;
 }

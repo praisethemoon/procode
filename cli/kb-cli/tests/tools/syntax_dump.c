@@ -3,11 +3,11 @@
  * nodes, whether kb would split it by the tree or fall back to line windows,
  * and how long the parse took.
  *
- *   kb-syntax-dump [--nodes] [--chunks [BYTES]] <file>...
+ *   kb-syntax-dump [--nodes] [--chunks [BYTES]] [--symbols] <file>...
  *
  * --nodes also lists every top-level node's type and span; --chunks lists the
  * chunks syntax_cuts makes at a target of BYTES (default 1600), with their
- * sizes and headings.
+ * sizes and headings; --symbols lists the definitions syntax_symbols finds.
  */
 
 #include "../../src/platform.h"
@@ -27,10 +27,15 @@ static double now_ms(void) {
 int main(int argc, char **argv) {
     bool nodes = false;
     size_t chunks = 0;
+    bool symbols = false;
     Arena *a = arena_new(1 << 20);
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--nodes") == 0) {
             nodes = true;
+            continue;
+        }
+        if (strcmp(argv[i], "--symbols") == 0) {
+            symbols = true;
             continue;
         }
         if (strcmp(argv[i], "--chunks") == 0) {
@@ -57,6 +62,12 @@ int main(int argc, char **argv) {
         for (size_t k = 0; nodes && k < o.n; k++)
             printf("    %-28s %6u-%-6u%s\n", o.v[k].type, o.v[k].start, o.v[k].end,
                    o.v[k].error ? "  ERROR" : "");
+        SyntaxSymbol *syms;
+        size_t ns;
+        if (symbols && syntax_symbols(a, l, text, len, &syms, &ns))
+            for (size_t k = 0; k < ns; k++)
+                printf("    %-10s %-28s line %-5u %s\n", syms[k].kind, syms[k].name, syms[k].line,
+                       syms[k].doc ? "(doc)" : "");
         SyntaxCut *cuts;
         size_t nc;
         if (chunks && syntax_cuts(a, l, text, len, chunks, &cuts, &nc)) {
