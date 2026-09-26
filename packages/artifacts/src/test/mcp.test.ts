@@ -24,7 +24,7 @@ test("the server introduces itself with the tokens a page should use", async () 
     const tools = (await handle({ jsonrpc: "2.0", id: 2, method: "tools/list" }, { cwd: "/" })) as Json;
     assert.deepEqual(
         ((tools["result"] as Json)["tools"] as { name: string }[]).map((t) => t.name),
-        ["artifact_publish", "artifact_list", "artifact_get"],
+        ["artifact_publish", "artifact_template", "artifact_list", "artifact_get"],
     );
 });
 
@@ -60,4 +60,32 @@ test("refusals are results the agent can read, with the code first", async () =>
     assert.match((await call(cwd, "artifact_get", { id: "A-4" })).text, /^not_found: /);
     const extra = await call(cwd, "artifact_publish", { title: "t", html: "x", delete: true });
     assert.match(extra.text, /^invalid: artifact_publish takes no "delete"/);
+});
+
+test("the report template is served, and it carries no colour of its own", async () => {
+    const list = JSON.parse((await call("/", "artifact_template", {})).text);
+    assert.deepEqual(list.templates.map((t: { name: string }) => t.name), ["report"]);
+    const report = JSON.parse((await call("/", "artifact_template", { name: "report" })).text);
+    const html: string = report.html;
+    assert.match(html, /class="kpis"/);
+    assert.match(html, /class="callout ok"/);
+    assert.match(html, /<svg class="chart"/);
+    assert.match(html, /class="tabs"/);
+    // Every colour comes from the viewer: no CSS, no inline style, no literal colour.
+    assert.doesNotMatch(html, /<style|style="/);
+    assert.doesNotMatch(html, /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/);
+    assert.doesNotMatch(html, /\b(fill|stroke|color)=/);
+    assert.match((await call("/", "artifact_template", { name: "slides" })).text, /^not_found: /);
+});
+
+test("every class the template uses is one the viewer styles", () => {
+    const { TEMPLATES } = require("../templates") as typeof import("../templates");
+    const css = require("node:fs").readFileSync(require("node:path").join(__dirname, "../../../artifacts-vscode/assets/artifact.css"), "utf8") as string;
+    const used = new Set<string>();
+    for (const m of TEMPLATES[0].html.matchAll(/class="([^"]+)"/g)) for (const c of m[1].split(/\s+/)) used.add(c);
+    const own = new Set(["filterable", "label", "muted"]); // hooks for the script, and styled elsewhere
+    for (const c of used) {
+        if (own.has(c) && c !== "label" && c !== "muted") continue;
+        assert.match(css, new RegExp(`\\.${c}\\b`), `.${c} is used by the template and not styled by the viewer`);
+    }
 });

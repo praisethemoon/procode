@@ -16,3 +16,4 @@ export {
     findArtifacts,
     isArtifactId,
 } from "./store";
+export { TEMPLATES, Template } from "./templates";

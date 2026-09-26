@@ -12,6 +12,7 @@
 import * as readline from "node:readline";
 
 import { ArtifactError, Artifacts, MAX_DESCRIPTION, MAX_TITLE, defaultRoot, findArtifacts } from "./store";
+import { TEMPLATES } from "./templates";
 
 const VERSION = "0.1.0";
 
@@ -25,7 +26,9 @@ The page is HTML (a whole document or a fragment). It is shown inside VS Code in
 - space: --bk-spacing-1 (0.25rem) … --bk-spacing-24, --bk-gap-xs|sm|md|lg|xl
 - type: --bk-font-family-sans, --bk-font-family-mono, --bk-font-size-xs|sm|md|base|lg|xl|2xl|3xl, --bk-font-weight-normal|medium|semibold|bold, --bk-line-height-tight|normal|relaxed
 - shape: --bk-radius-sm|md|lg, --bk-border-width-1|2, --bk-shadow-sm|md
-Plain elements (headings, paragraphs, lists, tables, code, pre, blockquote, links) are already styled with these, so simple pages need no CSS at all.
+Plain elements (headings, paragraphs, lists, tables, code, pre, blockquote, details, links) are already styled, and so are components by class name, so a report needs no CSS at all:
+eyebrow, lede · meta + chip · kpis + kpi (<b>number</b><span>what</span><small>why</small>; kpi.warn, kpi.danger) · callout ok|info|warn|danger (<strong>verdict</strong><p>reason</p>) · cols, panel · tag (ok|warn|danger) · tabs (buttons with aria-pressed) · td.id, td.num · toc · svg.chart with .bar (ok|warn|danger|muted), .grid, .node (accent), .edge (accent|dashed), .arrowhead, text.label.
+For anything longer than a few paragraphs, start from artifact_template {name: "report"}: it has every component in place and says what goes where.
 The page has no network: inline everything (SVG, data: images, scripts). Scripts run sandboxed.
 Republish with the same id to revise a page; its createdAt is kept.`;
 
@@ -73,6 +76,25 @@ export const TOOLS: readonly Tool[] = [
                 description: args["description"] as string | undefined,
                 id: args["id"] as string | undefined,
             });
+        },
+    },
+    {
+        name: "artifact_template",
+        description:
+            "A starting point for a page: every component the viewer styles, in place, with what goes where. Without name, lists the templates.",
+        inputSchema: {
+            type: "object",
+            properties: { name: { type: "string", description: `One of: ${TEMPLATES.map((t) => t.name).join(", ")}.` } },
+        },
+        call: (args) => {
+            if (args["name"] === undefined) {
+                return { templates: TEMPLATES.map(({ name, description }) => ({ name, description })) };
+            }
+            const t = TEMPLATES.find((x) => x.name === args["name"]);
+            if (!t) {
+                throw new ArtifactError("not_found", `no template "${String(args["name"])}"; there is ${TEMPLATES.map((x) => x.name).join(", ")}`);
+            }
+            return t;
         },
     },
     {

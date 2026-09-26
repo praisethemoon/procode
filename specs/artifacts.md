@@ -115,6 +115,7 @@ extension, the workspace or the viewer. Everything a page shows travels in
 | tool | does |
 |---|---|
 | `artifact_publish` | `{ title, html, description?, id? }`. Without `id`, creates the next `A-<n>`. With `id`, replaces that artifact's page and metadata, keeping `createdAt`. Returns the artifact and the path of its page. |
+| `artifact_template` | `{ name? }`: a starting page with every component in place (§3), or without `name` the list of templates. Today there is `report`. |
 | `artifact_list` | every artifact, newest `updatedAt` first, without pages |
 | `artifact_get` | `{ id }`: the metadata and the page |
 
