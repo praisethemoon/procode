@@ -11,6 +11,8 @@ import { test } from "node:test";
 
 import {
     addArgv,
+    addBatchArgv,
+    batchLines,
     chunkArgv,
     collectionsArgv,
     deleteCollectionArgv,
@@ -314,6 +316,7 @@ test("no builder ever emits --store, because the CLI no longer has one", () => {
         deleteCollectionArgv("a"),
         deleteCollectionArgv("a", true),
         forgetArgv("D-1"),
+        addBatchArgv(),
         sourcesArgv({ collection: "c", kind: "file" }),
         sourceArgv("S-1"),
         refreshSourceArgv("S-1"),
@@ -346,4 +349,16 @@ test("sources are listed with their narrowings as flags, shown and refreshed by 
     assert.deepEqual(sourcesArgv({ collection: "", kind: null }), ["sources"]);
     assert.deepEqual(sourceArgv("S-3"), ["sources", "show", "S-3"]);
     assert.deepEqual(refreshSourceArgv("S-3"), ["refresh", "S-3"]);
+});
+
+test("a batch is one JSON line per document on stdin, and nothing of it is an argument", () => {
+    assert.deepEqual(addBatchArgv(), ["add", "--batch"]);
+    const text = batchLines([
+        { title: "one", collection: "c", content: "line one\nline two" },
+        { title: "two", collection: "c", content: "x", url: " https://example.test ", mime: "", meta: { year: 2026 } },
+    ]);
+    const lines = text.split("\n");
+    assert.equal(lines.length, 3, "two lines and the final newline; a newline inside content stays escaped");
+    assert.deepEqual(JSON.parse(lines[0]), { title: "one", collection: "c", content: "line one\nline two" });
+    assert.deepEqual(JSON.parse(lines[1]), { title: "two", collection: "c", content: "x", url: "https://example.test", meta: { year: 2026 } });
 });

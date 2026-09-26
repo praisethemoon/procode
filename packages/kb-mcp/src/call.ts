@@ -29,7 +29,7 @@
  */
 
 import {
-    AddOptions,
+    BatchDocument,
     Kb,
     SearchMode,
     SearchOptions,
@@ -296,12 +296,7 @@ async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
     if (!Array.isArray(list) || list.length === 0) {
         throw bad("kb_add", '"documents" must be a non-empty array.');
     }
-    interface Filing {
-        readonly title: string;
-        readonly content: string;
-        readonly options: AddOptions;
-    }
-    const filings: Filing[] = list.map((entry, i) => {
+    const documents: BatchDocument[] = list.map((entry, i) => {
         if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
             throw bad("kb_add", `documents[${i}] must be an object.`);
         }
@@ -324,64 +319,50 @@ async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
                 throw bad("kb_add", `${where}.meta must be an object.`);
             }
         }
+        /* NO DESTINATION. The CLI files into the `.kb/` it finds by walking
+         * up from the server's working directory, and when there is none it
+         * refuses with `not_found` naming `kb init`. That refusal comes back
+         * below as an `isError` result the agent can read, with `filed: 0` —
+         * not as a transport error, because the call was well formed and the
+         * store is what said no. */
         return {
             title,
             content,
-            options: {
-                title,
-                collection,
-                url: asString("kb_add", `${where}.url`, d["url"]),
-                mime: asString("kb_add", `${where}.mime`, d["mime"]),
-                meta: (meta ?? undefined) as Readonly<Record<string, unknown>> | undefined,
-                /* NO DESTINATION. The CLI files into the `.kb/` it finds by
-                 * walking up from the server's working directory, and when
-                 * there is none it refuses with `not_found` naming `kb init`.
-                 * That refusal comes back through the loop below as an
-                 * `isError` result the agent can read, with `filed: 0` — not
-                 * as a transport error, because the call was well formed and
-                 * the store is what said no. */
-            },
+            collection,
+            url: asString("kb_add", `${where}.url`, d["url"]),
+            mime: asString("kb_add", `${where}.mime`, d["mime"]),
+            meta: (meta ?? undefined) as Readonly<Record<string, unknown>> | undefined,
         };
     });
 
-    /* ONE CALL PER DOCUMENT, WHICH IS NOT §2'S `POST /documents/batch`. That
-     * route is "many at once, one transaction" and the CLI has no command for
-     * it, so there is no transaction to be had here and pretending otherwise
-     * would be the lie. What is offered instead is stated plainly: they are
-     * filed in order, the first refusal stops the run, and the answer names
-     * exactly which ones landed. Filing is idempotent by content hash, so
-     * re-running a batch after fixing the one that failed costs nothing for
-     * the ones that already went in. */
-    const added: unknown[] = [];
-    for (let i = 0; i < filings.length; i++) {
-        const filing = filings[i];
-        try {
-            added.push(await kb.add(filing.content, filing.options));
-        } catch (e) {
-            const stopped = whyItFailed(e);
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: JSON.stringify(
-                            {
-                                ok: false,
-                                filed: added.length,
-                                added,
-                                stoppedAt: { index: i, title: filing.title },
-                                because: stopped,
-                                note: "documents are filed one at a time and the first refusal stops the run; the ones listed in added are in the store.",
-                            },
-                            null,
-                            2,
-                        ),
-                    },
-                ],
-                isError: true,
-            };
-        }
+    /* §2's `POST /documents/batch`: one call, one lock, one index rebuild, and
+     * all or nothing — a document the store refuses refuses the batch, and
+     * nothing is filed. The answer says so, so an agent never has to work out
+     * which of its documents made it in. */
+    try {
+        const added = await kb.addBatch(documents);
+        return rows({ filed: added.length, added });
+    } catch (e) {
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: JSON.stringify(
+                        {
+                            ok: false,
+                            filed: 0,
+                            added: [],
+                            because: whyItFailed(e),
+                            note: "the documents are filed as one batch: this one was refused, so none of them is in the store.",
+                        },
+                        null,
+                        2,
+                    ),
+                },
+            ],
+            isError: true,
+        };
     }
-    return rows({ filed: added.length, added });
 }
 
 /* §9's row for this tool is TWO routes, `GET /collections` and `GET /stats`,

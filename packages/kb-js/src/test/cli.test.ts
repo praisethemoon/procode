@@ -29,7 +29,7 @@ import { test } from "node:test";
 
 import { Kb } from "../client";
 import { KbError, isKbError } from "../errors";
-import { deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, refreshSourceArgv, searchArgv, sourceArgv, sourcesArgv } from "../argv";
+import { addBatchArgv, batchLines, deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, refreshSourceArgv, searchArgv, sourceArgv, sourcesArgv } from "../argv";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const BIN = path.resolve(ROOT, "..", "..", "cli", "kb-cli", "bin", "kb");
@@ -85,6 +85,7 @@ test("every flag this package spells for an implemented command is one the CLI n
         ["init"],
         ["add", "--title", "t", "--collection", "c", "--url", "u", "--mime", "m", "--meta", "{}", "--file", "-"],
         forgetArgv("D-1"),
+        addBatchArgv(),
         deleteCollectionArgv("c", true),
         sourcesArgv({ collection: "c", kind: "file" }),
         sourceArgv("S-1"),
@@ -518,6 +519,47 @@ test("sources through this package: listed, shown with their history, and a file
         assert.deepEqual(shown.history.map((h) => h.changed), [true, false, true]);
 
         await assert.rejects(work.kb.refreshSource(filed.source), (e: unknown) => isKbError(e) && e.code === "usage");
+    } finally {
+        work.dispose();
+    }
+});
+
+test("a batch through this package: filed together, and refused together", async (t) => {
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await work.kb.init();
+        const docs = [
+            { title: "one", collection: "b", content: "zzone" },
+            { title: "two", collection: "b", content: "# Two\n\nzztwo", mime: "text/markdown", meta: { year: 2026 } },
+        ];
+        const added = await work.kb.addBatch(docs);
+        assert.deepEqual(added.map((a) => a.created), [true, true]);
+        assert.equal(added[1].splitter, "markdown");
+        assert.equal((await work.kb.search("zztwo")).count, 1);
+
+        // Each row carries exactly what the binary printed on it.
+        const printedRows = (
+            JSON.parse(
+                execFileSync(BIN, ["add", "--batch", "--json"], {
+                    cwd: work.dir,
+                    env: work.env,
+                    input: batchLines(docs),
+                    encoding: "utf8",
+                }),
+            ) as { added: Record<string, unknown>[] }
+        ).added;
+        assert.deepEqual(answered(added[0]), Object.keys(printedRows[0]).sort());
+
+        const before = fs.readFileSync(path.join(work.dir, ".kb", "documents.jsonl"), "utf8");
+        await assert.rejects(
+            work.kb.addBatch([{ title: "fine", collection: "b", content: "zzfine" }, { title: "", collection: "b", content: "x" }]),
+            (e: unknown) => isKbError(e) && e.code === "usage" && /batch line 2/.test(e.message),
+        );
+        assert.equal(fs.readFileSync(path.join(work.dir, ".kb", "documents.jsonl"), "utf8"), before, "a refused batch wrote nothing");
     } finally {
         work.dispose();
     }

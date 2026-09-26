@@ -25,6 +25,9 @@
 
 import {
     AddOptions,
+    BatchDocument,
+    addBatchArgv,
+    batchLines,
     GetOptions,
     LsOptions,
     RefreshOptions,
@@ -55,6 +58,8 @@ import { KbOptions, run } from "./run";
 import {
     arr,
     num,
+    obj,
+    readAdded,
     readChunkRead,
     readCollection,
     readDocument,
@@ -184,22 +189,15 @@ export class Kb {
      * The content goes down stdin (`argv.ts` says why) and never through the
      * argument list. */
     async add(content: string, options: AddOptions): Promise<KbAdded> {
-        const payload = await run(addArgv(options), this.options, content);
-        return {
-            document: str(payload["document"]),
-            source: str(payload["source"]),
-            contentHash: str(payload["contentHash"]),
-            bytes: num(payload["bytes"]),
-            collection: str(payload["collection"]),
-            mime: str(payload["mime"]),
-            splitter: str(payload["splitter"]),
-            chunkCount: num(payload["chunkCount"]),
-            chunkBase: num(payload["chunkBase"]),
-            created: payload["created"] === true,
-            reindexed: payload["reindexed"] === true,
-            blobWritten: payload["blobWritten"] === true,
-            fetchedAt: str(payload["fetchedAt"]),
-        };
+        return readAdded(await run(addArgv(options), this.options, content));
+    }
+
+    /* §2's `POST /documents/batch`: every document filed under one lock with
+     * one index rebuild, or — when any of them is refused — none at all. The
+     * answers come back in the order the documents were given. */
+    async addBatch(documents: readonly BatchDocument[]): Promise<readonly KbAdded[]> {
+        const payload = await run(addBatchArgv(), this.options, batchLines(documents));
+        return arr(payload["added"]).map((row) => readAdded(obj(row)));
     }
 
     /* §5's `GET /stale`: "documents whose age exceeds a threshold, newest

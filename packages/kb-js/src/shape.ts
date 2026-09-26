@@ -18,6 +18,7 @@
  */
 
 import {
+    KbAdded,
     KbChunk,
     KbChunkRead,
     KbCollection,
@@ -323,6 +324,26 @@ export function readLinkWritten(payload: Record<string, unknown>): KbLinkWritten
         type: str(payload["type"]),
         changed: bool(payload["changed"]),
         at: str(payload["at"]),
+    };
+}
+
+/* What `kb add` answers for one document, whether alone or as a row of a
+ * batch: the same fields either way. */
+export function readAdded(payload: Record<string, unknown>): KbAdded {
+    return {
+        document: str(payload["document"]),
+        source: str(payload["source"]),
+        contentHash: str(payload["contentHash"]),
+        bytes: num(payload["bytes"]),
+        collection: str(payload["collection"]),
+        mime: str(payload["mime"]),
+        splitter: str(payload["splitter"]),
+        chunkCount: num(payload["chunkCount"]),
+        chunkBase: num(payload["chunkBase"]),
+        created: payload["created"] === true,
+        reindexed: payload["reindexed"] === true,
+        blobWritten: payload["blobWritten"] === true,
+        fetchedAt: str(payload["fetchedAt"]),
     };
 }
 

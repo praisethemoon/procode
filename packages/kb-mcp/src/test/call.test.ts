@@ -330,9 +330,9 @@ test("kb_add with no store to file into is a refusal the agent can read", async 
     );
 });
 
-test("the document's text goes down stdin and never through the argument list", async () => {
+test("the documents go down stdin as one batch, and none of their text is an argument", async () => {
     const content = `# IOCP\n${"x".repeat(5000)}\n`;
-    await withKb([{ stdout: ok(ADDED) }], async (kb, fake) => {
+    await withKb([{ stdout: ok({ added: [ADDED], count: 1 }) }], async (kb, fake) => {
         await callTool(kb, "kb_add", {
             documents: [
                 {
@@ -346,25 +346,21 @@ test("the document's text goes down stdin and never through the argument list", 
             ],
         });
         const call = fake.calls()[0];
-        assert.equal(call.stdin, content);
-        assert.equal(call.argv.join(" ").includes("xxxx"), false);
-        assert.equal(flag(call.argv, "--title"), "IOCP");
-        assert.equal(flag(call.argv, "--collection"), "win32-iocp");
-        assert.equal(flag(call.argv, "--url"), "https://learn.microsoft.test/win32/iocp");
-        assert.equal(flag(call.argv, "--mime"), "text/markdown");
-        assert.deepEqual(JSON.parse(flag(call.argv, "--meta") ?? "{}"), {
-            authors: ["MSDN"],
-            year: 2026,
+        assert.deepEqual(call.argv, ["add", "--batch", "--json"]);
+        assert.deepEqual(JSON.parse(call.stdin.trimEnd()), {
+            title: "IOCP",
+            collection: "win32-iocp",
+            content,
+            url: "https://learn.microsoft.test/win32/iocp",
+            mime: "text/markdown",
+            meta: { authors: ["MSDN"], year: 2026 },
         });
     });
 });
 
-test("several documents are filed one at a time, in the order they were given", async () => {
+test("several documents are filed as one batch, in the order they were given", async () => {
     await withKb(
-        [
-            { stdout: ok({ ...ADDED, document: "D-1" }) },
-            { stdout: ok({ ...ADDED, document: "D-2" }) },
-        ],
+        [{ stdout: ok({ added: [{ ...ADDED, document: "D-1" }, { ...ADDED, document: "D-2" }], count: 2 }) }],
         async (kb, fake) => {
             const answer = body(
                 await callTool(kb, "kb_add", {
@@ -375,7 +371,11 @@ test("several documents are filed one at a time, in the order they were given", 
                 }),
             );
             assert.equal(answer["filed"], 2);
-            assert.deepEqual(fake.calls().map((c) => c.stdin), ["a", "b"]);
+            assert.equal(fake.calls().length, 1, "one call for the whole batch");
+            assert.deepEqual(
+                fake.calls()[0].stdin.trimEnd().split("\n").map((l) => JSON.parse(l).content),
+                ["a", "b"],
+            );
             assert.deepEqual(
                 (answer["added"] as Record<string, unknown>[]).map((a) => a["document"]),
                 ["D-1", "D-2"],
@@ -384,33 +384,25 @@ test("several documents are filed one at a time, in the order they were given", 
     );
 });
 
-test("a refusal partway through says exactly what landed before it", async () => {
-    /* There is no batch route in the CLI and therefore no transaction. What is
-     * owed instead is an answer that names the documents that ARE in the store,
-     * because an agent that cannot tell is an agent that files everything
-     * twice. */
+test("a refused batch files nothing, and the answer says so", async () => {
+    /* One transaction: the store refuses the batch, and an agent must be able
+     * to tell that none of its documents went in rather than guess which. */
     await withKb(
-        [
-            { stdout: ok({ ...ADDED, document: "D-1" }) },
-            { stdout: refusal("unsupported_mime", "kb: cannot chunk application/zip"), exit: 1 },
-        ],
+        [{ stdout: refusal("usage", "kb: batch line 2: a document needs a title"), exit: 1 }],
         async (kb, fake) => {
             const result = await callTool(kb, "kb_add", {
                 documents: [
                     { title: "one", content: "a", collection: "c" },
-                    { title: "two", content: "b", collection: "c", mime: "application/zip" },
-                    { title: "three", content: "c", collection: "c" },
+                    { title: "two", content: "b", collection: "c" },
                 ],
             });
             assert.equal(result.isError, true);
             const answer = body(result);
-            assert.equal(answer["filed"], 1);
-            assert.deepEqual(answer["stoppedAt"], { index: 1, title: "two" });
-            assert.equal(
-                (answer["because"] as Record<string, unknown>)["error"],
-                "unsupported_mime",
-            );
-            assert.equal(fake.calls().length, 2, "the run carried on past the refusal");
+            assert.equal(answer["filed"], 0);
+            assert.deepEqual(answer["added"], []);
+            assert.equal((answer["because"] as Record<string, unknown>)["error"], "usage");
+            assert.match(String(answer["note"]), /none of them/);
+            assert.equal(fake.calls().length, 1);
         },
     );
 });

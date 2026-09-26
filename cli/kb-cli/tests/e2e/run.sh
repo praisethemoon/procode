@@ -1500,6 +1500,48 @@ expect_grep '"count":0' kbf search zzsixth --json
 expect_grep '"current":true' kbf status --json
 expect_grep '"error":"usage"' kbf collections rename other elsewhere --with-documents --json
 
+# ------------------------------------------------------------------ batch
+mkdir -p batch
+kbb2() { ( cd "$WORK/batch" && "$KB" "$@" ); }
+kbb2 init > /dev/null
+
+t "a batch files every document under one lock"
+out=$(printf '%s\n' \
+    '{"title":"one","collection":"b","content":"zzbatchone"}' \
+    '{"title":"two","collection":"b","content":"# Two\n\nzzbatchtwo","mime":"text/markdown","meta":{"year":2026}}' \
+    '{"title":"page","collection":"b","content":"zzbatchpage","url":"https://example.test/page"}' \
+    | kbb2 add --batch --json)
+has "batch" "$out" '"count":3'
+has "batch" "$out" '"added":\[{"document":"D-1"'
+has "batch" "$out" '"splitter":"markdown"'
+expect_grep '"count":1' kbb2 search zzbatchtwo --json
+expect_grep '"current":true' kbb2 status --json
+expect_grep '"year":2026' kbb2 get D-2 --json
+
+t "the same locator twice in one batch is one document"
+out=$(printf '%s\n' \
+    '{"title":"page","collection":"b","content":"zzpagealpha","url":"https://example.test/page"}' \
+    '{"title":"page","collection":"b","content":"zzpagebeta","url":"https://example.test/page"}' \
+    | kbb2 add --batch --json)
+has "same" "$out" '"document":"D-3","source":"S-3"'
+hasnt "same" "$out" '"document":"D-4"'
+expect_grep '"count":1' kbb2 search zzpagebeta --json
+expect_grep '"count":0' kbb2 search zzpagealpha --json
+
+t "a bad line files nothing at all"
+before=$(sha_of batch/.kb/documents.jsonl)
+out=$(printf '%s\n' \
+    '{"title":"fine","collection":"b","content":"zzfine"}' \
+    '{"title":"","collection":"b","content":"x"}' \
+    | kbb2 add --batch --json)
+has "bad line" "$out" '"error":"usage"'
+has "bad line" "$out" 'batch line 2'
+[ "$(sha_of batch/.kb/documents.jsonl)" = "$before" ] || fail "a refused batch wrote to the log"
+expect_grep '"count":0' kbb2 search zzfine --json
+expect_grep '"error":"usage"' sh -c "cd '$WORK/batch' && printf 'not json\n' | '$KB' add --batch --json"
+expect_grep '"error":"usage"' sh -c "cd '$WORK/batch' && printf '' | '$KB' add --batch --json"
+expect_grep '"error":"usage"' sh -c "cd '$WORK/batch' && printf 'x' | '$KB' add --batch --title t --json"
+
 # ---------------------------------------------------------------- sources
 mkdir -p srcs
 kbs() { ( cd "$WORK/srcs" && "$KB" "$@" ); }

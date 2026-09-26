@@ -143,7 +143,8 @@ const KB_ADD: ToolDefinition = {
     description:
         "File content you have already read into the knowledge base, so the next question on the topic is " +
         "answered from disk instead of fetched again. Hand over the text you have; nothing is re-fetched. " +
-        "Filing is idempotent by content hash. Documents go to this workspace's store; if the workspace has " +
+        "Filing is idempotent by content hash. All the documents of one call are filed together or not at " +
+        "all: if the store refuses one, none is filed. Documents go to this workspace's store; if the workspace has " +
         "none this fails, and creating one is the user's decision, not yours.",
     inputSchema: {
         type: "object",

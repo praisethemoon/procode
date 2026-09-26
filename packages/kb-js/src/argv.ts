@@ -206,6 +206,36 @@ export function addArgv(options: AddOptions): string[] {
     return argv;
 }
 
+/* §2's `POST /documents/batch`: "many at once, one transaction". Every
+ * document travels as one JSON line on stdin, content included, so no field
+ * of any document is ever an argument. */
+export interface BatchDocument {
+    title: string;
+    collection: string;
+    content: string;
+    url?: string | null;
+    mime?: string | null;
+    meta?: Readonly<Record<string, unknown>> | null;
+}
+
+export function addBatchArgv(): string[] {
+    return ["add", "--batch"];
+}
+
+/* The batch's stdin: one object a line. JSON.stringify escapes every newline
+ * inside a string, so a document's text can never break its own line. */
+export function batchLines(documents: readonly BatchDocument[]): string {
+    return documents
+        .map((d) => {
+            const line: Record<string, unknown> = { title: d.title, collection: d.collection, content: d.content };
+            if (typeof d.url === "string" && d.url.trim() !== "") line["url"] = d.url.trim();
+            if (typeof d.mime === "string" && d.mime.trim() !== "") line["mime"] = d.mime.trim();
+            if (d.meta !== undefined && d.meta !== null) line["meta"] = d.meta;
+            return JSON.stringify(line) + "\n";
+        })
+        .join("");
+}
+
 /* §5's `GET /stale` and `POST /refresh`, and §7's two collection writes.
  *
  * NONE OF THESE COMMANDS EXIST IN THE CLI YET, and that is recorded here
