@@ -139,7 +139,10 @@ def build(root, corpus, kb, model, work, sets):
                 f.write(blob)
         t0 = time.time()
         print(f"filing {len(corpus[s])} {s} files", file=sys.stderr, flush=True)
-        out = json.loads(kb_run(kb, ["add", "--dir", base, "--collection", s, "--json"], store, home))
+        # --wait: every chunk embedded before the queries run, however long
+        # it takes (an add otherwise stops after its time budget, §2).
+        out = json.loads(kb_run(kb, ["add", "--dir", base, "--collection", s, "--wait", "--json"],
+                                store, home))
         if out["files"] != len(corpus[s]):
             sys.exit(f"{s}: kb filed {out['files']} of {len(corpus[s])} files; skipped {out['skipped']}")
         print(f"  {out['files']} files, {out['embedded']} chunks embedded, "
@@ -179,6 +182,22 @@ def line_bytes(text, first, last):
     return starts[first - 1], end
 
 
+def mode_args(m):
+    """A mode's search flags. `rerank` may carry a depth and a token budget:
+    rerank-d10-t256 is --rerank --rerank-depth 10 --rerank-tokens 256."""
+    if m == "rrf":
+        return ["--mode", "hybrid", "--fusion", "rrf"]
+    if m.startswith("rerank"):
+        args = ["--mode", "hybrid", "--rerank"]
+        for part in m.split("-")[1:]:
+            if part.startswith("d"):
+                args += ["--rerank-depth", part[1:]]
+            elif part.startswith("t"):
+                args += ["--rerank-tokens", part[1:]]
+        return args
+    return ["--mode", m]
+
+
 def run_queries(kb, store, home, queries, s, modes, texts, chunks):
     per = []
     for q in queries:
@@ -194,8 +213,7 @@ def run_queries(kb, store, home, queries, s, modes, texts, chunks):
         for m in modes:
             # The query goes after `--`: an identifier query can itself start
             # with a dash (`--no-forget`), and kb would take it for an option.
-            args = {"rerank": ["--mode", "hybrid", "--rerank"],
-                    "rrf": ["--mode", "hybrid", "--fusion", "rrf"]}.get(m, ["--mode", m])
+            args = mode_args(m)
             t0 = time.time()
             out = json.loads(kb_run(kb, ["search", *args, "--k", str(K),
                                          "--collection", s, "--json", "--", q["q"]],
@@ -284,9 +302,10 @@ def compare(a_path, b_path):
         tags = ["all"] + sorted({ra[i]["tag"] for i in ids})
         for tag in tags:
             sel = [i for i in ids if tag == "all" or ra[i]["tag"] == tag]
-            for m in MODES + EXTRA_MODES:
-                if m not in ra[sel[0]]["ranks"] or m not in rb[sel[0]]["ranks"]:
-                    continue
+            both = set(ra[sel[0]]["ranks"]) & set(rb[sel[0]]["ranks"])
+            order = [m for m in MODES + EXTRA_MODES if m in both] + sorted(
+                m for m in both if m not in MODES + EXTRA_MODES)
+            for m in order:
                 pa = [ra[i]["ranks"][m] for i in sel]
                 pb = [rb[i]["ranks"][m] for i in sel]
                 ma, mb = metrics(pa), metrics(pb)
@@ -414,7 +433,7 @@ def main():
         if args.store:
             json.dump(stamp, open(os.path.join(work, "stamp.json"), "w"))
 
-    if "rerank" in modes:
+    if any(m.startswith("rerank") for m in modes):
         if not args.reranker:
             sys.exit("--modes rerank needs --reranker <file.gguf>")
         models = os.path.join(home, ".kb", "models")

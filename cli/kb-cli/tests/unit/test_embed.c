@@ -401,3 +401,40 @@ void test_embed(void) {
     tmp_rm(a, dir);
     arena_free(a);
 }
+
+/* The int8 product against the float one, on a matrix whose rows and tokens
+ * are not multiples of the kernel's blocks, so every path runs. */
+void test_q8(void) {
+    t_begin("q8: the int8 product is within 1% of the float one");
+    Arena *a = arena_new(1 << 20);
+    const uint64_t n = 96, rows = 7;
+    const size_t T = 5;
+    float *w = (float *)arena_alloc(a, rows * n * sizeof(float));
+    float *x = (float *)arena_alloc(a, T * n * sizeof(float));
+    uint32_t s = 1;
+    for (uint64_t i = 0; i < rows * n; i++) {
+        s = s * 1103515245u + 12345u;
+        w[i] = (float)((int32_t)(s >> 8) % 2001 - 1000) / 1000.0f;
+    }
+    for (size_t i = 0; i < T * n; i++) {
+        s = s * 1103515245u + 12345u;
+        x[i] = (float)((int32_t)(s >> 8) % 2001 - 1000) / 1000.0f;
+    }
+    Q8Matrix m;
+    ASSERT_TRUE(q8_from(a, GGML_F32, (const uint8_t *)w, n, rows, &m));
+    float *want = (float *)arena_alloc(a, T * rows * sizeof(float));
+    float *got = (float *)arena_alloc(a, T * rows * sizeof(float));
+    int8_t *xq = (int8_t *)arena_alloc(a, T * n);
+    float *xd = (float *)arena_alloc(a, T * (n / Q8_BLOCK) * sizeof(float));
+    ASSERT_TRUE(quant_matmul(GGML_F32, (const uint8_t *)w, n, rows, x, T, want));
+    q8_matmul(&m, x, T, xq, xd, got);
+    double num = 0, den = 0;
+    for (size_t i = 0; i < T * rows; i++) {
+        num += (double)(got[i] - want[i]) * (got[i] - want[i]);
+        den += (double)want[i] * want[i];
+    }
+    ASSERT_TRUE(den > 0 && sqrt(num / den) < 0.01);
+    t_begin("q8: widths that are not a multiple of the block are refused");
+    ASSERT_TRUE(!q8_from(a, GGML_F32, (const uint8_t *)w, 50, 1, &m));
+    arena_free(a);
+}

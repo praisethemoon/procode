@@ -82,6 +82,20 @@ static void test_reranker(void) {
                 ASSERT_TRUE(scores[i] > scores[j]);
     if (getenv("KB_TEST_VERBOSE"))
         fprintf(stderr, "  worst difference %.2e\n", worst);
+    t_begin("reranker: in int8 it keeps the reference's order (within 0.1)");
+    ASSERT_TRUE(embed_quantize(&e));
+    for (size_t k = 0; pairs && k < pairs->arr.n && k < 16; k++) {
+        const Str *q = &pairs->arr.items[k]->arr.items[0]->s;
+        const Str *p = &pairs->arr.items[k]->arr.items[1]->s;
+        float got = 0;
+        ASSERT_TRUE(rerank_score(&e, q->ptr, q->len, p->ptr, p->len, 0, &got));
+        ASSERT_TRUE(fabs((double)got - logits->arr.items[k]->num) <= 0.1);
+        scores[k] = got;
+    }
+    for (size_t i = 0; pairs && i < pairs->arr.n && i < 16; i++)
+        for (size_t j = 0; j < pairs->arr.n && j < 16; j++)
+            if (logits->arr.items[i]->num > logits->arr.items[j]->num)
+                ASSERT_TRUE(scores[i] > scores[j]);
     embed_close(&e);
     arena_free(a);
 }
@@ -126,6 +140,30 @@ void test_modernbert(void) {
     }
     if (getenv("KB_TEST_VERBOSE"))
         fprintf(stderr, "  worst cosine %.6f\n", worst);
+
+    /* Real text stays within 0.9996 of the float model in int8. The fixture's
+     * last two texts are degenerate — nothing at all, and one word six
+     * hundred times — and a repeated pattern compounds the rounding: they
+     * are held to 0.995 (they measure 0.9969 to 0.9990 across the kernels). */
+    t_begin("modernbert: in int8 real text is within cosine 0.999, degenerate text 0.995");
+    {
+        Embedder q;
+        ASSERT_TRUE(embed_open(a, model, &q, err, sizeof err));
+        ASSERT_TRUE(embed_quantize(&q));
+        float *u = (float *)arena_alloc(a, q.n_embd * sizeof(float));
+        for (size_t k = 0; k < texts->arr.n; k++) {
+            const Str *s = &texts->arr.items[k]->s;
+            bool tr;
+            ASSERT_TRUE(embed_text(&q, s->ptr, s->len, false, u, &tr));
+            double qc = cosine(u, embs->arr.items[k], q.n_embd);
+            if (getenv("KB_TEST_VERBOSE"))
+                fprintf(stderr, "  int8 text %zu: cosine %.5f\n", k, qc);
+            const Str *txt = &texts->arr.items[k]->s;
+            const bool degenerate = txt->len == 0 || k + 1 == texts->arr.n;
+            ASSERT_TRUE(qc >= (degenerate ? 0.995 : 0.999));
+        }
+        embed_close(&q);
+    }
 
     t_begin("modernbert: a query and a document embed the same (no prefixes)");
     const Str *s0 = &texts->arr.items[0]->s;

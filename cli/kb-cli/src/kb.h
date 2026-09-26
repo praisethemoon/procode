@@ -52,7 +52,9 @@
 #define KB_CHUNK_TOKENS 400u
 /* Reranking (§4): how many fused candidates the cross-encoder rescores, and
  * the token budget of one (query, passage) pair, the passage cut first. */
-#define KB_RERANK_DEPTH 20u
+/* 10: the benchmark scores depth 10 the same as 20 (docs hit@1 0.89 both,
+ * code 0.85 both) at half the latency (bench/results/gte-q8.json). */
+#define KB_RERANK_DEPTH 10u
 /* How long `kb add` spends embedding before it answers, in seconds; the rest
  * is left pending for `kb embed` (vectors.h). Well inside an agent's tool
  * timeout. */

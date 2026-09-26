@@ -86,7 +86,7 @@ const KB_SEARCH: ToolDefinition = {
             rerank: {
                 type: "boolean",
                 description:
-                    "Rescore the top 20 hits with a cross-encoder and reorder them by its score, which each rescored " +
+                    "Rescore the top 10 hits with a cross-encoder and reorder them by its score, which each rescored " +
                     "hit carries as scores.rerank. Better ordering, but several seconds slower per search, and it " +
                     "needs the reranker model file in ~/.kb/models (refused as model_missing without it). Default: false.",
             },

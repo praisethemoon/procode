@@ -24,7 +24,10 @@ void vec_fingerprint(const ModelParams *m, char out[65]) {
     char model[65];
     model_fingerprint(m, model);
     char buf[160];
-    int32_t n = snprintf(buf, sizeof buf, "%s\x1f%s", model, KB_CHUNKER_ID);
+    /* "q8": documents are embedded with int8 layer products (embed_quantize),
+     * which moves every vector a little; a store embedded in float must not
+     * be mistaken for one embedded this way, nor the other way round. */
+    int32_t n = snprintf(buf, sizeof buf, "%s\x1f%s\x1fq8", model, KB_CHUNKER_ID);
     sha256_hex(buf, (size_t)n, out);
 }
 
@@ -152,6 +155,12 @@ bool vec_sync(Arena *a, Store *s, Embedder *e, bool all, bool progress,
     }
     char fp[65];
     vec_fingerprint(&e->cfg, fp);
+    /* Many texts to embed: int8 layer products, about a third faster
+     * (quant.h). The conversion takes tens of milliseconds. */
+    if (!embed_quantize(e)) {
+        snprintf(err, errsz, "the model's layers could not be converted to int8");
+        return false;
+    }
     VecSet old;
     vec_load(a, s, &old);
     if (all || strcmp(old.fingerprint, fp) != 0 || old.dim != e->n_embd)

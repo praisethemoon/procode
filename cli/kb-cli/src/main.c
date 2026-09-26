@@ -28,7 +28,7 @@ static const char *USAGE =
     "         [--expand N] [--source S-n] [--mime M] [--since <date>]\n"
     "         [--meta <json>]\n"
     "         [--min-score X] [--older-than 90d] [--rerank]\n"
-    "                             snippets only; kb chunk fetches a passage\n"    "                             --rerank: the reranker rescores the top 20\n"
+    "                             snippets only; kb chunk fetches a passage\n"    "                             --rerank: the reranker rescores the top 10\n"
     "  chunk <C-n> [--expand N]   one chunk in full, with its neighbours\n"
     "  collections                names, counts, bytes, oldest fetch\n"
     "  collections rename <old> <new>\n"

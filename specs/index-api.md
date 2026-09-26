@@ -275,7 +275,7 @@ GET /search?q=<text>
     &expand=1                           also return N neighbouring chunks
     &source=S-3  &mime=  &since=<iso>   filters
     &minScore=                          floor on the bm25 score, before fusion
-    &rerank=true                        cross-encoder reorders the fused top 20
+    &rerank=true                        cross-encoder reorders the fused top 10
 ```
 
 **Hybrid is the default and is not an optimization.** This corpus is dense with
@@ -302,12 +302,14 @@ how many chunks the semantic side did not see, as `unembedded` in the answer.
 `bm25` and `vector` appear in `scores` only for the paths that found the hit.
 
 **Reranking is opt-in** (`--rerank` on the CLI). A cross-encoder rescores the
-fused top 20, reading each pair as the query against the chunk's header line
+fused top 10, reading each pair as the query against the chunk's header line
 and text, cut to 512 tokens per pair, and those hits are put in the order of
 its scores; the rest keep the fused order after them. It costs seconds a query
 on CPU and needs the reranker model file in `~/.kb/models`: without it the
 search is refused with `model_missing` rather than answered unreranked. Hits it
 rescored carry its logit as `scores.rerank`; the others do not.
+`--rerank-depth N` and `--rerank-tokens N` change how many candidates it reads
+and how much of each, the two things its latency turns on.
 
 A hit:
 
@@ -438,6 +440,14 @@ Which model a workspace was indexed with stays pinned in its own
 `model_mismatch`, not a silent change. Vectors are stored int8 and scanned
 flat — at the scale a personal store reaches, an exact SIMD scan beats an
 approximate index that also has to be maintained.
+
+Documents are embedded with the model's layer products in 8-bit integers
+(weights and activations quantised per block of 32, `quant.h`), about a third
+faster than float and within cosine 0.999 of it on real text; the benchmark
+scores the two the same. The reranker, reading ten passages a search, runs in
+int8 too; the one query a search embeds runs in float, since converting a
+model for a single text saves nothing. Vectors computed one way are not
+mixed with the other: the vector file's fingerprint says which.
 
 `index/vectors.bin` holds one vector per chunk **keyed by chunk id**, with the
 model fingerprint it was produced under. A chunk id names one passage forever

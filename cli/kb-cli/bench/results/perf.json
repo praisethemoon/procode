@@ -1,0 +1,102 @@
+{
+ "kb": "/Users/praisethemoon/praisethemoon/type-c/claude/lap/cli/kb-cli/bin/kb",
+ "model": "gte-modernbert-base.F16.gguf",
+ "results": [
+  {
+   "size": 1000,
+   "documents": 100,
+   "file_keyword_s": 0.8281519412994385,
+   "pending": 2100,
+   "embed_s": 150.4289300441742,
+   "embedded": 2100,
+   "chunks": 2100,
+   "chunks_per_s": 14.0,
+   "add_one_s": 1.5811877250671387,
+   "add_one_chunks": 21,
+   "add_batch_s": 6.052135944366455,
+   "keyword_ms_median": 4.4,
+   "keyword_split_ms": {
+    "fuse and render": 0.55,
+    "keyword search": 0.16,
+    "load index": 0.2,
+    "open model": 0.0,
+    "open store": 0.81,
+    "total": 1.71,
+    "process start and exit": 2.7
+   },
+   "hybrid_ms_median": 45.3,
+   "hybrid_split_ms": {
+    "embed query": 25.82,
+    "fuse and render": 0.56,
+    "keyword search": 0.16,
+    "load index": 0.28,
+    "open model": 13.23,
+    "open store": 0.91,
+    "total": 41.89,
+    "vector scan": 0.48,
+    "process start and exit": 3.4
+   },
+   "rerank_ms_median": 1752.2,
+   "rerank_split_ms": {
+    "embed query": 26.42,
+    "fuse and render": 1706.33,
+    "keyword search": 0.17,
+    "load index": 0.25,
+    "open model": 15.36,
+    "open store": 0.98,
+    "total": 1748.06,
+    "vector scan": 0.51,
+    "process start and exit": 4.1
+   },
+   "rebuild_s": 0.038281917572021484
+  },
+  {
+   "size": 10000,
+   "documents": 1000,
+   "file_keyword_s": 3.2476489543914795,
+   "pending": 21000,
+   "embed_s": 1516.2999398708344,
+   "embedded": 21000,
+   "chunks": 21000,
+   "chunks_per_s": 13.8,
+   "add_one_s": 1.6485950946807861,
+   "add_one_chunks": 21,
+   "add_batch_s": 6.02753472328186,
+   "keyword_ms_median": 13.6,
+   "keyword_split_ms": {
+    "fuse and render": 0.61,
+    "keyword search": 2.85,
+    "load index": 1.61,
+    "open model": 0.0,
+    "open store": 4.91,
+    "total": 9.93,
+    "process start and exit": 3.7
+   },
+   "hybrid_ms_median": 62.7,
+   "hybrid_split_ms": {
+    "embed query": 25.71,
+    "fuse and render": 0.62,
+    "keyword search": 2.76,
+    "load index": 1.74,
+    "open model": 16.61,
+    "open store": 4.87,
+    "total": 58.27,
+    "vector scan": 5.79,
+    "process start and exit": 4.4
+   },
+   "rerank_ms_median": 1765.9,
+   "rerank_split_ms": {
+    "embed query": 26.1,
+    "fuse and render": 1700.22,
+    "keyword search": 2.91,
+    "load index": 1.86,
+    "open model": 19.03,
+    "open store": 4.86,
+    "total": 1761.1,
+    "vector scan": 6.27,
+    "process start and exit": 4.8
+   },
+   "rebuild_s": 0.18692874908447266
+  }
+ ]
+}

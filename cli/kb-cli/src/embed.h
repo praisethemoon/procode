@@ -27,6 +27,7 @@
 #define KB_EMBED_H
 
 #include "bpe.h"
+#include "quant.h"
 #include "gguf.h"
 #include "wpm.h"
 
@@ -66,6 +67,8 @@ typedef struct {
     const GgufTensor *attn_norm_w, *attn_norm_b;
     const GgufTensor *ffn_up, *ffn_gate, *ffn_down;
     const GgufTensor *out_norm_w, *out_norm_b;
+    /* The four matrices in int8, after embed_quantize; NULL before. */
+    Q8Matrix *q_qkv, *q_attn_out, *q_ffn_up, *q_ffn_down;
 } EmbedLayer;
 
 typedef enum { EMBED_NOMIC_BERT, EMBED_MODERNBERT } EmbedArch;
@@ -92,6 +95,10 @@ typedef struct {
      * encoder output through dense (D x D), GELU, LayerNorm, and one output
      * with a bias. NULL for an embedder. */
     bool reranker;
+    /* int8 inputs for the Q8 matrices: T x widest-input bytes, and scales */
+    int8_t *q8_x;
+    float *q8_d;
+    bool q8;
     const GgufTensor *cls_dense_w, *cls_norm_w, *cls_out_w, *cls_out_b;
 
     const GgufTensor *tok_embd, *type_embd, *embd_norm_w, *embd_norm_b;
@@ -126,6 +133,14 @@ bool embed_find_model(Arena *a, char *out, size_t outsz, char *err,
 bool embed_open(Arena *a, const char *path, Embedder *e, char *err,
                 size_t errsz);
 void embed_close(Embedder *e);
+
+/* Converts a ModernBERT model's layer matrices to int8 (quant.h's Q8Matrix)
+ * and runs every later forward pass on them: about twice the speed, at a
+ * relative error per product of 5e-3. For bulk work — filing, kb embed,
+ * reranking — where the conversion (a fraction of a second) is repaid many
+ * times; a search's one query keeps the float path. A no-op for other
+ * architectures. */
+bool embed_quantize(Embedder *e);
 
 /* ---- the reranker ------------------------------------------------------
  *

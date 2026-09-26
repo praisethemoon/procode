@@ -2,6 +2,7 @@
 
 #include "gguf.h"
 
+#include "platform.h"
 #include "simd.h"
 
 bool quant_simd(void) {
@@ -426,4 +427,191 @@ bool quant_matmul(uint32_t t, const uint8_t *w, uint64_t n, uint64_t rows,
         col += rows;
     }
     return true;
+}
+
+/* ---- int8 matrices ------------------------------------------------------ */
+
+#if !defined(KB_NO_SIMD) && defined(__ARM_FEATURE_DOTPROD)
+#define Q8_DOTPROD 1
+#elif !defined(KB_NO_SIMD) && (defined(__ARM_NEON) || defined(__ARM_NEON__))
+#define Q8_NEON 1
+#elif !defined(KB_NO_SIMD) && \
+    (defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2))
+#include <emmintrin.h>
+#define Q8_SSE2 1
+#endif
+
+/* One block's integer dot product. */
+static inline int32_t dot_q8(const int8_t *a, const int8_t *b) {
+#if defined(Q8_DOTPROD)
+    int32x4_t s = vdotq_s32(vdupq_n_s32(0), vld1q_s8(a), vld1q_s8(b));
+    s = vdotq_s32(s, vld1q_s8(a + 16), vld1q_s8(b + 16));
+    return vaddvq_s32(s);
+#elif defined(Q8_NEON)
+    int16x8_t p0 = vmull_s8(vld1_s8(a), vld1_s8(b));
+    int16x8_t p1 = vmull_s8(vld1_s8(a + 8), vld1_s8(b + 8));
+    int16x8_t p2 = vmull_s8(vld1_s8(a + 16), vld1_s8(b + 16));
+    int16x8_t p3 = vmull_s8(vld1_s8(a + 24), vld1_s8(b + 24));
+    int32x4_t s = vpaddlq_s16(p0);
+    s = vpadalq_s16(s, p1);
+    s = vpadalq_s16(s, p2);
+    s = vpadalq_s16(s, p3);
+    return vaddvq_s32(s);
+#elif defined(Q8_SSE2)
+    __m128i acc = _mm_setzero_si128();
+    for (int32_t k = 0; k < Q8_BLOCK; k += 16) {
+        __m128i va = _mm_loadu_si128((const __m128i *)(a + k));
+        __m128i vb = _mm_loadu_si128((const __m128i *)(b + k));
+        /* Sign-extend each half to 16 bits: the byte doubled, then shifted. */
+        __m128i al = _mm_srai_epi16(_mm_unpacklo_epi8(va, va), 8);
+        __m128i ah = _mm_srai_epi16(_mm_unpackhi_epi8(va, va), 8);
+        __m128i bl = _mm_srai_epi16(_mm_unpacklo_epi8(vb, vb), 8);
+        __m128i bh = _mm_srai_epi16(_mm_unpackhi_epi8(vb, vb), 8);
+        acc = _mm_add_epi32(acc, _mm_madd_epi16(al, bl));
+        acc = _mm_add_epi32(acc, _mm_madd_epi16(ah, bh));
+    }
+    int32_t v[4];
+    _mm_storeu_si128((__m128i *)v, acc);
+    return v[0] + v[1] + v[2] + v[3];
+#else
+    int32_t s = 0;
+    for (int32_t k = 0; k < Q8_BLOCK; k++)
+        s += (int32_t)a[k] * (int32_t)b[k];
+    return s;
+#endif
+}
+
+/* A row of n floats as nb blocks of int8 and their scales. */
+static void q8_row(const float *x, uint64_t n, int8_t *q, float *d) {
+    for (uint64_t b = 0; b < n / Q8_BLOCK; b++) {
+        const float *xb = x + b * Q8_BLOCK;
+        float m = 0.0f;
+        for (int32_t i = 0; i < Q8_BLOCK; i++) {
+            float v = xb[i] < 0 ? -xb[i] : xb[i];
+            if (v > m)
+                m = v;
+        }
+        const float scale = m / 127.0f, inv = m > 0 ? 127.0f / m : 0.0f;
+        d[b] = scale;
+        for (int32_t i = 0; i < Q8_BLOCK; i++) {
+            float r = xb[i] * inv;
+            q[b * Q8_BLOCK + i] = (int8_t)(r >= 0 ? (int32_t)(r + 0.5f) : (int32_t)(r - 0.5f));
+        }
+    }
+}
+
+typedef struct {
+    uint32_t type;
+    const uint8_t *w;
+    uint64_t n, row_bytes;
+    Q8Matrix *m;
+} Q8FromJob;
+
+static void q8_from_rows(size_t begin, size_t end, void *ud) {
+    const Q8FromJob *j = (const Q8FromJob *)ud;
+    float row[4096];
+    for (size_t r = begin; r < end; r++) {
+        quant_row(j->type, j->w + r * j->row_bytes, j->n, row);
+        q8_row(row, j->n, j->m->q + r * j->n, j->m->d + r * j->m->nb);
+    }
+}
+
+bool q8_from(Arena *a, uint32_t ggml_type, const uint8_t *w, uint64_t n,
+             uint64_t rows, Q8Matrix *out) {
+    uint64_t row_bytes;
+    if (n % Q8_BLOCK != 0 || n > 4096 || !quant_row_bytes(ggml_type, n, &row_bytes))
+        return false;
+    out->rows = rows;
+    out->n = n;
+    out->nb = n / Q8_BLOCK;
+    out->q = (int8_t *)arena_alloc(a, rows * n);
+    out->d = (float *)arena_alloc(a, rows * out->nb * sizeof(float));
+    Q8FromJob job = {ggml_type, w, n, row_bytes, out};
+    plat_parallel((size_t)rows, q8_from_rows, &job);
+    return true;
+}
+
+typedef struct {
+    const Q8Matrix *w;
+    const float *x;
+    int8_t *xq;
+    float *xd;
+    size_t T;
+    float *out;
+} Q8Job;
+
+static void q8_quantise_inputs(size_t begin, size_t end, void *ud) {
+    const Q8Job *j = (const Q8Job *)ud;
+    for (size_t t = begin; t < end; t++)
+        q8_row(j->x + t * j->w->n, j->w->n, j->xq + t * j->w->n, j->xd + t * j->w->nb);
+}
+
+/* Groups of four rows against every token, four tokens at a time, as the
+ * float kernel does: each block of a row is loaded once for four tokens. */
+static void q8_rows(size_t begin, size_t end, void *ud) {
+    const Q8Job *j = (const Q8Job *)ud;
+    const Q8Matrix *w = j->w;
+    const uint64_t n = w->n, nb = w->nb;
+    for (size_t g = begin; g < end; g++) {
+        const uint64_t r0 = (uint64_t)g * 4;
+        const uint64_t nr = w->rows - r0 < 4 ? w->rows - r0 : 4;
+        for (size_t t0 = 0; t0 < j->T; t0 += 4) {
+            const size_t nt = j->T - t0 < 4 ? j->T - t0 : 4;
+#if defined(Q8_DOTPROD)
+            if (nr == 4 && nt == 4) {
+                /* Four tokens' blocks loaded once for four rows; each pair's
+                 * block sum scaled into four float lanes, summed at the end. */
+                float32x4_t acc[4][4];
+                for (int32_t r = 0; r < 4; r++)
+                    for (int32_t c = 0; c < 4; c++)
+                        acc[r][c] = vdupq_n_f32(0.0f);
+                for (uint64_t b = 0; b < nb; b++) {
+                    int8x16_t xl[4], xh[4];
+                    float xs[4];
+                    for (int32_t c = 0; c < 4; c++) {
+                        const int8_t *xq = j->xq + (t0 + (size_t)c) * n + b * Q8_BLOCK;
+                        xl[c] = vld1q_s8(xq);
+                        xh[c] = vld1q_s8(xq + 16);
+                        xs[c] = j->xd[(t0 + (size_t)c) * nb + b];
+                    }
+                    for (int32_t r = 0; r < 4; r++) {
+                        const int8_t *wq = w->q + (r0 + (uint64_t)r) * n + b * Q8_BLOCK;
+                        const int8x16_t wl = vld1q_s8(wq), wh = vld1q_s8(wq + 16);
+                        const float ws = w->d[(r0 + (uint64_t)r) * nb + b];
+                        for (int32_t c = 0; c < 4; c++) {
+                            int32x4_t s = vdotq_s32(vdupq_n_s32(0), wl, xl[c]);
+                            s = vdotq_s32(s, wh, xh[c]);
+                            acc[r][c] = vfmaq_n_f32(acc[r][c], vcvtq_f32_s32(s), ws * xs[c]);
+                        }
+                    }
+                }
+                for (int32_t r = 0; r < 4; r++)
+                    for (int32_t c = 0; c < 4; c++)
+                        j->out[(t0 + (size_t)c) * w->rows + r0 + (uint64_t)r] = vaddvq_f32(acc[r][c]);
+                continue;
+            }
+#endif
+            float acc[4][4] = {{0}};
+            for (uint64_t b = 0; b < nb; b++) {
+                for (uint64_t r = 0; r < nr; r++) {
+                    const int8_t *wq = w->q + (r0 + r) * n + b * Q8_BLOCK;
+                    const float wd = w->d[(r0 + r) * nb + b];
+                    for (size_t t = 0; t < nt; t++) {
+                        const int8_t *xq = j->xq + (t0 + t) * n + b * Q8_BLOCK;
+                        acc[r][t] += (float)dot_q8(wq, xq) * wd * j->xd[(t0 + t) * nb + b];
+                    }
+                }
+            }
+            for (uint64_t r = 0; r < nr; r++)
+                for (size_t t = 0; t < nt; t++)
+                    j->out[(t0 + t) * w->rows + r0 + r] = acc[r][t];
+        }
+    }
+}
+
+void q8_matmul(const Q8Matrix *w, const float *x, size_t T, int8_t *xq, float *xd,
+               float *out) {
+    Q8Job job = {w, x, xq, xd, T, out};
+    plat_parallel(T, q8_quantise_inputs, &job);
+    plat_parallel((size_t)((w->rows + 3) / 4), q8_rows, &job);
 }

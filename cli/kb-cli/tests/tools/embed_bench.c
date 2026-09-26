@@ -1,7 +1,7 @@
 /* Times the embedder on real text, and checks that a faster build still
  * computes the same vectors.
  *
- *   kb-embed-bench <model.gguf> [--chunks N] [--piece B] [--save F | --check F] <file>...
+ *   kb-embed-bench <model.gguf> [--chunks N] [--piece B] [--q8] [--save F | --check F] <file>...
  *
  * The files are cut into B-byte pieces (default 1600, the size kb's chunker
  * aims for; smaller pieces show how the embedder copes with short chunks),
@@ -9,7 +9,8 @@
  * `kb add` does. It prints milliseconds per chunk and tokens per second.
  * --save writes the vectors to F; --check compares against a saved F and
  * prints the smallest cosine and the largest absolute difference, so an
- * optimisation that changes the arithmetic shows by how much.
+ * optimisation that changes the arithmetic shows by how much. --q8 runs the
+ * layers in int8 (embed_quantize) and reports how long the conversion took.
  */
 
 #include "../../src/embed.h"
@@ -31,11 +32,14 @@ static double now(void) {
 int main(int argc, char **argv) {
     const char *model = NULL, *save = NULL, *check = NULL;
     size_t want = 64, piece = 1600;
+    bool q8 = false;
     const char **files = (const char **)calloc((size_t)argc, sizeof(char *));
     size_t nfiles = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--chunks") == 0 && i + 1 < argc)
             want = (size_t)atoi(argv[++i]);
+        else if (strcmp(argv[i], "--q8") == 0)
+            q8 = true;
         else if (strcmp(argv[i], "--piece") == 0 && i + 1 < argc)
             piece = (size_t)atoi(argv[++i]);
         else if (strcmp(argv[i], "--save") == 0 && i + 1 < argc)
@@ -58,6 +62,14 @@ int main(int argc, char **argv) {
     if (!embed_open(a, model, &e, err, sizeof err)) {
         fprintf(stderr, "open: %s\n", err);
         return 1;
+    }
+    if (q8) {
+        double c0 = now();
+        if (!embed_quantize(&e)) {
+            fprintf(stderr, "int8 conversion failed\n");
+            return 1;
+        }
+        printf("int8 conversion: %.0f ms\n", (now() - c0) * 1e3);
     }
     const char **text = (const char **)arena_alloc(a, want * sizeof(char *));
     size_t *len = (size_t *)arena_alloc(a, want * sizeof(size_t));

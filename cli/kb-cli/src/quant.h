@@ -27,6 +27,7 @@
 #ifndef KB_QUANT_H
 #define KB_QUANT_H
 
+#include "arena.h"
 #include "kb.h"
 
 /* Every k-quant in this family packs 256 values per super-block. */
@@ -75,5 +76,40 @@ bool quant_matmul(uint32_t ggml_type, const uint8_t *w, uint64_t n,
 /* True when this build compiled the SIMD matvec in. Reported by `kb status`
  * so a timing can be read against what actually ran. */
 bool quant_simd(void);
+
+/* ---- int8 matrices ------------------------------------------------------
+ *
+ * The same product in 8-bit integers: each row of W is cut into blocks of
+ * Q8_BLOCK values, and each block kept as int8 with one float scale (its
+ * largest magnitude over 127); the input vectors are quantised the same way
+ * on each call, and a block's dot product is an integer dot product scaled
+ * by the two blocks' scales. The CPU does four times as many 8-bit
+ * multiply-adds per instruction as float ones, where it has int8 dot product
+ * instructions (ARM's since 8.2, which every Apple and most current ARM
+ * chips have); elsewhere NEON's widening multiply, SSE2's multiply-add of
+ * 16-bit pairs, or plain C compute the same integers.
+ *
+ * The result is not the float one: relative error around 5e-3 per product,
+ * well under what changes a nearest neighbour (tests/unit/test_modernbert.c
+ * measures the embeddings against the reference). kb uses it where it embeds
+ * many texts at once (filing, `kb embed`, reranking) and keeps the float
+ * path for a search's one query. */
+#define Q8_BLOCK 32
+
+typedef struct {
+    uint64_t rows, n, nb; /* nb = n / Q8_BLOCK */
+    float *d;             /* rows x nb scales */
+    int8_t *q;            /* rows x n values */
+} Q8Matrix;
+
+/* W (any type quant_row reads) as an int8 matrix. n must be a multiple of
+ * Q8_BLOCK and at most 4096. */
+bool q8_from(Arena *a, uint32_t ggml_type, const uint8_t *w, uint64_t n,
+             uint64_t rows, Q8Matrix *out);
+
+/* out[t*rows + j] = sum_i W[j][i] * x[t*n + i], in int8. xq and xd are the
+ * caller's scratch: T*n bytes and T*nb floats. */
+void q8_matmul(const Q8Matrix *w, const float *x, size_t T, int8_t *xq, float *xd,
+               float *out);
 
 #endif /* KB_QUANT_H */

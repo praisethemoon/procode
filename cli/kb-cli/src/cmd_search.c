@@ -36,7 +36,7 @@ static const char *const VALUE_FLAGS[] = {
     "--collection", "--mode",       "--k",         "--expand",
     "--source",     "--mime",       "--since",     "--min-score",
     "--minScore",   "--older-than", "--olderThan", "--meta",
-    "--fusion",     NULL};
+    "--fusion",     "--rerank-depth", "--rerank-tokens", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", "--rerank", NULL};
 
 typedef enum { MODE_KEYWORD, MODE_HYBRID, MODE_SEMANTIC } SearchMode;
@@ -297,7 +297,8 @@ static int rescored_cmp(const void *pa, const void *pb) {
 }
 
 static bool rerank_fused(Arena *a, Store *s, bool json, const char *query, RankResult *fused,
-                         size_t nfused, DocText *cache, size_t *ncache, float **rr, size_t *nrr) {
+                         size_t nfused, size_t want, size_t tokens, DocText *cache,
+                         size_t *ncache, float **rr, size_t *nrr) {
     char path[KB_PATH_MAX], err[512];
     Embedder re;
     if (!embed_find_reranker(a, path, sizeof path, err, sizeof err)) {
@@ -310,7 +311,13 @@ static bool rerank_fused(Arena *a, Store *s, bool json, const char *query, RankR
         err_out(json, "model_missing", "--rerank needs the reranker: %s", err);
         return false;
     }
-    size_t depth = nfused < KB_RERANK_DEPTH ? nfused : KB_RERANK_DEPTH;
+    /* Twenty passages: int8 layer products repay their conversion. */
+    if (!embed_quantize(&re)) {
+        embed_close(&re);
+        err_out(json, "internal", "the reranker's layers could not be converted to int8");
+        return false;
+    }
+    size_t depth = nfused < want ? nfused : want;
     Rescored *v = (Rescored *)arena_alloc(a, depth * sizeof(Rescored));
     for (size_t i = 0; i < depth; i++) {
         Cand *c = (Cand *)fused[i].item;
@@ -328,7 +335,7 @@ static bool rerank_fused(Arena *a, Store *s, bool json, const char *query, RankR
             body = arena_printf(a, "%s\n%.*s", header, (int)blen, body);
             blen = strlen(body);
         }
-        if (!rerank_score(&re, query, strlen(query), body, blen, KB_RERANK_TOKENS,
+        if (!rerank_score(&re, query, strlen(query), body, blen, tokens,
                           &v[i].score)) {
             embed_close(&re);
             err_out(json, "internal", "reranking C-%lld failed",
@@ -595,9 +602,29 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
     /* With --rerank the fused list goes at least KB_RERANK_DEPTH deep, so
      * the cross-encoder has candidates to promote from below the cut. */
     const bool rerank = has_flag(argc, argv, VALUE_FLAGS, "--rerank");
+    /* How many candidates the reranker reads, and how many tokens of each
+     * pair: the two knobs its latency turns on (bench/bench.py measures). */
+    size_t rr_depth = KB_RERANK_DEPTH, rr_tokens = KB_RERANK_TOKENS;
+    const char *rd = flag_value(argc, argv, VALUE_FLAGS, "--rerank-depth");
+    const char *rt = flag_value(argc, argv, VALUE_FLAGS, "--rerank-tokens");
+    if (rd || rt) {
+        char *e1 = NULL, *e2 = NULL;
+        long d = rd ? strtol(rd, &e1, 10) : (long)rr_depth;
+        long tk = rt ? strtol(rt, &e2, 10) : (long)rr_tokens;
+        if ((rd && (*e1 || d < 1 || d > 100)) || (rt && (*e2 || tk < 32 || tk > 1024)) ||
+            !rerank) {
+            store_close(&s);
+            err_out(json, "usage", rerank ? "--rerank-depth is 1 to 100 and --rerank-tokens "
+                                            "32 to 1024"
+                                          : "--rerank-depth and --rerank-tokens go with --rerank");
+            return KB_EXIT_ERR;
+        }
+        rr_depth = (size_t)d;
+        rr_tokens = (size_t)tk;
+    }
     size_t fuse_k = (size_t)k;
-    if (rerank && fuse_k < KB_RERANK_DEPTH)
-        fuse_k = KB_RERANK_DEPTH;
+    if (rerank && fuse_k < rr_depth)
+        fuse_k = rr_depth;
     RankResult *fused = NULL;
     size_t nfused;
     const char *fusion = flag_value(argc, argv, VALUE_FLAGS, "--fusion");
@@ -628,7 +655,8 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
     float *rr = NULL;
     size_t nrr = 0;
     if (rerank && nfused) {
-        if (!rerank_fused(a, &s, json, query, fused, nfused, cache, &ncache, &rr, &nrr)) {
+        if (!rerank_fused(a, &s, json, query, fused, nfused, rr_depth, rr_tokens, cache,
+                          &ncache, &rr, &nrr)) {
             store_close(&s);
             return KB_EXIT_ERR;
         }

@@ -627,6 +627,16 @@ static bool matmul(const GgufTensor *t, const float *x, size_t T, float *out) {
     return quant_matmul(t->type, t->data, t->ne[0], t->ne[1], x, T, out);
 }
 
+/* A layer's matrix product: in int8 when embed_quantize converted it. */
+static bool layer_mm(Embedder *e, const GgufTensor *t, const Q8Matrix *q, const float *x,
+                     size_t T, float *out) {
+    if (q) {
+        q8_matmul(q, x, T, e->q8_x, e->q8_d, out);
+        return true;
+    }
+    return matmul(t, x, T, out);
+}
+
 /* Attention for a range of (head, query block) units. A head reads every
  * token's q, k and v in its own slice of the model width, and a unit writes
  * only that slice of its own tokens' outputs, so units run in parallel and the
@@ -944,22 +954,22 @@ static bool forward_modernbert(Embedder *e, const int32_t *ids, size_t T, float 
             w = e->lw;
         }
         run_glue(e, T, GLUE_NORM, w, NULL);
-        if (!matmul(L->qkv, e->tmp, T, e->qkv))
+        if (!layer_mm(e, L->qkv, L->q_qkv, e->tmp, T, e->qkv))
             return false;
         run_glue(e, T, GLUE_QKV_ROPE, NULL, global ? freq_global : freq_local);
         AttnJob job = {e, T, kq_scale, global ? -1 : (int64_t)(e->window / 2)};
         plat_parallel(attn_units(e, T), attend_heads, &job);
-        if (!matmul(L->attn_out, e->attn, T, e->tmp))
+        if (!layer_mm(e, L->attn_out, L->q_attn_out, e->attn, T, e->tmp))
             return false;
         run_glue(e, T, GLUE_ADD, NULL, NULL);
 
         if (!quant_row(L->out_norm_w->type, L->out_norm_w->data, D, e->lw))
             return false;
         run_glue(e, T, GLUE_NORM, e->lw, NULL);
-        if (!matmul(L->ffn_up, e->tmp, T, e->ff1))
+        if (!layer_mm(e, L->ffn_up, L->q_ffn_up, e->tmp, T, e->ff1))
             return false;
         run_glue(e, T, GLUE_GEGLU, NULL, NULL);
-        if (!matmul(L->ffn_down, e->ff2, T, e->tmp))
+        if (!layer_mm(e, L->ffn_down, L->q_ffn_down, e->ff2, T, e->tmp))
             return false;
         run_glue(e, T, GLUE_ADD, NULL, NULL);
     }
@@ -1205,5 +1215,27 @@ bool rerank_score(Embedder *e, const char *query, size_t qlen, const char *passa
         !quant_row(e->cls_out_b->type, e->cls_out_b->data, 1, bias))
         return false;
     *logit = out + bias[0];
+    return true;
+}
+
+bool embed_quantize(Embedder *e) {
+    if (e->kind != EMBED_MODERNBERT || e->q8)
+        return true;
+    const uint64_t widest = e->n_ff > e->n_embd ? e->n_ff : e->n_embd;
+    e->q8_x = (int8_t *)arena_alloc(e->a, (size_t)KB_EMBED_MAX_TOKENS * widest);
+    e->q8_d = (float *)arena_alloc(e->a, (size_t)KB_EMBED_MAX_TOKENS * (widest / Q8_BLOCK) *
+                                             sizeof(float));
+    for (uint32_t l = 0; l < e->n_layer; l++) {
+        EmbedLayer *L = &e->layer[l];
+        const GgufTensor *src[4] = {L->qkv, L->attn_out, L->ffn_up, L->ffn_down};
+        Q8Matrix **dst[4] = {&L->q_qkv, &L->q_attn_out, &L->q_ffn_up, &L->q_ffn_down};
+        for (int32_t i = 0; i < 4; i++) {
+            Q8Matrix *m = (Q8Matrix *)arena_alloc(e->a, sizeof(Q8Matrix));
+            if (!q8_from(e->a, src[i]->type, src[i]->data, src[i]->ne[0], src[i]->ne[1], m))
+                return false;
+            *dst[i] = m;
+        }
+    }
+    e->q8 = true;
     return true;
 }
