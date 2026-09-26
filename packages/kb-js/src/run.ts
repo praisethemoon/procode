@@ -26,6 +26,7 @@
  */
 
 import { spawn } from "node:child_process";
+import * as fs from "node:fs";
 
 import { KbCrash, KbError } from "./errors";
 
@@ -61,6 +62,14 @@ interface Completed {
     signal: NodeJS.Signals | null;
     stdout: string;
     stderr: string;
+}
+
+function isDirectory(p: string): boolean {
+    try {
+        return fs.statSync(p).isDirectory();
+    } catch {
+        return false;
+    }
 }
 
 /* One process, its output, and the three ways it can end badly: it never
@@ -151,18 +160,27 @@ function spawnKb(
         });
 
         child.on("error", (e: NodeJS.ErrnoException) => {
-            finish(() =>
+            finish(() => {
+                /* ENOENT is Node's word for two different things here: the
+                 * executable is not there, or the directory it was to run in
+                 * is not. Which one is checked, not guessed. */
+                const cwd = options.cwd;
+                const noFolder = e.code === "ENOENT" && cwd !== undefined && !isDirectory(cwd);
+                const named = bin.includes("/") || bin.includes("\\") ? `"${bin}"` : `"${bin}" on the PATH`;
                 reject(
-                    new KbCrash(
-                        e.code === "ENOENT"
-                            ? `kb is not on the PATH (looked for "${bin}").`
-                            : `kb could not be started: ${e.message}`,
-                        argv,
-                        null,
-                        "",
-                    ),
-                ),
-            );
+                    noFolder
+                        ? new KbCrash(`kb could not be started: the folder ${cwd} does not exist.`, argv, null, "", "folder")
+                        : e.code === "ENOENT" || e.code === "EACCES"
+                          ? new KbCrash(
+                                e.code === "ENOENT" ? `kb was not found: there is no ${named}.` : `kb could not be started: ${named} cannot be run (${e.code}).`,
+                                argv,
+                                null,
+                                "",
+                                "binary",
+                            )
+                          : new KbCrash(`kb could not be started: ${e.message}`, argv, null, "", "other"),
+                );
+            });
         });
 
         child.on("close", (code, signal) => {

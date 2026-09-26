@@ -97,7 +97,7 @@ test("nothing is spawned from an assembled string, and the argv is an array", ()
      * from becoming the dangerous one.
      *
      * Stated at the CALL rather than over every backtick in the package: a
-     * blanket scan fails on `kb is not on the PATH (looked for "${bin}")`,
+     * blanket scan fails on `there is no ${named}`,
      * which is a sentence for a person and not a command for a shell, and a
      * guard that fails on prose teaches whoever hits it to loosen the guard. */
     for (const { file, text } of sources()) {

@@ -59,7 +59,16 @@ export interface WireError {
     unrecognised: boolean;
     /* §11's details as the store sent them; plain JSON, so it crosses as is. */
     details: Readonly<Record<string, unknown>> | null;
+    /* Set by the host on a `not_found` when the store itself is what is
+     * missing — `status()` found none — rather than something asked for in
+     * one. A folder with no knowledge base is a state to offer a way out of,
+     * not a refusal to show a code for. */
+    noStore?: boolean;
 }
+
+/* Why kb never ran, as `kb-js` tells it: the command is not there, the
+ * folder is not, or something else. Absent when kb ran and failed. */
+export type CannotStart = "binary" | "folder" | "other";
 
 /* ----------------------------------------------------- webview -> host */
 
@@ -83,6 +92,10 @@ export type Request =
     | { kind: "notify"; level: "info" | "warning" | "error"; message: string }
     /* Pick files from disk and file them, into `collection` when a row asked. */
     | { kind: "addFiles"; collection: string | null }
+    /* The two ways out of the states above: create a store in the
+     * workspace folder, or open the setting that names the kb command. */
+    | { kind: "init" }
+    | { kind: "settings" }
     /* §4's delete, whose text has to tell the truth about what it does. */
     | { kind: "confirm"; id: number; title: string; detail: string; confirm: string };
 
@@ -91,7 +104,7 @@ export type Request =
 export type Response =
     | { kind: "result"; id: number; value: unknown }
     | { kind: "failed"; id: number; error: WireError }
-    | { kind: "crash"; id: number; message: string }
+    | { kind: "crash"; id: number; message: string; cannotStart?: CannotStart; command?: string }
     | { kind: "confirmed"; id: number; confirmed: boolean }
     /* The store moved, or a write this extension made landed. There is no
      * subscription to a local store — `kb` is a process that starts and exits
@@ -120,6 +133,8 @@ export function isRequest(data: unknown): data is Request {
         kind === "title" ||
         kind === "notify" ||
         kind === "addFiles" ||
+        kind === "init" ||
+        kind === "settings" ||
         kind === "confirm"
     );
 }

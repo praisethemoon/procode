@@ -9,14 +9,19 @@
  * three exit codes reaching the screen. `Refused` shows §11's code and message,
  * because a reader looking at `model_mismatch` is looking at a store that owes
  * a reindex and the word is what they can act on. `Faulted` says kb failed and
- * that there is nothing to correct in what was asked.
+ * shows what it reported.
+ *
+ * TWO STATES ARE NEITHER, and each gets its own screen with its way out:
+ * a folder with no store yet (`NoStore`, which offers to create one) and a kb
+ * that never started (`CannotStart`, which names the command and the setting).
+ * Both are the reader's to fix, and neither is kb's fault.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Icon, Spinner } from "baukasten-ui/core";
+import { Button, Icon, Spinner } from "baukasten-ui/core";
 
-import { Operation, WireError } from "../src/protocol";
-import { HostFault, StoreRefusal, call, onHostEvent } from "./rpc";
+import { CannotStart as Why, Operation, WireError } from "../src/protocol";
+import { HostFault, StoreRefusal, call, initStore, onHostEvent, openCliSetting } from "./rpc";
 
 /* A codicon name is a string as far as this file is concerned; baukasten's
  * `Icon` types it against its own union. */
@@ -29,7 +34,7 @@ export type QueryState<T> =
     | { status: "loading" }
     | { status: "ok"; value: T }
     | { status: "refused"; error: WireError }
-    | { status: "faulted"; message: string };
+    | { status: "faulted"; message: string; cannotStart: Why | null; command: string | null };
 
 /* The input is compared by its JSON rather than by identity, so a caller may
  * build it inline — which is what every call site wants to do — without
@@ -56,9 +61,9 @@ export function useQuery<T>(
                 if (e instanceof StoreRefusal) {
                     setState({ status: "refused", error: e.error });
                 } else if (e instanceof HostFault) {
-                    setState({ status: "faulted", message: e.message });
+                    setState({ status: "faulted", message: e.message, cannotStart: e.cannotStart, command: e.command });
                 } else {
-                    setState({ status: "faulted", message: String(e) });
+                    setState({ status: "faulted", message: String(e), cannotStart: null, command: null });
                 }
             });
         return () => {
@@ -110,14 +115,66 @@ export function Refused(props: { error: WireError }): JSX.Element {
     );
 }
 
+/* kb ran and failed: a bug in kb, or a store it cannot read. */
 export function Faulted(props: { message: string }): JSX.Element {
     return (
         <div className="kb-notice">
-            <h2>kb failed.</h2>
-            <div className="kb-small">
-                This is not a refusal from the store — it is a fault, and there is nothing to
-                correct in what was asked.
+            <h2>kb stopped with an error</h2>
+            <p>Something went wrong inside kb or its store, not in what you asked. This is what kb reported:</p>
+            <pre className="kb-pre">{props.message}</pre>
+        </div>
+    );
+}
+
+/* The workspace folder has no store at or above it yet. */
+export function NoStore(): JSX.Element {
+    return (
+        <div className="kb-notice kb-state">
+            <Codicon name="library" className="kb-state-icon" />
+            <h2>No knowledge base in this folder</h2>
+            <p>
+                Knowledge keeps what you file in a <code>.kb</code> folder, found by looking in the workspace folder
+                and the folders above it. There isn't one yet.
+            </p>
+            <Button variant="primary" size="sm" onClick={initStore}>
+                Create a knowledge base here
+            </Button>
+            <p className="kb-muted">
+                Or run <code>kb init</code> in the folder.
+            </p>
+        </div>
+    );
+}
+
+/* kb never started. Every cause but the last is the reader's to fix. */
+export function CannotStart(props: { why: Why; command: string | null; message: string }): JSX.Element {
+    if (props.why === "binary") {
+        return (
+            <div className="kb-notice kb-state">
+                <Codicon name="tools" className="kb-state-icon" />
+                <h2>kb can't be found</h2>
+                <p>
+                    Knowledge runs the <code>kb</code> command-line tool
+                    {props.command && props.command !== "kb" ? (
+                        <>
+                            {" "}
+                            as <code>{props.command}</code>
+                        </>
+                    ) : null}
+                    , and it isn't there. Build and install it from the lap repository with{" "}
+                    <code>make -C cli/kb-cli &amp;&amp; make -C cli/kb-cli install</code>, or set{" "}
+                    <strong>Knowledge › Cli Path</strong> to where it is.
+                </p>
+                <Button variant="secondary" size="sm" onClick={openCliSetting}>
+                    Open Settings
+                </Button>
+                <pre className="kb-pre">{props.message}</pre>
             </div>
+        );
+    }
+    return (
+        <div className="kb-notice kb-state">
+            <h2>{props.why === "folder" ? "The workspace folder can't be found" : "kb couldn't be started"}</h2>
             <pre className="kb-pre">{props.message}</pre>
         </div>
     );
@@ -144,10 +201,14 @@ export function Resolved<T>(props: {
         return <Loading what={props.loading} />;
     }
     if (state.status === "refused") {
-        return <Refused error={state.error} />;
+        return state.error.noStore ? <NoStore /> : <Refused error={state.error} />;
     }
     if (state.status === "faulted") {
-        return <Faulted message={state.message} />;
+        return state.cannotStart ? (
+            <CannotStart why={state.cannotStart} command={state.command} message={state.message} />
+        ) : (
+            <Faulted message={state.message} />
+        );
     }
     return props.children(state.value);
 }

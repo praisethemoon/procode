@@ -10,7 +10,7 @@
  * type would tell a reader to fix input that was never the problem.
  */
 
-import { Operation, Request, Response, ViewTag, WireError, isResponse } from "../src/protocol";
+import { CannotStart, Operation, Request, Response, ViewTag, WireError, isResponse } from "../src/protocol";
 
 interface VsCodeApi {
     postMessage(message: unknown): void;
@@ -35,9 +35,14 @@ export class StoreRefusal extends Error {
 }
 
 export class HostFault extends Error {
-    constructor(message: string) {
+    /* Set when kb never started, with why, and the command it was started as. */
+    readonly cannotStart: CannotStart | null;
+    readonly command: string | null;
+    constructor(message: string, cannotStart: CannotStart | null = null, command: string | null = null) {
         super(message);
         this.name = "HostFault";
+        this.cannotStart = cannotStart;
+        this.command = command;
     }
 }
 
@@ -66,7 +71,7 @@ window.addEventListener("message", (ev: MessageEvent) => {
     if (data.kind === "failed") {
         p.reject(new StoreRefusal(data.error));
     } else if (data.kind === "crash") {
-        p.reject(new HostFault(data.message));
+        p.reject(new HostFault(data.message, data.cannotStart ?? null, data.command ?? null));
     } else if (data.kind === "result") {
         p.resolve(data.value);
     } else {
@@ -110,6 +115,15 @@ export function link(href: string): void {
 /* §4: "a collection row opens the sidebar scoped to it." */
 export function addFiles(collection: string | null = null): void {
     send({ kind: "addFiles", collection });
+}
+
+/* The ways out of "no knowledge base here" and "kb can't be found". */
+export function initStore(): void {
+    send({ kind: "init" });
+}
+
+export function openCliSetting(): void {
+    send({ kind: "settings" });
 }
 
 export function scope(collection: string): void {

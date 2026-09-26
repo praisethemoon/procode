@@ -47,6 +47,7 @@ export {
 export {
     CLI_ERROR_CODES,
     CliErrorCode,
+    KbCannotStart,
     KbCrash,
     KbError,
     KbErrorCode,

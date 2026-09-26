@@ -834,7 +834,7 @@ test("every operation the surface can ask is one the host answers", () => {
     /* And nothing else: a `case` naming an operation the protocol does not have
      * is dead code that reads as a feature. */
     for (const c of cases) {
-        if (["call", "open", "link", "scope", "title", "notify", "addFiles"].includes(c)) {
+        if (["call", "open", "link", "scope", "title", "notify", "addFiles", "init", "settings"].includes(c)) {
             continue; /* the request kinds, which share the file */
         }
         assert.ok(

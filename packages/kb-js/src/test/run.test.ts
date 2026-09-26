@@ -222,12 +222,32 @@ test("an exit 1 with no envelope is a fault, because there is no §11 code to in
     });
 });
 
-test("a binary that is not there says so, naming what it looked for", async () => {
+test("a binary that is not there says so, naming what it looked for, and that it never started", async () => {
     const e = (await run(["status"], { bin: "/nonexistent/kb-binary" }).catch((x: unknown) => x)) as KbCrash;
     assert.ok(e instanceof KbCrash);
     assert.equal(e.exitCode, null);
-    assert.match(e.message, /not on the PATH/);
+    assert.equal(e.cannotStart, "binary");
+    assert.match(e.message, /not found/);
     assert.match(e.message, /kb-binary/);
+    const bare = (await run(["status"], { bin: "kb-binary-that-is-nowhere" }).catch((x: unknown) => x)) as KbCrash;
+    assert.equal(bare.cannotStart, "binary");
+    assert.match(bare.message, /on the PATH/, "a bare name was looked for on the PATH, and says so");
+});
+
+test("a folder that is not there is not reported as a missing binary", async () => {
+    /* Node answers ENOENT for both; a reader told to fix their PATH when the
+     * folder was the problem is sent the wrong way. */
+    const e = (await run(["status"], { bin: process.execPath, cwd: "/nonexistent/folder-for-kb" }).catch((x: unknown) => x)) as KbCrash;
+    assert.ok(e instanceof KbCrash);
+    assert.equal(e.cannotStart, "folder");
+    assert.match(e.message, /folder-for-kb does not exist/);
+});
+
+test("a crash after kb started is not a failure to start", async () => {
+    await withFake([{ stdout: "", stderr: "boom", exit: 2 }], async (fake) => {
+        const e = (await run(["ls"], { bin: fake.bin, env: fake.env() }).catch((x: unknown) => x)) as KbCrash;
+        assert.equal(e.cannotStart, null);
+    });
 });
 
 test("a command that does not answer is killed and reported, not awaited for ever", async () => {

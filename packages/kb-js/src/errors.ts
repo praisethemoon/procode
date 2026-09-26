@@ -148,6 +148,12 @@ export class KbError extends Error {
  * vocabulary a caller can act on, and a bug in kb is not in it. A surface
  * showing this should say that kb failed, not that the reader's question was
  * wrong. */
+/* Why kb never ran, when it did not: the command is not there (or is not
+ * something that can be run), the directory it was to run in is not there,
+ * or anything else. The first two have a fix a reader can make, and a surface
+ * should name it rather than call it a fault in kb. */
+export type KbCannotStart = "binary" | "folder" | "other";
+
 export class KbCrash extends Error {
     readonly argv: readonly string[];
     /* The process's exit status, or null when it never ran — a missing binary,
@@ -156,13 +162,16 @@ export class KbCrash extends Error {
     /* Whatever the process wrote to stderr, trimmed. The one place a reader
      * can look when the payload was unreadable. */
     readonly stderr: string;
+    /* Set only when kb never started, with why. */
+    readonly cannotStart: KbCannotStart | null;
 
-    constructor(message: string, argv: readonly string[], exitCode: number | null, stderr: string) {
+    constructor(message: string, argv: readonly string[], exitCode: number | null, stderr: string, cannotStart: KbCannotStart | null = null) {
         super(message);
         this.name = "KbCrash";
         this.argv = argv;
         this.exitCode = exitCode;
         this.stderr = stderr;
+        this.cannotStart = cannotStart;
     }
 }
 

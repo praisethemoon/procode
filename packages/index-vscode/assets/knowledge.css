@@ -313,6 +313,33 @@ html, body {
   color: var(--bk-color-foreground);
 }
 
+.kb-notice p {
+  margin: 0 0 var(--bk-gap-sm, 8px);
+  line-height: 1.5;
+}
+
+/* A state with a way out: its one action given room. */
+.kb-state {
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--bk-gap-xs, 4px);
+}
+.kb-state > .codicon,
+.kb-state .kb-state-icon {
+  font-size: 22px !important;
+  color: var(--bk-color-foreground-muted);
+  margin-bottom: var(--bk-gap-xs, 4px);
+}
+.kb-state > button {
+  margin: var(--bk-gap-xs, 4px) 0 var(--bk-gap-sm, 8px);
+}
+.kb-state .kb-pre {
+  align-self: stretch;
+  white-space: pre-wrap;
+}
+
 .kb-pre {
   overflow-x: auto;
   padding: var(--bk-padding-sm);

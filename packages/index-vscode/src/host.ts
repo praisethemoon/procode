@@ -213,6 +213,12 @@ export function handleRequest(ctx: HostContext, surface: Surface, raw: unknown):
         case "addFiles":
             void vscode.commands.executeCommand("knowledge.addFiles", request.collection ?? undefined);
             return;
+        case "init":
+            void vscode.commands.executeCommand("knowledge.init");
+            return;
+        case "settings":
+            void vscode.commands.executeCommand("workbench.action.openSettings", "knowledge.cliPath");
+            return;
         default:
             void vscode.window
                 .showWarningMessage(
@@ -257,7 +263,24 @@ async function answer(
             ctx.announce();
         }
     } catch (e) {
-        reply(webview, failure(id, e));
+        const out = failure(id, e);
+        if (out.kind === "failed" && out.error.code === "not_found" && (await noStore(ctx))) {
+            reply(webview, { ...out, error: { ...out.error, noStore: true } });
+        } else if (out.kind === "crash" && out.cannotStart === "binary") {
+            reply(webview, { ...out, command: ctx.settings().cliPath });
+        } else {
+            reply(webview, out);
+        }
+    }
+}
+
+/* Whether the store itself is what is missing: `not_found` is also the
+ * answer for a document that is not in one, and that is a plain refusal. */
+async function noStore(ctx: HostContext): Promise<boolean> {
+    try {
+        return !(await ctx.client().status()).present;
+    } catch {
+        return false; // no folder, or kb cannot say: leave the refusal as it is
     }
 }
 
@@ -285,6 +308,7 @@ export function failure(id: number, e: unknown): Response {
             kind: "crash",
             id,
             message: crash.stderr.length > 0 ? `${crash.message}\n${crash.stderr}` : crash.message,
+            ...(crash.cannotStart !== null ? { cannotStart: crash.cannotStart } : {}),
         };
     }
     return { kind: "crash", id, message: e instanceof Error ? `${e.name}: ${e.message}` : String(e) };
