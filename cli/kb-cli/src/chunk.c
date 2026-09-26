@@ -152,12 +152,15 @@ uint32_t chunk_tokens_of(size_t bytes) {
 typedef struct {
     size_t start;
     const char *heading;
+    const char *context;
 } Section;
 
 typedef struct {
     Arena *a;
     Section *v;
     size_t n, cap;
+    /* The heading open at each level (1-6), for the context of the next. */
+    const char *open[7];
 } Sections;
 
 static void section_add(Sections *s, size_t start, const char *heading) {
@@ -173,7 +176,28 @@ static void section_add(Sections *s, size_t start, const char *heading) {
     ARENA_GROW(s->a, s->v, s->n, s->cap, Section);
     s->v[s->n].start = start;
     s->v[s->n].heading = heading;
+    s->v[s->n].context = NULL;
     s->n++;
+}
+
+/* A heading at `level` (1-6): its context is the headings still open above
+ * it, and it closes every deeper one. A document that skips a level (# then
+ * ###) simply has no heading at the one it skipped. */
+static void section_add_level(Sections *s, size_t start, const char *heading,
+                              int32_t level) {
+    const char *context = NULL;
+    for (int32_t k = 1; k < level; k++) {
+        if (!s->open[k])
+            continue;
+        context = context ? arena_printf(s->a, "%s > %s", context, s->open[k])
+                          : s->open[k];
+    }
+    section_add(s, start, heading);
+    if (s->n && s->v[s->n - 1].start == start && !s->v[s->n - 1].context)
+        s->v[s->n - 1].context = context;
+    s->open[level] = heading;
+    for (int32_t k = level + 1; k <= 6; k++)
+        s->open[k] = NULL;
 }
 
 static const char *trim_copy(Arena *a, const char *p, size_t n, size_t cap) {
@@ -233,7 +257,7 @@ static void sections_markdown(Sections *out, const char *text, Lines l) {
                 tn--;
             title = trim_copy(out->a, title, tn, 200);
         }
-        section_add(out, (size_t)(line.ptr - text), title);
+        section_add_level(out, (size_t)(line.ptr - text), title, (int32_t)h);
     }
 }
 
@@ -300,7 +324,8 @@ static void sections_html(Sections *out, const char *text, size_t len) {
             end++;
         if (end + 3 >= len)
             end = len;
-        section_add(out, i, html_text(out->a, text + body, end - body));
+        section_add_level(out, i, html_text(out->a, text + body, end - body),
+                          d - '0');
     }
 }
 
@@ -454,13 +479,14 @@ typedef struct {
 } ChunkBuf;
 
 static void chunk_add(ChunkBuf *b, size_t start, size_t end,
-                      const char *heading) {
+                      const char *heading, const char *context) {
     if (end <= start)
         return;
     ARENA_GROW(b->a, b->v, b->n, b->cap, Chunk);
     b->v[b->n].start = start;
     b->v[b->n].end = end;
     b->v[b->n].heading = heading;
+    b->v[b->n].context = context;
     b->v[b->n].tokens = chunk_tokens_of(end - start);
     b->n++;
 }
@@ -483,18 +509,18 @@ static size_t snap_back(const char *text, size_t lo, size_t want) {
 }
 
 static void window_split(ChunkBuf *b, const char *text, size_t start,
-                         size_t end, const char *heading, size_t target,
-                         size_t overlap) {
+                         size_t end, const char *heading, const char *context,
+                         size_t target, size_t overlap) {
     size_t pos = start;
     while (pos < end) {
         if (end - pos <= target) {
             /* The tail always closes on the section's end, so the last span
              * of a document reaches its final byte. */
-            chunk_add(b, pos, end, heading);
+            chunk_add(b, pos, end, heading, context);
             return;
         }
         size_t cut = snap_back(text, pos, pos + target);
-        chunk_add(b, pos, cut, heading);
+        chunk_add(b, pos, cut, heading, context);
         size_t next = cut > pos + overlap ? cut - overlap : pos + 1;
         if (next <= pos)
             next = pos + 1;
@@ -515,25 +541,37 @@ static Chunks split_syntax(Arena *a, const char *text, size_t len, SyntaxLang sy
         ok = syntax_cuts(a, SYNTAX_TSX, text, len, target_bytes, &cuts, &n);
     ChunkBuf b = {a, NULL, 0, 0};
     if (!ok) {
-        window_split(&b, text, 0, len, NULL, target_bytes, overlap_bytes);
+        window_split(&b, text, 0, len, NULL, NULL, target_bytes, overlap_bytes);
     } else {
         for (size_t i = 0; i < n; i++)
             chunk_add(&b, cuts[i].start, i + 1 < n ? cuts[i + 1].start : len,
-                      cuts[i].heading);
+                      cuts[i].heading, NULL);
     }
     Chunks out = {b.v, b.n};
     return out;
 }
 
+/* "title > context > heading", leaving out empty parts and any that only
+ * repeats the one before it (a Markdown file whose first heading is its
+ * title). */
 char *chunk_header(Arena *a, Lang lang, const char *title, const Chunk *c) {
-    if (lang != LANG_CODE)
-        return NULL;
-    bool t = title && title[0], h = c->heading && c->heading[0];
-    if (t && h)
-        return arena_printf(a, "%s > %s", title, c->heading);
-    if (t || h)
-        return arena_strdup(a, t ? title : c->heading);
-    return NULL;
+    (void)lang;
+    const char *parts[3] = {title, c->context, c->heading};
+    char *out = NULL;
+    const char *last = NULL;
+    for (int32_t i = 0; i < 3; i++) {
+        const char *p = parts[i];
+        if (!p || !p[0] || (last && strcmp(p, last) == 0))
+            continue;
+        /* A context that starts with the title (an H1 that names the
+         * document) keeps only what follows it. */
+        if (i == 1 && title && strncmp(p, title, strlen(title)) == 0 &&
+            strncmp(p + strlen(title), " > ", 3) == 0)
+            p += strlen(title) + 3;
+        out = out ? arena_printf(a, "%s > %s", out, p) : arena_strdup(a, p);
+        last = parts[i];
+    }
+    return out;
 }
 
 Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang, SyntaxLang syn,
@@ -548,7 +586,7 @@ Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang, SyntaxLang
     if (lang == LANG_CODE && syn != SYNTAX_NONE)
         return split_syntax(a, text, len, syn, target_bytes, overlap_bytes);
 
-    Sections sec = {a, NULL, 0, 0};
+    Sections sec = {a, NULL, 0, 0, {NULL}};
     Lines l = split_lines(a, text, len);
     section_add(&sec, 0, NULL); /* everything before the first heading */
     switch (lang) {
@@ -567,8 +605,8 @@ Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang, SyntaxLang
          * span rather than tracked while the boundaries are found. */
         if (lang == LANG_CODE)
             heading = code_heading(a, text, start, end);
-        window_split(&b, text, start, end, heading, target_bytes,
-                     overlap_bytes);
+        window_split(&b, text, start, end, heading, sec.v[i].context,
+                     target_bytes, overlap_bytes);
     }
     out.v = b.v;
     out.n = b.n;

@@ -3,6 +3,7 @@
 #include "cmd.h"
 #include "modelrec.h"
 #include "platform.h"
+#include "sha256.h"
 
 #include <math.h>
 #include <string.h>
@@ -16,6 +17,14 @@ static void vec_path(const Store *s, char *out, size_t outsz) {
 
 static size_t record_bytes(uint32_t dim) {
     return 8 + 4 + (size_t)dim;
+}
+
+void vec_fingerprint(const ModelParams *m, char out[65]) {
+    char model[65];
+    model_fingerprint(m, model);
+    char buf[160];
+    int32_t n = snprintf(buf, sizeof buf, "%s\x1f%s", model, KB_CHUNKER_ID);
+    sha256_hex(buf, (size_t)n, out);
 }
 
 void vec_load(Arena *a, const Store *s, VecSet *out) {
@@ -134,7 +143,7 @@ bool vec_sync(Arena *a, Store *s, Embedder *e, bool all, bool progress,
         return false;
     }
     char fp[65];
-    model_fingerprint(&e->cfg, fp);
+    vec_fingerprint(&e->cfg, fp);
     VecSet old;
     vec_load(a, s, &old);
     if (all || strcmp(old.fingerprint, fp) != 0 || old.dim != e->n_embd)

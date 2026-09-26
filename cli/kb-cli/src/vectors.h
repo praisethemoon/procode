@@ -40,6 +40,12 @@ typedef struct {
 
 /* Reads index/vectors.bin. A missing or unreadable file is an empty set with
  * no fingerprint — the same answer as "nothing embedded yet". */
+/* What vectors.bin is stamped with: the model's fingerprint and the chunker's
+ * version. A vector is the embedding of a chunk's text under its header line
+ * (chunk_header), so a chunker that changes the header changes every vector
+ * as surely as a new model does, even where the chunk ids stay the same. */
+void vec_fingerprint(const ModelParams *m, char out[65]);
+
 void vec_load(Arena *a, const Store *s, VecSet *out);
 bool vec_save(Arena *a, const Store *s, const VecSet *v, char *err,
               size_t errsz);

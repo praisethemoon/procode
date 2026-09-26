@@ -192,11 +192,16 @@ char *fts_build(Arena *a, const FtsDocInput *in, size_t n, size_t target_bytes,
             c.chunk_index = (uint32_t)nchunks;
             c.length = 0;
             c.postings = 0;
-            /* A code chunk is indexed under its header too: the file and
-             * the function it is in are words a search should match. */
-            const char *header = chunk_header(a, in[d].lang, in[d].title, &ch.v[i]);
-            if (header)
-                token_scan(header, strlen(header), scan_term, &c);
+            /* A chunk is indexed under where it is, too, as boosted fields
+             * (BM25F by repetition): the document's title three times, its
+             * heading path and heading twice. The words that name a section
+             * are the words a search for it uses, and the passage itself
+             * seldom repeats them. */
+            const char *fields[3] = {in[d].title, ch.v[i].context, ch.v[i].heading};
+            const int32_t weight[3] = {3, 2, 2};
+            for (int32_t f = 0; f < 3; f++)
+                for (int32_t r = 0; fields[f] && r < weight[f]; r++)
+                    token_scan(fields[f], strlen(fields[f]), scan_term, &c);
             token_scan(in[d].text + ch.v[i].start, ch.v[i].end - ch.v[i].start,
                        scan_term, &c);
             postings += c.postings;

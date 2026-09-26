@@ -48,7 +48,7 @@
  * KB_CHUNKER_ID versions the *algorithm*. §8 records only the sizes, but two
  * indexes built with identical sizes and different splitting rules are just
  * as incompatible, and a later reindex has no other way to notice. */
-#define KB_CHUNKER_ID "structural-2"
+#define KB_CHUNKER_ID "structural-3"
 #define KB_CHUNK_TOKENS 400u
 #define KB_CHUNK_OVERLAP 60u
 /* No tokenizer exists until the model loads, so a token is approximated as

@@ -106,7 +106,7 @@ static void store_json(StrBuf *sb, Arena *a, const char *dir,
     char rsha[65];
     char rfp[65] = "";
     if (model_recorded(a, &s, &rec, rsha))
-        model_fingerprint(&rec, rfp);
+        vec_fingerprint(&rec, rfp);
     bool same_model = rfp[0] && strcmp(vs.fingerprint, rfp) == 0;
     size_t vmissing = same_model ? vec_missing(&s, &vs) : (size_t)chunks;
     sb_printf(sb, "},\"vectors\":{\"count\":%zu,\"missing\":%zu,\"current\":%s",

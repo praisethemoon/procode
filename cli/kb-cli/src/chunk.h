@@ -25,6 +25,10 @@ typedef enum { LANG_MARKDOWN, LANG_HTML, LANG_CODE, LANG_TEXT } Lang;
 
 typedef struct {
     const char *heading; /* NULL when the chunk sits under none */
+    /* The headings above `heading`, outermost first, joined by " > ": "8. The
+     * model > Weights" for a chunk under "### Files" there. NULL at the top
+     * level, and for code, whose heading already carries its container. */
+    const char *context;
     size_t start, end;   /* byte span into the document text */
     uint32_t tokens;
 } Chunk;
@@ -59,11 +63,11 @@ uint32_t chunk_tokens_of(size_t bytes);
 Chunks chunk_split(Arena *a, const char *text, size_t len, Lang lang, SyntaxLang syn,
                    size_t target_bytes, size_t overlap_bytes);
 
-/* The line a code chunk is indexed and embedded under, ahead of its text:
- * "<document title> > <heading>", the heading being the chunk's container
- * and signature. A chunk's text alone often never says which file or which
- * function it is in; this puts both in the words a search matches. NULL for
- * a chunk that is not code. */
+/* The line a chunk is indexed and embedded under, ahead of its text:
+ * "<document title> > <heading path> > <heading>" — the file and the
+ * function for code, the document and its section path for prose. A chunk's
+ * text alone often never says where it is; this puts that in the words a
+ * search matches. NULL when there is nothing to say. */
 char *chunk_header(Arena *a, Lang lang, const char *title, const Chunk *c);
 
 #endif /* KB_CHUNK_H */

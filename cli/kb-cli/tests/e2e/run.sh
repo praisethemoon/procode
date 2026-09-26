@@ -453,7 +453,7 @@ has "status" "$out" '"nextIds"'
 t "the chunking parameters are recorded in index/model.json"
 [ -f .kb/index/model.json ] || fail "index/model.json missing"
 expect_grep '"chunkTokens":400' cat .kb/index/model.json
-expect_grep '"chunker":"structural-2"' cat .kb/index/model.json
+expect_grep '"chunker":"structural-3"' cat .kb/index/model.json
 
 t "a store built with other chunking parameters says a reindex is owed"
 cp .kb/index/model.json model.json.bak
@@ -1547,7 +1547,7 @@ base_after=$(kbr get D-1 --json | \
 
 t "reindex rewrites index/model.json and rebuild then obeys it"
 expect_grep '"chunkTokens":400' cat rechunk/.kb/index/model.json
-expect_grep '"chunker":"structural-2"' cat rechunk/.kb/index/model.json
+expect_grep '"chunker":"structural-3"' cat rechunk/.kb/index/model.json
 expect_grep '"current":true' kbr status --json
 out=$(kbr rebuild --json)
 has "after reindex" "$out" '"mismatched":0'

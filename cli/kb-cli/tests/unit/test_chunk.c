@@ -125,7 +125,45 @@ static void test_tokens(void) {
     ASSERT_TRUE(chunk_tokens_of(4000) > chunk_tokens_of(400));
 }
 
+static void test_heading_paths(void) {
+    Arena *a = arena_new(1 << 16);
+    t_begin("chunk: a section knows the headings above it");
+    const char *md = "# Guide\n\nintro\n\n## Install\n\nsteps\n\n### On macOS\n\nbrew\n\n"
+                     "## Use\n\nrun it\n\n#### Deep\n\nskipped a level\n";
+    Chunks c = chunk_split(a, md, strlen(md), LANG_MARKDOWN, SYNTAX_NONE, 400, 60);
+    const Chunk *mac = NULL, *use = NULL, *deep = NULL;
+    for (size_t i = 0; i < c.n; i++) {
+        if (c.v[i].heading && strcmp(c.v[i].heading, "On macOS") == 0) mac = &c.v[i];
+        if (c.v[i].heading && strcmp(c.v[i].heading, "Use") == 0) use = &c.v[i];
+        if (c.v[i].heading && strcmp(c.v[i].heading, "Deep") == 0) deep = &c.v[i];
+    }
+    ASSERT_TRUE(mac && mac->context && strcmp(mac->context, "Guide > Install") == 0);
+    ASSERT_TRUE(use && use->context && strcmp(use->context, "Guide") == 0);
+    ASSERT_TRUE(deep && deep->context && strcmp(deep->context, "Guide > Use") == 0);
+
+    t_begin("chunk: the header line names the document and the section path, once");
+    ASSERT_TRUE(strcmp(chunk_header(a, LANG_MARKDOWN, "Guide", mac), "Guide > Install > On macOS") == 0);
+    ASSERT_TRUE(strcmp(chunk_header(a, LANG_MARKDOWN, "setup.md", mac),
+                       "setup.md > Guide > Install > On macOS") == 0);
+    Chunk top = {"Guide", NULL, 0, 1, 1};
+    ASSERT_TRUE(strcmp(chunk_header(a, LANG_MARKDOWN, "Guide", &top), "Guide") == 0);
+    Chunk bare = {NULL, NULL, 0, 1, 1};
+    ASSERT_TRUE(strcmp(chunk_header(a, LANG_TEXT, "notes", &bare), "notes") == 0);
+    ASSERT_TRUE(chunk_header(a, LANG_TEXT, NULL, &bare) == NULL);
+
+    t_begin("chunk: html headings have paths too");
+    const char *html = "<h1>API</h1><p>a</p><h2>Search</h2><p>b</p><h3>Fusion</h3><p>c</p>";
+    c = chunk_split(a, html, strlen(html), LANG_HTML, SYNTAX_NONE, 400, 60);
+    bool found = false;
+    for (size_t i = 0; i < c.n; i++)
+        if (c.v[i].heading && strcmp(c.v[i].heading, "Fusion") == 0)
+            found = c.v[i].context && strcmp(c.v[i].context, "API > Search") == 0;
+    ASSERT_TRUE(found);
+    arena_free(a);
+}
+
 void test_chunk(void) {
+    test_heading_paths();
     Arena *a = arena_new(1 << 16);
     test_lang();
     test_markdown(a);

@@ -92,7 +92,7 @@ static bool semantic_open(Arena *a, Store *s, bool json, const char *mode,
         return false;
     }
     char fp[65];
-    model_fingerprint(&probe.params, fp);
+    vec_fingerprint(&probe.params, fp);
     vec_load(a, s, v);
     /* A file written under another model covers nothing. */
     if (strcmp(v->fingerprint, fp) != 0)
