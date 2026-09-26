@@ -15,5 +15,5 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true
   },
-  "include": ["webview", "src/protocol.ts", "src/linkify.ts"]
+  "include": ["webview", "src/protocol.ts", "src/linkify.ts", "src/filter.ts"]
 }

@@ -1,6 +1,7 @@
 /* The bundled extension host, activated against a minimal stand-in for the
- * `vscode` module: enough to prove it registers its commands, builds the tree
- * from a real board, and answers a tab's first message with the item's view. */
+ * `vscode` module: enough to prove it registers its commands, sends the
+ * sidebar the board it draws its tree from, and answers a tab's first message
+ * with the item's view. */
 
 import * as assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -21,7 +22,7 @@ const executed: unknown[][] = [];
 const threads: { uri: { path: string }; range: { startLine: number; endLine: number }; comments: { author: { name: string }; body: { value: string } }[]; canReply: boolean; label: string }[] = [];
 let content: { provideTextDocumentContent(uri: { toString(): string }): string } | null = null;
 const LAP = path.resolve(__dirname, "../../../../cli/lap-cli/bin/lap");
-let provider: { getChildren(n?: unknown): { item: { id: string }; label: string; description: string }[] } | null = null;
+let sidebar: { resolveWebviewView(view: unknown): void } | null = null;
 let onMessage: ((m: unknown) => void) | null = null;
 
 class EventEmitter {
@@ -61,8 +62,9 @@ const fake = {
         from: (c: { scheme: string; path: string }) => ({ ...c, toString: () => `${c.scheme}:${c.path}` }),
     },
     window: {
-        createTreeView: (_id: string, o: { treeDataProvider: typeof provider }) => {
-            provider = o.treeDataProvider;
+        registerWebviewViewProvider: (id: string, p: typeof sidebar) => {
+            assert.equal(id, "coboard.tree");
+            sidebar = p;
             return { dispose() {} };
         },
         createWebviewPanel: () => ({
@@ -117,16 +119,34 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
         Module._load = load;
     }
 
-    for (const c of ["coboard.newEpic", "coboard.newMilestone", "coboard.newTicket", "coboard.open", "coboard.goTo", "coboard.delete", "coboard.startSession", "coboard.refresh"]) {
+    for (const c of ["coboard.newEpic", "coboard.newMilestone", "coboard.newTicket", "coboard.open", "coboard.delete", "coboard.startSession", "coboard.refresh", "coboard.collapseAll"]) {
         assert.ok(commands.has(c), `${c} is registered`);
     }
-    const epics = provider!.getChildren();
-    assert.deepEqual(epics.map((n) => n.item.id), ["E-1"]);
-    const under = provider!.getChildren(epics[0]);
-    assert.deepEqual(under.map((n) => n.item.id), ["M-1", "T-2"], "milestones, then the epic's tickets in no milestone");
-    assert.deepEqual(provider!.getChildren(under[0]).map((n) => n.item.id), ["T-1"]);
+    assert.equal(commands.has("coboard.goTo"), false, "the filter bar replaces Go to Item");
 
-    await commands.get("coboard.open")!("M-1");
+    // The sidebar: on its first message it is sent the whole board.
+    const toSidebar: { type: string; items?: { id: string }[]; hasFolder?: boolean }[] = [];
+    let fromSidebar: ((m: unknown) => void) | null = null;
+    sidebar!.resolveWebviewView({
+        webview: {
+            options: {},
+            html: "",
+            cspSource: "vscode-resource:",
+            asWebviewUri: (u: { fsPath: string }) => u.fsPath,
+            postMessage: (m: (typeof toSidebar)[number]) => toSidebar.push(m),
+            onDidReceiveMessage: (fn: (m: unknown) => void) => (fromSidebar = fn),
+        },
+        onDidDispose() {},
+    });
+    fromSidebar!({ type: "ready" });
+    const tree = toSidebar.find((m) => m.type === "items")!;
+    assert.equal(tree.hasFolder, true);
+    assert.deepEqual(tree.items!.map((i) => i.id), ["E-1", "M-1", "T-1", "T-2"]);
+    commands.get("coboard.collapseAll")!();
+    assert.equal(toSidebar.at(-1)!.type, "collapseAll");
+
+    // A right-click command gets the row's data-vscode-context.
+    await commands.get("coboard.open")!({ webviewSection: "milestone", id: "M-1", preventDefaultContextMenuItems: true });
     onMessage!({ type: "ready" });
     const data = posted.find((m) => (m as { type: string }).type === "data") as { view: { kind: string; tickets: { id: string }[] } };
     assert.equal(data.view.kind, "milestone");

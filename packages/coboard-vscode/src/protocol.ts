@@ -42,3 +42,13 @@ export type ToHost =
     | { readonly type: "startSession"; readonly ticket: string }
     | { readonly type: "commits"; readonly session: string }
     | { readonly type: "showEdit"; readonly commit: string; readonly sessionMsg?: string };
+
+/* The sidebar: the whole board as summaries, and what a row can ask for. */
+export type SidebarToView =
+    | { readonly type: "items"; readonly items: readonly Summary[]; readonly hasFolder: boolean }
+    | { readonly type: "collapseAll" };
+
+export type SidebarToHost =
+    | { readonly type: "ready" }
+    | { readonly type: "open"; readonly id: string }
+    | { readonly type: "command"; readonly command: "coboard.newEpic" | "coboard.newMilestone" | "coboard.newTicket"; readonly id?: string };

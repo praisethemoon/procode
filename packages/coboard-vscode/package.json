@@ -34,46 +34,34 @@
       "coboard": [
         {
           "id": "coboard.tree",
-          "name": "Board"
+          "name": "Board",
+          "type": "webview"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "coboard.tree",
-        "contents": "No epics yet. Epics hold milestones, and milestones hold tickets.\n[New Epic](command:coboard.newEpic)",
-        "when": "workspaceFolderCount > 0"
-      },
-      {
-        "view": "coboard.tree",
-        "contents": "Open a folder to use its board.",
-        "when": "workspaceFolderCount == 0"
-      }
-    ],
     "commands": [
       { "command": "coboard.newEpic", "title": "New Epic", "category": "Board", "icon": "$(add)" },
       { "command": "coboard.newMilestone", "title": "New Milestone", "category": "Board", "icon": "$(milestone)" },
       { "command": "coboard.newTicket", "title": "New Ticket", "category": "Board", "icon": "$(new-file)" },
       { "command": "coboard.open", "title": "Open", "category": "Board" },
-      { "command": "coboard.goTo", "title": "Go to Item…", "category": "Board", "icon": "$(search)" },
       { "command": "coboard.delete", "title": "Delete", "category": "Board" },
       { "command": "coboard.startSession", "title": "Start lap Session for Ticket", "category": "Board" },
       { "command": "coboard.showEdit", "title": "Show lap Edit", "category": "Board" },
-      { "command": "coboard.refresh", "title": "Refresh", "category": "Board", "icon": "$(refresh)" }
+      { "command": "coboard.refresh", "title": "Refresh", "category": "Board", "icon": "$(refresh)" },
+      { "command": "coboard.collapseAll", "title": "Collapse All", "category": "Board", "icon": "$(collapse-all)" }
     ],
     "menus": {
       "view/title": [
         { "command": "coboard.newEpic", "when": "view == coboard.tree", "group": "navigation@1" },
-        { "command": "coboard.goTo", "when": "view == coboard.tree", "group": "navigation@2" },
-        { "command": "coboard.refresh", "when": "view == coboard.tree", "group": "navigation@3" }
+        { "command": "coboard.refresh", "when": "view == coboard.tree", "group": "navigation@2" },
+        { "command": "coboard.collapseAll", "when": "view == coboard.tree", "group": "navigation@3" }
       ],
-      "view/item/context": [
-        { "command": "coboard.newMilestone", "when": "view == coboard.tree && viewItem == epic", "group": "inline@1" },
-        { "command": "coboard.newTicket", "when": "view == coboard.tree && viewItem =~ /^(epic|milestone)$/", "group": "inline@2" },
-        { "command": "coboard.newMilestone", "when": "view == coboard.tree && viewItem == epic", "group": "1_new@1" },
-        { "command": "coboard.newTicket", "when": "view == coboard.tree && viewItem =~ /^(epic|milestone)$/", "group": "1_new@2" },
-        { "command": "coboard.startSession", "when": "view == coboard.tree && viewItem == ticket", "group": "2_lap@1" },
-        { "command": "coboard.delete", "when": "view == coboard.tree", "group": "9_delete@1" }
+      "webview/context": [
+        { "command": "coboard.open", "when": "webviewId == 'coboard.tree' && webviewSection =~ /^(epic|milestone|ticket)$/", "group": "0_open@1" },
+        { "command": "coboard.newMilestone", "when": "webviewId == 'coboard.tree' && webviewSection == 'epic'", "group": "1_new@1" },
+        { "command": "coboard.newTicket", "when": "webviewId == 'coboard.tree' && webviewSection =~ /^(epic|milestone)$/", "group": "1_new@2" },
+        { "command": "coboard.startSession", "when": "webviewId == 'coboard.tree' && webviewSection == 'ticket'", "group": "2_lap@1" },
+        { "command": "coboard.delete", "when": "webviewId == 'coboard.tree' && webviewSection =~ /^(epic|milestone|ticket)$/", "group": "9_delete@1" }
       ],
       "commandPalette": [
         { "command": "coboard.open", "when": "false" },
@@ -81,7 +69,8 @@
         { "command": "coboard.newTicket", "when": "false" },
         { "command": "coboard.delete", "when": "false" },
         { "command": "coboard.startSession", "when": "false" },
-        { "command": "coboard.showEdit", "when": "false" }
+        { "command": "coboard.showEdit", "when": "false" },
+        { "command": "coboard.collapseAll", "when": "false" }
       ]
     },
     "configuration": {

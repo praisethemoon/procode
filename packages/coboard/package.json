@@ -30,6 +30,19 @@
       "default": "./out/lap.js"
     }
   },
+  "typesVersions": {
+    "*": {
+      "model": [
+        "out/model.d.ts"
+      ],
+      "query": [
+        "out/query.d.ts"
+      ],
+      "lap": [
+        "out/lap.d.ts"
+      ]
+    }
+  },
   "bin": {
     "coboard-mcp": "./bin/coboard-mcp"
   },

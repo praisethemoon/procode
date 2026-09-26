@@ -15,19 +15,17 @@ import {
     Board,
     BoardError,
     Item,
-    Summary,
     commitDiff,
     findBoard,
     search,
     sessionCommits,
-    summarize,
     startSession,
     ticketSessions,
     view,
 } from "coboard";
 
 import { commentText, regionLabel, regionLines } from "./lapview";
-import type { Choices, ToHost, ToView } from "./protocol";
+import type { Choices, SidebarToHost, SidebarToView, ToHost, ToView } from "./protocol";
 
 let board: Board | null = null;
 
@@ -78,53 +76,43 @@ async function guarded<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
     }
 }
 
-/* ------------------------------------------------------------------ tree */
+/* --------------------------------------------------------------- sidebar
+ *
+ * A webview rather than a native tree, because the filter bar above the tree
+ * is an input with buttons inside it, which a native tree cannot hold. The
+ * tree is drawn by webview/sidebar.tsx from the board's summaries; its
+ * right-click menu is still VS Code's own, through `webview/context` menus
+ * keyed on each row's `data-vscode-context`. */
 
-const STATUS_ICON: Record<string, string> = {
-    todo: "circle-large-outline",
-    doing: "play-circle",
-    blocked: "error",
-    review: "eye",
-    done: "pass-filled",
-    open: "circle-large-outline",
-};
+class Sidebar implements vscode.WebviewViewProvider {
+    private view: vscode.WebviewView | null = null;
 
-class Node extends vscode.TreeItem {
-    constructor(readonly item: Summary, hasChildren: boolean) {
-        super(item.title, hasChildren ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
-        this.id = item.id;
-        this.description = item.kind === "ticket" ? `${item.id} · ${item.status}` : item.id;
-        this.contextValue = item.kind;
-        this.tooltip = `${item.id} — ${item.title}\n${item.kind}, ${item.status}`;
-        const icon = item.kind === "epic" ? "project" : item.kind === "milestone" ? "milestone" : STATUS_ICON[item.status] ?? "circle-large-outline";
-        this.iconPath = new vscode.ThemeIcon(item.status === "done" && item.kind !== "ticket" ? "pass" : icon);
-        this.command = { command: "coboard.open", title: "Open", arguments: [item.id] };
+    constructor(
+        private readonly ctx: vscode.ExtensionContext,
+        private readonly onOpen: (id: string) => void,
+    ) {}
+
+    resolveWebviewView(view: vscode.WebviewView): void {
+        this.view = view;
+        const media = vscode.Uri.joinPath(this.ctx.extensionUri, "out", "media");
+        view.webview.options = { enableScripts: true, localResourceRoots: [media] };
+        view.webview.html = html(view.webview, media, "sidebar.js", "");
+        view.webview.onDidReceiveMessage((m: SidebarToHost) => {
+            if (m.type === "ready") this.refresh();
+            else if (m.type === "open") this.onOpen(m.id);
+            else if (m.type === "command") void vscode.commands.executeCommand(m.command, ...(m.id ? [m.id] : []));
+        });
+        view.onDidDispose(() => {
+            this.view = null;
+        });
     }
-}
-
-class Tree implements vscode.TreeDataProvider<Node> {
-    private readonly changed = new vscode.EventEmitter<void>();
-    readonly onDidChangeTreeData = this.changed.event;
 
     refresh(): void {
-        this.changed.fire();
+        this.post({ type: "items", items: search(items(), ""), hasFolder: folder() !== null });
     }
 
-    getTreeItem(n: Node): vscode.TreeItem {
-        return n;
-    }
-
-    getChildren(parent?: Node): Node[] {
-        const all = items(); // epics, then milestones, then tickets
-        const childrenOf = (p: Item): Item[] =>
-            p.kind === "epic"
-                ? all.filter((i) => (i.kind === "milestone" && i.epic === p.id) || (i.kind === "ticket" && i.epic === p.id && i.milestone === null))
-                : p.kind === "milestone"
-                  ? all.filter((i) => i.kind === "ticket" && i.milestone === p.id)
-                  : [];
-        const p = parent ? all.find((i) => i.id === parent.item.id) : undefined;
-        const list = parent ? (p ? childrenOf(p) : []) : all.filter((i) => i.kind === "epic");
-        return list.map((i) => new Node(summarize(i), childrenOf(i).length > 0));
+    post(m: SidebarToView): void {
+        void this.view?.webview.postMessage(m);
     }
 }
 
@@ -158,7 +146,7 @@ async function pushSessions(ticket: string, panel: vscode.WebviewPanel): Promise
     void panel.webview.postMessage(msg);
 }
 
-function refreshAll(tree: Tree): void {
+function refreshAll(tree: Sidebar): void {
     tree.refresh();
     const all = items();
     for (const [id, panel] of panels) {
@@ -166,15 +154,15 @@ function refreshAll(tree: Tree): void {
     }
 }
 
-function html(panel: vscode.WebviewPanel, media: vscode.Uri, id: string): string {
+function html(webview: vscode.Webview, media: vscode.Uri, script: string, id: string): string {
     const nonce = crypto.randomBytes(16).toString("base64");
-    const uri = (f: string) => panel.webview.asWebviewUri(vscode.Uri.joinPath(media, f)).toString();
+    const uri = (f: string) => webview.asWebviewUri(vscode.Uri.joinPath(media, f)).toString();
     const csp = [
         "default-src 'none'",
-        `style-src ${panel.webview.cspSource} 'unsafe-inline'`,
+        `style-src ${webview.cspSource} 'unsafe-inline'`,
         `script-src 'nonce-${nonce}'`,
-        `font-src ${panel.webview.cspSource} data:`,
-        `img-src ${panel.webview.cspSource} https: data:`,
+        `font-src ${webview.cspSource} data:`,
+        `img-src ${webview.cspSource} https: data:`,
     ].join("; ");
     const css = ["baukasten-base.css", "baukasten-vscode.css", "codicon.css", "board.css"]
         .map((f) => `<link rel="stylesheet" href="${uri(f)}">`)
@@ -189,12 +177,12 @@ ${css}
 </head>
 <body>
 <div id="root" data-id="${id}"></div>
-<script nonce="${nonce}" src="${uri("board.js")}"></script>
+<script nonce="${nonce}" src="${uri(script)}"></script>
 </body>
 </html>`;
 }
 
-function open(ctx: vscode.ExtensionContext, tree: Tree, id: string): void {
+function open(ctx: vscode.ExtensionContext, tree: Sidebar, id: string): void {
     const key = id.trim().toUpperCase();
     const existing = panels.get(key);
     if (existing) {
@@ -211,10 +199,10 @@ function open(ctx: vscode.ExtensionContext, tree: Tree, id: string): void {
     panels.set(key, panel);
     panel.onDidDispose(() => panels.delete(key));
     panel.webview.onDidReceiveMessage((m: ToHost) => void onMessage(ctx, tree, key, panel, m));
-    panel.webview.html = html(panel, media, key);
+    panel.webview.html = html(panel.webview, media, "board.js", key);
 }
 
-async function onMessage(ctx: vscode.ExtensionContext, tree: Tree, id: string, panel: vscode.WebviewPanel, m: ToHost): Promise<void> {
+async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string, panel: vscode.WebviewPanel, m: ToHost): Promise<void> {
     const fail = (e: unknown) => {
         const msg: ToView = { type: "error", message: (e as Error).message };
         void panel.webview.postMessage(msg);
@@ -318,16 +306,21 @@ async function ask(prompt: string): Promise<string | undefined> {
     return title?.trim() || undefined;
 }
 
+/* A command's subject: an id passed directly, or the `data-vscode-context`
+ * of the sidebar row it was invoked on. */
 function idOf(arg: unknown): string | undefined {
     if (typeof arg === "string") return arg;
-    if (arg instanceof Node) return arg.item.id;
+    if (typeof arg === "object" && arg !== null && typeof (arg as { id?: unknown }).id === "string") {
+        return (arg as { id: string }).id;
+    }
     return undefined;
 }
 
 export function activate(ctx: vscode.ExtensionContext): void {
-    const tree = new Tree();
-    const treeView = vscode.window.createTreeView("coboard.tree", { treeDataProvider: tree, showCollapseAll: true });
-    ctx.subscriptions.push(treeView);
+    const tree: Sidebar = new Sidebar(ctx, (id) => open(ctx, tree, id));
+    ctx.subscriptions.push(
+        vscode.window.registerWebviewViewProvider("coboard.tree", tree, { webviewOptions: { retainContextWhenHidden: true } }),
+    );
 
     const reg = (name: string, fn: (...args: unknown[]) => unknown) =>
         ctx.subscriptions.push(vscode.commands.registerCommand(name, (...args: unknown[]) => guarded(() => fn(...args))));
@@ -340,6 +333,7 @@ export function activate(ctx: vscode.ExtensionContext): void {
         }),
     );
     reg("coboard.refresh", () => refreshAll(tree));
+    reg("coboard.collapseAll", () => tree.post({ type: "collapseAll" }));
     reg("coboard.showEdit", (arg) => (typeof arg === "string" ? showEdit(arg, null) : undefined));
     reg("coboard.open", (arg) => {
         const id = idOf(arg);
@@ -397,19 +391,6 @@ export function activate(ctx: vscode.ExtensionContext): void {
         const s = await startSession(b.root, t.id, purpose.trim());
         void vscode.window.showInformationMessage(`lap session ${s} started for ${t.id}.`);
     });
-    reg("coboard.goTo", async () => {
-        const pick = await vscode.window.showQuickPick(
-            search(items(), "").map((s) => ({
-                label: `${s.id}  ${s.title}`,
-                description: s.kind === "ticket" ? `${s.status}${s.assignee ? ` · ${s.assignee}` : ""}` : s.kind,
-                detail: s.kind === "epic" ? undefined : [s.epic, s.milestone].filter(Boolean).join(" › "),
-                id: s.id,
-            })),
-            { placeHolder: "Go to an epic, milestone or ticket", matchOnDescription: true, matchOnDetail: true },
-        );
-        if (pick) open(ctx, tree, pick.id);
-    });
-
     // Agents write through the MCP server; the log is the only signal.
     let timer: NodeJS.Timeout | undefined;
     const later = () => {

@@ -1,5 +1,5 @@
 /* Copies the stylesheets a board tab links and bundles the two halves: the
- * webview (React + baukasten, for the browser) and the extension host (with
+ * webviews (a tab and the sidebar; React + baukasten, for the browser) and the extension host (with
  * coboard inlined, so the .vsix needs no node_modules). */
 
 import * as esbuild from "esbuild";
@@ -31,8 +31,8 @@ fs.writeFileSync(
 );
 
 await esbuild.build({
-    entryPoints: [path.join(root, "webview", "main.tsx")],
-    outfile: path.join(out, "board.js"),
+    entryPoints: { board: path.join(root, "webview", "main.tsx"), sidebar: path.join(root, "webview", "sidebar.tsx") },
+    outdir: out,
     bundle: true,
     format: "iife",
     platform: "browser",
