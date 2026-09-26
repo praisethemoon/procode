@@ -3,10 +3,12 @@
  * live through a file watcher. See cli/lap-cli/SPEC.md for the record schema.
  */
 
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { EMPTY_FILTER, HistoryFilter, query } from "./history";
 import {
     CommitRec,
     LapLog,
@@ -22,6 +24,7 @@ import {
     stateText,
     summaryLine,
 } from "./model";
+import type { ToHost, ToView } from "./protocol";
 
 const GROUPING_KEY = "lap.groupBySession";
 const STATE_SCHEME = "lap-state";
@@ -43,15 +46,8 @@ function findRepo(): Repo | undefined {
 }
 
 
-type Node =
-    | { type: "session"; session: SessionRec; active: boolean }
-    | { type: "no-session-group"; commits: CommitRec[] }
-    | { type: "commit"; commit: CommitRec };
-
-class LapTreeProvider implements vscode.TreeDataProvider<Node> {
-    private readonly emitter = new vscode.EventEmitter<Node | undefined>();
-    readonly onDidChangeTreeData = this.emitter.event;
-
+/* The log, read incrementally as it grows. */
+class LapLogSource {
     private repo: Repo | undefined;
     private reader: LogReader = createReader();
     private offset = 0;
@@ -66,7 +62,6 @@ class LapTreeProvider implements vscode.TreeDataProvider<Node> {
 
     async toggleGrouping(): Promise<void> {
         await this.state.update(GROUPING_KEY, !this.groupBySession);
-        this.emitter.fire(undefined);
     }
 
     private reset(repo: Repo | undefined): void {
@@ -128,7 +123,6 @@ class LapTreeProvider implements vscode.TreeDataProvider<Node> {
                 this.reset(this.repo);
             }
         }
-        this.emitter.fire(undefined);
     }
 
     get current(): LapLog {
@@ -142,114 +136,87 @@ class LapTreeProvider implements vscode.TreeDataProvider<Node> {
     get hasRepo(): boolean {
         return this.repo !== undefined;
     }
+}
 
-    getChildren(element?: Node): Node[] {
-        if (!element) {
-            if (!this.repo) {
-                return []; /* viewsWelcome takes over */
+/* The History view: a webview, because a native tree cannot hold the filter
+ * bar. The view says what is set; the host runs the query over the log
+ * (history.ts) and sends back one page, so the log's edit text never
+ * crosses. */
+class HistoryView implements vscode.WebviewViewProvider {
+    private view: vscode.WebviewView | null = null;
+    private filter: HistoryFilter = EMPTY_FILTER;
+    private page = 0;
+
+    constructor(
+        private readonly extensionUri: vscode.Uri,
+        private readonly source: LapLogSource,
+        private readonly onOpen: (id: string) => void,
+    ) {}
+
+    resolveWebviewView(view: vscode.WebviewView): void {
+        this.view = view;
+        const media = vscode.Uri.joinPath(this.extensionUri, "out", "media");
+        view.webview.options = { enableScripts: true, localResourceRoots: [media] };
+        view.webview.html = historyHtml(view.webview, media);
+        view.webview.onDidReceiveMessage((m: ToHost) => {
+            if (m.type === "query") {
+                this.filter = m.filter;
+                this.page = m.page;
+                this.push();
+            } else if (m.type === "open") {
+                this.onOpen(m.id);
             }
-            if (!this.groupBySession) {
-                return [...this.reader.log.commits]
-                    .reverse()
-                    .map((commit) => ({ type: "commit", commit }));
-            }
-            const roots: Node[] = [...this.reader.log.sessions]
-                .reverse()
-                .map((session) => ({
-                    type: "session",
-                    session,
-                    active: session.id === this.reader.log.activeSessionId,
-                }));
-            if (this.reader.log.noSession.length > 0) {
-                roots.push({
-                    type: "no-session-group",
-                    commits: this.reader.log.noSession,
-                });
-            }
-            return roots;
-        }
-        if (element.type === "session") {
-            return [...element.session.commits]
-                .reverse()
-                .map((commit) => ({ type: "commit", commit }));
-        }
-        if (element.type === "no-session-group") {
-            return [...element.commits]
-                .reverse()
-                .map((commit) => ({ type: "commit", commit }));
-        }
-        return [];
+        });
+        view.onDidDispose(() => {
+            this.view = null;
+        });
     }
 
-    getTreeItem(node: Node): vscode.TreeItem {
-        if (node.type === "session") {
-            const s = node.session;
-            const item = new vscode.TreeItem(
-                `${s.id}  ${summaryLine(s.msg)}`,
-                node.active
-                    ? vscode.TreeItemCollapsibleState.Expanded
-                    : vscode.TreeItemCollapsibleState.Collapsed,
-            );
-            const n = s.commits.length;
-            item.description = `${n} commit${n === 1 ? "" : "s"}${
-                node.active ? " • active" : ""
-            }`;
-            item.iconPath = new vscode.ThemeIcon(
-                node.active ? "play-circle" : "milestone",
-            );
-            item.tooltip = new vscode.MarkdownString(
-                `**${s.id}** — ${n} commit${n === 1 ? "" : "s"}\n\n` +
-                    `${s.msg}\n\n` +
-                    `started ${s.ts}` +
-                    (s.endTs
-                        ? `, ended ${s.endTs}`
-                        : node.active
-                          ? " — **active**"
-                          : " — open"),
-            );
-            item.contextValue = "lapSession";
-            return item;
-        }
-        if (node.type === "no-session-group") {
-            const n = node.commits.length;
-            const item = new vscode.TreeItem(
-                "no session",
-                vscode.TreeItemCollapsibleState.Collapsed,
-            );
-            item.description = `${n} commit${n === 1 ? "" : "s"}`;
-            item.iconPath = new vscode.ThemeIcon("circle-slash");
-            item.tooltip = "Commits recorded with --no-session";
-            return item;
-        }
-        const c = node.commit;
-        const item = new vscode.TreeItem(
-            `${c.id}  ${summaryLine(c.msg)}`,
-            vscode.TreeItemCollapsibleState.None,
-        );
-        item.description = `${c.file} · ${regionLabel(c)}`;
-        const icon =
-            c.op === "create"
-                ? "diff-added"
-                : c.op === "delete"
-                  ? "diff-removed"
-                  : "diff-modified";
-        item.iconPath = new vscode.ThemeIcon(icon);
-        const tooltip = new vscode.MarkdownString();
-        tooltip.appendMarkdown(
-            `**${c.id}** · ${c.file} · ${regionLabel(c)} · ${c.ts}` +
-                (c.session ? ` · session ${c.session}` : " · no session") +
-                "\n\n",
-        );
-        tooltip.appendText(c.msg);
-        item.tooltip = tooltip;
-        item.command = {
-            command: "lap.showCommit",
-            title: "Show Commit",
-            arguments: [c.id],
-        };
-        item.contextValue = "lapCommit";
-        return item;
+    /* The page for the view's last query, against the log as it is now. */
+    push(): void {
+        if (!this.view) return;
+        const log = this.source.current;
+        const msg: ToView = this.source.hasRepo
+            ? {
+                  type: "page",
+                  page: query(log, this.filter, { grouped: this.source.groupBySession, page: this.page, now: new Date() }),
+                  hasRepo: true,
+                  active: log.activeSessionId,
+              }
+            : { type: "page", page: null, hasRepo: false, active: null };
+        void this.view.webview.postMessage(msg);
     }
+
+    collapseAll(): void {
+        void this.view?.webview.postMessage({ type: "collapseAll" } satisfies ToView);
+    }
+}
+
+function historyHtml(webview: vscode.Webview, media: vscode.Uri): string {
+    const nonce = crypto.randomBytes(16).toString("base64");
+    const uri = (f: string) => webview.asWebviewUri(vscode.Uri.joinPath(media, f)).toString();
+    const csp = [
+        "default-src 'none'",
+        `style-src ${webview.cspSource} 'unsafe-inline'`,
+        `script-src 'nonce-${nonce}'`,
+        `font-src ${webview.cspSource}`,
+    ].join("; ");
+    const css = ["baukasten-base.css", "baukasten-vscode.css", "codicon.css", "lap.css"]
+        .map((f) => `<link rel="stylesheet" href="${uri(f)}">`)
+        .join("\n");
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+${css}
+</head>
+<body>
+<div id="root"></div>
+<script nonce="${nonce}" src="${uri("lap-history.js")}"></script>
+</body>
+</html>`;
 }
 
 /* Serves a file's replayed content at "before"/"after" a commit, so the
@@ -261,7 +228,7 @@ class StateContentProvider implements vscode.TextDocumentContentProvider {
     private readonly emitter = new vscode.EventEmitter<vscode.Uri>();
     readonly onDidChange = this.emitter.event;
 
-    constructor(private readonly provider: LapTreeProvider) {}
+    constructor(private readonly provider: LapLogSource) {}
 
     provideTextDocumentContent(uri: vscode.Uri): string {
         const parts = uri.path.replace(/^\//, "").split("/");
@@ -413,13 +380,7 @@ async function openCommitDiff(
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-    const tree = new LapTreeProvider(context.workspaceState);
-    const view = vscode.window.createTreeView("lapHistory", {
-        treeDataProvider: tree,
-        showCollapseAll: true,
-    });
-    context.subscriptions.push(view);
-
+    const tree = new LapLogSource(context.workspaceState);
     const states = new StateContentProvider(tree);
     context.subscriptions.push(
         vscode.workspace.registerTextDocumentContentProvider(
@@ -443,6 +404,9 @@ export function activate(context: vscode.ExtensionContext): void {
             : undefined;
         void openCommitDiff(commit, session, comments);
     };
+
+    const history = new HistoryView(context.extensionUri, tree, showCommitDiff);
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider("lapHistory", history));
 
     const status = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left,
@@ -480,6 +444,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         refreshTimer = setTimeout(() => {
             tree.refresh();
+            history.push();
             updateStatus();
         }, 200);
     };
@@ -498,10 +463,15 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand("lap.refresh", () => {
             tree.refresh();
+            history.push();
             updateStatus();
         }),
         vscode.commands.registerCommand("lap.toggleGrouping", async () => {
             await tree.toggleGrouping();
+            history.push();
+        }),
+        vscode.commands.registerCommand("lap.collapseAll", () => {
+            history.collapseAll();
         }),
         vscode.commands.registerCommand("lap.showCommit", (id: string) => {
             showCommitDiff(id);

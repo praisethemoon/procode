@@ -11,7 +11,7 @@
  *                  procode's own command and MCP provider
  *   out/extension.js   the entry, with Lap History, Knowledge, the Board and
  *                      Artifacts bundled in
- *   out/media/         the webview assets of Knowledge, the Board and Artifacts
+ *   out/media/         the webview assets of Lap History, Knowledge, the Board and Artifacts
  *   out/pdfjs/         pdf.js, which Knowledge imports at runtime to read PDFs
  *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/artifacts.js
  *                      the MCP servers, one file each
@@ -108,7 +108,7 @@ fs.writeFileSync(path.join(dist, "package.json"), JSON.stringify(manifest, null,
 
 /* ------------------------------------------------------------------ assets */
 
-for (const part of ["index-vscode", "coboard-vscode", "artifacts-vscode"]) {
+for (const part of PARTS) {
     const media = path.join(repo, "packages", part, "out", "media");
     for (const f of fs.readdirSync(media)) {
         if (!f.endsWith(".map")) fs.copyFileSync(path.join(media, f), path.join(dist, "out", "media", f));

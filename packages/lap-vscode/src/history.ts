@@ -1,0 +1,264 @@
+/* What the History view shows: the log narrowed by a filter, one page of it.
+ * Pure — the extension host runs it and sends only the page to the webview,
+ * because the log carries the text of every edit and a long one is megabytes.
+ * No vscode import, so the tests run it with plain node.
+ *
+ * WHAT A MATCH SHOWS. A session found by its own id or message shows every
+ * commit it has (that pass the other filters); a session found through its
+ * commits shows only those commits. The time range, the kinds of change and
+ * the people narrow commits, and a session is shown when any of its commits
+ * survive — or, with none at all, when it started in range.
+ *
+ * ORDER. Newest first, always: the most recent session on top, and its most
+ * recent commit first. Commits made outside any session are one group, last.
+ */
+
+import { CommitRec, LapLog, SessionRec, regionLabel, summaryLine } from "./model";
+
+export const RANGES = ["recent", "today", "3d", "week", "30d"] as const;
+export type Range = (typeof RANGES)[number];
+
+export const RANGE_LABELS: Readonly<Record<Range, string>> = {
+    recent: "Most recent",
+    today: "Today",
+    "3d": "Last 3 days",
+    week: "Last week",
+    "30d": "Last 30 days",
+};
+
+export const OPS = ["edit", "create", "delete"] as const;
+export const STATES = ["active", "open", "ended", "none"] as const;
+export type SessionState = (typeof STATES)[number];
+
+export const STATE_LABELS: Readonly<Record<SessionState, string>> = {
+    active: "active",
+    open: "open",
+    ended: "ended",
+    none: "no session",
+};
+
+export interface HistoryFilter {
+    readonly text: string;
+    readonly range: Range;
+    /* Each: the values any one of which a commit (or session) must have;
+     * empty means the field does not filter. */
+    readonly ops: readonly string[];
+    readonly users: readonly string[];
+    readonly states: readonly SessionState[];
+}
+
+export const EMPTY_FILTER: HistoryFilter = { text: "", range: "recent", ops: [], users: [], states: [] };
+
+/* The deeper filters, counted for the chevron's badge. */
+export function fieldCount(f: HistoryFilter): number {
+    return f.ops.length + f.users.length + f.states.length;
+}
+
+export function isFiltering(f: HistoryFilter): boolean {
+    return f.text.trim() !== "" || f.range !== "recent" || fieldCount(f) > 0;
+}
+
+export const PAGE_SIZE = { grouped: 25, raw: 50 } as const;
+
+/* The earliest moment in range, in milliseconds, or null for no limit.
+ * "Today" starts at local midnight, the way a person means it; the others
+ * count back from now. */
+export function rangeStart(range: Range, now: Date): number | null {
+    const day = 24 * 60 * 60 * 1000;
+    switch (range) {
+        case "recent":
+            return null;
+        case "today":
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        case "3d":
+            return now.getTime() - 3 * day;
+        case "week":
+            return now.getTime() - 7 * day;
+        default:
+            return now.getTime() - 30 * day;
+    }
+}
+
+/* One commit as a row: what the list shows and what its tooltip says, and
+ * none of the edit's text. */
+export interface CommitRow {
+    readonly id: string;
+    readonly ts: string;
+    readonly file: string;
+    readonly op: string;
+    readonly region: string;
+    readonly summary: string;
+    readonly msg: string;
+    readonly session: string | null;
+    readonly user: string | null;
+}
+
+export interface SessionRow {
+    /* The session's id, or null for the commits made outside any session. */
+    readonly id: string | null;
+    readonly summary: string;
+    readonly msg: string;
+    readonly ts: string;
+    readonly endTs: string | null;
+    readonly state: SessionState;
+    /* The commits shown, newest first, and how many the session has in all. */
+    readonly commits: readonly CommitRow[];
+    readonly total: number;
+    /* Found by its own id or message, rather than through its commits. */
+    readonly matchedSelf: boolean;
+}
+
+export interface HistoryPage {
+    readonly grouped: boolean;
+    /* Grouped: the sessions on this page. Raw: the commits on it. */
+    readonly sessions: readonly SessionRow[];
+    readonly commits: readonly CommitRow[];
+    /* 0-based, clamped to what exists. */
+    readonly page: number;
+    readonly pages: number;
+    readonly pageSize: number;
+    /* Sessions (grouped) or commits (raw) that matched, over every page. */
+    readonly total: number;
+    /* Everyone who has committed, for the filter's chips. */
+    readonly users: readonly string[];
+}
+
+const LAP_ID = /^[ls]\d+$/i;
+
+function textOf(q: string): { q: string; exact: boolean } {
+    const t = q.trim().toLowerCase();
+    return { q: t, exact: LAP_ID.test(t) };
+}
+
+/* An id asks for that item and nothing else: L12 is not L120. */
+function idMatches(id: string, t: { q: string; exact: boolean }): boolean {
+    return t.exact ? id.toLowerCase() === t.q : id.toLowerCase().includes(t.q);
+}
+
+function commitText(c: CommitRec, t: { q: string; exact: boolean }): boolean {
+    if (t.q === "") return true;
+    if (t.exact) return idMatches(c.id, t);
+    return idMatches(c.id, t) || c.msg.toLowerCase().includes(t.q) || c.file.toLowerCase().includes(t.q);
+}
+
+function sessionText(s: SessionRec, t: { q: string; exact: boolean }): boolean {
+    if (t.q === "") return false;
+    if (t.exact) return idMatches(s.id, t);
+    return idMatches(s.id, t) || s.msg.toLowerCase().includes(t.q);
+}
+
+function time(ts: string): number {
+    const n = Date.parse(ts);
+    return Number.isNaN(n) ? 0 : n;
+}
+
+export function stateOf(s: SessionRec, activeId: string | null): SessionState {
+    if (s.id === activeId) return "active";
+    return s.endTs ? "ended" : "open";
+}
+
+export function row(c: CommitRec): CommitRow {
+    return {
+        id: c.id,
+        ts: c.ts,
+        file: c.file,
+        op: c.op,
+        region: regionLabel(c),
+        summary: summaryLine(c.msg),
+        msg: c.msg,
+        session: c.session,
+        user: c.user,
+    };
+}
+
+export function query(
+    log: LapLog,
+    filter: HistoryFilter,
+    options: { grouped: boolean; page: number; now: Date },
+): HistoryPage {
+    const since = rangeStart(filter.range, options.now);
+    const t = textOf(filter.text);
+    const inRange = (ts: string) => since === null || time(ts) >= since;
+    /* Everything but the text: what a commit must pass wherever it is shown. */
+    const passes = (c: CommitRec) =>
+        inRange(c.ts) &&
+        (filter.ops.length === 0 || filter.ops.includes(c.op)) &&
+        (filter.users.length === 0 || (c.user !== null && filter.users.includes(c.user)));
+    const commitFilters = filter.ops.length > 0 || filter.users.length > 0;
+    const wantState = (s: SessionState) => filter.states.length === 0 || filter.states.includes(s);
+    const newestFirst = (cs: readonly CommitRec[]) => [...cs].reverse();
+    const users = [...new Set(log.commits.map((c) => c.user).filter((u): u is string => u !== null))].sort();
+
+    if (!options.grouped) {
+        const stateById = new Map(log.sessions.map((s) => [s.id, stateOf(s, log.activeSessionId)]));
+        const all = newestFirst(log.commits).filter((c) => {
+            const state = c.session !== null ? stateById.get(c.session) ?? "none" : "none";
+            return wantState(state) && passes(c) && commitText(c, t);
+        });
+        return paged(false, [], all.map(row), options.page, PAGE_SIZE.raw, users);
+    }
+
+    const rows: SessionRow[] = [];
+    for (const s of [...log.sessions].reverse()) {
+        const state = stateOf(s, log.activeSessionId);
+        if (!wantState(state)) continue;
+        const self = sessionText(s, t);
+        const shown = newestFirst(s.commits).filter((c) => passes(c) && (self || commitText(c, t)));
+        const emptyButStarted =
+            s.commits.length === 0 && !commitFilters && inRange(s.ts) && (t.q === "" || self);
+        if (shown.length === 0 && !emptyButStarted) continue;
+        rows.push({
+            id: s.id,
+            summary: summaryLine(s.msg),
+            msg: s.msg,
+            ts: s.ts,
+            endTs: s.endTs,
+            state,
+            commits: shown.map(row),
+            total: s.commits.length,
+            matchedSelf: self,
+        });
+    }
+    if (wantState("none") && log.noSession.length > 0) {
+        const shown = newestFirst(log.noSession).filter((c) => passes(c) && commitText(c, t));
+        if (shown.length > 0) {
+            const last = log.noSession[log.noSession.length - 1];
+            rows.push({
+                id: null,
+                summary: "no session",
+                msg: "Commits recorded with --no-session",
+                ts: last.ts,
+                endTs: null,
+                state: "none",
+                commits: shown.map(row),
+                total: log.noSession.length,
+                matchedSelf: false,
+            });
+        }
+    }
+    return paged(true, rows, [], options.page, PAGE_SIZE.grouped, users);
+}
+
+function paged(
+    grouped: boolean,
+    sessions: SessionRow[],
+    commits: CommitRow[],
+    page: number,
+    pageSize: number,
+    users: readonly string[],
+): HistoryPage {
+    const total = grouped ? sessions.length : commits.length;
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    const p = Math.min(Math.max(0, Math.floor(page)), pages - 1);
+    const from = p * pageSize;
+    return {
+        grouped,
+        sessions: grouped ? sessions.slice(from, from + pageSize) : [],
+        commits: grouped ? [] : commits.slice(from, from + pageSize),
+        page: p,
+        pages,
+        pageSize,
+        total,
+        users,
+    };
+}

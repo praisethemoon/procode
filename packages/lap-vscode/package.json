@@ -18,7 +18,8 @@
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "workspaceContains:.lap/log.jsonl"
+    "workspaceContains:.lap/log.jsonl",
+    "onView:lapHistory"
   ],
   "contributes": {
     "viewsContainers": {
@@ -35,16 +36,11 @@
         {
           "id": "lapHistory",
           "name": "History",
+          "type": "webview",
           "icon": "media/lap.svg"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "lapHistory",
-        "contents": "No lap repository found in this workspace.\nCreate one from a terminal with `lap init`, then commits will appear here live."
-      }
-    ],
     "commands": [
       {
         "command": "lap.refresh",
@@ -59,6 +55,11 @@
       {
         "command": "lap.showCommit",
         "title": "Lap: Show Commit"
+      },
+      {
+        "command": "lap.collapseAll",
+        "title": "Lap: Collapse All",
+        "icon": "$(collapse-all)"
       }
     ],
     "menus": {
@@ -72,18 +73,27 @@
           "command": "lap.toggleGrouping",
           "when": "view == lapHistory",
           "group": "navigation@1"
+        },
+        {
+          "command": "lap.collapseAll",
+          "when": "view == lapHistory",
+          "group": "navigation@3"
         }
       ],
       "commandPalette": [
         {
           "command": "lap.showCommit",
           "when": "false"
+        },
+        {
+          "command": "lap.collapseAll",
+          "when": "false"
         }
       ]
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && tsc -p tsconfig.webview.json && node scripts/build.mjs",
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test \"out/test/*.test.js\"",
     "vscode:prepublish": "npm run compile"
@@ -91,6 +101,14 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "esbuild": "^0.24.0"
+  },
+  "dependencies": {
+    "baukasten-ui": "^0.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }
