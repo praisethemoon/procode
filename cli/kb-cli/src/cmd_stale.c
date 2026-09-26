@@ -241,6 +241,11 @@ static int32_t refresh_source(Arena *a, bool json, const char *id) {
     char *text;
     size_t len;
     if (!read_text_arg(a, src->locator, &text, &len)) {
+        /* Recorded, so `kb sources` shows which sources could not be read
+         * again. If even that append fails, the refusal below still stands. */
+        char ignored[256];
+        (void)source_set_status(a, &s, src, "fetch_failed", ignored,
+                                sizeof ignored);
         store_close(&s);
         errdet_begin("fetch_failed");
         errdet_str("locator", src->locator);
@@ -254,8 +259,9 @@ static int32_t refresh_source(Arena *a, bool json, const char *id) {
     Document d;
     bool changed = false, blob_written = false;
     if (!refile_document(a, &s, doc, text, len, hash, doc->title, doc->mime,
-                         doc->meta, now, &d, &changed, &blob_written, err,
-                         sizeof err)) {
+                         doc->meta, NULL, now, &d, &changed, &blob_written,
+                         err, sizeof err) ||
+        !source_set_status(a, &s, src, "ok", err, sizeof err)) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;

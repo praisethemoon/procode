@@ -330,6 +330,65 @@ t "the query-string spelling of a flag also works"
 out=$("$KB" ls --collection=notes --json)
 has "ls eq form" "$out" '"count":1'
 
+# -------------------------------------------------------------- filters
+mkdir -p filt
+kbf() { ( cd "$WORK/filt" && "$KB" "$@" ); }
+kbf init > /dev/null
+printf 'zzfilta\n' | kbf add --title "Completion Ports" --collection win \
+    --meta '{"year":2024,"tags":["iocp","win32"]}' > /dev/null
+printf 'zzfiltb\n' | kbf add --title "io_uring intro" --collection linux \
+    --url https://kernel.test/uring --meta '{"year":2023}' > /dev/null
+printf 'zzfiltc\n' | kbf add --title kqueue --collection bsd > /dev/null
+
+t "ls takes a list of collections and a text filter over title and locator"
+has "two collections" "$(kbf ls --collection win,linux --json)" '"count":2'
+has "q title" "$(kbf ls --q completion --json)" '"count":1'
+has "q locator" "$(kbf ls --q kernel.test --json)" '"count":1'
+
+t "meta filters: every key matches, a value in an array counts"
+has "meta number" "$(kbf ls --meta '{"year":2024}' --json)" '"count":1'
+has "meta in array" "$(kbf ls --meta '{"tags":"iocp"}' --json)" '"count":1'
+has "meta both keys" "$(kbf ls --meta '{"year":2023,"tags":"iocp"}' --json)" '"count":0'
+has "meta absent key" "$(kbf ls --meta '{"lang":"c"}' --json)" '"count":0'
+has "search meta" "$(kbf search zzfilta --meta '{"year":2024}' --json)" '"count":1'
+has "search meta miss" "$(kbf search zzfilta --meta '{"year":2023}' --json)" '"count":0'
+expect_grep '"error":"usage"' kbf ls --meta '[1]' --json
+
+t "--since takes a date or a timestamp and refuses anything else"
+has "since date" "$(kbf ls --since 2000-01-01 --json)" '"count":3'
+has "since future" "$(kbf ls --since 2999-01-01 --json)" '"count":0'
+expect_grep '"error":"usage"' kbf ls --since 2026-9-1 --json
+expect_grep '"error":"usage"' kbf search zzfilta --since yesterday --json
+
+t "the same text with a new title or meta records them and re-indexes nothing"
+out=$(printf 'zzfiltb\n' | kbf add --title "io_uring, an introduction" \
+        --collection linux --url https://kernel.test/uring \
+        --meta '{"year":2025}' --json)
+has "refile" "$out" '"reindexed":false'
+out=$(kbf get D-2 --json)
+has "new title" "$out" '"title":"io_uring, an introduction"'
+has "new meta" "$out" '"year":2025'
+printf 'zzfiltb\n' | kbf add --title "io_uring, an introduction" \
+    --collection linux --url https://kernel.test/uring > /dev/null
+has "meta kept" "$(kbf get D-2 --json)" '"year":2025'
+
+t "a source's etag is the one its latest fetch was filed with"
+printf 'zzfiltb\n' | kbf add --title "io_uring, an introduction" \
+    --collection linux --url https://kernel.test/uring --etag abc123 > /dev/null
+has "etag" "$(kbf sources show S-2 --json)" '"etag":"abc123"'
+printf 'zzfiltb rewritten\n' | kbf add --title "io_uring, an introduction" \
+    --collection linux --url https://kernel.test/uring > /dev/null
+has "etag cleared" "$(kbf sources show S-2 --json)" '"etag":null'
+has "status ok" "$(kbf sources --q kernel --json)" '"status":"ok"'
+
+t "Markdown or HTML piped with no type is recognised; a comment line is not"
+has "md" "$(printf '# Title\n\nbody\n' | kbf add --title md --collection sniff --json)" \
+    '"mime":"text/markdown"'
+has "html" "$(printf '<!doctype html><p>x' | kbf add --title h --collection sniff --json)" \
+    '"mime":"text/html"'
+has "cfg" "$(printf 'x=1\n# comment\n' | kbf add --title cfg --collection sniff --json)" \
+    '"mime":"text/plain"'
+
 # ------------------------------------------------------------------ get
 t "get returns one document"
 out=$("$KB" get D-1 --json)
@@ -1608,12 +1667,20 @@ t "a source that cannot be read again says why"
 mv srcs/notes.md srcs/notes.moved
 expect_grep '"error":"fetch_failed"' kbs refresh S-1 --json
 expect_grep '"details":{"locator":"[^"]*notes.md"}' kbs refresh S-1 --json
+expect_grep '"status":"fetch_failed"' kbs sources show S-1 --json
+expect_grep '"count":1' kbs sources --status fetch_failed --json
 expect_grep '"error":"fetch_failed"' kbs refresh S-2 --json
 expect_grep 'kb add --url' kbs refresh S-2 --json
 expect_grep '"error":"usage"' kbs refresh S-3 --json
 expect_grep '"error":"not_found"' kbs refresh S-99 --json
 expect_grep '"error":"usage"' kbs refresh S-1 --collection research --json
 expect_grep '"error":"usage"' kbs refresh D-1 --json
+
+t "a source read again after a failure is ok again"
+mv srcs/notes.moved srcs/notes.md
+expect_ok kbs refresh S-1
+expect_grep '"status":"ok"' kbs sources show S-1 --json
+expect_grep '"count":0' kbs sources --status fetch_failed --json
 
 # ---------------------------------------------------------------- compact
 mkdir -p comp

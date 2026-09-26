@@ -1,33 +1,13 @@
 #include "cmd.h"
 
-/* GET /documents (§2) with its ?collection=&source=&mime=&since= filters. */
+/* GET /documents (§2) with its ?collection=&source=&mime=&q=&since=
+ * filters, and meta (§1.2's "filterable"). */
 
 static const char *const VALUE_FLAGS[] = {
     "--collection", "--source",     "--mime",      "--since",
-    "--limit",      "--older-than", "--olderThan", NULL};
+    "--q",          "--meta",       "--limit",     "--older-than",
+    "--olderThan",  NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
-
-typedef struct {
-    const char *collection;
-    const char *source;
-    const char *mime;
-    const char *since;
-} Filters;
-
-static bool keep(const Filters *f, const Document *d, const Source *src) {
-    if (f->collection &&
-        (!src || strcmp(src->collection, f->collection) != 0))
-        return false;
-    if (f->source && strcmp(d->source, f->source) != 0)
-        return false;
-    if (f->mime && (!d->mime || strcmp(d->mime, f->mime) != 0))
-        return false;
-    /* ISO-8601 UTC with a fixed layout sorts lexicographically, so "newer
-     * than" is a string comparison and needs no calendar. */
-    if (f->since && (!d->fetched_at || strcmp(d->fetched_at, f->since) < 0))
-        return false;
-    return true;
-}
 
 int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
     bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
@@ -36,18 +16,18 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;
     }
-    Filters f;
-    f.collection = flag_value(argc, argv, VALUE_FLAGS, "--collection");
-    f.source = flag_value(argc, argv, VALUE_FLAGS, "--source");
-    f.mime = flag_value(argc, argv, VALUE_FLAGS, "--mime");
-    f.since = flag_value(argc, argv, VALUE_FLAGS, "--since");
+    char err[512];
+    DocQuery f;
+    if (!docquery_parse(a, argc, argv, VALUE_FLAGS, &f, err, sizeof err)) {
+        err_out(json, "usage", "%s", err);
+        return KB_EXIT_ERR;
+    }
     const char *limit_s = flag_value(argc, argv, VALUE_FLAGS, "--limit");
     int64_t limit = limit_s ? strtoll(limit_s, NULL, 10) : 0;
     if (limit_s && limit <= 0) {
         err_out(json, "usage", "--limit expects a positive number");
         return KB_EXIT_ERR;
     }
-    char err[512];
     Staleness st;
     if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
                         sizeof err)) {
@@ -77,7 +57,7 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
     for (size_t i = 0; i < s.documents.n; i++) {
         const Document *d = &s.documents.v[i];
         const Source *src = src_by_id(&s.sources, d->source);
-        if (!keep(&f, d, src))
+        if (!docquery_keep(a, &f, d, src))
             continue;
         if (limit && shown >= limit)
             break;

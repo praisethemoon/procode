@@ -30,7 +30,16 @@ import { Input, Select } from "baukasten-ui/core";
 
 import { KbCollection, KbDocument, KbHit, KbStatus } from "kb-js/pure";
 
-import { Row, browseQuery, browseRows, isSearching, searchQuery, searchRows } from "../src/view/rows";
+import {
+    BROWSE_LIMIT,
+    Row,
+    browseCut,
+    browseQuery,
+    browseRows,
+    isSearching,
+    searchQuery,
+    searchRows,
+} from "../src/view/rows";
 import { formatDate } from "../src/view/facts";
 import { Codicon, Resolved, StaleBadge, useDebounced, useQuery } from "./parts";
 import { onHostEvent, open, tag } from "./rpc";
@@ -103,11 +112,14 @@ function KnowledgeRow(props: { row: Row }): JSX.Element {
 /* ---------------------------------------------------------- the two lists */
 
 function BrowseList(props: { collection: string; staleDays: number }): JSX.Element {
-    const { state } = useQuery<KbDocument[]>("ls", browseQuery(props.collection));
+    const [all, setAll] = useState(false);
+    useEffect(() => setAll(false), [props.collection]);
+    const { state } = useQuery<KbDocument[]>("ls", browseQuery(props.collection, all));
     return (
         <Resolved state={state} loading="Reading the store…">
             {(documents) => {
-                const rows = browseRows(documents, Date.now(), props.staleDays);
+                const { shown, more } = browseCut(documents);
+                const rows = browseRows(all ? documents : shown, Date.now(), props.staleDays);
                 if (rows.length === 0) {
                     return (
                         <div className="kb-empty">
@@ -117,7 +129,19 @@ function BrowseList(props: { collection: string; staleDays: number }): JSX.Eleme
                         </div>
                     );
                 }
-                return <List rows={rows} />;
+                return (
+                    <>
+                        <List rows={rows} />
+                        {more && !all ? (
+                            <div className="kb-empty kb-more">
+                                Only the first {BROWSE_LIMIT} documents are listed; there are more.{" "}
+                                <button type="button" className="kb-action" onClick={() => setAll(true)}>
+                                    Show all
+                                </button>
+                            </div>
+                        ) : null}
+                    </>
+                );
             }}
         </Resolved>
     );

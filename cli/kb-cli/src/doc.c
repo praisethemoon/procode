@@ -38,6 +38,8 @@ char *doc_encode_source(Arena *a, const Source *s, size_t *out_len) {
     put_str(&sb, "title", s->title);
     put_str(&sb, "collection", s->collection);
     put_str(&sb, "createdAt", s->created_at);
+    if (s->status)
+        put_str(&sb, "status", s->status);
     sb_putc(&sb, '}');
     *out_len = sb.len;
     return sb_finish(&sb);
@@ -57,6 +59,8 @@ char *doc_encode_document(Arena *a, const Document *d, size_t *out_len) {
     put_str(&sb, "indexedAt", d->indexed_at);
     sb_printf(&sb, ",\"chunkCount\":%lu,\"chunkBase\":%lld",
               (unsigned long)d->chunk_count, (long long)d->chunk_base);
+    if (d->etag)
+        put_str(&sb, "etag", d->etag);
     if (d->meta) {
         /* the writer's bytes, unchanged: what was handed in is what comes
          * back out, not what a printer made of it */
@@ -208,6 +212,7 @@ bool srclog_load(Arena *a, const char *path, SourceList *out, char *err,
         s.title = jobj_str(j, "title");
         s.collection = jobj_str(j, "collection");
         s.created_at = jobj_str(j, "createdAt");
+        s.status = jobj_str(j, "status");
         if (!s.id || !s.kind || !s.locator || !s.collection) {
             snprintf(err, errsz, "%s line %d: source record missing a field",
                      path, i + 1);
@@ -368,6 +373,7 @@ bool doclog_load(Arena *a, const char *path, DocList *out, char *err,
         d.content_hash = jobj_str(j, "contentHash");
         d.fetched_at = jobj_str(j, "fetchedAt");
         d.indexed_at = jobj_str(j, "indexedAt");
+        d.etag = jobj_str(j, "etag");
         d.bytes = (uint64_t)jobj_int(j, "bytes", 0);
         d.chunk_count = (uint32_t)count;
         d.chunk_base = base;

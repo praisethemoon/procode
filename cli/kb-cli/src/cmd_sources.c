@@ -2,7 +2,8 @@
 
 /* §2's GET /sources and GET /sources/{id}:
  *
- *   kb sources [--collection C] [--kind K]   one row per source
+ *   kb sources [--collection C] [--kind K] [--status S] [--q text]
+ *                                           one row per source
  *   kb sources show S-n                      the source, its documents, and
  *                                            every time they were fetched
  *
@@ -11,7 +12,8 @@
  * documents it describes. Reading a source again is `kb refresh S-n`.
  */
 
-static const char *const VALUE_FLAGS[] = {"--collection", "--kind", NULL};
+static const char *const VALUE_FLAGS[] = {"--collection", "--kind",
+                                          "--status", "--q", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 static int32_t show(Arena *a, bool json, Store *s, const char *id) {
@@ -101,8 +103,11 @@ int32_t cmd_sources(Arena *a, int32_t argc, char **argv) {
     }
     const char *collection = flag_value(argc, argv, VALUE_FLAGS, "--collection");
     const char *kind = flag_value(argc, argv, VALUE_FLAGS, "--kind");
-    if (verb && (collection || kind)) {
-        err_out(json, "usage", "--collection and --kind narrow the list, not show");
+    const char *status = flag_value(argc, argv, VALUE_FLAGS, "--status");
+    const char *q = flag_value(argc, argv, VALUE_FLAGS, "--q");
+    if (verb && (collection || kind || status || q)) {
+        err_out(json, "usage",
+                "--collection, --kind, --status and --q narrow the list, not show");
         return KB_EXIT_ERR;
     }
 
@@ -132,6 +137,11 @@ int32_t cmd_sources(Arena *a, int32_t argc, char **argv) {
             if (collection && strcmp(src->collection, collection) != 0)
                 continue;
             if (kind && strcmp(src->kind, kind) != 0)
+                continue;
+            if (status && strcmp(src->status ? src->status : "ok", status) != 0)
+                continue;
+            if (q && !icase_contains(src->title ? src->title : "", q) &&
+                !icase_contains(src->locator, q))
                 continue;
             if (json) {
                 sb_printf(&sb, "%s{", shown ? "," : "");

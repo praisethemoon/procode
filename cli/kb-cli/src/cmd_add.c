@@ -2,6 +2,8 @@
 
 #include "sha256.h"
 
+#include <ctype.h>
+
 /* POST /documents (§2): the caller already has the text and hands it over
  * rather than causing a second fetch. This is the load-bearing route — an
  * agent files what it just read as it goes, so the second question on the
@@ -9,7 +11,7 @@
  */
 
 static const char *const VALUE_FLAGS[] = {
-    "--title", "--collection", "--url",  "--mime",
+    "--title", "--collection", "--url",  "--mime", "--etag",
     "--file",  "--meta",       "--meta-file", NULL};
 static const char *const BOOL_FLAGS[] = {"--json", "--batch", NULL};
 
@@ -40,6 +42,56 @@ static const char *mime_from_path(const char *path) {
         size_t m = strlen(map[i].ext);
         if (n > m && strcmp(path + n - m, map[i].ext) == 0)
             return map[i].mime;
+    }
+    return NULL;
+}
+
+/* The type of text that came with no name to read it from — piped, or handed
+ * over in a batch. Only the two structured types are recognised, and only on
+ * evidence a plain text file would not have by accident: an HTML document
+ * that says so on its first line, or Markdown that opens with a heading or
+ * has at least two section headings below the top level. A `# comment` line
+ * in a config file is one heading and not the first line, so it stays plain
+ * text; being wrong the other way costs no more than the sliding window. */
+static size_t atx_level(const char *line, size_t len) {
+    size_t n = 0;
+    while (n < len && n < 7 && line[n] == '#')
+        n++;
+    return (n >= 1 && n <= 6 && n < len && line[n] == ' ') ? n : 0;
+}
+
+static bool starts_icase(const char *s, size_t len, const char *prefix) {
+    size_t n = strlen(prefix);
+    if (len < n)
+        return false;
+    for (size_t i = 0; i < n; i++)
+        if (tolower((unsigned char)s[i]) != prefix[i])
+            return false;
+    return true;
+}
+
+static const char *mime_from_content(const char *text, size_t len) {
+    size_t i = 0;
+    if (len >= 3 && memcmp(text, "\xEF\xBB\xBF", 3) == 0)
+        i = 3;
+    while (i < len && (text[i] == ' ' || text[i] == '\t' || text[i] == '\r' ||
+                       text[i] == '\n'))
+        i++;
+    if (starts_icase(text + i, len - i, "<!doctype html") ||
+        starts_icase(text + i, len - i, "<html"))
+        return "text/html";
+    bool first = true;
+    uint32_t sections = 0;
+    for (size_t p = i; p < len;) {
+        const char *nl = memchr(text + p, '\n', len - p);
+        size_t end = nl ? (size_t)(nl - text) : len;
+        size_t level = atx_level(text + p, end - p);
+        if (first && level > 0)
+            return "text/markdown";
+        if (level >= 2 && ++sections >= 2)
+            return "text/markdown";
+        first = false;
+        p = end + 1;
     }
     return NULL;
 }
@@ -99,6 +151,7 @@ typedef struct {
     const char *file; /* the path the text was read from; NULL for stdin */
     const char *mime; /* NULL: inferred from the url or the file */
     const char *meta; /* a JSON object's text, or NULL */
+    const char *etag; /* the ETag the caller's fetch saw, or NULL */
     const char *content;
     size_t len;
     /* Filled by prepare. */
@@ -172,6 +225,8 @@ static bool prepare(Arena *a, Filing *f, const char **code, char *err,
     if (!f->mime)
         f->mime = mime_from_path(path_hint);
     if (!f->mime)
+        f->mime = mime_from_content(f->content, f->len);
+    if (!f->mime)
         f->mime = "text/plain";
     if (!chunk_mime_supported(f->mime)) {
         *code = "unsupported_mime";
@@ -198,8 +253,10 @@ static bool ingest(Arena *a, Store *s, const Filing *f, const char *now,
         /* The same locator again: a touch when the text is unchanged, a new
          * version under the same id when it is not. */
         if (!refile_document(a, s, existing_doc, f->content, f->len, f->hash,
-                             f->title, f->mime, f->meta, now, &out->d,
-                             &out->reindexed, &out->blob_written, err, errsz))
+                             f->title, f->mime, f->meta, f->etag, now,
+                             &out->d, &out->reindexed, &out->blob_written,
+                             err, errsz) ||
+            !source_set_status(a, s, existing_src, "ok", err, errsz))
             return false;
         out->lang = doc_lang(out->d.mime, out->d.path);
         out->created = false;
@@ -227,6 +284,8 @@ static bool ingest(Arena *a, Store *s, const Filing *f, const char *now,
     const char *source_id;
     if (existing_src) {
         source_id = existing_src->id;
+        if (!source_set_status(a, s, existing_src, "ok", err, errsz))
+            return false;
     } else {
         Source src;
         memset(&src, 0, sizeof src);
@@ -258,6 +317,7 @@ static bool ingest(Arena *a, Store *s, const Filing *f, const char *now,
     d->fetched_at = now;
     d->indexed_at = now;
     d->meta = f->meta;
+    d->etag = f->etag;
     d->chunk_count = (uint32_t)chunks.n;
     d->chunk_base = chunk_base;
     size_t len;
@@ -357,8 +417,8 @@ static bool open_store(Arena *a, Store *s, bool json, int32_t *rc) {
 /* ---- kb add --batch ------------------------------------------------------
  *
  * §2's POST /documents/batch: "many at once, one transaction". One JSON
- * object a line on stdin — title, collection and content, and url, mime and
- * meta when there are any — filed under one lock with one index rebuild.
+ * object a line on stdin — title, collection and content, and url, mime,
+ * meta and etag when there are any — filed under one lock with one index rebuild.
  *
  * ALL OR NOTHING, as far as the caller can cause it: every line is parsed and
  * prepared before the store is opened, so a bad line refuses the whole batch
@@ -400,6 +460,7 @@ static int32_t add_batch(Arena *a, bool json) {
         f->collection = jobj_str(j, "collection");
         f->url = jobj_str(j, "url");
         f->mime = jobj_str(j, "mime");
+        f->etag = jobj_str(j, "etag");
         JVal *c = jobj_get(j, "content");
         if (c && c->t == J_STR) {
             f->content = c->s.ptr;
@@ -496,6 +557,7 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
     f.url = flag_value(argc, argv, VALUE_FLAGS, "--url");
     f.file = flag_value(argc, argv, VALUE_FLAGS, "--file");
     f.mime = flag_value(argc, argv, VALUE_FLAGS, "--mime");
+    f.etag = flag_value(argc, argv, VALUE_FLAGS, "--etag");
     if (!f.title || !f.title[0]) {
         err_out(json, "usage", "kb add requires --title");
         return KB_EXIT_ERR;

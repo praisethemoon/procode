@@ -58,6 +58,10 @@ typedef struct {
     const char *title;
     const char *collection;
     const char *created_at; /* ISO-8601 UTC */
+    /* §1.2's status: NULL or "ok", or "fetch_failed" once reading it again
+     * failed. Recorded, not derived, because the failure left no document
+     * behind to derive it from; the next successful filing sets it back. */
+    const char *status;
 } Source;
 
 typedef struct {
@@ -69,6 +73,10 @@ typedef struct {
     const char *content_hash;
     const char *fetched_at;
     const char *indexed_at;
+    /* The HTTP ETag the caller saw when it fetched this text, or NULL. kb
+     * fetches nothing itself, so only whoever did can say; a source's etag
+     * (§1.2) is its latest document's. */
+    const char *etag;
     /* The writer's own bytes for a JSON object, or NULL. §1.2 calls meta
      * free-form and filterable but not schema-bound, so it is stored and
      * returned exactly as handed in; kb never interprets it. */

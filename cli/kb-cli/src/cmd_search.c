@@ -28,38 +28,20 @@
 static const char *const VALUE_FLAGS[] = {
     "--collection", "--mode",       "--k",         "--expand",
     "--source",     "--mime",       "--since",     "--min-score",
-    "--minScore",   "--older-than", "--olderThan", NULL};
+    "--minScore",   "--older-than", "--olderThan", "--meta",
+    NULL};
 static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef enum { MODE_KEYWORD, MODE_HYBRID, MODE_SEMANTIC } SearchMode;
 
 /* ---- filters ----------------------------------------------------------- */
 
-/* §4 takes `collection` as a comma-separated scope. An empty element is
- * skipped rather than matched, so a trailing comma is not a filter that
- * nothing satisfies. */
-static bool csv_has(const char *csv, const char *v) {
-    if (!csv)
-        return true;
-    size_t n = strlen(v);
-    for (const char *p = csv; *p;) {
-        const char *comma = strchr(p, ',');
-        size_t seg = comma ? (size_t)(comma - p) : strlen(p);
-        if (seg == n && strncmp(p, v, n) == 0)
-            return true;
-        if (!comma)
-            break;
-        p = comma + 1;
-    }
-    return false;
-}
-
+/* The scope is `ls`'s (docquery_keep), asked per document as the index
+ * scores it. */
 typedef struct {
+    Arena *a;
     Store *s;
-    const char *collection;
-    const char *source;
-    const char *mime;
-    const char *since;
+    DocQuery q;
 } DocFilter;
 
 static bool doc_keep(uint32_t doc_index, void *ud) {
@@ -67,18 +49,7 @@ static bool doc_keep(uint32_t doc_index, void *ud) {
     if (doc_index >= f->s->documents.n)
         return false;
     const Document *d = &f->s->documents.v[doc_index];
-    const Source *src = src_by_id(&f->s->sources, d->source);
-    if (f->collection && (!src || !csv_has(f->collection, src->collection)))
-        return false;
-    if (f->source && strcmp(d->source, f->source) != 0)
-        return false;
-    if (f->mime && (!d->mime || strcmp(d->mime, f->mime) != 0))
-        return false;
-    /* ISO-8601 UTC with a fixed layout sorts lexicographically, so "newer
-     * than" needs no calendar. */
-    if (f->since && (!d->fetched_at || strcmp(d->fetched_at, f->since) < 0))
-        return false;
-    return true;
+    return docquery_keep(f->a, &f->q, d, src_by_id(&f->s->sources, d->source));
 }
 
 typedef struct {
@@ -213,6 +184,13 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         }
     }
     char err[512];
+    DocFilter f;
+    memset(&f, 0, sizeof f);
+    f.a = a;
+    if (!docquery_parse(a, argc, argv, VALUE_FLAGS, &f.q, err, sizeof err)) {
+        err_out(json, "usage", "%s", err);
+        return KB_EXIT_ERR;
+    }
     Staleness st;
     if (!staleness_init(&st, older_than_arg(argc, argv, VALUE_FLAGS), err,
                         sizeof err)) {
@@ -240,13 +218,7 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
 
     TermList q = token_terms(a, query, strlen(query));
 
-    DocFilter f;
-    memset(&f, 0, sizeof f);
     f.s = &s;
-    f.collection = flag_value(argc, argv, VALUE_FLAGS, "--collection");
-    f.source = flag_value(argc, argv, VALUE_FLAGS, "--source");
-    f.mime = flag_value(argc, argv, VALUE_FLAGS, "--mime");
-    f.since = flag_value(argc, argv, VALUE_FLAGS, "--since");
 
     FtsHit *hits = NULL;
     size_t n =

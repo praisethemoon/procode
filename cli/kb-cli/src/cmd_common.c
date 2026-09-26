@@ -3,6 +3,7 @@
 #include "errdet.h"
 #include "sha256.h"
 
+#include <ctype.h>
 #include <stdarg.h>
 
 static bool is_value_flag(const char *const *value_flags, const char *arg) {
@@ -251,6 +252,156 @@ bool doc_chunks(Arena *a, Store *s, const Document *d, char **text,
     return true;
 }
 
+/* ---- which documents -------------------------------------------------- */
+
+static bool csv_has(const char *csv, const char *v) {
+    size_t n = strlen(v);
+    for (const char *p = csv; *p;) {
+        const char *comma = strchr(p, ',');
+        size_t seg = comma ? (size_t)(comma - p) : strlen(p);
+        if (seg == n && strncmp(p, v, n) == 0)
+            return true;
+        if (!comma)
+            break;
+        p = comma + 1;
+    }
+    return false;
+}
+
+bool icase_contains(const char *hay, const char *needle) {
+    size_t n = strlen(needle);
+    if (n == 0)
+        return true;
+    for (const char *p = hay; *p; p++) {
+        size_t i = 0;
+        while (i < n && p[i] &&
+               tolower((unsigned char)p[i]) == tolower((unsigned char)needle[i]))
+            i++;
+        if (i == n)
+            return true;
+    }
+    return false;
+}
+
+static bool jval_equal(const JVal *x, const JVal *y) {
+    if (x->t != y->t)
+        return false;
+    switch (x->t) {
+    case J_NULL:
+        return true;
+    case J_BOOL:
+        return x->b == y->b;
+    case J_NUM:
+        return x->num == y->num;
+    case J_STR:
+        return str_eq(x->s, y->s);
+    case J_ARR:
+        if (x->arr.n != y->arr.n)
+            return false;
+        for (size_t i = 0; i < x->arr.n; i++)
+            if (!jval_equal(x->arr.items[i], y->arr.items[i]))
+                return false;
+        return true;
+    case J_OBJ:
+        if (x->obj.n != y->obj.n)
+            return false;
+        for (size_t i = 0; i < x->obj.n; i++) {
+            const JVal *other = NULL;
+            for (size_t j = 0; j < y->obj.n && !other; j++)
+                if (str_eq(x->obj.keys[i], y->obj.keys[j]))
+                    other = y->obj.vals[j];
+            if (!other || !jval_equal(x->obj.vals[i], other))
+                return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+static bool meta_matches(Arena *a, const JVal *want, const char *meta) {
+    if (!meta)
+        return false;
+    char err[64];
+    JVal *have = json_parse(a, meta, strlen(meta), err, sizeof err);
+    if (!have || have->t != J_OBJ)
+        return false;
+    for (size_t i = 0; i < want->obj.n; i++) {
+        const JVal *v = NULL;
+        for (size_t j = 0; j < have->obj.n && !v; j++)
+            if (str_eq(want->obj.keys[i], have->obj.keys[j]))
+                v = have->obj.vals[j];
+        if (!v)
+            return false;
+        bool ok = jval_equal(v, want->obj.vals[i]);
+        for (size_t j = 0; !ok && v->t == J_ARR && j < v->arr.n; j++)
+            ok = jval_equal(v->arr.items[j], want->obj.vals[i]);
+        if (!ok)
+            return false;
+    }
+    return true;
+}
+
+bool docquery_parse(Arena *a, int32_t argc, char **argv,
+                    const char *const *value_flags, DocQuery *q, char *err,
+                    size_t errsz) {
+    memset(q, 0, sizeof *q);
+    q->collection = flag_value(argc, argv, value_flags, "--collection");
+    q->source = flag_value(argc, argv, value_flags, "--source");
+    q->mime = flag_value(argc, argv, value_flags, "--mime");
+    q->q = flag_value(argc, argv, value_flags, "--q");
+    const char *since = flag_value(argc, argv, value_flags, "--since");
+    if (since) {
+        char full[32];
+        if (strlen(since) == 10)
+            snprintf(full, sizeof full, "%sT00:00:00Z", since);
+        else
+            snprintf(full, sizeof full, "%s", since);
+        if (!plat_time_parse(full, &q->since)) {
+            snprintf(err, errsz,
+                     "--since expects a date (2026-09-01) or a timestamp "
+                     "(2026-09-01T12:00:00Z), not \"%s\"",
+                     since);
+            return false;
+        }
+        q->has_since = true;
+    }
+    const char *meta = flag_value(argc, argv, value_flags, "--meta");
+    if (meta) {
+        char why[128];
+        JVal *m = json_parse(a, meta, strlen(meta), why, sizeof why);
+        if (!m || m->t != J_OBJ) {
+            snprintf(err, errsz,
+                     "--meta expects a JSON object of the fields to match, "
+                     "e.g. '{\"year\":2024}'");
+            return false;
+        }
+        q->meta = m;
+    }
+    return true;
+}
+
+bool docquery_keep(Arena *a, const DocQuery *q, const Document *d,
+                   const Source *src) {
+    if (q->collection && (!src || !csv_has(q->collection, src->collection)))
+        return false;
+    if (q->source && strcmp(d->source, q->source) != 0)
+        return false;
+    if (q->mime && (!d->mime || strcmp(d->mime, q->mime) != 0))
+        return false;
+    if (q->has_since) {
+        /* A fetchedAt that cannot be read cannot be said to be newer. */
+        int64_t at;
+        if (!plat_time_parse(d->fetched_at, &at) || at < q->since)
+            return false;
+    }
+    if (q->q && !icase_contains(d->title ? d->title : "", q->q) &&
+        !(src && icase_contains(src->locator, q->q)))
+        return false;
+    if (q->meta && !meta_matches(a, q->meta, d->meta))
+        return false;
+    return true;
+}
+
 const Document *doc_by_chunk(const DocList *l, int64_t chunk_num,
                              uint32_t *ordinal) {
     for (size_t i = 0; i < l->n; i++) {
@@ -271,16 +422,40 @@ const Document *doc_by_chunk(const DocList *l, int64_t chunk_num,
 bool refile_document(Arena *a, Store *s, const Document *existing,
                      const char *content, size_t len, const char *hash,
                      const char *title, const char *mime, const char *meta,
-                     const char *now, Document *out, bool *reindexed,
-                     bool *blob_written, char *err, size_t errsz) {
+                     const char *etag, const char *now, Document *out,
+                     bool *reindexed, bool *blob_written, char *err,
+                     size_t errsz) {
     *blob_written = false;
-    if (strcmp(existing->content_hash, hash) == 0) {
+    /* Meta not given is meta kept; meta given replaces it whole. */
+    if (!meta)
+        meta = existing->meta;
+    bool same_split = strcmp(existing->content_hash, hash) == 0 &&
+                      strcmp(existing->mime ? existing->mime : "", mime) == 0;
+    if (same_split) {
+        /* The same text split the same way re-indexes nothing (§2). A new
+         * title or new meta still has to land: a touch carries only the
+         * date, so that case is a whole record over the same chunk range. */
+        if (!etag)
+            etag = existing->etag;
+        bool same_fields =
+            strcmp(existing->title ? existing->title : "", title) == 0 &&
+            strcmp(existing->meta ? existing->meta : "", meta ? meta : "") == 0 &&
+            strcmp(existing->etag ? existing->etag : "", etag ? etag : "") == 0;
+        Document d = *existing;
+        d.fetched_at = now;
         size_t n;
-        char *line = doc_encode_touch(a, existing->id, now, &n);
+        char *line;
+        if (same_fields) {
+            line = doc_encode_touch(a, existing->id, now, &n);
+        } else {
+            d.title = title;
+            d.meta = meta;
+            d.etag = etag;
+            line = doc_encode_document(a, &d, &n);
+        }
         if (!store_append(s, STORE_DOCUMENTS, line, n, err, errsz))
             return false;
-        *out = *existing;
-        out->fetched_at = now;
+        *out = d;
         *reindexed = false;
         return true;
     }
@@ -302,6 +477,7 @@ bool refile_document(Arena *a, Store *s, const Document *existing,
     d.title = title;
     d.mime = mime;
     d.meta = meta;
+    d.etag = etag;
     d.content_hash = hash;
     d.bytes = (uint64_t)len;
     d.fetched_at = now;
@@ -315,6 +491,18 @@ bool refile_document(Arena *a, Store *s, const Document *existing,
     *out = d;
     *reindexed = true;
     return true;
+}
+
+bool source_set_status(Arena *a, Store *s, const Source *src,
+                       const char *status, char *err, size_t errsz) {
+    const char *now = src->status ? src->status : "ok";
+    if (strcmp(now, status) == 0)
+        return true;
+    Source next = *src;
+    next.status = status;
+    size_t n;
+    char *line = doc_encode_source(a, &next, &n);
+    return store_append(s, STORE_SOURCES, line, n, err, errsz);
 }
 
 bool forget_records(Arena *a, Store *s, const char *const *docs, size_t ndocs,
@@ -417,8 +605,10 @@ SourceFacts source_facts(Arena *a, const Store *s, const char *source_id) {
         single_hash = d->content_hash;
         sha256_update(&c, d->content_hash, strlen(d->content_hash));
         if (!f.fetched_at ||
-            (d->fetched_at && strcmp(d->fetched_at, f.fetched_at) > 0))
+            (d->fetched_at && strcmp(d->fetched_at, f.fetched_at) > 0)) {
             f.fetched_at = d->fetched_at;
+            f.etag = d->etag;
+        }
     }
     if (f.doc_count == 1) {
         f.content_hash = single_hash;
@@ -528,6 +718,12 @@ void json_source(StrBuf *sb, const Store *s, const Source *src) {
     sb_printf(sb, ",\"fetchedAt\":\"%s\"", f.fetched_at ? f.fetched_at : "");
     sb_printf(sb, ",\"contentHash\":\"%s\"",
               f.content_hash ? f.content_hash : "");
-    sb_printf(sb, ",\"docCount\":%lu,\"bytes\":%llu,\"status\":\"ok\"",
+    sb_printf(sb, ",\"docCount\":%lu,\"bytes\":%llu",
               (unsigned long)f.doc_count, (unsigned long long)f.bytes);
+    sb_puts(sb, ",\"etag\":");
+    if (f.etag)
+        json_escape_c(sb, f.etag);
+    else
+        sb_puts(sb, "null");
+    sb_printf(sb, ",\"status\":\"%s\"", src->status ? src->status : "ok");
 }

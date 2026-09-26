@@ -169,19 +169,27 @@ export function isSearching(q: string): boolean {
 
 /* What `GET /documents` is asked for in the browse state.
  *
- * The limit is a ceiling on a sidebar and not a page: there is no paging in §2
- * and a rail that stopped at two hundred rows without saying so would be a
- * store that looked smaller than it is. The surface says how many it drew. */
+ * The limit keeps a first paint of a large store cheap; it is not a page, and
+ * index-ui §2 wants every document in scope reachable. One row more than is
+ * drawn is asked for, so the list knows it was cut and says so, and `all`
+ * asks with no limit at all when the reader wants the rest. */
 export const BROWSE_LIMIT = 200;
 export const SEARCH_K = 50;
 
-export function browseQuery(collection: string): Record<string, unknown> {
-    const input: Record<string, unknown> = { limit: BROWSE_LIMIT };
+export function browseQuery(collection: string, all: boolean = false): Record<string, unknown> {
+    const input: Record<string, unknown> = all ? {} : { limit: BROWSE_LIMIT + 1 };
     const scope = collection.trim();
     if (scope.length > 0) {
         input["collection"] = scope;
     }
     return input;
+}
+
+/* The rows to draw, and whether the store holds more than that. */
+export function browseCut<T>(documents: readonly T[]): { shown: readonly T[]; more: boolean } {
+    return documents.length > BROWSE_LIMIT
+        ? { shown: documents.slice(0, BROWSE_LIMIT), more: true }
+        : { shown: documents, more: false };
 }
 
 export function searchQuery(collection: string): Record<string, unknown> {

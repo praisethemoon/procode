@@ -166,15 +166,11 @@ test("a store filed into and read back through this package", async (t) => {
         assert.equal(row.id, added.document);
         assert.equal(row.collection, "win32-iocp");
         assert.equal(row.locator, "https://learn.microsoft.test/win32/iocp");
-        /* `text/plain`, AND THAT IS THE CLI'S ANSWER RATHER THAN A DISAPPOINT-
-         * MENT. `kb add` guesses the type from the locator's extension, and
-         * `.../win32/iocp` has none — so a page that is markdown is filed as
-         * plain text unless the caller says otherwise. It matters here because
-         * §3.2 of the UI spec renders by mime: a document filed this way would
-         * read as a wall of unformatted text with its own hashes in it. The
-         * caller that knows — a surface filing the file it has open — passes
-         * `mime`, and the next assertion is that doing so wins. */
-        assert.equal(row.mime, "text/plain");
+        /* `.../win32/iocp` has no extension to guess from, so `kb add` reads
+         * the text itself: it opens with a heading, so it is Markdown and §3.2
+         * of the UI spec renders it as such rather than as a wall of text with
+         * its own hashes in it. */
+        assert.equal(row.mime, "text/markdown");
         assert.ok(row.bytes > 0);
         assert.ok(row.chunkCount >= 1);
         assert.deepEqual(row.meta, { authors: ["MSDN"], year: 2026 });
@@ -186,11 +182,11 @@ test("a store filed into and read back through this package", async (t) => {
             title: "io_uring",
             collection: "io-uring",
             url: "https://kernel.test/io_uring",
-            mime: "text/markdown",
+            mime: "text/plain",
         });
         const typedRow = (await work.kb.ls({ collection: "io-uring" }))[0];
         assert.equal(typedRow.id, typed.document);
-        assert.equal(typedRow.mime, "text/markdown");
+        assert.equal(typedRow.mime, "text/plain");
 
         /* And the filters, which are the argv this package builds. */
         assert.equal((await work.kb.ls({ collection: "win32-iocp" })).length, 1);
@@ -508,6 +504,8 @@ test("sources through this package: listed, shown with their history, and a file
         assert.equal(src.kind, "file");
         assert.equal(src.docCount, 1);
         assert.deepEqual((await work.kb.sources({ collection: "research" })).length, 2);
+        assert.equal(src.status, "ok");
+        assert.equal(src.etag, null);
 
         const same = await work.kb.refreshSource(src.id);
         assert.equal(same.changed, false);

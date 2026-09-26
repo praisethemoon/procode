@@ -45,22 +45,42 @@ function putNumber(argv: string[], flag: string, value: number | null | undefine
 /* ------------------------------------------------------------ the reads */
 
 export interface LsOptions {
-    collection?: string | null;
+    /* One collection or several (§2 and §4 take the same comma list). */
+    collection?: readonly string[] | string | null;
     source?: string | null;
     mime?: string | null;
-    /* An ISO-8601 instant. The store compares these as strings — a fixed
-     * layout sorts lexicographically — so anything else silently filters
-     * nothing rather than failing. */
+    /* A kb timestamp or a bare date; the store refuses anything else. */
     since?: string | null;
+    /* A case-insensitive substring of the title or the locator. */
+    q?: string | null;
+    /* Every key must match (§1.2's "filterable"); an array value in a
+     * document matches any one of its elements. */
+    meta?: Readonly<Record<string, unknown>> | null;
     limit?: number | null;
+}
+
+/* The comma list both routes take, from one name or several. */
+function collectionList(c: readonly string[] | string | null | undefined): string | null {
+    const joined = Array.isArray(c)
+        ? c.map((x) => x.trim()).filter((x) => x.length > 0).join(",")
+        : c;
+    return typeof joined === "string" ? joined : null;
+}
+
+function putMeta(argv: string[], meta: Readonly<Record<string, unknown>> | null | undefined): void {
+    if (meta !== undefined && meta !== null) {
+        argv.push("--meta", JSON.stringify(meta));
+    }
 }
 
 export function lsArgv(options: LsOptions = {}): string[] {
     const argv = ["ls"];
-    put(argv, "--collection", options.collection);
+    put(argv, "--collection", collectionList(options.collection));
     put(argv, "--source", options.source);
     put(argv, "--mime", options.mime);
     put(argv, "--since", options.since);
+    put(argv, "--q", options.q);
+    putMeta(argv, options.meta);
     putNumber(argv, "--limit", options.limit);
     return argv;
 }
@@ -138,21 +158,20 @@ export interface SearchOptions {
     source?: string | null;
     mime?: string | null;
     since?: string | null;
+    meta?: Readonly<Record<string, unknown>> | null;
     minScore?: number | null;
 }
 
 export function searchArgv(query: string, options: SearchOptions = {}): string[] {
     const argv = ["search"];
-    const collection = Array.isArray(options.collection)
-        ? options.collection.map((c) => c.trim()).filter((c) => c.length > 0).join(",")
-        : options.collection;
-    put(argv, "--collection", typeof collection === "string" ? collection : null);
+    put(argv, "--collection", collectionList(options.collection));
     put(argv, "--mode", options.mode);
     putNumber(argv, "--k", options.k);
     putNumber(argv, "--expand", options.expand);
     put(argv, "--source", options.source);
     put(argv, "--mime", options.mime);
     put(argv, "--since", options.since);
+    putMeta(argv, options.meta);
     putNumber(argv, "--min-score", options.minScore);
     /* The subject last, behind `--` when it could be read as a flag. The query
      * is NOT trimmed away when it is blank: an empty search is the caller's
@@ -188,6 +207,8 @@ export interface AddOptions {
     url?: string | null;
     mime?: string | null;
     meta?: Readonly<Record<string, unknown>> | null;
+    /* The HTTP ETag the caller's own fetch saw; kb fetches nothing itself. */
+    etag?: string | null;
 }
 
 export function addArgv(options: AddOptions): string[] {
@@ -196,9 +217,8 @@ export function addArgv(options: AddOptions): string[] {
     argv.push("--collection", options.collection);
     put(argv, "--url", options.url);
     put(argv, "--mime", options.mime);
-    if (options.meta !== undefined && options.meta !== null) {
-        argv.push("--meta", JSON.stringify(options.meta));
-    }
+    putMeta(argv, options.meta);
+    put(argv, "--etag", options.etag);
     /* stdin, always. A caller handing over a path instead would be asking the
      * store to read a file this process has already read, which is one more
      * thing that can disagree about what was filed. */
@@ -216,6 +236,7 @@ export interface BatchDocument {
     url?: string | null;
     mime?: string | null;
     meta?: Readonly<Record<string, unknown>> | null;
+    etag?: string | null;
 }
 
 export function addBatchArgv(): string[] {
@@ -231,6 +252,7 @@ export function batchLines(documents: readonly BatchDocument[]): string {
             if (typeof d.url === "string" && d.url.trim() !== "") line["url"] = d.url.trim();
             if (typeof d.mime === "string" && d.mime.trim() !== "") line["mime"] = d.mime.trim();
             if (d.meta !== undefined && d.meta !== null) line["meta"] = d.meta;
+            if (typeof d.etag === "string" && d.etag !== "") line["etag"] = d.etag;
             return JSON.stringify(line) + "\n";
         })
         .join("");
@@ -323,16 +345,21 @@ export function forgetArgv(id: string): string[] {
     return ["forget", id];
 }
 
-/* §2's GET /sources, narrowed by collection and kind, and GET /sources/{id}. */
+/* §2's GET /sources, narrowed by collection, kind, status and text, and
+ * GET /sources/{id}. */
 export interface SourcesOptions {
     collection?: string | null;
     kind?: string | null;
+    status?: string | null;
+    q?: string | null;
 }
 
 export function sourcesArgv(options: SourcesOptions = {}): string[] {
     const argv = ["sources"];
     put(argv, "--collection", options.collection);
     put(argv, "--kind", options.kind);
+    put(argv, "--status", options.status);
+    put(argv, "--q", options.q);
     return argv;
 }
 

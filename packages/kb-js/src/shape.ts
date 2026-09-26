@@ -101,6 +101,7 @@ export function readSource(v: unknown): KbSource {
         contentHash: str(s["contentHash"]),
         docCount: num(s["docCount"]),
         bytes: num(s["bytes"]),
+        etag: typeof s["etag"] === "string" ? s["etag"] : null,
         status: str(s["status"]),
     };
 }

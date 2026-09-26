@@ -91,9 +91,50 @@ bool doc_chunks(Arena *a, Store *s, const Document *d, char **text,
 const Document *doc_by_chunk(const DocList *l, int64_t chunk_num,
                              uint32_t *ordinal);
 
+/* ---- which documents (§2's GET /documents, §4's filters) ---------------
+ *
+ * ONE FILTER, READ ONE WAY, FOR `ls` AND `search`. A collection list that
+ * `search` accepted and `ls` did not, or a `since` one of them validated,
+ * would make the same scope mean two things.
+ *
+ * - `--collection a,b`   any of the named collections
+ * - `--source S-n`, `--mime M`
+ * - `--since T`          fetched at or after T: a kb timestamp, or a bare
+ *                        date meaning its midnight UTC. Anything else is
+ *                        refused rather than compared as a string, where
+ *                        "2026-9-1" would sort after every September date.
+ * - `--meta '{...}'`     every key must match: the same JSON value, or, where
+ *                        the document's value is an array, one of its
+ *                        elements. The same shape `kb add --meta` takes.
+ * - `--q text`           (ls) a case-insensitive substring of the title or
+ *                        the locator
+ */
+typedef struct {
+    const char *collection;
+    const char *source;
+    const char *mime;
+    const char *q;
+    bool has_since;
+    int64_t since;
+    const JVal *meta;
+} DocQuery;
+
+/* A case-insensitive (ASCII) substring test; an empty needle is in anything. */
+bool icase_contains(const char *hay, const char *needle);
+
+bool docquery_parse(Arena *a, int32_t argc, char **argv,
+                    const char *const *value_flags, DocQuery *q, char *err,
+                    size_t errsz);
+bool docquery_keep(Arena *a, const DocQuery *q, const Document *d,
+                   const Source *src);
+
 /* A document that already exists, handed its text again, in a store already
  * open for write. Unchanged text is a touch: §2's "re-indexes nothing and
- * updates fetchedAt". Changed text is a new version under the same id with a
+ * updates fetchedAt" — unless it comes with a new title or new meta, which
+ * are recorded over the same chunks. `meta` NULL keeps the document's own;
+ * `etag` NULL keeps it for the same text and clears it for new text, since an
+ * ETag names one version of a page;
+ * a new mime changes the split, so it counts as changed text. Changed text is a new version under the same id with a
  * fresh chunk range — the old chunk ids go with the text they named rather
  * than being handed to different passages (§1.1). `out` is the record now in
  * force. When *reindexed the caller rebuilds the keyword index; a touch
@@ -102,8 +143,15 @@ const Document *doc_by_chunk(const DocList *l, int64_t chunk_num,
 bool refile_document(Arena *a, Store *s, const Document *existing,
                      const char *content, size_t len, const char *hash,
                      const char *title, const char *mime, const char *meta,
-                     const char *now, Document *out, bool *reindexed,
-                     bool *blob_written, char *err, size_t errsz);
+                     const char *etag, const char *now, Document *out,
+                     bool *reindexed, bool *blob_written, char *err,
+                     size_t errsz);
+
+/* Records a source's status (§1.2) when it differs from the one in force:
+ * "fetch_failed" when reading it again failed, "ok" when something was filed
+ * from it since. Appends nothing when the status already holds. */
+bool source_set_status(Arena *a, Store *s, const Source *src,
+                       const char *status, char *err, size_t errsz);
 
 /* Forgets documents, then sources, in a store already open for write: one
  * forget record each, documents first so no document is ever left naming a
@@ -183,6 +231,7 @@ typedef struct {
     uint64_t bytes;
     const char *fetched_at; /* NULL when the source has no documents */
     const char *content_hash;
+    const char *etag;       /* the newest document's, or NULL */
 } SourceFacts;
 
 SourceFacts source_facts(Arena *a, const Store *s, const char *source_id);

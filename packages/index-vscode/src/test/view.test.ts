@@ -14,6 +14,7 @@ import { KbDocument, KbHit } from "kb-js/pure";
 
 import {
     BROWSE_LIMIT,
+    browseCut,
     LINE_LIMIT,
     browseQuery,
     browseRows,
@@ -107,10 +108,17 @@ test("the browse list is newest first, and an undated row sorts last", () => {
 test("the browse query never sends a blank collection", () => {
     /* A blank `collection=` filters for the empty-string collection, which is
      * nobody's question. */
-    assert.deepEqual(browseQuery(""), { limit: BROWSE_LIMIT });
-    assert.deepEqual(browseQuery("   "), { limit: BROWSE_LIMIT });
+    assert.deepEqual(browseQuery(""), { limit: BROWSE_LIMIT + 1 });
+    assert.deepEqual(browseQuery("   "), { limit: BROWSE_LIMIT + 1 });
     assert.equal(browseQuery(" papers ").collection, "papers");
     assert.equal("collection" in searchQuery(""), false);
+});
+
+test("a browse list that was cut knows it, and asking for all sends no limit", () => {
+    const many = Array.from({ length: BROWSE_LIMIT + 1 }, (_, i) => i);
+    assert.deepEqual(browseCut(many), { shown: many.slice(0, BROWSE_LIMIT), more: true });
+    assert.deepEqual(browseCut(many.slice(0, BROWSE_LIMIT)).more, false);
+    assert.deepEqual(browseQuery("papers", true), { collection: "papers" });
 });
 
 test("a search row keeps the store's order, its verdict and its matched paths", () => {

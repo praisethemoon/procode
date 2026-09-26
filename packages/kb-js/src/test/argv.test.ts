@@ -65,6 +65,37 @@ test("every filter §2 names is a flag, and the value is trimmed", () => {
     );
 });
 
+test("ls takes several collections, a text filter and meta, as search does", () => {
+    assert.deepEqual(lsArgv({ collection: ["win32", " io-uring ", ""], q: "ports", meta: { year: 2024 } }), [
+        "ls",
+        "--collection",
+        "win32,io-uring",
+        "--q",
+        "ports",
+        "--meta",
+        '{"year":2024}',
+    ]);
+    assert.deepEqual(searchArgv("x", { meta: { tags: "iocp" } }), ["search", "--meta", '{"tags":"iocp"}', "x"]);
+    assert.deepEqual(sourcesArgv({ status: "fetch_failed", q: "kernel" }), [
+        "sources",
+        "--status",
+        "fetch_failed",
+        "--q",
+        "kernel",
+    ]);
+    assert.deepEqual(addArgv({ title: "T", collection: "c", etag: "abc" }), [
+        "add",
+        "--title",
+        "T",
+        "--collection",
+        "c",
+        "--etag",
+        "abc",
+        "--file",
+        "-",
+    ]);
+});
+
 test("a limit that is not a number is left off rather than sent as one", () => {
     /* `--limit NaN` is a parse failure at the far end, and the far end is
      * where a caller would have to read the reason. */

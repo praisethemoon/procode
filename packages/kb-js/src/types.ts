@@ -34,6 +34,9 @@ export interface KbSource {
     readonly contentHash: string;
     readonly docCount: number;
     readonly bytes: number;
+    /* The ETag the latest fetch was filed with, when its fetcher gave one. */
+    readonly etag: string | null;
+    /* "ok", or "fetch_failed" once reading it again failed. */
     readonly status: string;
 }
 

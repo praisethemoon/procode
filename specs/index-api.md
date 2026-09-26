@@ -61,6 +61,11 @@ content handed in directly. `Document` is one addressable item within it.
 page, its canonical URL and section path; for source code, its language and
 symbol list. It is filterable but not schema-bound.
 
+`etag` is the HTTP ETag the caller's fetch saw, handed over with the content;
+the binary fetches nothing itself (§12.2), so it cannot learn one. `status` is
+`ok`, or `fetch_failed` once reading the source again failed, until something
+is filed from it again.
+
 ### 1.3 Collections
 
 A collection is a flat named scope — `win32-iocp`, `io-uring`, `papers`,
@@ -145,7 +150,7 @@ than in the log, so re-ingesting an unchanged page writes nothing.
 | `GET /sources/{id}` | full, with document count and fetch history |
 | `POST /sources/{id}/refresh` | refetch, compare by hash, re-embed only what changed. A `file` source is read again; a `url` one is re-filed through `POST /documents` while §12.2 keeps HTTP out of the binary |
 | `DELETE /sources/{id}` | forget it and every document under it |
-| `GET /documents` | rows. `?collection=&source=&mime=&q=&since=` |
+| `GET /documents` | rows. `?collection=&source=&mime=&q=&since=&meta=`. `collection` is a comma list as in §4; `since` a timestamp or a date; `meta` a JSON object whose every key must match, an array value matching any one element |
 | `GET /documents/{id}` | metadata. `?include=text,chunks,links` |
 | `DELETE /documents/{id}` | forget one |
 
