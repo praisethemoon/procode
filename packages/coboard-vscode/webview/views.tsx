@@ -5,7 +5,7 @@ import { Button, Icon, TextArea } from "baukasten-ui/core";
 import { useState } from "react";
 
 import type { LapCommit } from "coboard/lap";
-import { EPIC_STATUSES, MILESTONE_STATUSES, PRIORITIES, SIZES, TICKET_STATUSES } from "coboard/model";
+import { Archived, EPIC_STATUSES, MILESTONE_STATUSES, PRIORITIES, SIZES, TICKET_STATUSES } from "coboard/model";
 import type { EpicView, MilestoneView, Summary, TicketView } from "coboard/query";
 import { CommitGroup, groupCommits, splitPath } from "../src/commits";
 import { ViewMode, columns, moves } from "../src/kanban";
@@ -19,7 +19,41 @@ function update(id: string, fields: Fields): void {
     send({ type: "update", id, fields });
 }
 
-function Header(props: { id: string; title: string; trail: (Summary | null)[]; actions?: JSX.Element }): JSX.Element {
+/* Who archived an item and why, and the way back: Unarchive for an item
+ * archived itself, a link to the epic or milestone it is archived with. */
+function ArchivedBanner(props: { id: string; a: Archived }): JSX.Element {
+    const a = props.a;
+    return (
+        <div className="cb-archived" role="status">
+            <Icon name="archive" />
+            <div className="cb-archived-text">
+                {a.via ? (
+                    <>
+                        <strong>Archived with <IdLink id={a.via} /></strong>
+                        <span className="cb-muted"> · unarchive {a.via} to bring it back</span>
+                    </>
+                ) : (
+                    <>
+                        <strong>Archived</strong>
+                        <span className="cb-muted">
+                            {" "}
+                            {a.at.slice(0, 10)}
+                            {a.by ? ` by ${a.by}` : ""}
+                        </span>
+                    </>
+                )}
+                {a.reason ? <div className="cb-archived-reason">{a.reason}</div> : null}
+            </div>
+            {a.via ? null : (
+                <Button size="sm" variant="secondary" onClick={() => send({ type: "unarchive", id: props.id })}>
+                    Unarchive
+                </Button>
+            )}
+        </div>
+    );
+}
+
+function Header(props: { id: string; title: string; trail: (Summary | null)[]; archived?: Archived; actions?: JSX.Element }): JSX.Element {
     return (
         <header className="cb-header">
             <div className="cb-trail">
@@ -41,11 +75,17 @@ function Header(props: { id: string; title: string; trail: (Summary | null)[]; a
                 </h1>
                 <div className="cb-row">
                     {props.actions}
+                    {props.archived ? null : (
+                        <Button size="sm" variant="ghost" title={`Archive ${props.id}`} onClick={() => send({ type: "archive", id: props.id })}>
+                            <Icon name="archive" />
+                        </Button>
+                    )}
                     <Button size="sm" variant="ghost" title={`Delete ${props.id}`} onClick={() => send({ type: "delete", id: props.id })}>
                         <Icon name="trash" />
                     </Button>
                 </div>
             </div>
+            {props.archived ? <ArchivedBanner id={props.id} a={props.archived} /> : null}
         </header>
     );
 }
@@ -176,7 +216,7 @@ export function Epic(props: { v: EpicView; mode: ViewMode }): JSX.Element {
     const { epic, milestones, tickets, allTickets, counts } = props.v;
     return (
         <article>
-            <Header id={epic.id} title={epic.title} trail={[]} />
+            <Header id={epic.id} title={epic.title} trail={[]} archived={epic.archived} />
             <div className="cb-fields">
                 <Pick label="Status" value={epic.status} options={opts(EPIC_STATUSES)} onChange={(status) => update(epic.id, { status })} />
                 <label className="cb-field">
@@ -243,7 +283,7 @@ export function Milestone(props: { v: MilestoneView; choices: Choices; mode: Vie
     const { milestone, epic, tickets, counts } = props.v;
     return (
         <article>
-            <Header id={milestone.id} title={milestone.title} trail={[epic]} />
+            <Header id={milestone.id} title={milestone.title} trail={[epic]} archived={milestone.archived} />
             <div className="cb-fields">
                 <Pick label="Status" value={milestone.status} options={opts(MILESTONE_STATUSES)} onChange={(status) => update(milestone.id, { status })} />
                 <Pick
@@ -451,7 +491,7 @@ export function Ticket(props: {
     const milestones = props.choices.milestones.filter((m) => m.epic === t.epic);
     return (
         <article>
-            <Header id={t.id} title={t.title} trail={[epic, milestone]} />
+            <Header id={t.id} title={t.title} trail={[epic, milestone]} archived={t.archived} />
             <div className="cb-fields">
                 <Pick label="Status" value={t.status} options={opts(TICKET_STATUSES)} onChange={(status) => update(t.id, { status })} />
                 <Pick label="Priority" value={t.priority} options={opts(PRIORITIES)} onChange={(priority) => update(t.id, { priority })} />

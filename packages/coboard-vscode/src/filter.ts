@@ -32,14 +32,19 @@ export interface Filter {
      * means the field does not filter. */
     readonly fields: Readonly<Record<Field, readonly string[]>>;
     /* Hide what is finished: done tickets, and done epics and milestones. A
-     * standing preference rather than a query, so clearing leaves it set. */
+     * standing preference rather than a query, so clearing leaves it set, as
+ * it leaves `archived`. */
     readonly openOnly: boolean;
+    /* Show archived items too. Off, they are not on the board at all: not
+     * matched, not context, not counted. */
+    readonly archived: boolean;
 }
 
 export const EMPTY: Filter = {
     text: "",
     fields: { status: [], kind: [], priority: [], size: [], assignee: [], label: [] },
     openOnly: false,
+    archived: false,
 };
 
 export function fieldCount(f: Filter): number {
@@ -57,7 +62,12 @@ export function isActive(f: Filter): boolean {
 
 /* The ✕: the text and every field, but not the open-only preference. */
 export function clear(f: Filter): Filter {
-    return { ...EMPTY, openOnly: f.openOnly };
+    return { ...EMPTY, openOnly: f.openOnly, archived: f.archived };
+}
+
+/* The items the filter works over: archived ones only when asked for. */
+function pool(all: readonly Summary[], f: Filter): readonly Summary[] {
+    return f.archived ? all : all.filter((s) => !s.archived);
 }
 
 export function toggle(f: Filter, field: Field, value: string): Filter {
@@ -105,7 +115,8 @@ export function matches(s: Summary, f: Filter): boolean {
 
 /* The ids to show, and among them the ones that matched (the rest are there
  * for context). With no filter, everything is shown and nothing is marked. */
-export function visible(all: readonly Summary[], f: Filter): { shown: Set<string>; matched: Set<string> } {
+export function visible(everything: readonly Summary[], f: Filter): { shown: Set<string>; matched: Set<string> } {
+    const all = pool(everything, f);
     if (!isActive(f)) return { shown: new Set(all.map((s) => s.id)), matched: new Set() };
     const byId = new Map(all.map((s) => [s.id, s]));
     const matched = new Set(all.filter((s) => matches(s, f)).map((s) => s.id));
@@ -154,7 +165,8 @@ export function options(all: readonly Summary[]): Readonly<Record<Field, readonl
  * because values within a field are alternatives and choosing one more only
  * ever adds its items. Counts are of matches, not of the context shown
  * around them. */
-export function counts(all: readonly Summary[], f: Filter): Readonly<Record<Field, ReadonlyMap<string, number>>> {
+export function counts(everything: readonly Summary[], f: Filter): Readonly<Record<Field, ReadonlyMap<string, number>>> {
+    const all = pool(everything, f);
     const out = {} as Record<Field, Map<string, number>>;
     for (const field of FIELDS) {
         const others: Filter = { ...f, fields: { ...f.fields, [field]: [] } };

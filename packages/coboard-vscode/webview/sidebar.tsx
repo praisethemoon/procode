@@ -39,7 +39,7 @@ function restore(): Saved {
     const f = s?.filter;
     const filter: Filter =
         f && typeof f.text === "string" && f.fields
-            ? { text: f.text, fields: { ...EMPTY.fields, ...f.fields }, openOnly: f.openOnly === true }
+            ? { text: f.text, fields: { ...EMPTY.fields, ...f.fields }, openOnly: f.openOnly === true, archived: f.archived === true }
             : EMPTY;
     return { filter, collapsed: Array.isArray(s?.collapsed) ? s!.collapsed : [] };
 }
@@ -128,6 +128,16 @@ function FilterBar(props: {
                 >
                     <Codicon name="issues" />
                 </button>
+                <button
+                    type="button"
+                    className={`sb-quick${filter.archived ? " sb-on" : ""}`}
+                    title={filter.archived ? "Showing archived items: click to hide them" : "Include archived items"}
+                    aria-label="Include archived items"
+                    aria-pressed={filter.archived}
+                    onClick={() => onChange({ ...filter, archived: !filter.archived })}
+                >
+                    <Codicon name="archive" />
+                </button>
             </div>
             {open ? (
                 <div className="sb-fields">
@@ -201,19 +211,24 @@ function Row(props: {
     const s = n.s;
     const hasKids = n.children.length > 0;
     const expanded = hasKids && (forceOpen || !collapsed.has(s.id));
-    const context = JSON.stringify({ webviewSection: s.kind, id: s.id, preventDefaultContextMenuItems: true });
+    const context = JSON.stringify({
+        webviewSection: s.kind,
+        id: s.id,
+        coboardArchived: s.archived === true,
+        preventDefaultContextMenuItems: true,
+    });
     const dim = filtering && !matched.has(s.id);
     return (
         <>
             <div
-                className={`sb-row${dim ? " sb-dim" : ""}`}
+                className={`sb-row${dim ? " sb-dim" : ""}${s.archived ? " sb-row-archived" : ""}`}
                 style={{ paddingLeft: `calc(${depth} * var(--sb-indent) + var(--bk-spacing-1))` }}
                 role="treeitem"
                 aria-expanded={hasKids ? expanded : undefined}
                 aria-level={depth + 1}
                 tabIndex={0}
                 data-vscode-context={context}
-                title={`${s.id} — ${s.title}\n${s.kind}, ${s.status}`}
+                title={`${s.id} — ${s.title}\n${s.kind}, ${s.status}${s.archived ? ", archived" : ""}`}
                 onClick={() => send({ type: "open", id: s.id })}
                 onKeyDown={(e) => {
                     if (e.key === "Enter") send({ type: "open", id: s.id });
@@ -233,6 +248,7 @@ function Row(props: {
                 </span>
                 <Codicon name={iconOf(s)} className={`sb-icon sb-${s.kind === "ticket" ? s.status : s.kind}`} />
                 <span className="sb-title">{s.title}</span>
+                {s.archived ? <Codicon name="archive" className="sb-archived" /> : null}
                 <span className="sb-desc">{s.kind === "ticket" ? `${s.id} · ${s.status}` : s.id}</span>
                 <span className="sb-actions">
                     {s.kind === "epic" ? (

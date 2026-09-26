@@ -43,6 +43,8 @@ export type ToHost =
     | { readonly type: "move"; readonly id: string; readonly epic?: string; readonly milestone?: string | null }
     | { readonly type: "comment"; readonly ticket: string; readonly body: string }
     | { readonly type: "delete"; readonly id: string }
+    | { readonly type: "archive"; readonly id: string }
+    | { readonly type: "unarchive"; readonly id: string }
     | { readonly type: "startSession"; readonly ticket: string }
     | { readonly type: "commits"; readonly session: string }
     | { readonly type: "showEdit"; readonly commit: string; readonly sessionMsg?: string }

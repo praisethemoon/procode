@@ -110,3 +110,16 @@ test("open only hides what is done, keeps a done parent as context, and survives
     assert.equal(g.openOnly, true);
     assert.equal(hasQuery(g), false);
 });
+
+test("archived items are off the board unless included, and then marked as matches like any other", () => {
+    const b = [...board, s("E-9", "Old epic", { archived: true }), s("T-50", "Old ticket", { epic: "E-9", archived: true, labels: ["spec"] })];
+    assert.equal(visible(b, EMPTY).shown.has("T-50"), false, "not shown with no filter at all");
+    assert.equal(visible(b, { ...EMPTY, text: "old" }).shown.size, 0, "nor found by text");
+    assert.equal(counts(b, EMPTY).label.get("spec"), 1, "nor counted");
+    const inc = { ...EMPTY, archived: true };
+    assert.ok(visible(b, inc).shown.has("T-50"));
+    assert.deepEqual(ids(visible(b, { ...inc, text: "old" }).matched), ["E-9", "T-50"]);
+    assert.equal(counts(b, inc).label.get("spec"), 2);
+    assert.equal(visible(b, { ...inc, openOnly: true }).shown.has("T-50"), true, "open only still applies by status");
+    assert.equal(clear({ ...inc, text: "x" }).archived, true, "the ✕ leaves it set");
+});

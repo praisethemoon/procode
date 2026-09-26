@@ -58,8 +58,10 @@ function requireBoard(): Board {
     return b;
 }
 
+/* Every item, archived ones included: the sidebar filters them itself, and
+ * an archived item's tab still opens. */
 function items(): Item[] {
-    return currentBoard()?.all() ?? [];
+    return currentBoard()?.all({ archived: "include" }) ?? [];
 }
 
 function author(): string {
@@ -112,7 +114,7 @@ class Sidebar implements vscode.WebviewViewProvider {
     }
 
     refresh(): void {
-        this.post({ type: "items", items: search(items(), ""), hasFolder: folder() !== null });
+        this.post({ type: "items", items: search(items(), "", { archived: "include" }), hasFolder: folder() !== null });
     }
 
     post(m: SidebarToView): void {
@@ -290,6 +292,12 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string
             case "delete":
                 await vscode.commands.executeCommand("coboard.delete", m.id);
                 return;
+            case "archive":
+                await vscode.commands.executeCommand("coboard.archive", m.id);
+                return;
+            case "unarchive":
+                await vscode.commands.executeCommand("coboard.unarchive", m.id);
+                return;
             case "startSession":
                 await vscode.commands.executeCommand("coboard.startSession", m.ticket);
                 await pushSessions(m.ticket, panel);
@@ -432,6 +440,29 @@ export function activate(ctx: vscode.ExtensionContext): void {
         if (ok !== "Delete") return;
         b.remove(item.id);
         panels.get(item.id)?.dispose();
+        refreshAll(tree);
+    });
+    reg("coboard.archive", async (arg) => {
+        const id = idOf(arg);
+        if (!id) return;
+        const b = requireBoard();
+        const item = b.get(id);
+        const under = b
+            .all({ archived: "include" })
+            .filter((c) => !c.archived && ((c.kind !== "epic" && c.epic === item.id) || (c.kind === "ticket" && c.milestone === item.id)));
+        const reason = await vscode.window.showInputBox({
+            title: `Archive ${item.id}${under.length > 0 ? ` and the ${under.length} item${under.length === 1 ? "" : "s"} under it` : ""}`,
+            prompt: "Why, optionally. Archived items leave the board's lists and search; Unarchive brings them back.",
+            placeHolder: "e.g. shipped in 0.1",
+        });
+        if (reason === undefined) return;
+        b.archive(item.id, { by: author(), reason });
+        refreshAll(tree);
+    });
+    reg("coboard.unarchive", (arg) => {
+        const id = idOf(arg);
+        if (!id) return;
+        requireBoard().unarchive(id);
         refreshAll(tree);
     });
     reg("coboard.startSession", async (arg) => {
