@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { Summary } from "coboard";
 
-import { EMPTY, UNASSIGNED, fieldCount, isActive, matches, options, toggle, visible } from "../filter";
+import { EMPTY, UNASSIGNED, counts, fieldCount, isActive, matches, options, toggle, visible } from "../filter";
 
 const s = (id: string, title: string, extra: Partial<Summary> = {}): Summary =>
     ({
@@ -77,4 +77,19 @@ test("the options are the fixed vocabularies and what occurs on the board", () =
     assert.ok(o.status.includes("blocked") && o.status.includes("open"));
     assert.deepEqual(o.assignee, ["claude", UNASSIGNED], "unassigned sorts last");
     assert.deepEqual(o.label, ["coboard-vscode", "kb-cli", "spec"]);
+});
+
+test("counts say how many items each value would match, given the other fields and the text", () => {
+    const all = counts(board, EMPTY);
+    assert.equal(all.status.get("doing"), 2);
+    assert.equal(all.status.get("open"), 3, "epics and milestones are open");
+    assert.equal(all.assignee.get(UNASSIGNED), 1);
+    assert.equal(all.label.get("blocked"), undefined, "a value nothing has counts nothing");
+    // Another field narrows the counts; the field's own selection does not.
+    const f = toggle(toggle(EMPTY, "label", "kb-cli"), "status", "doing");
+    const c = counts(board, f);
+    assert.equal(c.status.get("doing"), 1);
+    assert.equal(c.status.get("done"), undefined);
+    assert.equal(c.label.get("coboard-vscode"), 1, "choosing another label would add T-34");
+    assert.equal(counts(board, { ...EMPTY, text: "gaps" }).kind.get("ticket"), 1);
 });

@@ -349,41 +349,70 @@ body {
     color: var(--bk-color-input-placeholder);
 }
 
+/* One row per field: the label in a fixed column, its chips wrapping beside it. */
 .sb-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 8px;
+    row-gap: 5px;
+    align-items: start;
     padding: 8px 0 4px;
 }
+.sb-group {
+    display: contents;
+}
 .sb-group-label {
+    padding-top: 2px;
+    line-height: 16px;
     font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
     color: var(--bk-color-foreground-muted);
-    margin-bottom: 3px;
 }
 .sb-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 3px;
+    min-width: 0;
 }
 .sb-chip {
-    padding: 1px 8px;
-    border: 1px solid var(--bk-color-border);
-    border-radius: 10px;
-    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--bk-color-foreground) 9%, transparent);
     color: var(--bk-color-foreground);
     font: inherit;
     font-size: 11px;
     cursor: pointer;
 }
 .sb-chip:hover {
-    background: var(--bk-color-list-hover);
+    background: color-mix(in srgb, var(--bk-color-foreground) 16%, transparent);
 }
-.sb-chip.sb-on {
+.sb-chip:focus-visible {
+    outline: 1px solid var(--bk-color-focus);
+    outline-offset: 1px;
+}
+.sb-chip .codicon {
+    font-size: 12px;
+}
+.sb-chip-n {
+    opacity: 0.7;
+    font-variant-numeric: tabular-nums;
+}
+.sb-chip.sb-none {
+    opacity: 0.5;
+}
+.sb-chip.sb-on,
+.sb-chip.sb-on:hover {
     background: var(--bk-color-primary);
     border-color: var(--bk-color-primary);
     color: var(--bk-color-primary-foreground);
+    opacity: 1;
+}
+.sb-chip.sb-on .sb-chip-n {
+    opacity: 0.85;
 }
 
 .sb-tree {

@@ -130,3 +130,23 @@ export function options(all: readonly Summary[]): Readonly<Record<Field, readonl
         label: sorted(labels),
     };
 }
+
+/* For each field, how many items each of its values would match, given the
+ * text and every other field as they are set: the number a chip promises
+ * before it is clicked. A field's own selection is left out of its counts,
+ * because values within a field are alternatives and choosing one more only
+ * ever adds its items. Counts are of matches, not of the context shown
+ * around them. */
+export function counts(all: readonly Summary[], f: Filter): Readonly<Record<Field, ReadonlyMap<string, number>>> {
+    const out = {} as Record<Field, Map<string, number>>;
+    for (const field of FIELDS) {
+        const others: Filter = { ...f, fields: { ...f.fields, [field]: [] } };
+        const n = new Map<string, number>();
+        for (const s of all) {
+            if (!matches(s, others)) continue;
+            for (const v of values(s, field)) n.set(v, (n.get(v) ?? 0) + 1);
+        }
+        out[field] = n;
+    }
+    return out;
+}

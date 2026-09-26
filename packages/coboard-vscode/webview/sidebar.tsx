@@ -17,7 +17,7 @@ import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type { Summary } from "coboard";
-import { EMPTY, FIELDS, FIELD_LABELS, Filter, fieldCount, isActive, options, toggle, visible } from "../src/filter";
+import { EMPTY, FIELDS, FIELD_LABELS, Filter, counts, fieldCount, isActive, options, toggle, visible } from "../src/filter";
 import type { SidebarToHost, SidebarToView } from "../src/protocol";
 
 declare function acquireVsCodeApi(): {
@@ -74,6 +74,7 @@ function FilterBar(props: {
     const [open, setOpen] = useState(false);
     const input = useRef<HTMLInputElement>(null);
     const opts = useMemo(() => options(props.all), [props.all]);
+    const tally = useMemo(() => counts(props.all, filter), [props.all, filter]);
     const count = fieldCount(filter);
     const active = isActive(filter);
 
@@ -127,15 +128,19 @@ function FilterBar(props: {
                                 <div className="sb-chips">
                                     {opts[field].map((value) => {
                                         const on = filter.fields[field].includes(value);
+                                        const n = tally[field].get(value) ?? 0;
                                         return (
                                             <button
                                                 type="button"
                                                 key={value}
-                                                className={`sb-chip${on ? " sb-on" : ""}`}
+                                                className={`sb-chip${on ? " sb-on" : ""}${n === 0 ? " sb-none" : ""}`}
                                                 aria-pressed={on}
+                                                title={`${n} item${n === 1 ? "" : "s"}`}
                                                 onClick={() => onChange(toggle(filter, field, value))}
                                             >
+                                                {on ? <Codicon name="check" /> : null}
                                                 {value}
+                                                <span className="sb-chip-n">{n}</span>
                                             </button>
                                         );
                                     })}
