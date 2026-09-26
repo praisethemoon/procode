@@ -63,7 +63,7 @@ int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
      * chunks without one are embedded. */
     VecSync vs;
     bool embedded = false;
-    if (!vec_update(a, &s, false, !json, VEC_NO_BUDGET, &vs, &embedded, err, sizeof err)) {
+    if (!vec_update(a, &s, false, !json && plat_stderr_tty(), VEC_NO_BUDGET, &vs, &embedded, err, sizeof err)) {
         store_close(&s);
         err_out(json, "internal", "%s", err);
         return KB_EXIT_FATAL;
