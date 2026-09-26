@@ -25,6 +25,10 @@ static const char *USAGE =
     "                             forget a topic; refuses while it holds\n"
     "                             documents unless told to forget them too\n"
     "  stats                      per collection: documents, chunks, bytes\n"
+    "  sources [--collection C] [--kind K]\n"
+    "                             every source, with its document count\n"
+    "  sources show <S-n>         one source, its documents, and every time\n"
+    "                             they were fetched\n"
     "  forget <D-n|S-n>           forget a document, or a source and its\n"
     "                             documents; kb compact drops the text\n"
     "\n"
@@ -32,6 +36,8 @@ static const char *USAGE =
     "  stale [--older-than 90d] [--collection C] [--limit N]\n"
     "                             documents past the threshold, newest\n"
     "                             sources first\n"
+    "  refresh <S-n>              read a file source again; re-index it only\n"
+    "                             if its text changed\n"
     "  refresh [--older-than 90d] [--collection C]\n"
     "                             REPORTS what would be refetched; kb has no\n"
     "                             HTTP client and fetches nothing\n"
@@ -100,6 +106,8 @@ int main(int argc, char **argv) {
         rc = cmd_stale(a, argc2, argv2);
     else if (strcmp(cmd, "refresh") == 0)
         rc = cmd_refresh(a, argc2, argv2);
+    else if (strcmp(cmd, "sources") == 0)
+        rc = cmd_sources(a, argc2, argv2);
     else if (strcmp(cmd, "forget") == 0)
         rc = cmd_forget(a, argc2, argv2);
     else if (strcmp(cmd, "links") == 0)

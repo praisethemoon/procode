@@ -203,6 +203,31 @@ export interface KbDocumentRead {
     readonly links?: { readonly outgoing: readonly KbLink[]; readonly incoming: readonly KbLink[] };
 }
 
+/* `kb sources show S-n`: the source, its documents, and every time they were
+ * filed — `changed` when the text was new, false when the same text was read
+ * again — oldest first. */
+export interface KbFetch {
+    readonly document: DocumentId;
+    readonly fetchedAt: string;
+    readonly changed: boolean;
+}
+
+export interface KbSourceRead {
+    readonly source: KbSource;
+    readonly documents: readonly KbDocument[];
+    readonly history: readonly KbFetch[];
+}
+
+/* `kb refresh S-n`: whether the text had changed, and so was re-indexed. */
+export interface KbSourceRefreshed {
+    readonly action: string;
+    readonly source: SourceId;
+    readonly document: DocumentId;
+    readonly changed: boolean;
+    readonly contentHash: string;
+    readonly fetchedAt: string;
+}
+
 /* What `kb forget` answers: every id that left the fold. `note` says the text
  * stays in the store until `kb compact`. */
 export interface KbForgotten {

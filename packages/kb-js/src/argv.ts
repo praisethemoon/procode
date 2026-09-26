@@ -293,6 +293,30 @@ export function forgetArgv(id: string): string[] {
     return ["forget", id];
 }
 
+/* §2's GET /sources, narrowed by collection and kind, and GET /sources/{id}. */
+export interface SourcesOptions {
+    collection?: string | null;
+    kind?: string | null;
+}
+
+export function sourcesArgv(options: SourcesOptions = {}): string[] {
+    const argv = ["sources"];
+    put(argv, "--collection", options.collection);
+    put(argv, "--kind", options.kind);
+    return argv;
+}
+
+export function sourceArgv(id: string): string[] {
+    return ["sources", "show", id];
+}
+
+/* §2's POST /sources/{id}/refresh: read a file source again and re-index it
+ * only if its text changed. The same command without an id is §5's report,
+ * built by refreshArgv. */
+export function refreshSourceArgv(id: string): string[] {
+    return ["refresh", id];
+}
+
 /* §6's read and its write, as subcommands of the noun they are about —
  * `kb links D-241` and `kb links add D-241 analogue_of D-7`, which is the
  * CLI's own spelling and is checked against `kb --help`.

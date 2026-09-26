@@ -29,7 +29,7 @@ import { test } from "node:test";
 
 import { Kb } from "../client";
 import { KbError, isKbError } from "../errors";
-import { deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, searchArgv } from "../argv";
+import { deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, refreshSourceArgv, searchArgv, sourceArgv, sourcesArgv } from "../argv";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const BIN = path.resolve(ROOT, "..", "..", "cli", "kb-cli", "bin", "kb");
@@ -86,6 +86,9 @@ test("every flag this package spells for an implemented command is one the CLI n
         ["add", "--title", "t", "--collection", "c", "--url", "u", "--mime", "m", "--meta", "{}", "--file", "-"],
         forgetArgv("D-1"),
         deleteCollectionArgv("c", true),
+        sourcesArgv({ collection: "c", kind: "file" }),
+        sourceArgv("S-1"),
+        refreshSourceArgv("S-1"),
     ];
     for (const argv of argvs) {
         assert.ok(text.includes(`  ${argv[0]} `) || text.includes(`  ${argv[0]}\n`), `kb --help does not name the ${argv[0]} command`);
@@ -479,6 +482,47 @@ test("forgetting through this package: a document, a source, and a collection wi
     }
 });
 
+test("sources through this package: listed, shown with their history, and a file source refreshed", async (t) => {
+    if (!built()) {
+        t.skip("cli/kb-cli/bin/kb is not built");
+        return;
+    }
+    const work = workspace();
+    try {
+        await work.kb.init();
+        const file = path.join(work.dir, "notes.md");
+        fs.writeFileSync(file, "# Notes\n\nzzold\n");
+        const filed = await work.kb.add(fs.readFileSync(file, "utf8"), { title: "notes", collection: "research" });
+        // Filed from the file itself, so its source is a `file` one.
+        execFileSync(BIN, ["add", "--title", "notes", "--collection", "research", "--file", file, "--json"], {
+            cwd: work.dir,
+            env: work.env,
+        });
+        const sources = await work.kb.sources({ kind: "file" });
+        assert.equal(sources.length, 1);
+        const src = sources[0];
+        assert.equal(src.kind, "file");
+        assert.equal(src.docCount, 1);
+        assert.deepEqual((await work.kb.sources({ collection: "research" })).length, 2);
+
+        const same = await work.kb.refreshSource(src.id);
+        assert.equal(same.changed, false);
+        fs.writeFileSync(file, "# Notes\n\nzznew\n");
+        const changed = await work.kb.refreshSource(src.id);
+        assert.equal(changed.changed, true);
+        assert.equal((await work.kb.search("zznew")).count, 1);
+
+        const shown = await work.kb.source(src.id);
+        assert.equal(shown.source.id, src.id);
+        assert.equal(shown.documents.length, 1);
+        assert.deepEqual(shown.history.map((h) => h.changed), [true, false, true]);
+
+        await assert.rejects(work.kb.refreshSource(filed.source), (e: unknown) => isKbError(e) && e.code === "usage");
+    } finally {
+        work.dispose();
+    }
+});
+
 test("every reader answers exactly the keys the real binary prints", async (t) => {
     if (!built()) {
         t.skip("cli/kb-cli/bin/kb is not built");
@@ -530,6 +574,11 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
                 what: "get",
                 argv: ["get", added.document],
                 read: await work.kb.get(added.document),
+            },
+            {
+                what: "sources show",
+                argv: ["sources", "show", added.source],
+                read: await work.kb.source(added.source),
             },
             {
                 /* Every include at once, on a document that has an edge:
@@ -595,6 +644,18 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
                 answered(read[i]),
                 Object.keys(rows[i]).sort(),
                 "a collections row carries a key the reader does not answer",
+            );
+        }
+        /* `sources` answers an array too: each row must carry exactly what
+         * the store printed on it, `etag` and all once there is one. */
+        const printedSources = raw(work, ["sources"])["sources"] as Record<string, unknown>[];
+        const readSources = await work.kb.sources();
+        assert.equal(readSources.length, printedSources.length);
+        for (let i = 0; i < printedSources.length; i++) {
+            assert.deepEqual(
+                answered(readSources[i]),
+                Object.keys(printedSources[i]).sort(),
+                "a sources row carries a key the reader does not answer",
             );
         }
         assert.equal(second.created, true);

@@ -36,6 +36,10 @@ import {
     deleteCollectionArgv,
     forgetArgv,
     getArgv,
+    refreshSourceArgv,
+    sourceArgv,
+    sourcesArgv,
+    SourcesOptions,
     initArgv,
     linkArgv,
     linksArgv,
@@ -56,6 +60,9 @@ import {
     readDocument,
     readDocumentRead,
     readForgotten,
+    readSource,
+    readSourceRead,
+    readSourceRefreshed,
     readHit,
     readLinkWritten,
     readLinks,
@@ -73,6 +80,9 @@ import {
     KbDocumentRead,
     KbForgotten,
     KbHit,
+    KbSource,
+    KbSourceRead,
+    KbSourceRefreshed,
     KbLinkWritten,
     KbLinks,
     KbRefresh,
@@ -248,6 +258,23 @@ export class Kb {
      * confirmation dialog needs to be able to say. */
     async deleteCollection(name: string, options: { withDocuments?: boolean } = {}): Promise<void> {
         await run(deleteCollectionArgv(name, options.withDocuments === true), this.options);
+    }
+
+    /* §2's GET /sources: one row per source, narrowed by collection or kind. */
+    async sources(options: SourcesOptions = {}): Promise<readonly KbSource[]> {
+        const payload = await run(sourcesArgv(options), this.options);
+        return arr(payload["sources"]).map(readSource);
+    }
+
+    /* §2's GET /sources/{id}: the source, its documents and their fetch history. */
+    async source(id: string): Promise<KbSourceRead> {
+        return readSourceRead(await run(sourceArgv(id), this.options));
+    }
+
+    /* §2's POST /sources/{id}/refresh, for a file source: read it again and
+     * re-index only if its text changed. A url or inline source is refused. */
+    async refreshSource(id: string): Promise<KbSourceRefreshed> {
+        return readSourceRefreshed(await run(refreshSourceArgv(id), this.options));
     }
 
     /* §2's DELETE /documents/{id} and DELETE /sources/{id}. Not offered to

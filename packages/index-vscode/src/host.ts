@@ -165,6 +165,10 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
             });
         case "refreshDocument":
             return refreshDocument(kb, text("id") ?? "");
+        case "source":
+            return kb.source(text("id") ?? "");
+        case "refreshSource":
+            return kb.refreshSource(text("id") ?? "");
         case "renameCollection":
             return kb.renameCollection(text("from") ?? "", text("to") ?? "");
         default:
@@ -237,7 +241,13 @@ async function answer(
         /* A write is the only thing that can have changed the store under the
          * other views, and it is the only thing that announces. A read that
          * announced would put every view into a loop of re-asking. */
-        if (op === "refresh" || op === "refreshDocument" || op === "renameCollection" || op === "deleteCollection") {
+        if (
+            op === "refresh" ||
+            op === "refreshDocument" ||
+            op === "refreshSource" ||
+            op === "renameCollection" ||
+            op === "deleteCollection"
+        ) {
             ctx.announce();
         }
     } catch (e) {

@@ -584,3 +584,17 @@ html, body {
   color: var(--bk-color-input-foreground);
   font: inherit;
 }
+
+/* A source page's fetch history: every time its documents were filed,
+ * newest first, as quiet lines under the documents. */
+.kb-history { margin-top: var(--bk-gap-lg, 16px); }
+.kb-section-title {
+  margin: 0 0 var(--bk-gap-xs, 4px);
+  font-size: var(--bk-font-size-sm, 12px);
+  font-weight: var(--bk-font-weight-semibold);
+  color: var(--bk-color-foreground-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.kb-history-list { list-style: none; margin: 0; padding: 0; }
+.kb-history-list li { padding: 2px 0; font-size: var(--bk-font-size-sm, 12px); }

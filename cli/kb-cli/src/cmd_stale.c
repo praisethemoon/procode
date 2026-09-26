@@ -1,5 +1,7 @@
 #include "cmd.h"
 
+#include "sha256.h"
+
 /* GET /stale and POST /refresh (§5).
  *
  * WHY THIS SECTION EXISTS. Documentation moves — Win32 pages get rewritten,
@@ -190,12 +192,113 @@ static const char *refetch_route(const char *kind) {
     return "none";
 }
 
+/* §2's POST /sources/{id}/refresh: read one source again, compare by hash,
+ * and re-index only if the text changed — through refile_document, the same
+ * path `kb add` takes for a document it has seen before. Only a `file`
+ * source can be read again here: a `url` needs the HTTP client this binary
+ * does not have (§12.2), and an `inline` source was content handed over,
+ * with nowhere to go back to. Both are refused and say how to re-file. */
+static int32_t refresh_source(Arena *a, bool json, const char *id) {
+    char err[512];
+    char dir[KB_PATH_MAX];
+    if (!store_resolve(dir, sizeof dir, err, sizeof err)) {
+        err_out(json, "not_found", "%s", err);
+        return KB_EXIT_ERR;
+    }
+    Store s;
+    const char *code;
+    if (!store_open(a, &s, dir, true, err, sizeof err, &code)) {
+        err_out(json, code, "%s", err);
+        return strcmp(code, "internal") == 0 ? KB_EXIT_FATAL : KB_EXIT_ERR;
+    }
+    const Source *src = src_by_id(&s.sources, id);
+    const Document *doc = src ? doc_by_source_path(&s.documents, src->id, "") : NULL;
+    if (!src || !doc) {
+        store_close(&s);
+        err_out(json, "not_found", src ? "source %s has no document to refresh"
+                                       : "no source %s",
+                id);
+        return KB_EXIT_ERR;
+    }
+    if (strcmp(src->kind, "url") == 0) {
+        store_close(&s);
+        err_out(json, "fetch_failed",
+                "%s is %s, and kb has no HTTP client to fetch it: re-file the "
+                "page with kb add --url",
+                id, src->locator);
+        return KB_EXIT_ERR;
+    }
+    if (strcmp(src->kind, "file") != 0) {
+        store_close(&s);
+        err_out(json, "usage",
+                "%s was filed from content handed over directly, so there is "
+                "nothing to read again: re-file it with kb add",
+                id);
+        return KB_EXIT_ERR;
+    }
+    char *text;
+    size_t len;
+    if (!read_text_arg(a, src->locator, &text, &len)) {
+        store_close(&s);
+        err_out(json, "fetch_failed", "cannot read %s for %s", src->locator, id);
+        return KB_EXIT_ERR;
+    }
+    char hash[65];
+    sha256_hex(text, len, hash);
+    char now[32];
+    plat_timestamp(now);
+    Document d;
+    bool changed = false, blob_written = false;
+    if (!refile_document(a, &s, doc, text, len, hash, doc->title, doc->mime,
+                         doc->meta, now, &d, &changed, &blob_written, err,
+                         sizeof err)) {
+        store_close(&s);
+        err_out(json, "internal", "%s", err);
+        return KB_EXIT_FATAL;
+    }
+    if (changed) {
+        uint32_t nd = 0, missing = 0;
+        FtsBuildStats stats;
+        if (!doclog_load(a, s.documents_path, &s.documents, err, sizeof err) ||
+            !index_rebuild(a, &s, &nd, &missing, &stats, err, sizeof err)) {
+            store_close(&s);
+            err_out(json, "internal", "%s", err);
+            return KB_EXIT_FATAL;
+        }
+    }
+    if (json) {
+        printf("{\"ok\":true,\"action\":\"refresh\",\"source\":\"%s\","
+               "\"document\":\"%s\",\"changed\":%s,\"contentHash\":\"%s\","
+               "\"fetchedAt\":\"%s\"}\n",
+               src->id, d.id, changed ? "true" : "false", d.content_hash, now);
+    } else {
+        printf("%s %s: %s\n", src->id, d.id,
+               changed ? "changed, re-indexed" : "unchanged, fetchedAt updated");
+    }
+    store_close(&s);
+    return KB_EXIT_OK;
+}
+
 int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
     bool json = has_flag(argc, argv, REFRESH_FLAGS, "--json");
     const char *bad = unknown_flag(argc, argv, REFRESH_FLAGS, BOOL_FLAGS);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;
+    }
+    /* A source id names one source to read again; without one this is §5's
+     * report over a scope. The two take different arguments, and mixing them
+     * is refused rather than half-honoured. */
+    const char *one = positional_arg(argc, argv, REFRESH_FLAGS, 0);
+    if (one) {
+        if (kb_id_num(one, 'S') == 0 || positional_arg(argc, argv, REFRESH_FLAGS, 1) ||
+            flag_value(argc, argv, REFRESH_FLAGS, "--collection") ||
+            older_than_arg(argc, argv, REFRESH_FLAGS)) {
+            err_out(json, "usage", "kb refresh takes one source id (S-n) on its "
+                                   "own, or --collection and --older-than");
+            return KB_EXIT_ERR;
+        }
+        return refresh_source(a, json, one);
     }
     char err[512];
     Staleness st;

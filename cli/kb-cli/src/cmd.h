@@ -22,6 +22,7 @@ int32_t cmd_stats(Arena *a, int32_t argc, char **argv);
 int32_t cmd_reindex(Arena *a, int32_t argc, char **argv);
 int32_t cmd_compact(Arena *a, int32_t argc, char **argv);
 int32_t cmd_forget(Arena *a, int32_t argc, char **argv);
+int32_t cmd_sources(Arena *a, int32_t argc, char **argv);
 
 /* ---- staleness (§5) ----------------------------------------------------
  *
@@ -88,6 +89,20 @@ bool doc_chunks(Arena *a, Store *s, const Document *d, char **text,
  * within it. NULL when no document claims it. */
 const Document *doc_by_chunk(const DocList *l, int64_t chunk_num,
                              uint32_t *ordinal);
+
+/* A document that already exists, handed its text again, in a store already
+ * open for write. Unchanged text is a touch: §2's "re-indexes nothing and
+ * updates fetchedAt". Changed text is a new version under the same id with a
+ * fresh chunk range — the old chunk ids go with the text they named rather
+ * than being handed to different passages (§1.1). `out` is the record now in
+ * force. When *reindexed the caller rebuilds the keyword index; a touch
+ * changes no term, so it needs none. The one path `kb add` and
+ * `kb refresh S-n` share. */
+bool refile_document(Arena *a, Store *s, const Document *existing,
+                     const char *content, size_t len, const char *hash,
+                     const char *title, const char *mime, const char *meta,
+                     const char *now, Document *out, bool *reindexed,
+                     bool *blob_written, char *err, size_t errsz);
 
 /* Forgets documents, then sources, in a store already open for write: one
  * forget record each, documents first so no document is ever left naming a

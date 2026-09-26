@@ -16,6 +16,9 @@ import {
     deleteCollectionArgv,
     forgetArgv,
     getArgv,
+    refreshSourceArgv,
+    sourceArgv,
+    sourcesArgv,
     initArgv,
     linkArgv,
     linksArgv,
@@ -311,6 +314,9 @@ test("no builder ever emits --store, because the CLI no longer has one", () => {
         deleteCollectionArgv("a"),
         deleteCollectionArgv("a", true),
         forgetArgv("D-1"),
+        sourcesArgv({ collection: "c", kind: "file" }),
+        sourceArgv("S-1"),
+        refreshSourceArgv("S-1"),
         linksArgv("D-1"),
         linkArgv("D-1", "analogue_of", "D-2"),
         statsArgv(),
@@ -332,4 +338,12 @@ test("forgetting is asked for by id, and a collection's documents only by name",
     assert.deepEqual(deleteCollectionArgv("io-uring", true), ["collections", "delete", "--with-documents", "--", "io-uring"]);
     // A collection name that looks like the flag is still a name.
     assert.deepEqual(deleteCollectionArgv("--with-documents"), ["collections", "delete", "--", "--with-documents"]);
+});
+
+test("sources are listed with their narrowings as flags, shown and refreshed by id", () => {
+    assert.deepEqual(sourcesArgv(), ["sources"]);
+    assert.deepEqual(sourcesArgv({ collection: " research ", kind: "file" }), ["sources", "--collection", "research", "--kind", "file"]);
+    assert.deepEqual(sourcesArgv({ collection: "", kind: null }), ["sources"]);
+    assert.deepEqual(sourceArgv("S-3"), ["sources", "show", "S-3"]);
+    assert.deepEqual(refreshSourceArgv("S-3"), ["refresh", "S-3"]);
 });

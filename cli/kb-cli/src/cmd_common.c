@@ -261,6 +261,55 @@ const Document *doc_by_chunk(const DocList *l, int64_t chunk_num,
 
 /* ---- the keyword index ------------------------------------------------- */
 
+bool refile_document(Arena *a, Store *s, const Document *existing,
+                     const char *content, size_t len, const char *hash,
+                     const char *title, const char *mime, const char *meta,
+                     const char *now, Document *out, bool *reindexed,
+                     bool *blob_written, char *err, size_t errsz) {
+    *blob_written = false;
+    if (strcmp(existing->content_hash, hash) == 0) {
+        size_t n;
+        char *line = doc_encode_touch(a, existing->id, now, &n);
+        if (!store_append(s, STORE_DOCUMENTS, line, n, err, errsz))
+            return false;
+        *out = *existing;
+        out->fetched_at = now;
+        *reindexed = false;
+        return true;
+    }
+    char stored[65]; /* store_put_blob hashes the text itself: the same hash */
+    if (!store_put_blob(s, content, len, stored, blob_written, err, errsz))
+        return false;
+    /* Split the way the record will say, from the fields it carries (see
+     * doc_lang), with the parameters the store was built with. */
+    ChunkParams cp = store_chunk_params(a, s);
+    Chunks chunks = chunk_split(a, content, len, doc_lang(mime, existing->path),
+                                (size_t)cp.chunk_tokens * KB_BYTES_PER_TOKEN,
+                                (size_t)cp.chunk_overlap * KB_BYTES_PER_TOKEN);
+    int64_t unused = 0, chunk_base = 0;
+    if (!store_reserve(s, 0, 0, (uint32_t)chunks.n, &unused, &unused,
+                       &chunk_base, err, errsz) ||
+        !store_write_chunk_params(s, err, errsz))
+        return false;
+    Document d = *existing;
+    d.title = title;
+    d.mime = mime;
+    d.meta = meta;
+    d.content_hash = hash;
+    d.bytes = (uint64_t)len;
+    d.fetched_at = now;
+    d.indexed_at = now;
+    d.chunk_count = (uint32_t)chunks.n;
+    d.chunk_base = chunk_base;
+    size_t n;
+    char *line = doc_encode_document(a, &d, &n);
+    if (!store_append(s, STORE_DOCUMENTS, line, n, err, errsz))
+        return false;
+    *out = d;
+    *reindexed = true;
+    return true;
+}
+
 bool forget_records(Arena *a, Store *s, const char *const *docs, size_t ndocs,
                     const char *const *srcs, size_t nsrcs, char *err,
                     size_t errsz) {

@@ -23,7 +23,7 @@
 
 import { useEffect, useState } from "react";
 
-import { KbChunk, KbDocument, isStale } from "kb-js/pure";
+import { KbChunk, KbDocument, KbSourceRead, KbSourceRefreshed, isStale } from "kb-js/pure";
 
 import { documentFacts, formatDate, metaEntries } from "../src/view/facts";
 import { revealId } from "../src/view/headings";
@@ -198,58 +198,89 @@ export function DocumentView(props: { reference: string }): JSX.Element {
  * — so this is that derivation, stated once, with the gap named rather than
  * papered over.
  */
+/* index-ui §6's `kb:/S-3`: a source, with its documents. Read through
+ * `kb sources show`, so the page has the source's own kind and locator and
+ * every time its documents were fetched, not only what its documents say. A
+ * file source can be read again from here (`kb refresh S-n`); the outcome is
+ * said out loud, as a document's refresh is. */
 export function SourceView(props: { reference: string }): JSX.Element {
-    const { state } = useQuery<KbDocument[]>("ls", { source: props.reference });
+    const { state, refresh } = useQuery<KbSourceRead>("source", { id: props.reference });
+    const onRefresh = (): void => {
+        call<KbSourceRefreshed>("refreshSource", { id: props.reference })
+            .then((r) => {
+                notify(
+                    "info",
+                    r.changed
+                        ? `${props.reference} changed on disk and ${r.document} was re-indexed.`
+                        : `${props.reference} is unchanged on disk; its fetch date is now ${r.fetchedAt}.`,
+                );
+                refresh();
+            })
+            .catch((e: unknown) => notify("warning", e instanceof Error ? e.message : String(e)));
+    };
     return (
         <div className="kb-view kb-doc">
             <Resolved state={state} loading="Reading the source…">
-                {(documents) => {
-                    if (documents.length === 0) {
-                        return (
-                            <div className="kb-empty">
-                                No documents under {props.reference}. A source with nothing in it is
-                                what an interrupted ingest leaves behind, and the next ingest of the
-                                same locator reuses it.
+                {({ source, documents, history }) => (
+                    <div className="kb-scroll">
+                        <header className="kb-head">
+                            <h1 className="kb-head-title">{source.title === "" ? source.id : source.title}</h1>
+                            <div className="kb-head-line">
+                                <span className="kb-ref">{source.id}</span>
+                                {source.kind === "inline" ? null : (
+                                    <button
+                                        type="button"
+                                        className="kb-link kb-locator"
+                                        title={source.locator}
+                                        onClick={() => link(source.locator)}
+                                    >
+                                        <Codicon name="link-external" />
+                                        {source.locator}
+                                    </button>
+                                )}
+                                {source.kind === "file" ? (
+                                    <button
+                                        type="button"
+                                        className="kb-link"
+                                        title="Read the file again and re-index it if it changed"
+                                        onClick={onRefresh}
+                                    >
+                                        <Codicon name="sync" /> Refresh
+                                    </button>
+                                ) : null}
                             </div>
-                        );
-                    }
-                    const first = documents[0];
-                    const bytes = documents.reduce((n, d) => n + d.bytes, 0);
-                    return (
-                        <div className="kb-scroll">
-                            <header className="kb-head">
-                                <h1 className="kb-head-title">
-                                    {first.title === "" ? props.reference : first.title}
-                                </h1>
-                                <div className="kb-head-line">
-                                    <span className="kb-ref">{props.reference}</span>
-                                    {first.locator === "" ? null : (
-                                        <button
-                                            type="button"
-                                            className="kb-link kb-locator"
-                                            title={first.locator}
-                                            onClick={() => link(first.locator)}
-                                        >
-                                            <Codicon name="link-external" />
-                                            {first.locator}
-                                        </button>
-                                    )}
+                            <dl className="kb-facts">
+                                <div className="kb-fact">
+                                    <dt>Kind</dt>
+                                    <dd>{source.kind}</dd>
                                 </div>
-                                <dl className="kb-facts">
-                                    <div className="kb-fact">
-                                        <dt>Collection</dt>
-                                        <dd>{first.collection}</dd>
-                                    </div>
-                                    <div className="kb-fact">
-                                        <dt>Documents</dt>
-                                        <dd>{documents.length}</dd>
-                                    </div>
-                                    <div className="kb-fact">
-                                        <dt>Bytes</dt>
-                                        <dd>{bytes}</dd>
-                                    </div>
-                                </dl>
-                            </header>
+                                <div className="kb-fact">
+                                    <dt>Collection</dt>
+                                    <dd>{source.collection}</dd>
+                                </div>
+                                <div className="kb-fact">
+                                    <dt>Documents</dt>
+                                    <dd>{source.docCount}</dd>
+                                </div>
+                                <div className="kb-fact">
+                                    <dt>Bytes</dt>
+                                    <dd>{source.bytes}</dd>
+                                </div>
+                                <div className="kb-fact">
+                                    <dt>Fetched</dt>
+                                    <dd title={source.fetchedAt}>
+                                        {source.fetchedAt === "" ? "never" : formatDate(source.fetchedAt)}
+                                    </dd>
+                                </div>
+                            </dl>
+                        </header>
+                        {documents.length === 0 ? (
+                            <div className="kb-empty">
+                                No documents under {source.id}. A source with nothing in it is what an
+                                interrupted ingest leaves behind, and the next ingest of the same locator
+                                reuses it.
+                            </div>
+                        ) : (
                             <div className="kb-list">
                                 {documents.map((d) => (
                                     <div
@@ -266,9 +297,7 @@ export function SourceView(props: { reference: string }): JSX.Element {
                                         }}
                                     >
                                         <div className="kb-row-head">
-                                            <span className="kb-row-title">
-                                                {d.title === "" ? d.id : d.title}
-                                            </span>
+                                            <span className="kb-row-title">{d.title === "" ? d.id : d.title}</span>
                                         </div>
                                         <div className="kb-row-meta">
                                             <span className="kb-ref">{d.id}</span>
@@ -279,9 +308,25 @@ export function SourceView(props: { reference: string }): JSX.Element {
                                     </div>
                                 ))}
                             </div>
-                        </div>
-                    );
-                }}
+                        )}
+                        {history.length === 0 ? null : (
+                            <section className="kb-history">
+                                <h2 className="kb-section-title">Fetch history</h2>
+                                <ul className="kb-history-list">
+                                    {[...history].reverse().map((f, i) => (
+                                        <li key={i}>
+                                            <span className="kb-when" title={f.fetchedAt}>
+                                                {formatDate(f.fetchedAt)}
+                                            </span>{" "}
+                                            <span className="kb-ref">{f.document}</span>{" "}
+                                            <span className="kb-muted">{f.changed ? "new text, indexed" : "unchanged"}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        )}
+                    </div>
+                )}
             </Resolved>
         </div>
     );

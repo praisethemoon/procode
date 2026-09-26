@@ -161,6 +161,18 @@ bool srclog_load(Arena *a, const char *path, SourceList *out, char *err,
 bool doclog_load(Arena *a, const char *path, DocList *out, char *err,
                  size_t errsz);
 
+/* One time a document was filed, as the log recorded it: a `document` record
+ * (the text was new, so it was indexed) or a `touch` (the same text read
+ * again). The fold keeps only the latest; this is §2's "fetch history". */
+typedef struct {
+    const char *at;
+    bool changed;
+} Fetch;
+
+/* Every fetch of one document, oldest first. */
+bool doclog_fetches(Arena *a, const char *path, const char *document_id,
+                    Fetch **out, size_t *n, char *err, size_t errsz);
+
 /* Lookups over a loaded log. NULL when absent. */
 const Source *src_by_id(const SourceList *l, const char *id);
 const Source *src_by_key(const SourceList *l, const char *kind,

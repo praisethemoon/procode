@@ -206,22 +206,18 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
     Lang lang = doc_lang(mime, "");
     bool created, reindexed, blob_written = false;
 
-    if (existing_doc && strcmp(existing_doc->content_hash, hash) == 0) {
-        /* §2: the same text at the same locator re-indexes nothing and
-         * updates fetchedAt. In an append-only log that update is a later
-         * record that supersedes the earlier one. */
-        size_t len;
-        char *line = doc_encode_touch(a, existing_doc->id, now, &len);
-        if (!store_append(&s, STORE_DOCUMENTS, line, len, err, sizeof err)) {
+    if (existing_doc) {
+        /* The same locator again: a touch when the text is unchanged, a new
+         * version under the same id when it is not. */
+        if (!refile_document(a, &s, existing_doc, content, content_len, hash,
+                             title, mime, meta, now, &d, &reindexed,
+                             &blob_written, err, sizeof err)) {
             store_close(&s);
             err_out(json, "internal", "%s", err);
             return KB_EXIT_FATAL;
         }
-        d = *existing_doc;
-        d.fetched_at = now;
         lang = doc_lang(d.mime, d.path);
         created = false;
-        reindexed = false;
     } else {
         if (!store_put_blob(&s, content, content_len, hash, &blob_written, err,
                             sizeof err)) {
@@ -237,11 +233,9 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
                         (size_t)cp.chunk_overlap * KB_BYTES_PER_TOKEN);
 
         /* Ids become durable here, before any record that uses them is
-         * written. A changed document keeps its own id and takes a fresh
-         * chunk range: the chunks it had are gone, and their ids go with
-         * them rather than being handed to different text (§1.1). */
+         * written. */
         int64_t src_n = 0, doc_n = 0, chunk_base = 0;
-        if (!store_reserve(&s, existing_src ? 0 : 1, existing_doc ? 0 : 1,
+        if (!store_reserve(&s, existing_src ? 0 : 1, 1,
                            (uint32_t)chunks.n, &src_n, &doc_n, &chunk_base,
                            err, sizeof err) ||
             !store_write_chunk_params(&s, err, sizeof err)) {
@@ -278,7 +272,7 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
         }
 
         memset(&d, 0, sizeof d);
-        d.id = existing_doc ? existing_doc->id : kb_id_make(a, 'D', doc_n);
+        d.id = kb_id_make(a, 'D', doc_n);
         d.source = source_id;
         d.path = "";
         d.title = title;
@@ -297,7 +291,7 @@ int32_t cmd_add(Arena *a, int32_t argc, char **argv) {
             err_out(json, "internal", "%s", err);
             return KB_EXIT_FATAL;
         }
-        created = existing_doc == NULL;
+        created = true;
         reindexed = true;
     }
 

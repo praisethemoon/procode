@@ -229,6 +229,37 @@ bool srclog_load(Arena *a, const char *path, SourceList *out, char *err,
     return true;
 }
 
+bool doclog_fetches(Arena *a, const char *path, const char *document_id,
+                    Fetch **out, size_t *n, char *err, size_t errsz) {
+    *out = NULL;
+    *n = 0;
+    Lines l;
+    bool torn;
+    if (!log_lines(a, path, &l, &torn, err, errsz))
+        return false;
+    size_t cap = 0;
+    for (int32_t i = 0; i < l.count; i++) {
+        if (l.lines[i].len == 0)
+            continue;
+        JVal *j = parse_record(a, l.lines[i], i + 1, path, err, errsz);
+        if (!j)
+            return false;
+        const char *type = jobj_str(j, "type");
+        const char *id = jobj_str(j, "id");
+        const char *at = jobj_str(j, "fetchedAt");
+        if (!type || !id || !at || strcmp(id, document_id) != 0)
+            continue;
+        bool changed = strcmp(type, "document") == 0;
+        if (!changed && strcmp(type, "touch") != 0)
+            continue;
+        ARENA_GROW(a, *out, *n, cap, Fetch);
+        (*out)[*n].at = at;
+        (*out)[*n].changed = changed;
+        (*n)++;
+    }
+    return true;
+}
+
 bool doclog_load(Arena *a, const char *path, DocList *out, char *err,
                  size_t errsz) {
     memset(out, 0, sizeof(*out));

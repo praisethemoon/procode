@@ -143,7 +143,7 @@ than in the log, so re-ingesting an unchanged page writes nothing.
 | `POST /documents/batch` | many at once, one transaction |
 | `GET /sources` | rows. `?collection=&kind=&status=&q=` |
 | `GET /sources/{id}` | full, with document count and fetch history |
-| `POST /sources/{id}/refresh` | refetch, compare by hash, re-embed only what changed |
+| `POST /sources/{id}/refresh` | refetch, compare by hash, re-embed only what changed. A `file` source is read again; a `url` one is re-filed through `POST /documents` while §12.2 keeps HTTP out of the binary |
 | `DELETE /sources/{id}` | forget it and every document under it |
 | `GET /documents` | rows. `?collection=&source=&mime=&q=&since=` |
 | `GET /documents/{id}` | metadata. `?include=text,chunks,links` |

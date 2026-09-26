@@ -1500,6 +1500,59 @@ expect_grep '"count":0' kbf search zzsixth --json
 expect_grep '"current":true' kbf status --json
 expect_grep '"error":"usage"' kbf collections rename other elsewhere --with-documents --json
 
+# ---------------------------------------------------------------- sources
+mkdir -p srcs
+kbs() { ( cd "$WORK/srcs" && "$KB" "$@" ); }
+kbs init > /dev/null
+printf '# Notes\n\nzzfileold words\n' > srcs/notes.md
+kbs add --title notes --collection research --file notes.md --json > /dev/null
+printf 'zzpage\n' | kbs add --title page --collection web --url https://example.test/p --json > /dev/null
+printf 'zzinline\n' | kbs add --title inline --collection research --json > /dev/null
+
+t "sources lists every source, narrowed by collection and kind"
+out=$(kbs sources --json)
+has "sources" "$out" '"count":3'
+has "sources" "$out" '"kind":"file"'
+has "sources" "$out" '"docCount":1'
+expect_grep '"count":2' kbs sources --collection research --json
+expect_grep '"count":1' kbs sources --kind url --json
+expect_grep 'S-1' kbs sources
+
+t "sources show gives the source, its documents and its fetch history"
+out=$(kbs sources show S-1 --json)
+has "show" "$out" '"source":{"id":"S-1"'
+has "show" "$out" '"documents":\[{"id":"D-1"'
+has "show" "$out" '"history":\[{"document":"D-1","fetchedAt":"[^"]*","changed":true}\]'
+expect_grep '"error":"not_found"' kbs sources show S-99 --json
+expect_grep '"error":"usage"' kbs sources show --json
+expect_grep '"error":"usage"' kbs sources show S-1 --kind file --json
+
+t "refreshing an unchanged file source touches it and indexes nothing"
+out=$(kbs refresh S-1 --json)
+has "refresh" "$out" '"changed":false'
+has "refresh" "$out" '"document":"D-1"'
+expect_grep '"changed":false}\]' kbs sources show S-1 --json
+
+t "refreshing a changed file source re-indexes it under the same document"
+printf '# Notes\n\nzzfilenew words\n' > srcs/notes.md
+out=$(kbs refresh S-1 --json)
+has "refresh" "$out" '"changed":true'
+has "refresh" "$out" '"document":"D-1"'
+expect_grep '"count":1' kbs search zzfilenew --json
+expect_grep '"count":0' kbs search zzfileold --json
+expect_grep '"current":true' kbs status --json
+expect_grep 'changed, re-indexed' sh -c "printf '# Notes\n\nagain\n' > '$WORK/srcs/notes.md' && cd '$WORK/srcs' && '$KB' refresh S-1"
+
+t "a source that cannot be read again says why"
+mv srcs/notes.md srcs/notes.moved
+expect_grep '"error":"fetch_failed"' kbs refresh S-1 --json
+expect_grep '"error":"fetch_failed"' kbs refresh S-2 --json
+expect_grep 'kb add --url' kbs refresh S-2 --json
+expect_grep '"error":"usage"' kbs refresh S-3 --json
+expect_grep '"error":"not_found"' kbs refresh S-99 --json
+expect_grep '"error":"usage"' kbs refresh S-1 --collection research --json
+expect_grep '"error":"usage"' kbs refresh D-1 --json
+
 # ---------------------------------------------------------------- compact
 mkdir -p comp
 kbc() { ( cd "$WORK/comp" && "$KB" "$@" ); }

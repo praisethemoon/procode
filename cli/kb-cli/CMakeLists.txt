@@ -41,6 +41,7 @@ set(KB_LIB_SOURCES
     src/cmd_links.c
     src/cmd_maint.c
     src/cmd_forget.c
+    src/cmd_sources.c
 )
 
 add_executable(kb ${KB_LIB_SOURCES} src/main.c)

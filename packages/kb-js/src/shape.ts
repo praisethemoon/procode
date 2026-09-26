@@ -25,6 +25,8 @@ import {
     KbDocumentRead,
     KbForgotten,
     KbHit,
+    KbSourceRead,
+    KbSourceRefreshed,
     KbLink,
     KbLinkWritten,
     KbLinks,
@@ -321,6 +323,28 @@ export function readLinkWritten(payload: Record<string, unknown>): KbLinkWritten
         type: str(payload["type"]),
         changed: bool(payload["changed"]),
         at: str(payload["at"]),
+    };
+}
+
+export function readSourceRead(payload: Record<string, unknown>): KbSourceRead {
+    return {
+        source: readSource(payload["source"]),
+        documents: arr(payload["documents"]).map(readDocument),
+        history: arr(payload["history"]).map((v) => {
+            const f = obj(v);
+            return { document: str(f["document"]), fetchedAt: str(f["fetchedAt"]), changed: bool(f["changed"]) };
+        }),
+    };
+}
+
+export function readSourceRefreshed(payload: Record<string, unknown>): KbSourceRefreshed {
+    return {
+        action: str(payload["action"]),
+        source: str(payload["source"]),
+        document: str(payload["document"]),
+        changed: bool(payload["changed"]),
+        contentHash: str(payload["contentHash"]),
+        fetchedAt: str(payload["fetchedAt"]),
     };
 }
 
