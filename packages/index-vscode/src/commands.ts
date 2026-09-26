@@ -296,6 +296,9 @@ export async function addUrl(kb: Kb, announce: () => void): Promise<void> {
     }
     try {
         const fetched = await fetchPage(url);
+        if (fetched.notModified) {
+            return; // not asked for conditionally, so not reachable; keeps the type honest
+        }
         const title = await vscode.window.showInputBox({
             title: "Title",
             value: fetched.title,
@@ -309,6 +312,7 @@ export async function addUrl(kb: Kb, announce: () => void): Promise<void> {
             collection,
             url,
             mime: fetched.mime,
+            etag: fetched.etag,
         });
         announce();
         void vscode.window.showInformationMessage(
@@ -332,6 +336,7 @@ export async function refreshDocument(kb: Kb, id: string): Promise<RefreshOutcom
     }
     let text: string;
     let mime = d.mime;
+    let etag: string | null = null;
     if (plan.kind === "url") {
         const go = await vscode.window.showWarningMessage(
             `Fetch ${plan.host} again?`,
@@ -341,9 +346,19 @@ export async function refreshDocument(kb: Kb, id: string): Promise<RefreshOutcom
         if (go !== "Fetch") {
             return { outcome: "declined" };
         }
-        const fetched = await fetchPage(plan.url);
-        text = fetched.text;
-        mime = fetched.mime;
+        /* Asked conditionally when the last fetch recorded an ETag: a 304 is
+         * the server saying the page is the one already filed, so the stored
+         * text is filed again — which only moves its fetch date (§2). */
+        const known = (await kb.source(d.source)).source.etag;
+        const fetched = await fetchPage(plan.url, known);
+        if (fetched.notModified) {
+            text = (await kb.get(id, { text: true })).text ?? "";
+            etag = known;
+        } else {
+            text = fetched.text;
+            mime = fetched.mime;
+            etag = fetched.etag;
+        }
     } else {
         let bytes: Uint8Array;
         try {
@@ -359,6 +374,7 @@ export async function refreshDocument(kb: Kb, id: string): Promise<RefreshOutcom
         url: d.locator,
         mime,
         meta: d.meta,
+        etag,
     });
     return {
         outcome: added.created || added.reindexed ? "updated" : "unchanged",
@@ -367,11 +383,10 @@ export async function refreshDocument(kb: Kb, id: string): Promise<RefreshOutcom
     };
 }
 
-export interface FetchedPage {
-    text: string;
-    mime: string;
-    title: string;
-}
+export type FetchedPage =
+    | { readonly notModified: false; readonly text: string; readonly mime: string; readonly title: string; readonly etag: string | null }
+    /* A conditional request answered 304: the page is the one already filed. */
+    | { readonly notModified: true };
 
 /* The fetch, as small as it can be.
  *
@@ -386,18 +401,30 @@ export interface FetchedPage {
  * `fetch_failed` carrying "status and locator" for exactly this, and filing a
  * 404 page under a title somebody chose is how a store comes to contain a
  * confident answer that is an error page. */
-export async function fetchPage(url: string): Promise<FetchedPage> {
-    const response = await fetch(url, {
-        redirect: "follow",
-        headers: { accept: "text/html,text/markdown,text/plain;q=0.9,*/*;q=0.5" },
-    });
+export async function fetchPage(url: string, ifNoneMatch?: string | null): Promise<FetchedPage> {
+    const headers: Record<string, string> = { accept: "text/html,text/markdown,text/plain;q=0.9,*/*;q=0.5" };
+    if (ifNoneMatch) {
+        headers["if-none-match"] = ifNoneMatch;
+    }
+    let response: Response;
+    try {
+        response = await fetch(url, { redirect: "follow", headers });
+    } catch (e) {
+        /* fetch's own message is "fetch failed"; the reason is in its cause. */
+        const cause = (e as { cause?: { message?: string; code?: string } }).cause;
+        const why = cause?.code ?? cause?.message ?? (e as Error).message;
+        throw new Error(`Could not reach ${new URL(url).host}: ${why}.`);
+    }
+    if (response.status === 304 && ifNoneMatch) {
+        return { notModified: true };
+    }
     if (!response.ok) {
-        throw new Error(`${url} answered ${response.status} ${response.statusText}.`);
+        throw new Error(`${url} answered ${response.status} ${response.statusText}; nothing was filed.`);
     }
     const contentType = response.headers.get("content-type") ?? "";
     const mime = contentType.split(";")[0].trim().toLowerCase() || "text/plain";
     const text = await response.text();
-    return { text, mime, title: titleOf(text, mime, url) };
+    return { notModified: false, text, mime, title: titleOf(text, mime, url), etag: response.headers.get("etag") };
 }
 
 /* A suggested title, which the reader then edits. Read out of the page when it

@@ -22,11 +22,13 @@ const fake = {
     Uri: { file: (p: string) => ({ fsPath: p }) },
 };
 
-function load(): { refreshDocument: typeof import("../commands").refreshDocument } {
+type Commands = typeof import("../commands");
+
+function load(): Pick<Commands, "refreshDocument" | "fetchPage"> {
     const original = Module._load;
     Module._load = (req, parent, isMain) => (req === "vscode" ? fake : original(req, parent, isMain));
     try {
-        return require("../commands") as { refreshDocument: typeof import("../commands").refreshDocument };
+        return require("../commands") as Commands;
     } finally {
         Module._load = original;
     }
@@ -73,4 +75,66 @@ test("a document is refreshed from its own source", { skip: !fs.existsSync(KB) &
     const declined = await refreshDocument(kb, page.document);
     assert.equal(declined.outcome, "declined");
     assert.equal((await kb.get(page.document)).document.fetchedAt, page.fetchedAt);
+});
+
+test("a page is refreshed conditionally on its etag, and a failure files nothing", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+    // A tiny site: one page whose body and ETag the test changes, and which
+    // answers 304 to a matching If-None-Match, as a real server does.
+    const http = await import("node:http");
+    let body = "<h1>IOCP</h1><p>first</p>";
+    let etag = '"v1"';
+    let status = 200;
+    const seen: (string | undefined)[] = [];
+    const server = http.createServer((req, res) => {
+        seen.push(req.headers["if-none-match"] as string | undefined);
+        if (status !== 200) {
+            res.writeHead(status);
+            res.end();
+            return;
+        }
+        if (req.headers["if-none-match"] === etag) {
+            res.writeHead(304, { etag });
+            res.end();
+            return;
+        }
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8", etag });
+        res.end(body);
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/iocp`;
+    try {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-url-"));
+        const kb = new Kb({ bin: KB, cwd: dir });
+        await kb.init();
+        const { refreshDocument, fetchPage } = load();
+
+        // What Add URL files: the page as it arrived, with its ETag.
+        const page = await fetchPage(url);
+        assert.ok(!page.notModified);
+        assert.equal(page.etag, '"v1"');
+        assert.equal(page.mime, "text/html");
+        const filed = await kb.add(page.text, { title: "IOCP", collection: "web", url, mime: page.mime, etag: page.etag });
+        assert.equal((await kb.sources())[0].etag, '"v1"');
+
+        answer = "Fetch";
+        const same = await refreshDocument(kb, filed.document);
+        assert.equal(same.outcome, "unchanged");
+        assert.equal(seen.at(-1), '"v1"', "the refresh asked conditionally");
+
+        body = "<h1>IOCP</h1><p>second</p>";
+        etag = '"v2"';
+        const changed = await refreshDocument(kb, filed.document);
+        assert.equal(changed.outcome, "updated");
+        assert.match((await kb.get(filed.document, { text: true })).text ?? "", /second/);
+        assert.equal((await kb.sources())[0].etag, '"v2"');
+
+        status = 500;
+        await assert.rejects(refreshDocument(kb, filed.document), /answered 500.*nothing was filed/);
+        assert.match((await kb.get(filed.document, { text: true })).text ?? "", /second/, "a failed fetch changed nothing");
+
+        await assert.rejects(fetchPage("http://127.0.0.1:1/nothing-listens"), /Could not reach 127\.0\.0\.1:1/);
+    } finally {
+        answer = undefined;
+        server.close();
+    }
 });

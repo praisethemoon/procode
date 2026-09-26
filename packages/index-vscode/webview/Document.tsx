@@ -238,11 +238,15 @@ export function SourceView(props: { reference: string }): JSX.Element {
                                         {source.locator}
                                     </button>
                                 )}
-                                {source.kind === "file" ? (
+                                {source.kind === "file" || source.kind === "url" ? (
                                     <button
                                         type="button"
                                         className="kb-link"
-                                        title="Read the file again and re-index it if it changed"
+                                        title={
+                                            source.kind === "url"
+                                                ? "Fetch the page again (asked first) and re-index it if it changed"
+                                                : "Read the file again and re-index it if it changed"
+                                        }
                                         onClick={onRefresh}
                                     >
                                         <Codicon name="sync" /> Refresh

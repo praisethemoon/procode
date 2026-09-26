@@ -23,7 +23,7 @@
 
 import * as vscode from "vscode";
 
-import { Kb, KbCrash, KbError, isKbCrash, isKbError } from "kb-js";
+import { Kb, KbCrash, KbError, KbSourceRefreshed, isKbCrash, isKbError } from "kb-js";
 
 import { refreshDocument } from "./commands";
 import { KNOWLEDGE_STYLESHEETS, knowledgePolicy } from "./policy";
@@ -168,7 +168,7 @@ async function perform(kb: Kb, op: Operation, raw: unknown): Promise<unknown> {
         case "source":
             return kb.source(text("id") ?? "");
         case "refreshSource":
-            return kb.refreshSource(text("id") ?? "");
+            return refreshSourceHere(kb, text("id") ?? "");
         case "renameCollection":
             return kb.renameCollection(text("from") ?? "", text("to") ?? "");
         default:
@@ -340,4 +340,34 @@ export function broadcast(webviews: Iterable<vscode.Webview>, response: Response
     for (const w of webviews) {
         void w.postMessage(response);
     }
+}
+
+/* A source's Refresh. A file is read again by kb itself; a url is fetched
+ * here, because kb has no network (index-api §12.2) — through the same
+ * document refresh, conditional on the ETag, answered in the source's shape. */
+async function refreshSourceHere(kb: Kb, id: string): Promise<KbSourceRefreshed> {
+    const read = await kb.source(id);
+    if (read.source.kind !== "url") {
+        return kb.refreshSource(id);
+    }
+    const doc = read.documents[0];
+    if (doc === undefined) {
+        throw new Error(`${id} holds no document to refresh.`);
+    }
+    const r = await refreshDocument(kb, doc.id);
+    if (r.outcome === "declined") {
+        throw new Error(`${id} was not refreshed.`);
+    }
+    if (r.outcome === "cannot") {
+        throw new Error(`${id} cannot be refreshed: ${r.why}`);
+    }
+    const filed = (await kb.get(r.document)).document;
+    return {
+        action: "refresh",
+        source: id,
+        document: r.document,
+        changed: r.outcome === "updated",
+        contentHash: filed.contentHash,
+        fetchedAt: r.fetchedAt,
+    };
 }
