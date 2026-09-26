@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Getting kb's search to 80%</title>
+</head>
+<body>
+
+<div class="eyebrow">Research report · 26 September 2026</div>
+<h1>Getting kb's search to 80%: context in every chunk, better fusion, then a small reranker</h1>
+<p class="lede">
+  On this project's own docs, kb finds the right section first 63–67% of the time and in the top three 77%. Our own
+  experiments put 80% top-3 within reach now. For 80% first-hit, the research points to a reranker on top of
+  heading-path context and score-aware fusion, plus a bigger query set to prove it. A new embedding model is the
+  answer for <em>code</em>, not for docs.
+</p>
+<div class="meta">
+  <span class="chip">Epic <b>E-7 Knowledge: performance at scale</b></span>
+  <span class="chip">Measured on <b>30 queries · 142–170 chunks</b></span>
+  <span class="chip">Research <b>6 repos read · 100+ sources</b></span>
+  <span class="chip">Status <b>findings, nothing changed in kb</b></span>
+</div>
+
+<div class="kpis">
+  <div class="kpi warn"><b>0.63</b><span>hit@1 today (hybrid)</span><small>0.67 without the SVG-heavy page as a distractor</small></div>
+  <div class="kpi"><b>0.80</b><span>hit@3 reachable now</span><small>by re-blending kb's own two rankings</small></div>
+  <div class="kpi warn"><b>0.73</b><span>best hit@1 measured</span><small>heading path in chunks + re-blended</small></div>
+  <div class="kpi danger"><b>±0.17</b><span>95% interval at 30 queries</span><small>one query is 3.3 points: too few to tune on</small></div>
+</div>
+
+<nav class="toc">
+  <a href="#measured">1. What we measured</a>
+  <a href="#answer">2. The answer: not a bigger model, first</a>
+  <a href="#ranked">3. Changes, ranked</a>
+  <a href="#systems">4. How real code search does it</a>
+  <a href="#models">5. Models that fit kb</a>
+  <a href="#fusion">6. Fusion and reranking</a>
+  <a href="#scale">7. Efficiency at scale</a>
+  <a href="#plan">8. The plan</a>
+  <a href="#open">9. Not verified</a>
+</nav>
+
+<h2 id="measured">1. What we measured</h2>
+<figure class="panel">
+  <svg class="chart" viewBox="0 0 700 200" role="img" aria-label="hit@1 by configuration over 30 queries; target 0.80"><text class="label" x="530" y="14" text-anchor="middle">target 0.80</text><text class="label" x="200" y="40" text-anchor="end">kb today (plain, RRF k=60)</text><rect class="bar warn" x="210" y="26" width="268" height="20" rx="2"/><text class="label" x="660" y="40" text-anchor="end">0.67</text><text class="label" x="200" y="74" text-anchor="end">plain, re-blended</text><rect class="bar warn" x="210" y="60" width="268" height="20" rx="2"/><text class="label" x="660" y="74" text-anchor="end">0.67</text><text class="label" x="200" y="108" text-anchor="end">heading path in chunks</text><rect class="bar warn" x="210" y="94" width="252" height="20" rx="2"/><text class="label" x="660" y="108" text-anchor="end">0.63</text><text class="label" x="200" y="142" text-anchor="end">heading path + re-blended</text><rect class="bar warn" x="210" y="128" width="292" height="20" rx="2"/><text class="label" x="660" y="142" text-anchor="end">0.73</text><line class="edge dashed" x1="530" y1="20" x2="530" y2="156"/><line class="grid" x1="210" y1="156" x2="610" y2="156"/><text class="label" x="210" y="172" text-anchor="middle">0</text><text class="label" x="410" y="172" text-anchor="middle">0.5</text><text class="label" x="610" y="172" text-anchor="middle">1.0</text></svg>
+  <figcaption>hit@1 (right section ranked first) over the same 30 labelled queries, section-level. Bars start at 0; the dashed line is the 0.80 target. "Re-blended" = kb's keyword and semantic top-50 fused offline with RRF k=5 and semantic weight 0.6, the best of twelve settings tried; values in the right-hand column.</figcaption>
+</figure>
+<div class="cols">
+  <div class="panel">
+    <table>
+      <thead><tr><th>mode (demo store, 170 chunks)</th><th class="num">hit@1</th><th class="num">hit@3</th><th class="num">MRR@10</th></tr></thead>
+      <tbody>
+        <tr><td>keyword</td><td class="num">0.33</td><td class="num">0.67</td><td class="num">0.52</td></tr>
+        <tr><td>semantic</td><td class="num">0.53</td><td class="num">0.77</td><td class="num">0.66</td></tr>
+        <tr><td><strong>hybrid</strong> (default)</td><td class="num"><strong>0.63</strong></td><td class="num"><strong>0.77</strong></td><td class="num"><strong>0.71</strong></td></tr>
+        <tr><td colspan="4"><span class="muted">Paraphrase queries only: keyword 0.20 → hybrid 0.55 hit@1. Exact-term queries: hybrid 0.80.</span></td></tr>
+      </tbody>
+    </table>
+    <p class="muted">Where it misses: sections that are pure reference and never say what they are about (<code>.lapignore</code> is all glob syntax); chunks embedded without their document title or heading path; RRF letting a middling keyword rank out-vote a clear semantic winner.</p>
+  </div>
+</div>
+
+<h2 id="answer">2. The answer: not a bigger model, first</h2>
+<div class="callout ok">
+  <strong>80% at hit@3 is reachable with a change to fusion alone.</strong>
+  <p>Re-blending kb's own rankings reaches 0.80 hit@3 on both stores, with no re-indexing.</p>
+</div>
+<div class="callout info">
+  <strong>For 80% at hit@1: context in the chunks, score-aware fusion, then a reranker.</strong>
+  <p>Heading-path prefixes are the cheapest proven gain (MRR@5 0.374 → 0.463 on a 1,600-query Markdown knowledge base). A 22.7M-parameter cross-encoder reranking the top 20 is the step aimed at exactly our "right answer at rank 2–4" misses (+11% nDCG@10 averaged over BEIR).</p>
+</div>
+<div class="callout warn">
+  <strong>Splitting is not the bottleneck for docs, and the embedding model is not the first lever.</strong>
+  <p>kb already splits by heading; the misses are sections whose text does not state their meaning, which no model can recover. A better model does matter for <em>code</em>: CodeRankEmbed, same architecture and vocabulary as kb's current model, scores 60.1 vs ≈47.7 on the CoIR code-retrieval benchmark.</p>
+</div>
+<div class="callout danger">
+  <strong>30 queries cannot prove 80%.</strong>
+  <p>The 95% interval at 0.65 is about ±0.17. Build 150+ doc and 100+ code queries before tuning anything, or the tuning fits the noise.</p>
+</div>
+
+<h2 id="ranked">3. Changes, ranked by expected gain ÷ cost</h2>
+<table>
+  <thead><tr><th>#</th><th>change</th><th>evidence</th><th>cost</th></tr></thead>
+  <tbody>
+    <tr><td class="num">0</td><td><strong>A larger query set</strong> with confidence intervals</td><td>Elastic: ~40 labelled queries before tuned fusion beat RRF, ~300 for reliable weights</td><td>an afternoon, agent-drafted and checked</td></tr>
+    <tr><td class="num">1</td><td><strong>Title and heading path</strong> in each chunk's embedded text, and as boosted BM25 fields</td><td>MRR@5 +23.8% (arXiv 2608.00824, verified); Anthropic contextual embeddings −35% top-20 failures, −49% with contextual BM25; Continue, bloop and Sweep all prepend path or headings</td><td>one re-embed</td></tr>
+    <tr><td class="num">2</td><td><strong>Agent-written context</strong>: an optional one-line summary per document or section on <code>kb_add</code></td><td>Anthropic's Contextual Retrieval, with the LLM moved to the calling agent (judgement)</td><td>small API change</td></tr>
+    <tr><td class="num">3</td><td><strong>Reranker</strong>: ms-marco-MiniLM-L6-v2 over the fused top 20</td><td>+11% BEIR nDCG@10; DL19 74.30 (verified); same WordPiece vocabulary kb already has</td><td>a BERT cross-encoder pass; ~0.3–0.9 s/query (estimate)</td></tr>
+    <tr><td class="num">4</td><td><strong>Score-aware fusion</strong>: normalised weighted combination instead of equal-weight RRF, a guard for a confident semantic winner, more keyword weight for identifier-shaped queries</td><td>convex combination beat RRF(60) on MS MARCO, NQ, HotpotQA, FiQA (arXiv 2210.11934)</td><td>small</td></tr>
+    <tr><td class="num">5</td><td><strong>Code chunking and tokens</strong>: tree-sitter split-then-merge, BM25 on the whole identifier plus its camel/snake parts, a symbol field boosted ×5</td><td>cAST +4.3 Recall@5; whole+parts 0.563 vs 0.309 NDCG@10 on CoIR-Go; Sourcegraph BM25F ~+20%</td><td>link tree-sitter (a C library) and grammars</td></tr>
+    <tr><td class="num">6</td><td><strong>CodeRankEmbed</strong> as the code vector space</td><td>CoIR 60.1 vs ≈47.7; SWE-bench-Lite function Acc@10 58.76 vs BM25 36.86; CLS pooling (verified)</td><td>small: same architecture and vocabulary</td></tr>
+    <tr><td class="num">7</td><td><strong>Chunk hygiene</strong>: real token counts; chunks over half digits and punctuation go keyword-only</td><td>bloop's <code>is_noisy</code>; fixes the 13-minute SVG page</td><td>small</td></tr>
+  </tbody>
+</table>
+
+<h2 id="systems">4. How real code search does it</h2>
+<table>
+  <thead><tr><th>system</th><th>index</th><th>ranking</th><th>what kb can take</th></tr></thead>
+  <tbody>
+    <tr><td class="id">GitHub Blackbird</td><td>sparse n-grams; separate content, symbol and path indexes</td><td>regex → n-gram query, then verify</td><td>separate symbol and path fields</td></tr>
+    <tr><td class="id">Sourcegraph Zoekt</td><td>positional trigrams (index ~3× corpus)</td><td>basename and exact symbol definition +7000; BM25F with symbols ×5 (~+20%)</td><td>BM25F boosts; Cody dropped embeddings for tuned BM25 plus ranking signals</td></tr>
+    <tr><td class="id">aider repo map</td><td>tree-sitter tag queries: definitions and references</td><td>personalised PageRank over the reference graph</td><td>symbol records and a graph prior for ties</td></tr>
+    <tr><td class="id">Continue</td><td>AST chunks, collapsed class/function context; Markdown chunks with every parent heading</td><td>FTS5 trigram (path ×10) + embeddings; optional rerank of 50 → 20</td><td>the heading-path idea; rerank only the top few dozen</td></tr>
+    <tr><td class="id">Sweep</td><td>tree-sitter split-then-merge (cAST in effect)</td><td>min-max BM25 + 2×cosine, weight tuned on 50 cases</td><td>normalised weighted fusion</td></tr>
+    <tr><td class="id">bloop</td><td>1–3-gram index; token windows with a path header</td><td>drops chunks over 50% digits/punctuation</td><td>the noise rule</td></tr>
+  </tbody>
+</table>
+<p class="muted">Read from shallow clones under <code>/tmp/kb-research</code> (nothing built or run); file and line references are in the full report, <code>/tmp/kb-research/REPORT.md</code>.</p>
+
+<h2 id="models">5. Models that fit kb</h2>
+<table>
+  <thead><tr><th>model</th><th class="num">params</th><th>license</th><th>docs (BEIR)</th><th>code (CoIR)</th><th>fit</th></tr></thead>
+  <tbody>
+    <tr><td class="id">nomic-embed-text-v1.5 (today)</td><td class="num">137M</td><td>Apache-2.0</td><td>≈53.0</td><td>≈47.7</td><td><span class="tag ok">keep for docs</span></td></tr>
+    <tr><td class="id">CodeRankEmbed</td><td class="num">137M</td><td>MIT</td><td>—</td><td>60.1</td><td><span class="tag ok">code: yes</span> same architecture and vocabulary</td></tr>
+    <tr><td class="id">gte-modernbert-base</td><td class="num">149M</td><td>Apache-2.0</td><td>55.2</td><td>71.5</td><td><span class="tag warn">later</span> best at this size; needs a ModernBERT block and a BPE tokenizer</td></tr>
+    <tr><td class="id">granite-embedding-small-r2</td><td class="num">47.7M</td><td>Apache-2.0</td><td>50.9</td><td>53.4</td><td><span class="tag warn">maybe</span> fast bulk option</td></tr>
+    <tr><td class="id">ms-marco-MiniLM-L6-v2 (reranker)</td><td class="num">22.7M</td><td>Apache-2.0</td><td>DL19 74.30</td><td>—</td><td><span class="tag ok">yes</span> first reranker</td></tr>
+    <tr><td class="id">gte-reranker-modernbert-base</td><td class="num">150M</td><td>Apache-2.0</td><td>56.73</td><td>80.0 on a 20-way variant (not CoIR-10)</td><td><span class="tag warn">later</span> with the ModernBERT block</td></tr>
+    <tr><td class="id">jina-code-0.5b, SFR-Code, jina-reranker-v2</td><td class="num">—</td><td>non-commercial</td><td>—</td><td>high</td><td><span class="tag danger">no</span> license</td></tr>
+  </tbody>
+</table>
+<p class="muted">CoIR scores differ between sources (bge-base is 42.77 in one paper and 46.6 in another); compare within a source only.</p>
+
+<h2 id="fusion">6. Fusion and reranking</h2>
+<p>RRF ranks by position only, so a middling keyword rank can out-vote a clear semantic winner, which is one of the misses we saw. A normalised, weighted combination keeps the score margins; its weight is learnable from little data. A reranker reads the query and each candidate together, and is best kept to the top 20–30: going deeper often hurts.</p>
+<ul>
+  <li><strong>Our offline sweep agrees:</strong> semantic weight 0.6 with a small RRF k was best, and the gain was 1–3 queries, too small to trust at 30 queries.</li>
+  <li><strong>Watch out:</strong> llama.cpp currently scores BERT cross-encoders wrongly (open PR #21729); validate kb's implementation against sentence-transformers, not llama.cpp.</li>
+</ul>
+
+<h2 id="scale">7. Efficiency at scale</h2>
+<ul>
+  <li><strong>Building is the limit:</strong> at 0.58 s per chunk, 10k chunks take ~1.6 h and 1M ~6.7 days. Batched matrix kernels, skipping noisy chunks and a content-hash cache come first.</li>
+  <li><strong>Search is not:</strong> hybrid search over 170 chunks took 0.22–0.31 s per query here, model loading included. Brute force over 256-dimension int8 vectors holds to ~200k chunks; a binary prescan plus exact rescore to ~1M. No HNSW below that.</li>
+  <li><strong>Memory at 1M chunks:</strong> 768-d float32 3 GB, int8 768 MB, 256-d int8 256 MB; nomic loses little at 256 dimensions (62.28 → 61.04 on MTEB).</li>
+</ul>
+
+<h2 id="plan">8. The plan</h2>
+<ol>
+  <li><strong>A benchmark first:</strong> 150+ doc queries and 100+ code queries, tagged paraphrase / identifier / purpose, with bootstrap intervals. Every step below is measured on it.</li>
+  <li><strong>Chunk hygiene:</strong> real token counts, noisy chunks keyword-only, tiny sibling sections merged.</li>
+  <li><strong>Heading path and title</strong> in the embedded text and as boosted keyword fields. Expected to be the largest single gain.</li>
+  <li><strong>Agent-written context</strong> on <code>kb_add</code>, re-embedding only what changed.</li>
+  <li><strong>Score-aware fusion</strong>, with RRF kept as a mode.</li>
+  <li><strong>The MiniLM-L6 reranker</strong> over the top 20, behind a switch, with latency measured.</li>
+  <li><strong>Code:</strong> tree-sitter chunking, identifier-aware tokens, symbol fields, CodeRankEmbed.</li>
+  <li><strong>Only if still short:</strong> a ModernBERT block, then gte-modernbert-base and its reranker.</li>
+</ol>
+<p class="muted">Avoid: tuning on 30 queries, a query-time LLM (HyDE and query2doc), semantic chunking, proposition indexing, reranking more than ~50 candidates, HNSW below ~1M chunks, non-commercial models.</p>
+
+<h2 id="open">9. Not verified</h2>
+<details open>
+  <summary>Which numbers were checked, and which were not</summary>
+  <p>Checked by me against the primary source: the heading-path paper (MRR@5 0.374 → 0.463, 1,600 queries), CodeRankEmbed's CLS pooling, and MiniLM-L6's DL19 74.30 / MRR@10 39.01 / 1,800 docs/s. The research agent checked the CoIR-Go tokenizer ablation, the Sourcegraph BM25F post, the Granite R2 tables, nomic's dimension table, the quantisation blog, sqlite-vec and FAISS. Every other figure is the agent's reading, some through its own sub-agents, and its flagged doubts are in <code>/tmp/kb-research/notes/</code>.</p>
+</details>
+<details>
+  <summary>Our own measurements</summary>
+  <p>30 queries written by one person who knows the documents, over this project's docs only; no code queries yet. Labels allow one to three right sections per query, so scores are a floor. Differences under ~0.10 are one to three queries.</p>
+</details>
+<details>
+  <summary>Estimates, not measurements</summary>
+  <p>The reranker's CPU latency (0.3–0.9 s for 20 candidates), the gains in section 3's ranking, and the scale thresholds are the research agent's estimates.</p>
+</details>
+
+<p class="muted">
+  Sources: the measurements are from kb's demo workspace and two scratch stores, 26 September 2026. The research report,
+  with its principal source URLs and the file and line references, is <code>/tmp/kb-research/REPORT.md</code>; the principal sources are arXiv 2608.00824,
+  2104.08663, 2210.11934, 2506.15655, 2605.18561, 2412.01007, 2503.09089, Anthropic's "Contextual Retrieval", and Sourcegraph's
+  BM25F post.
+</p>
+
+</body>
+</html>
