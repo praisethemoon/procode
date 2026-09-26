@@ -1,0 +1,44 @@
+{
+  "name": "artifacts",
+  "displayName": "artifacts",
+  "description": "Pages an agent publishes into the workspace's .artifact/ directory — HTML written against baukasten's tokens, with a title, a description and dates — and the MCP server agents publish them through.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "praisethemoon",
+  "author": {
+    "name": "Soulaymen Chouri",
+    "email": "doit@praisethemoon.org"
+  },
+  "license": "MIT",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    },
+    "./store": {
+      "types": "./out/store.d.ts",
+      "default": "./out/store.js"
+    }
+  },
+  "bin": {
+    "artifacts-mcp": "./bin/artifacts-mcp"
+  },
+  "files": [
+    "out",
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test \"out/test/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}

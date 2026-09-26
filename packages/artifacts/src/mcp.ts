@@ -1,0 +1,170 @@
+/* Artifacts as MCP tools, over stdio: newline-delimited JSON-RPC 2.0
+ * (specs/artifacts.md §4).
+ *
+ * Agents publish a page, list what is there and read one back. Deleting is
+ * left to people, in the editor.
+ *
+ * The artifacts are the `.artifact/` found by walking up from the directory
+ * the server was started in; with none, the first publish creates one at the
+ * enclosing git repository's root.
+ */
+
+import * as readline from "node:readline";
+
+import { ArtifactError, Artifacts, MAX_DESCRIPTION, MAX_TITLE, defaultRoot, findArtifacts } from "./store";
+
+const VERSION = "0.1.0";
+
+/* What an agent needs to write a page that looks right, said once, where the
+ * agent reads it. The token list is the useful subset of baukasten's; the
+ * spec names the rest. */
+export const INSTRUCTIONS = `Artifacts are finished pieces of work you hand to the person as a page — a report, a comparison, a design note, findings, a chart. Publish one with artifact_publish when the result is worth reading as a document rather than as chat.
+
+The page is HTML (a whole document or a fragment). It is shown inside VS Code in the person's theme, so style it ONLY with baukasten's CSS variables, never with fixed colours:
+- colour: --bk-color-foreground, --bk-color-foreground-muted, --bk-color-background, --bk-color-background-secondary, --bk-color-background-elevated, --bk-color-border, --bk-color-divider, --bk-color-link, --bk-color-primary, --bk-color-primary-foreground, --bk-color-success, --bk-color-warning, --bk-color-danger, --bk-color-info, --bk-color-code-background, --bk-color-code-foreground
+- space: --bk-spacing-1 (0.25rem) … --bk-spacing-24, --bk-gap-xs|sm|md|lg|xl
+- type: --bk-font-family-sans, --bk-font-family-mono, --bk-font-size-xs|sm|md|base|lg|xl|2xl|3xl, --bk-font-weight-normal|medium|semibold|bold, --bk-line-height-tight|normal|relaxed
+- shape: --bk-radius-sm|md|lg, --bk-border-width-1|2, --bk-shadow-sm|md
+Plain elements (headings, paragraphs, lists, tables, code, pre, blockquote, links) are already styled with these, so simple pages need no CSS at all.
+The page has no network: inline everything (SVG, data: images, scripts). Scripts run sandboxed.
+Republish with the same id to revise a page; its createdAt is kept.`;
+
+type Json = Record<string, unknown>;
+
+interface Tool {
+    readonly name: string;
+    readonly description: string;
+    readonly inputSchema: Json;
+    readonly call: (args: Json, ctx: Ctx) => unknown;
+}
+
+export interface Ctx {
+    readonly cwd: string;
+}
+
+function readStore(ctx: Ctx): Artifacts | null {
+    const root = findArtifacts(ctx.cwd);
+    return root ? new Artifacts(root) : null;
+}
+
+export const TOOLS: readonly Tool[] = [
+    {
+        name: "artifact_publish",
+        description:
+            "Publish an HTML page as an artifact the person reads in VS Code. Without id, creates the next A-<n>; with id, replaces that artifact's page and metadata. Style with baukasten's --bk-* variables only (see the server instructions). Returns the artifact and the path of its page.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                title: { type: "string", description: `One line, at most ${MAX_TITLE} characters.` },
+                description: {
+                    type: "string",
+                    description: `What the page is and why it exists; shown under the title in the list. At most ${MAX_DESCRIPTION} characters.`,
+                },
+                html: { type: "string", description: "The page: a whole HTML document or a fragment." },
+                id: { type: "string", description: "A-<n>: the artifact to replace. Omit to create a new one." },
+            },
+            required: ["title", "html"],
+        },
+        call: (args, ctx) => {
+            const store = readStore(ctx) ?? new Artifacts(defaultRoot(ctx.cwd));
+            return store.publish({
+                title: args["title"] as string,
+                html: args["html"] as string,
+                description: args["description"] as string | undefined,
+                id: args["id"] as string | undefined,
+            });
+        },
+    },
+    {
+        name: "artifact_list",
+        description: "Every artifact in the workspace, most recently updated first, without their pages.",
+        inputSchema: { type: "object", properties: {} },
+        call: (_args, ctx) => {
+            const artifacts = readStore(ctx)?.list() ?? [];
+            return { artifacts, count: artifacts.length };
+        },
+    },
+    {
+        name: "artifact_get",
+        description: "One artifact's metadata and its page.",
+        inputSchema: {
+            type: "object",
+            properties: { id: { type: "string", description: "A-<n>" } },
+            required: ["id"],
+        },
+        call: (args, ctx) => {
+            const store = readStore(ctx);
+            if (!store) throw new ArtifactError("not_found", `no artifact ${String(args["id"])}: this workspace has none`);
+            return store.get(args["id"] as string);
+        },
+    },
+];
+
+/* ------------------------------------------------------------ JSON-RPC */
+
+function checkArgs(tool: Tool, args: Json): void {
+    const props = (tool.inputSchema["properties"] ?? {}) as Json;
+    for (const k of Object.keys(args)) {
+        if (!(k in props)) {
+            throw new ArtifactError("invalid", `${tool.name} takes no "${k}"; it takes ${Object.keys(props).join(", ") || "nothing"}`);
+        }
+    }
+}
+
+export async function handle(msg: Json, ctx: Ctx): Promise<Json | null> {
+    const id = msg["id"];
+    const method = String(msg["method"] ?? "");
+    const reply = (result: unknown) => ({ jsonrpc: "2.0", id, result });
+    if (id === undefined || id === null) {
+        return null; // a notification: nothing to answer
+    }
+    switch (method) {
+        case "initialize":
+            return reply({
+                protocolVersion: String((msg["params"] as Json | undefined)?.["protocolVersion"] ?? "2024-11-05"),
+                capabilities: { tools: {} },
+                serverInfo: { name: "artifacts", version: VERSION },
+                instructions: INSTRUCTIONS,
+            });
+        case "ping":
+            return reply({});
+        case "tools/list":
+            return reply({ tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
+        case "tools/call": {
+            const params = (msg["params"] ?? {}) as Json;
+            const tool = TOOLS.find((t) => t.name === params["name"]);
+            if (!tool) {
+                return { jsonrpc: "2.0", id, error: { code: -32602, message: `unknown tool ${String(params["name"])}` } };
+            }
+            try {
+                const args = (params["arguments"] ?? {}) as Json;
+                checkArgs(tool, args);
+                const result = await tool.call(args, ctx);
+                return reply({ content: [{ type: "text", text: JSON.stringify(result, null, 2) }] });
+            } catch (e) {
+                const code = e instanceof ArtifactError ? e.code : "internal";
+                return reply({ content: [{ type: "text", text: `${code}: ${(e as Error).message}` }], isError: true });
+            }
+        }
+        default:
+            return { jsonrpc: "2.0", id, error: { code: -32601, message: `unknown method ${method}` } };
+    }
+}
+
+export function main(): void {
+    const ctx: Ctx = { cwd: process.cwd() };
+    const rl = readline.createInterface({ input: process.stdin });
+    rl.on("line", (line) => {
+        if (!line.trim()) return;
+        let msg: Json;
+        try {
+            msg = JSON.parse(line) as Json;
+        } catch {
+            process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }) + "\n");
+            return;
+        }
+        void handle(msg, ctx).then((out) => {
+            if (out) process.stdout.write(JSON.stringify(out) + "\n");
+        });
+    });
+}

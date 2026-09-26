@@ -9,6 +9,7 @@
         "packages/lap-vscode",
         "packages/coboard",
         "packages/coboard-vscode",
+        "packages/artifacts",
         "packages/combined"
     ],
     "scripts": {

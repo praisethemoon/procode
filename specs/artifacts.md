@@ -22,7 +22,8 @@ Bindings, in the pattern lap, kb and coboard share:
 
 `.artifact/` at the workspace root, found by walking up from the working
 directory the way `.git`, `.kb/` and `.coboard/` are. `artifact_publish`
-creates it in the working directory when there is none. Nothing is written
+creates it at the enclosing git repository's root when there is none (the
+working directory outside a repository). Nothing is written
 anywhere else.
 
 ```
@@ -44,7 +45,9 @@ Artifact { id, title, description, createdAt, updatedAt, bytes }
 ```
 
 - **`id`** is `A-<n>`: public, prefixed, monotonic, never reused. The next id
-  is one more than the largest ever present in `.artifact/`.
+  is past both `.artifact/next` (a counter, so an id stays spent after its
+  artifact is deleted) and every `A-<n>` directory present, and is claimed by
+  creating its directory, which only one writer can do.
 - **`title`** — required, one line, at most 200 characters.
 - **`description`** — optional, what the page is and why it exists, at most
   2000 characters. It is what the list shows under the title.
@@ -72,10 +75,10 @@ fragment in a document. It may assume:
   `--bk-color-primary`, `--bk-color-success`, `--bk-color-warning`,
   `--bk-color-danger`, `--bk-color-info`, `--bk-color-code-background`, …),
   spacing (`--bk-spacing-1` … `--bk-spacing-24`, `--bk-gap-{xs..xl}`), type
-  (`--bk-font-family`, `--bk-font-size-{xs..5xl}`,
+  (`--bk-font-family-sans`, `--bk-font-family-mono`, `--bk-font-size-{xs..5xl}`,
   `--bk-font-weight-{normal,medium,semibold,bold}`,
-  `--bk-line-height-{tight,normal,relaxed}`), shape (`--bk-radius-*`,
-  `--bk-border-width-*`, `--bk-shadow-*`);
+  `--bk-line-height-{tight,normal,relaxed}`), shape (`--bk-radius-{sm..3xl}`,
+  `--bk-border-width-{1,2,4}`, `--bk-shadow-{sm..2xl}`);
 - **a default stylesheet** for plain elements — body, headings, paragraphs,
   lists, links, tables, `code` and `pre`, `blockquote`, `hr` — written with
   those tokens, so a page with no styles of its own already looks native.
