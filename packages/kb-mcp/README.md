@@ -27,10 +27,11 @@ reader must get the same answer to the same question.
 
 ## And the seventh, which does not exist
 
-`rebuild`, `reindex`, `compact`, `promote`, `demote` and every `DELETE` are not
-exposed. §9 is explicit about why: an agent files knowledge into the project
-store and reads from both, while forgetting — and deciding that something is
-general enough to outlive the project — are the reader's decisions.
+`rebuild`, `reindex`, `compact` and every `DELETE` are not exposed. §9 is
+explicit about why: an agent files knowledge into the workspace's store and
+reads from it, while forgetting is the reader's decision. That is also why
+`kb_add` with a `dir` never forgets a file that is gone from the folder: it
+reports it as `missing`.
 
 A tool that let an agent drop a collection would be a defect against that
 section rather than a feature, and especially so when it is useful: the useful
@@ -50,19 +51,15 @@ Two rules follow the same line:
 
 ## Where a write lands
 
-`kb_add` takes no tier. §1.4 sends an ingest to the project store when one
-exists and to global otherwise, because the intent at the moment of filing is
-almost always project-scoped; §9 then keeps `promote` and `demote` away from
-agents entirely. A `store: "global"` argument would hand the caller that
-decision at the one moment it cannot be made well, in the direction that is hard
-to undo — a document filed globally is easy never to notice again. So the flag
-is not sent, and `kb_links`'s write refuses a tier out loud rather than
-accepting one and dropping it.
+There is one store, the workspace's: the first `.kb/` at or above the working
+directory the server was started in, found by walking up like `.git` (§1.4 of
+`specs/index-api.md`). There is no global store and no tier to choose, so
+`kb_add` takes none. Research that should outlive a project is kept by
+committing its `.kb/`.
 
-Which project store that is depends on the working directory the server was
-started in, because §1.4 finds one by walking up like `.git`. A host that starts
-this somewhere other than the workspace gets a server that searches and files
-into the global tier, and every answer it gives is plausible.
+A host that starts the server outside the workspace gets one that finds no
+store, and every tool refuses with `not_found` rather than filing anywhere
+else. Start it from inside the project.
 
 ## Running it
 
@@ -78,7 +75,6 @@ across `src/` by name.
 | variable | meaning |
 |---|---|
 | `KB_BIN` | the `kb` executable. A bare name is resolved through PATH. |
-| `KB_STORE` | read by the CLI, not here: it moves the global tier. |
 
 ## Framing
 

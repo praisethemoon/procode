@@ -1,0 +1,152 @@
+{"id": "da001", "q": "should i commit the .kb directory to git", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [120, 139]}]}
+{"id": "da002", "q": "model.json fingerprint modelFile sha256", "tag": "identifier", "rel": [{"path": "specs/index-api.md", "lines": [348, 356]}]}
+{"id": "da003", "q": "search refuses after swapping in a different embedding model file", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [358, 360]}, {"path": "specs/index-api.md", "lines": [384, 386]}]}
+{"id": "da004", "q": "why is hybrid search the default instead of pure vector search", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [246, 252]}]}
+{"id": "da005", "q": "what does search do when no chunks have been embedded yet", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [254, 258]}]}
+{"id": "da006", "q": "minScore search parameter", "tag": "identifier", "rel": [{"path": "specs/index-api.md", "lines": [236, 244]}]}
+{"id": "da007", "q": "--no-forget", "tag": "identifier", "rel": [{"path": "specs/index-api.md", "lines": [184, 194]}]}
+{"id": "da008", "q": "biggest file kb will index from a directory", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [196, 207]}]}
+{"id": "da009", "q": "does rebuild re-embed chunks that already have a vector", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [390, 396]}]}
+{"id": "da010", "q": "does kb respect gitignore rules when adding a folder", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [196, 200]}]}
+{"id": "da011", "q": "what happens to a document when its file is edited and the folder added again", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [184, 194]}]}
+{"id": "da012", "q": "why doesn't the kb binary download web pages itself", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [452, 457]}]}
+{"id": "da013", "q": "how do i refresh a source that came from a url", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [452, 457]}, {"path": "specs/index-api.md", "lines": [162, 170]}]}
+{"id": "da014", "q": "how should an agent save a page it has already read into kb", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [162, 177]}]}
+{"id": "da015", "q": "does filing the same page twice redo the indexing work", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [179, 180]}, {"path": "specs/index-api.md", "lines": [156, 158]}]}
+{"id": "da016", "q": "S-3 D-241 C-99812 id prefixes", "tag": "identifier", "rel": [{"path": "specs/index-api.md", "lines": [36, 47]}]}
+{"id": "da017", "q": "can a document belong to more than one topic scope", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [79, 85]}]}
+{"id": "da018", "q": "why is there no shared store in the home directory", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [95, 114]}]}
+{"id": "da019", "q": "init_failed", "tag": "identifier", "rel": [{"path": "specs/index-api.md", "lines": [100, 108]}]}
+{"id": "da020", "q": "does kb fall back to some other store when no .kb is found above the cwd", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [95, 98]}, {"path": "README.md", "lines": [99, 102]}]}
+{"id": "da021", "q": "how are markdown files and source code split into passages", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [221, 226]}]}
+{"id": "da022", "q": "why does changing chunk size force a reindex", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [231, 232]}]}
+{"id": "da023", "q": "GET /stale olderThan=90d", "tag": "identifier", "rel": [{"path": "specs/index-api.md", "lines": [283, 295]}]}
+{"id": "da024", "q": "why does search return snippets rather than whole documents", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [274, 281]}, {"path": "packages/kb-mcp/README.md", "lines": [43, 46]}]}
+{"id": "da025", "q": "analogue_of link type", "tag": "identifier", "rel": [{"path": "specs/index-api.md", "lines": [307, 318]}]}
+{"id": "da026", "q": "why aren't api symbols or concepts modelled as graph nodes", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [310, 314]}, {"path": "specs/index-api.md", "lines": [449, 451]}]}
+{"id": "da027", "q": "collection_in_use withDocuments", "tag": "identifier", "rel": [{"path": "specs/index-api.md", "lines": [331, 331]}, {"path": "specs/index-api.md", "lines": [436, 446]}]}
+{"id": "da028", "q": "reclaim disk space from old blobs nothing points to anymore", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [320, 331]}]}
+{"id": "da029", "q": "why no approximate nearest neighbour index for the vectors", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [384, 388]}]}
+{"id": "da030", "q": "which gguf gets used when several models sit in the models folder", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [368, 373]}, {"path": "README.md", "lines": [118, 119]}]}
+{"id": "da031", "q": "model_missing", "tag": "identifier", "rel": [{"path": "specs/index-api.md", "lines": [368, 379]}, {"path": "specs/index-api.md", "lines": [436, 440]}]}
+{"id": "da032", "q": "why does kb-js shell out to the cli instead of searching in javascript", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [415, 427]}, {"path": "packages/kb-js/README.md", "lines": [3, 11]}, {"path": "packages/kb-mcp/README.md", "lines": [11, 15]}]}
+{"id": "da033", "q": "why is the knowledge sidebar a webview and not a tree view", "tag": "purpose", "rel": [{"path": "specs/index-ui.md", "lines": [26, 27]}]}
+{"id": "da034", "q": "what the knowledge sidebar shows before you type anything", "tag": "paraphrase", "rel": [{"path": "specs/index-ui.md", "lines": [33, 35]}]}
+{"id": "da035", "q": "does the knowledge search need a submit button", "tag": "paraphrase", "rel": [{"path": "specs/index-ui.md", "lines": [37, 39]}]}
+{"id": "da036", "q": "what information each result row in the sidebar displays", "tag": "paraphrase", "rel": [{"path": "specs/index-ui.md", "lines": [41, 52]}]}
+{"id": "da037", "q": "why can't i edit an indexed document in the viewer", "tag": "purpose", "rel": [{"path": "specs/index-ui.md", "lines": [91, 92]}, {"path": "specs/index-ui.md", "lines": [128, 128]}]}
+{"id": "da038", "q": "does opening a search hit mark up the matched words", "tag": "paraphrase", "rel": [{"path": "specs/index-ui.md", "lines": [86, 89]}]}
+{"id": "da039", "q": "kb:/collections", "tag": "identifier", "rel": [{"path": "specs/index-ui.md", "lines": [94, 99]}, {"path": "specs/index-ui.md", "lines": [108, 115]}]}
+{"id": "da040", "q": "Knowledge: Search command", "tag": "identifier", "rel": [{"path": "specs/index-ui.md", "lines": [101, 106]}]}
+{"id": "da041", "q": "kb:/graph", "tag": "identifier", "rel": [{"path": "specs/index-ui.md", "lines": [110, 120]}]}
+{"id": "da042", "q": "where do chunk size and model choice get configured if not in the ui", "tag": "purpose", "rel": [{"path": "specs/index-ui.md", "lines": [126, 134]}]}
+{"id": "da043", "q": "bpe_strip", "tag": "identifier", "rel": [{"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [45, 50]}]}
+{"id": "da044", "q": "which encoder layers attend to every token and which use a window", "tag": "paraphrase", "rel": [{"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [72, 79]}]}
+{"id": "da045", "q": "kb.role reranker", "tag": "identifier", "rel": [{"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [105, 106]}, {"path": "specs/index-api.md", "lines": [368, 373]}]}
+{"id": "da046", "q": "how is the relevance score computed from the reranker hidden states", "tag": "paraphrase", "rel": [{"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [86, 92]}]}
+{"id": "da047", "q": "how do i regenerate the gguf file from the hugging face weights", "tag": "purpose", "rel": [{"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [15, 27]}]}
+{"id": "da048", "q": "how does the tokenizer handle runs of indentation spaces", "tag": "paraphrase", "rel": [{"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [37, 44]}]}
+{"id": "da049", "q": "blk.0.attn_norm.weight", "tag": "identifier", "rel": [{"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [64, 66]}, {"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [114, 118]}]}
+{"id": "da050", "q": "in the feed-forward block which half of the projection is the gate", "tag": "paraphrase", "rel": [{"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [64, 69]}]}
+{"id": "da051", "q": "rope.freq_base_local", "tag": "identifier", "rel": [{"path": "cli/kb-cli/tools/modernbert/MODERNBERT.md", "lines": [96, 104]}]}
+{"id": "da052", "q": "KbCrash", "tag": "identifier", "rel": [{"path": "packages/kb-js/README.md", "lines": [44, 54]}]}
+{"id": "da053", "q": "why can't a webview import the full kb-js package", "tag": "purpose", "rel": [{"path": "packages/kb-js/README.md", "lines": [33, 42]}]}
+{"id": "da054", "q": "how does kb-js stop user search text from being run by the shell", "tag": "purpose", "rel": [{"path": "packages/kb-js/README.md", "lines": [56, 63]}, {"path": "README.md", "lines": [17, 17]}]}
+{"id": "da055", "q": "what happens when kb-js calls a command the cli hasn't implemented", "tag": "paraphrase", "rel": [{"path": "packages/kb-js/README.md", "lines": [65, 71]}]}
+{"id": "da056", "q": "isKbError e.spec", "tag": "identifier", "rel": [{"path": "packages/kb-js/README.md", "lines": [13, 31]}]}
+{"id": "da057", "q": "can the js wrapper tests run without compiling the kb binary", "tag": "paraphrase", "rel": [{"path": "packages/kb-js/README.md", "lines": [73, 80]}]}
+{"id": "da058", "q": "why kb-mcp has no mcp sdk dependency", "tag": "purpose", "rel": [{"path": "packages/kb-mcp/README.md", "lines": [6, 9]}]}
+{"id": "da059", "q": "which kb operations are not available to agents", "tag": "paraphrase", "rel": [{"path": "packages/kb-mcp/README.md", "lines": [28, 39]}, {"path": "specs/index-api.md", "lines": [411, 413]}]}
+{"id": "da060", "q": "Content-Length headers vs newline-delimited json stdio", "tag": "identifier", "rel": [{"path": "packages/kb-mcp/README.md", "lines": [83, 88]}]}
+{"id": "da061", "q": "difference between a protocol error and a failed tool call in kb-mcp", "tag": "paraphrase", "rel": [{"path": "packages/kb-mcp/README.md", "lines": [96, 100]}]}
+{"id": "da062", "q": "KB_BIN", "tag": "identifier", "rel": [{"path": "packages/kb-mcp/README.md", "lines": [78, 81]}, {"path": "README.md", "lines": [84, 97]}]}
+{"id": "da063", "q": "why does kb-mcp forbid console.log", "tag": "purpose", "rel": [{"path": "packages/kb-mcp/README.md", "lines": [73, 76]}]}
+{"id": "da064", "q": "multibyte character split across two pipe reads", "tag": "paraphrase", "rel": [{"path": "packages/kb-mcp/README.md", "lines": [90, 94]}]}
+{"id": "da065", "q": "why kb_add doesn't let the agent pick the global store", "tag": "purpose", "rel": [{"path": "packages/kb-mcp/README.md", "lines": [51, 60]}]}
+{"id": "da066", "q": "where are published artifact pages stored on disk", "tag": "paraphrase", "rel": [{"path": "specs/artifacts.md", "lines": [21, 36]}, {"path": ".claude/skills/artifacts/SKILL.md", "lines": [8, 10]}]}
+{"id": "da067", "q": "how to update an existing artifact without changing its creation date", "tag": "purpose", "rel": [{"path": "specs/artifacts.md", "lines": [115, 117]}, {"path": "specs/artifacts.md", "lines": [53, 55]}, {"path": ".claude/skills/artifacts/SKILL.md", "lines": [28, 29]}]}
+{"id": "da068", "q": "can an artifact page load external scripts or fonts", "tag": "paraphrase", "rel": [{"path": "specs/artifacts.md", "lines": [107, 111]}, {"path": ".claude/skills/artifacts/SKILL.md", "lines": [69, 70]}]}
+{"id": "da069", "q": "bad_id", "tag": "identifier", "rel": [{"path": "specs/artifacts.md", "lines": [122, 128]}]}
+{"id": "da070", "q": "why shouldn't artifact pages hard-code colours", "tag": "purpose", "rel": [{"path": "specs/artifacts.md", "lines": [104, 105]}, {"path": ".claude/skills/artifacts/SKILL.md", "lines": [54, 58]}]}
+{"id": "da071", "q": "how are new artifact numbers allocated without two writers colliding", "tag": "paraphrase", "rel": [{"path": "specs/artifacts.md", "lines": [47, 50]}]}
+{"id": "da072", "q": "callout ok info warn danger", "tag": "identifier", "rel": [{"path": "specs/artifacts.md", "lines": [86, 102]}, {"path": ".claude/skills/artifacts/SKILL.md", "lines": [40, 42]}]}
+{"id": "da073", "q": "how do i delete an artifact", "tag": "purpose", "rel": [{"path": "specs/artifacts.md", "lines": [130, 131]}, {"path": "specs/artifacts.md", "lines": [148, 149]}]}
+{"id": "da074", "q": "what does the artifact viewer inject into the frame ahead of the page styles", "tag": "paraphrase", "rel": [{"path": "specs/artifacts.md", "lines": [140, 146]}]}
+{"id": "da075", "q": "how are artifact files saved so a half-written state is never seen", "tag": "paraphrase", "rel": [{"path": "specs/artifacts.md", "lines": [63, 64]}]}
+{"id": "db001", "q": "which node and vs code versions does the repo need", "tag": "paraphrase", "rel": [{"path": "README.md", "lines": [36, 43]}]}
+{"id": "db002", "q": "build only the typescript packages without the C tools", "tag": "paraphrase", "rel": [{"path": "README.md", "lines": [53, 58]}]}
+{"id": "db003", "q": "how to install lap and kb into ~/.local instead of /usr/local", "tag": "purpose", "rel": [{"path": "README.md", "lines": [71, 82]}, {"path": "cli/lap-cli/README.md", "lines": [55, 57]}]}
+{"id": "db005", "q": "why does every kb mcp tool refuse with not_found", "tag": "purpose", "rel": [{"path": "README.md", "lines": [99, 102]}, {"path": "specs/index-api.md", "lines": [95, 98]}]}
+{"id": "db006", "q": "where does the embedding model live and who puts it there", "tag": "paraphrase", "rel": [{"path": "README.md", "lines": [104, 110]}, {"path": "specs/index-api.md", "lines": [368, 373]}]}
+{"id": "db007", "q": "nomic-embed-text-v1.5 gguf sha256", "tag": "identifier", "rel": [{"path": "README.md", "lines": [111, 116]}]}
+{"id": "db008", "q": "how do I get claude code to use the kb and coboard mcp servers from procode", "tag": "purpose", "rel": [{"path": "README.md", "lines": [128, 135]}]}
+{"id": "db009", "q": "knowledge.cliPath", "tag": "identifier", "rel": [{"path": "README.md", "lines": [137, 140]}]}
+{"id": "db010", "q": "where is the board data folder created if none exists", "tag": "paraphrase", "rel": [{"path": "README.md", "lines": [142, 148]}]}
+{"id": "db011", "q": "COBOARD_AUTHOR", "tag": "identifier", "rel": [{"path": "README.md", "lines": [150, 153]}]}
+{"id": "db012", "q": "what should I set up before running mutation tests", "tag": "purpose", "rel": [{"path": "README.md", "lines": [176, 178]}]}
+{"id": "db013", "q": "one vsix with lap history, knowledge and board together", "tag": "paraphrase", "rel": [{"path": "README.md", "lines": [121, 126]}]}
+{"id": "db014", "q": "can lap commit a file containing null bytes", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [149, 151]}, {"path": "cli/lap-cli/README.md", "lines": [196, 197]}]}
+{"id": "db015", "q": "is trailing whitespace removed from a commit message", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [15, 18]}]}
+{"id": "db016", "q": "why are lap commit ids sequential rather than content hashes", "tag": "purpose", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [24, 25]}]}
+{"id": "db017", "q": ".lap/heads", "tag": "identifier", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [29, 41]}]}
+{"id": "db018", "q": "is it safe to delete files inside the .lap folder", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [44, 49]}, {"path": "cli/lap-cli/README.md", "lines": [158, 168]}, {"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [112, 117]}]}
+{"id": "db019", "q": "why is the index header written after the entries", "tag": "purpose", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [58, 61]}]}
+{"id": "db020", "q": "prev_same_file", "tag": "identifier", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [65, 71]}]}
+{"id": "db021", "q": "when does lap store a full copy of a file to speed up replay", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [72, 76]}]}
+{"id": "db023", "q": "LAP_USER resolution order", "tag": "identifier", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [114, 118]}, {"path": "cli/lap-cli/README.md", "lines": [145, 147]}, {"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [14, 16]}]}
+{"id": "db024", "q": "is new_start a position in the working file or the committed file", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [120, 128]}]}
+{"id": "db025", "q": "what happens when a diff is so big lap stops splitting it", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [137, 140]}]}
+{"id": "db026", "q": "why do changes separated only by whitespace lines get merged", "tag": "purpose", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [141, 145]}, {"path": "cli/lap-cli/SPEC.md", "lines": [9, 14]}]}
+{"id": "db027", "q": "multiple_edits", "tag": "identifier", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [205, 211]}]}
+{"id": "db028", "q": "how to commit a file whose name starts with a dash", "tag": "purpose", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [159, 162]}]}
+{"id": "db029", "q": "NO_COLOR overrides --color=always", "tag": "identifier", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [181, 183]}, {"path": "cli/lap-cli/README.md", "lines": [151, 156]}]}
+{"id": "db030", "q": "why are the colour flags spelled with an equals sign", "tag": "purpose", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [166, 173]}]}
+{"id": "db031", "q": "lap session list --meta ticket=T-12", "tag": "identifier", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [236, 245]}]}
+{"id": "db032", "q": "how does lap summarize a task so edits that were undone disappear", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [247, 256]}, {"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [103, 108]}]}
+{"id": "db033", "q": "can I un-ignore a path with an exclamation pattern in lapignore", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [269, 275]}]}
+{"id": "db034", "q": "what does lap do with a half-written last line after a crash", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [281, 284]}]}
+{"id": "db035", "q": "how does lap recover when state.json lags behind the log", "tag": "purpose", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [285, 289]}]}
+{"id": "db036", "q": "lap exit code 2", "tag": "identifier", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [155, 157]}, {"path": "cli/lap-cli/README.md", "lines": [142, 143]}]}
+{"id": "db037", "q": "what does lap tell you that git history cannot", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/README.md", "lines": [21, 23]}]}
+{"id": "db038", "q": "make e2e", "tag": "identifier", "rel": [{"path": "cli/lap-cli/README.md", "lines": [46, 53]}]}
+{"id": "db039", "q": "how to run the lap tests with address sanitizer", "tag": "purpose", "rel": [{"path": "cli/lap-cli/README.md", "lines": [55, 61]}]}
+{"id": "db040", "q": "cmake --install CMAKE_INSTALL_PREFIX lap", "tag": "identifier", "rel": [{"path": "cli/lap-cli/README.md", "lines": [63, 71]}, {"path": "README.md", "lines": [81, 82]}]}
+{"id": "db041", "q": "after committing one of several edits do the numbers stay the same", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/README.md", "lines": [101, 103]}, {"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [57, 60]}]}
+{"id": "db042", "q": "how do I record that I deleted a file in lap", "tag": "purpose", "rel": [{"path": "cli/lap-cli/README.md", "lines": [124, 125]}, {"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [71, 72]}]}
+{"id": "db043", "q": "lap search --added --removed", "tag": "identifier", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [228, 228]}, {"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [97, 98]}]}
+{"id": "db044", "q": "can lap roll a file back to an older version", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/README.md", "lines": [174, 176]}]}
+{"id": "db045", "q": "lap status shows changes I didn't make after switching branches", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/README.md", "lines": [178, 182]}]}
+{"id": "db046", "q": "should .lap be committed to git or ignored", "tag": "purpose", "rel": [{"path": "cli/lap-cli/README.md", "lines": [184, 189]}]}
+{"id": "db047", "q": "how to record a file rename in lap", "tag": "purpose", "rel": [{"path": "cli/lap-cli/README.md", "lines": [191, 194]}, {"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [73, 84]}]}
+{"id": "db048", "q": "how long does lap status take on a large checkout", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/README.md", "lines": [203, 205]}]}
+{"id": "db049", "q": "what happens when two agents write to the same lap repo at once", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/README.md", "lines": [207, 209]}, {"path": "cli/lap-cli/SPEC.md", "lines": [279, 280]}]}
+{"id": "db050", "q": "how to move a lap repository to another machine", "tag": "purpose", "rel": [{"path": "cli/lap-cli/README.md", "lines": [211, 212]}, {"path": "cli/lap-cli/SPEC.md", "lines": [44, 49]}, {"path": "cli/lap-cli/SPEC.md", "lines": [263, 267]}]}
+{"id": "db051", "q": "does piped lap output contain terminal escape codes", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/README.md", "lines": [149, 156]}, {"path": "cli/lap-cli/SPEC.md", "lines": [178, 180]}, {"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [88, 90]}]}
+{"id": "db052", "q": "--no-session", "tag": "identifier", "rel": [{"path": "cli/lap-cli/SPEC.md", "lines": [19, 21]}, {"path": "cli/lap-cli/README.md", "lines": [35, 37]}, {"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [64, 65]}]}
+{"id": "db053", "q": "should an agent commit all its edits together at the end", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [24, 29]}, {"path": "cli/lap-cli/README.md", "lines": [87, 89]}, {"path": ".claude/skills/tickets/SKILL.md", "lines": [27, 31]}]}
+{"id": "db054", "q": "what to do if a session is already open when starting a new task", "tag": "purpose", "rel": [{"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [20, 23]}, {"path": ".claude/skills/tickets/SKILL.md", "lines": [23, 26]}]}
+{"id": "db055", "q": "example of a good versus bad lap commit message", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [34, 35]}]}
+{"id": "db056", "q": "best way to commit a large new file with lap", "tag": "purpose", "rel": [{"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [66, 70]}]}
+{"id": "db057", "q": "no active session error", "tag": "identifier", "rel": [{"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [64, 65]}]}
+{"id": "db058", "q": "how to keep ansi escapes out when running lap through a pty", "tag": "purpose", "rel": [{"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [88, 90]}]}
+{"id": "db059", "q": "how to see everything that was done in one task", "tag": "paraphrase", "rel": [{"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [99, 100]}, {"path": "cli/lap-cli/README.md", "lines": [118, 119]}]}
+{"id": "db060", "q": "lap rr <from> <to>", "tag": "identifier", "rel": [{"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [103, 108]}, {"path": "cli/lap-cli/SPEC.md", "lines": [254, 256]}]}
+{"id": "db061", "q": "when should I run lap rebuild", "tag": "purpose", "rel": [{"path": "cli/lap-cli/skill/lap/SKILL.md", "lines": [112, 117]}, {"path": "cli/lap-cli/SPEC.md", "lines": [263, 267]}]}
+{"id": "db062", "q": "does the lap vs code extension need the lap binary installed", "tag": "paraphrase", "rel": [{"path": "packages/lap-vscode/README.md", "lines": [27, 29]}, {"path": "README.md", "lines": [160, 162]}]}
+{"id": "db063", "q": "Lap view raw list toggle", "tag": "identifier", "rel": [{"path": "packages/lap-vscode/README.md", "lines": [10, 14]}]}
+{"id": "db064", "q": "where does the commit message show up when I open a commit's diff", "tag": "paraphrase", "rel": [{"path": "packages/lap-vscode/README.md", "lines": [17, 22]}]}
+{"id": "db065", "q": "why can't I start a session or commit from the lap history extension", "tag": "purpose", "rel": [{"path": "packages/lap-vscode/README.md", "lines": [3, 6]}, {"path": "packages/lap-vscode/README.md", "lines": [43, 47]}]}
+{"id": "db066", "q": "board_update status=doing assignee=claude", "tag": "identifier", "rel": [{"path": ".claude/skills/tickets/SKILL.md", "lines": [21, 22]}]}
+{"id": "db067", "q": "how to word lap messages when a big restructure breaks into lots of pieces", "tag": "purpose", "rel": [{"path": ".claude/skills/tickets/SKILL.md", "lines": [32, 35]}]}
+{"id": "db068", "q": "what goes in the comment when closing a ticket", "tag": "paraphrase", "rel": [{"path": ".claude/skills/tickets/SKILL.md", "lines": [49, 53]}]}
+{"id": "db069", "q": "which check to run when an mcp server or manifest changed", "tag": "purpose", "rel": [{"path": ".claude/skills/tickets/SKILL.md", "lines": [36, 40]}]}
+{"id": "db070", "q": "may an agent remove a ticket the user dropped", "tag": "paraphrase", "rel": [{"path": ".claude/skills/tickets/SKILL.md", "lines": [61, 62]}]}
+{"id": "db071", "q": "artifact_template report", "tag": "identifier", "rel": [{"path": ".claude/skills/artifacts/SKILL.md", "lines": [22, 24]}, {"path": "specs/artifacts.md", "lines": [118, 118]}]}
+{"id": "db073", "q": "when should I answer in chat instead of making an artifact", "tag": "purpose", "rel": [{"path": ".claude/skills/artifacts/SKILL.md", "lines": [14, 18]}]}
+{"id": "db075", "q": "td.num td.id tag", "tag": "identifier", "rel": [{"path": ".claude/skills/artifacts/SKILL.md", "lines": [45, 46]}, {"path": "specs/artifacts.md", "lines": [95, 97]}]}
+{"id": "dc001", "q": "kb exit status for an internal failure versus a bad argument", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [29, 30]}, {"path": "packages/kb-js/README.md", "lines": [44, 54]}]}
+{"id": "dc002", "q": "is it safe to delete the index folder inside .kb", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [148, 158]}, {"path": "specs/index-api.md", "lines": [130, 134]}]}
+{"id": "dc003", "q": "what does a chunk record carry besides its text", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [51, 62]}]}
+{"id": "dc004", "q": "where do a paper's authors and year go when filing it", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [70, 72]}, {"path": "specs/index-ui.md", "lines": [75, 78]}]}
+{"id": "dc005", "q": "does kb need a background server running", "tag": "paraphrase", "rel": [{"path": "specs/index-api.md", "lines": [18, 19]}]}
+{"id": "dc006", "q": "why mark search results that come from old sources", "tag": "purpose", "rel": [{"path": "specs/index-api.md", "lines": [292, 295]}]}
