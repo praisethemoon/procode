@@ -26,6 +26,7 @@ import * as vscode from "vscode";
 
 import { Kb, KbError, isKbError } from "kb-js";
 
+import { extractPdf, isPdf } from "./pdf";
 import { RefreshOutcome, refreshPlan } from "./refresh";
 
 /* VSCode's language identifiers, mapped onto the mimes `kb add` files under.
@@ -201,7 +202,7 @@ export async function addFiles(kb: Kb, announce: () => void, collection?: string
         openLabel: "Add to Knowledge",
         title: collection ? `Add files to ${collection}` : "Add files to Knowledge",
         filters: {
-            "Text and code": ["md", "markdown", "txt", "rst", "adoc", "html", "htm", "c", "h", "cc", "cpp", "hpp", "rs", "go", "py", "ts", "tsx", "js", "java", "json", "yaml", "yml", "toml"],
+            "Text, code and PDF": ["md", "markdown", "txt", "rst", "adoc", "html", "htm", "pdf", "c", "h", "cc", "cpp", "hpp", "rs", "go", "py", "ts", "tsx", "js", "java", "json", "yaml", "yml", "toml"],
             "All files": ["*"],
         },
     });
@@ -228,6 +229,24 @@ export async function addFiles(kb: Kb, announce: () => void, collection?: string
     for (const uri of picked) {
         const name = path.basename(uri.path);
         const bytes = await vscode.workspace.fs.readFile(uri);
+        if (isPdf(name) && bytes.length > 0) {
+            /* A paper: its text extracted here and filed as Markdown, one
+             * section per page, with the PDF's path as the locator. */
+            try {
+                const paper = await extractPdf(bytes, name.replace(/\.pdf$/i, ""));
+                const added = await kb.add(paper.markdown, {
+                    title: (title ?? paper.title).trim(),
+                    collection: into,
+                    url: uri.fsPath,
+                    mime: "text/markdown",
+                    meta: paper.meta,
+                });
+                filed.push(added.document);
+            } catch (e) {
+                report(e, `file ${name}`);
+            }
+            continue;
+        }
         if (bytes.length === 0 || bytes.includes(0)) {
             skipped.push(name);
             continue;
@@ -366,7 +385,12 @@ export async function refreshDocument(kb: Kb, id: string): Promise<RefreshOutcom
         } catch {
             return { outcome: "cannot", why: `its file is no longer at ${plan.path}.` };
         }
-        text = Buffer.from(bytes).toString("utf8");
+        if (isPdf(plan.path)) {
+            text = (await extractPdf(bytes, d.title)).markdown;
+            mime = "text/markdown";
+        } else {
+            text = Buffer.from(bytes).toString("utf8");
+        }
     }
     const added = await kb.add(text, {
         title: d.title,

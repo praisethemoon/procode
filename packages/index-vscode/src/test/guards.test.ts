@@ -282,6 +282,10 @@ test("this package adds no third-party dependency coboard-vscode does not alread
         /* This package's own sibling, which is the `lap-js`/`coboard-core`
          * slot one package along. */
         "kb-js",
+        /* PDF text extraction (index-api §12.3), decided on its own ticket:
+         * pure JavaScript so the package stays universal, Mozilla's, and
+         * shipped beside the bundle (src/pdf.ts), not inside it. */
+        "pdfjs-dist",
     ]);
     for (const dep of Object.keys(pkg.dependencies)) {
         assert.ok(

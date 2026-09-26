@@ -12,6 +12,7 @@
  *   out/extension.js   the entry, with Lap History, Knowledge, the Board and
  *                      Artifacts bundled in
  *   out/media/         the webview assets of Knowledge, the Board and Artifacts
+ *   out/pdfjs/         pdf.js, which Knowledge imports at runtime to read PDFs
  *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/artifacts.js
  *                      the MCP servers, one file each
  *   media/             Lap History's activity-bar icon
@@ -114,6 +115,8 @@ for (const part of ["index-vscode", "coboard-vscode", "artifacts-vscode"]) {
     }
 }
 fs.cpSync(path.join(repo, "packages", "lap-vscode", "media"), path.join(dist, "media"), { recursive: true });
+// pdf.js, beside the bundle where Knowledge imports it from (index-vscode/src/pdf.ts).
+fs.cpSync(path.join(repo, "packages", "index-vscode", "out", "pdfjs"), path.join(dist, "out", "pdfjs"), { recursive: true });
 fs.copyFileSync(path.join(repo, "LICENSE"), path.join(dist, "LICENSE"));
 // dist/ holds exactly what ships; this only tells vsce so.
 fs.writeFileSync(path.join(dist, ".vscodeignore"), "**/*.map\n");

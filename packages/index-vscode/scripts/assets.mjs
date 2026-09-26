@@ -50,6 +50,14 @@ for (const [src, to] of COPIES) {
     fs.copyFileSync(src, path.join(out, to));
 }
 
+/* pdf.js, beside the bundle rather than in it: it is ES modules and loads its
+ * worker by a path relative to itself (src/pdf.ts). The minified builds, under
+ * the names each expects of the other. */
+const pdfjs = path.join(root, "out", "pdfjs");
+fs.mkdirSync(pdfjs, { recursive: true });
+fs.copyFileSync(find(fromHere.resolve, "pdfjs-dist/legacy/build/pdf.min.mjs"), path.join(pdfjs, "pdf.mjs"));
+fs.copyFileSync(find(fromHere.resolve, "pdfjs-dist/legacy/build/pdf.worker.min.mjs"), path.join(pdfjs, "pdf.worker.mjs"));
+
 /* The codicon stylesheet points at the font with a relative `url(./codicon.ttf)`
  * carrying a cache-busting query. Both files land side by side above, so the
  * reference resolves — but the query string is a version hash of a copy that is
