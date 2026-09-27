@@ -220,6 +220,12 @@ for yours, renames are two commits) are in
 | **procode** | [packages/combined/](packages/combined/) | The VS Code extension: Lap History, Knowledge, the Board and Artifacts, with the coboard, kb and artifacts MCP servers inside. It is built from `packages/*-vscode`. |
 | **skills** | [.claude/skills/](.claude/skills/) | How agents work here: `lap`, `tickets` (board, lap and git together) and `artifacts`. The lap skill is also in [cli/lap-cli/skill/](cli/lap-cli/skill/) for other projects. |
 
+## Built with
+
+The views are built with [baukasten](https://github.com/TypeFox/baukasten),
+TypeFox's component library for VS Code webviews, and artifact pages are
+styled with its design tokens, so they follow your editor's theme.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). Copyright (c) 2026 Soulaymen Chouri.
