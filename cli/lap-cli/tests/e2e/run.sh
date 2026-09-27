@@ -1029,6 +1029,33 @@ printf '%s' "$out" | grep -q "modified  f42.txt" || fail "the edit to f42.txt wa
 [ ! -e .lap/index ] || fail "status, a reader, wrote the index"
 cd "$WORK"
 
+t "a CRLF checkout of LF-recorded files is clean, and its edits are recorded as LF"
+mkdir -p "$WORK/eol" && cd "$WORK/eol"
+"$LAP" init >/dev/null
+"$LAP" commit .lapignore --no-session -i "keep the starter ignore list out of the test" \
+    -b "records the .lapignore that lap init wrote" >/dev/null 2>&1 || fail "baseline .lapignore"
+printf 'one\ntwo\nthree\n' > a.txt
+printf 'no final newline' > b.txt
+"$LAP" commit a.txt --no-session -i "baseline a.txt for the line-ending test" \
+    -b "records a.txt with LF endings" >/dev/null 2>&1 || fail "baseline a.txt"
+"$LAP" commit b.txt --no-session -i "baseline b.txt for the line-ending test" \
+    -b "records b.txt without a final newline" >/dev/null 2>&1 || fail "baseline b.txt"
+# what git writes on Windows with core.autocrlf=true
+printf 'one\r\ntwo\r\nthree\r\n' > a.txt
+expect_grep "clean" "$LAP" status
+printf 'one\r\nTWO\r\nthree\r\n' > a.txt
+out=$("$LAP" status)
+printf '%s' "$out" | grep -q "a.txt  (1 edit)" || fail "a CRLF edit is not one edit: $out"
+"$LAP" commit a.txt --no-session -i "shout two in the CRLF copy" \
+    -b "uppercases the second line of a.txt" >/dev/null 2>&1 || fail "commit in the CRLF copy"
+tail -1 .lap/log.jsonl | grep -q '\\r' && fail "a CRLF edit was recorded with its CR"
+expect_grep "clean" "$LAP" status
+expect_ok "$LAP" verify --deep
+# a lone CR that no newline ends is content, not a line ending
+printf 'no final newline\r' > b.txt
+expect_grep "b.txt  (1 edit)" "$LAP" status
+cd "$WORK"
+
 # ------------------------------------------------------------ summary
 echo "e2e: $TESTS scenarios, $FAILED failure(s)"
 [ "$FAILED" -eq 0 ] || exit 1

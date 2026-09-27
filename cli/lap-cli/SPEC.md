@@ -250,7 +250,16 @@ are addressable by hash.
   into artificial edit sequences.
 - A change only in the trailing-newline state of the last line is a 1-line
   edit on that line.
-- CRLF is preserved byte-faithfully (the `\r` stays in the line content).
+- lap reads CRLF as LF, as git stores text: a working file's lines lose the
+  `\r` of a CRLF ending before they are compared or recorded, so new
+  commits hold LF, and a trailing `\r` on a shadow line is ignored when
+  comparing. A checkout whose line endings git converted (Windows,
+  `core.autocrlf`) therefore shows the same edits as one that was not, and
+  a change of line endings alone is no change. lap does not read
+  `.gitattributes`. The shadow is still exactly what the log replays to:
+  lines recorded with a `\r` by an older lap keep it, and `verify --deep`
+  compares bytes. A `\r` on a last line that no `\n` ends is content, not a
+  line ending.
 - Files with a NUL byte in the first 8 KB are binary: shown in status once
   tracked, refused by commit.
 - Files larger than 64 MB are refused. Symlinks are skipped entirely.
