@@ -287,6 +287,11 @@ bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
             snprintf(err, errsz, "cannot acquire repository lock");
             return false;
         }
+        /* a folder from before chunks moves to them on its first write */
+        bool converted;
+        if (!hist_convert_legacy(a, r->lapdir, hist_chunk_limit(), &converted,
+                                 err, errsz))
+            return false;
     }
     /* listed under the lock, so a writer's view cannot go stale */
     if (!hist_open(a, r->lapdir, LAP_MAIN_LINEAGE, &r->hist, err, errsz))

@@ -218,6 +218,17 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   repository-wide replace) can have changed one.
 - git tracks `.lap/log/`. Appending changes one file, the open chunk; a
   sealed chunk never changes again.
+- **The single-file log of older versions.** A folder holding
+  `.lap/log.jsonl` and no main chunk is read as it is, and readers never
+  change it. The first writing command splits it at record boundaries into
+  `main.000001.jsonl`, … at the limit, then removes it (a torn final line
+  is dropped, as any writer drops one). Records and hashes are unchanged,
+  so `verify` passes before and after, and git sees one deleted file and
+  some new ones, once. Chunks are written before the old file is removed,
+  so a crash leaves one or the other complete; finding both, the writer
+  finishes a split whose chunks are a prefix of the old file, removes an
+  old file that is a prefix of the chunks, and refuses anything else,
+  keeping both.
 
 ## Messages
 

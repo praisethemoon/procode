@@ -167,6 +167,6 @@ a listed range.
 `lap verify` checks the log's hash chain; `lap verify --deep` also replays
 history against the shadow store and snapshot cache. `lap rebuild`
 reconstructs every cache from the log — run it after copying a repo by its
-log alone, deleting anything under `.lap/` other than `log.jsonl`, or when
+log alone, deleting anything under `.lap/` other than `log/`, or when
 a cache looks wrong. Truth lives in the log; everything else is
 regenerable.

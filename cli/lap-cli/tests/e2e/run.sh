@@ -1137,6 +1137,66 @@ expect_ok "$LAP" status
 unset LAP_TEST_CHUNK_BYTES
 cd "$WORK"
 
+# ------------------------------------------------- the single-file log
+t "a single-file log is read as it is and converted by the first write"
+mkdir -p "$WORK/legacy" && cd "$WORK/legacy" || exit 1
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "a history from before chunks" >/dev/null 2>&1
+i=1
+while [ $i -le 4 ]; do
+    printf 'old %d\n' $i >> old.txt
+    "$LAP" commit old.txt -i "build a history to convert" \
+        -b "appends old line $i" >/dev/null 2>&1 || fail "commit old $i"
+    i=$((i + 1))
+done
+# the shape an older lap left: one file, no chunk directory
+history > .lap/log.jsonl
+rm .lap/log/main.*.jsonl && rmdir .lap/log
+cp .lap/log.jsonl "$WORK/legacy-before.jsonl"
+expect_grep "L4 .*old.txt" "$LAP" log
+expect_grep "chain ok: 6 records" "$LAP" verify
+expect_grep 'session: S1 "a history from before chunks"' "$LAP" status
+expect_grep "appends old line 2" "$LAP" show L2
+[ -d .lap/log ] && fail "a reader converted the log"
+cmp -s .lap/log.jsonl "$WORK/legacy-before.jsonl" || fail "a reader changed the log"
+printf 'new 1\n' >> old.txt
+expect_grep "moved .lap/log.jsonl into 1 chunk" "$LAP" commit old.txt \
+    -i "build a history to convert" -b "appends the first line after conversion"
+[ -e .lap/log.jsonl ] && fail "the single-file log is still there"
+[ -f .lap/log/main.000001.jsonl ] || fail "no chunk after the conversion"
+# every record converted byte for byte, so every hash is unchanged
+history | head -n 6 | cmp -s - "$WORK/legacy-before.jsonl" || \
+    fail "the converted history differs from the old log"
+[ "$(history | wc -l)" -eq 7 ] || fail "the commit after conversion is missing"
+expect_grep "chain ok: 7 records" "$LAP" verify
+expect_grep "0 mismatch" "$LAP" verify --deep
+
+t "a large single-file log converts into chunks at the limit"
+history > .lap/log.jsonl
+rm .lap/log/main.*.jsonl && rmdir .lap/log
+cp .lap/log.jsonl "$WORK/legacy-before.jsonl"
+expect_grep "into [3-9] chunks" env LAP_TEST_CHUNK_BYTES=600 "$LAP" rebuild
+history | cmp -s - "$WORK/legacy-before.jsonl" || \
+    fail "the converted history differs from the old log"
+for c in .lap/log/main.*.jsonl; do
+    [ "$(wc -c < "$c")" -le 600 ] || fail "$c is past the limit"
+done
+expect_grep "chain ok: 7 records" "$LAP" verify
+
+t "a leftover single-file log beside complete chunks is removed"
+cp "$WORK/legacy-before.jsonl" .lap/log.jsonl
+expect_ok "$LAP" session end
+[ -e .lap/log.jsonl ] && fail "the leftover single-file log is still there"
+expect_grep "chain ok: 8 records" "$LAP" verify
+
+t "a single-file log that differs from the chunks is refused, both kept"
+printf '{"type":"init","version":1,"ts":"2026-01-01T00:00:00Z","prev":"x"}\n' > .lap/log.jsonl
+expect_grep "hold history, and they differ" "$LAP" session start "x y z"
+[ -e .lap/log.jsonl ] || fail "the differing log was removed"
+rm .lap/log.jsonl
+expect_ok "$LAP" status
+cd "$WORK"
+
 # ------------------------------------------------------------ summary
 echo "e2e: $TESTS scenarios, $FAILED failure(s)"
 [ "$FAILED" -eq 0 ] || exit 1

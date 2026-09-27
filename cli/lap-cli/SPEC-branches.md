@@ -105,14 +105,6 @@ the branch never had.
 - **Hash lookups** (`show #hash`) search every chunk present, including other
   lineages', so a `from` link can be followed from the parent.
 
-### Converting an existing log
-
-The first writing command that finds `.lap/log.jsonl` and no `.lap/log/`
-splits the file at record boundaries into `main.000001.jsonl`, … (4 MB each)
-and removes it. Records and hashes are unchanged, so `verify` passes before
-and after. Readers read either shape and never convert. git sees one deleted
-file and some new ones, once.
-
 ## Branches
 
 ### Starting one

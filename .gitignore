@@ -22,6 +22,8 @@ build/
 # state) that is native-endian and machine-local. Clone, then `lap
 # rebuild` — exactly the transport story in cli/lap-cli/SPEC.md.
 **/.lap/*
+!**/.lap/log/
+# the single-file log from before chunks, until lap's next write moves it
 !**/.lap/log.jsonl
 
 # Machine-local Claude Code settings (this one sets bypassPermissions,

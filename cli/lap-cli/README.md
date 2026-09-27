@@ -165,9 +165,12 @@ colour never moves a column.
 
 ## How it stores things
 
-An append-only JSONL log in `.lap/log.jsonl` — every record hash-chained to
-the previous one (tamper- and corruption-evident, checked by `lap verify`)
-— is the sole truth. Everything else in `.lap/` is a disposable
+An append-only JSONL log in `.lap/log/` — every record hash-chained to
+the previous one (tamper- and corruption-evident, checked by `lap verify`),
+kept as chunk files of up to 4 MB that are never written again once the
+next one starts — is the sole truth. A folder with the single-file
+`.lap/log.jsonl` of older versions is moved to chunks by its first write,
+record for record. Everything else in `.lap/` is a disposable
 acceleration cache: a fixed-width index with per-file chains (O(1) commit
 lookup, blame that walks only the file's own history), byte-budgeted
 content snapshots that bound replay cost, and the shadow store. Delete any
@@ -189,12 +192,13 @@ it — `checkout`, `pull`, `rebase`, `merge` — those changes are
 indistinguishable from edits you made, and `lap status` will report them as
 your pending work. Commit or discard before switching branches.
 
-**A shared history file can be corrupted by merging it.** If
-`.lap/log.jsonl` is tracked by git and two branches both record commits,
-merging them conflicts on a single append-only file, and resolving that by
+**A shared history can be corrupted by merging it.** If `.lap/log/` is
+tracked by git and two git branches of one folder both record commits,
+merging them conflicts on the chunk both appended to, and resolving that by
 interleaving lines breaks the hash chain. `lap verify` will detect the
-damage but cannot repair it. Either keep recorded history on one line of
-work, or add `.lap/` to `.gitignore` and let it stay machine-local.
+damage (naming a sealed chunk that changed) but cannot repair it. Either
+keep recorded history on one line of work, or add `.lap/` to `.gitignore`
+and let it stay machine-local.
 
 **Renames are two commits**, because lap tracks paths, not file identity —
 record the old path's disappearance and the new path's appearance, and name
@@ -217,7 +221,8 @@ their whole run; readers never lock and never block. A second writer waits
 rather than failing.
 
 **Caches are machine-local** and native-endian. Transport a repository as
-its `log.jsonl` plus the working tree, then run `lap rebuild` on arrival.
+its `log/` directory plus the working tree, then run `lap rebuild` on
+arrival.
 
 **Windows** builds with MSVC through CMake and runs the unit suite under
 ctest. The e2e suite is a shell script, run on macOS and Linux.

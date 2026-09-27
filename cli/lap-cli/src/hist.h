@@ -35,6 +35,7 @@ typedef struct {
     int32_t cap;
     uint64_t size; /* bytes in the whole history */
     uint64_t limit; /* the chunk limit appends seal at; hist_chunk_limit() */
+    bool legacy; /* read from the single-file log.jsonl of before chunks */
 } Hist;
 
 /* "main.000003.jsonl" -> lineage "main", n 3. False for any other name:
@@ -49,7 +50,9 @@ uint64_t hist_chunk_limit(void);
 
 /* Lists lineage's chunks in lapdir/log. A missing directory or no chunk is
  * an empty history, not an error: the first append creates chunk 1. Chunk
- * numbers must run 1, 2, ... without a gap, else false with a reason. */
+ * numbers must run 1, 2, ... without a gap, else false with a reason.
+ * With no main chunk, a log.jsonl of before chunks is read as the one chunk
+ * of a legacy history; readers never convert it. */
 bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
                char *err, size_t errsz);
 
@@ -84,5 +87,15 @@ bool hist_append(Arena *a, Hist *h, const char *line, size_t len, char *err,
 /* Seals the open chunk by creating the next one, empty. An empty open chunk
  * is left as it is. */
 bool hist_seal(Arena *a, Hist *h, char *err, size_t errsz);
+
+/* Splits lapdir/log.jsonl into main chunks at the limit, record by record,
+ * then removes it; records and hashes are unchanged. A torn final line is
+ * dropped, as a writer would. Chunks are written first and the old file
+ * removed last, so a crash leaves either the old file or complete chunks:
+ * when both are found, chunks that are a prefix of the old file are
+ * written again, an old file that is a prefix of the chunks is a leftover
+ * and removed, and anything else is refused. *converted reports a split. */
+bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
+                         bool *converted, char *err, size_t errsz);
 
 #endif /* LAP_HIST_H */

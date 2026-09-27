@@ -20,6 +20,31 @@ static void clear_chunks(void) {
                  names[i]);
         remove(path);
     }
+    snprintf(path, sizeof path, "%s/%s", T_LAPDIR, LAP_LOG_NAME);
+    remove(path);
+}
+
+static void put_legacy(const char *data) {
+    char path[256];
+    plat_mkdirs(T_LAPDIR);
+    snprintf(path, sizeof path, "%s/%s", T_LAPDIR, LAP_LOG_NAME);
+    plat_write_file_atomic(path, data, strlen(data));
+}
+
+static bool legacy_exists(void) {
+    char path[256];
+    snprintf(path, sizeof path, "%s/%s", T_LAPDIR, LAP_LOG_NAME);
+    return plat_is_file(path);
+}
+
+static char *read_history(Arena *a) {
+    Hist h;
+    char err[256], *data = NULL;
+    size_t len;
+    if (!hist_open(a, T_LAPDIR, "main", &h, err, sizeof err) ||
+        !hist_read_all(a, &h, &data, &len))
+        return NULL;
+    return data;
 }
 
 static void put_file(const char *name, const char *data) {
@@ -246,11 +271,88 @@ static void test_listing(Arena *a) {
     clear_chunks();
 }
 
+static void test_legacy(Arena *a) {
+    char err[256];
+    Hist h;
+    bool converted = true;
+
+    t_begin("hist: a lone log.jsonl is read as a legacy history");
+    clear_chunks();
+    put_legacy("aaaa\nbbbb\ncccc\n");
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(h.legacy);
+    ASSERT_EQ_I(h.n, 1);
+    ASSERT_EQ_I(h.size, 15);
+    char *data;
+    ASSERT_TRUE(hist_read(a, &h, 5, 4, &data));
+    ASSERT_EQ_S(data, "bbbb");
+
+    t_begin("hist: conversion splits at record boundaries and removes the "
+            "old file");
+    ASSERT_TRUE(hist_convert_legacy(a, T_LAPDIR, 10, &converted, err,
+                                    sizeof err));
+    ASSERT_TRUE(converted);
+    ASSERT_TRUE(!legacy_exists());
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(!h.legacy);
+    ASSERT_EQ_I(h.n, 2);
+    ASSERT_EQ_I(h.v[0].size, 10);
+    ASSERT_EQ_I(h.v[1].size, 5);
+    ASSERT_EQ_S(read_history(a), "aaaa\nbbbb\ncccc\n");
+
+    t_begin("hist: without an old file, conversion does nothing");
+    ASSERT_TRUE(hist_convert_legacy(a, T_LAPDIR, 10, &converted, err,
+                                    sizeof err));
+    ASSERT_TRUE(!converted);
+    ASSERT_EQ_S(read_history(a), "aaaa\nbbbb\ncccc\n");
+
+    t_begin("hist: conversion drops a torn final line");
+    clear_chunks();
+    put_legacy("aaaa\nbb");
+    ASSERT_TRUE(hist_convert_legacy(a, T_LAPDIR, 100, &converted, err,
+                                    sizeof err));
+    ASSERT_TRUE(converted);
+    ASSERT_EQ_S(read_history(a), "aaaa\n");
+
+    t_begin("hist: chunks that are a prefix of the old file are redone");
+    clear_chunks();
+    put_file("main.000001.jsonl", "aaaa\n");
+    put_legacy("aaaa\nbbbb\ncccc\n");
+    ASSERT_TRUE(hist_convert_legacy(a, T_LAPDIR, 100, &converted, err,
+                                    sizeof err));
+    ASSERT_TRUE(converted);
+    ASSERT_TRUE(!legacy_exists());
+    ASSERT_EQ_S(read_history(a), "aaaa\nbbbb\ncccc\n");
+
+    t_begin("hist: an old file that is a prefix of the chunks is a leftover");
+    clear_chunks();
+    put_file("main.000001.jsonl", "aaaa\nbbbb\n");
+    put_file("main.000002.jsonl", "cccc\n");
+    put_legacy("aaaa\nbbbb\n");
+    ASSERT_TRUE(hist_convert_legacy(a, T_LAPDIR, 100, &converted, err,
+                                    sizeof err));
+    ASSERT_TRUE(!converted);
+    ASSERT_TRUE(!legacy_exists());
+    ASSERT_EQ_S(read_history(a), "aaaa\nbbbb\ncccc\n");
+
+    t_begin("hist: an old file and chunks that differ are refused, both kept");
+    clear_chunks();
+    put_file("main.000001.jsonl", "aaaa\nXXXX\n");
+    put_legacy("aaaa\nbbbb\ncccc\n");
+    ASSERT_TRUE(!hist_convert_legacy(a, T_LAPDIR, 100, &converted, err,
+                                     sizeof err));
+    ASSERT_TRUE(strstr(err, "differ") != NULL);
+    ASSERT_TRUE(legacy_exists());
+    ASSERT_EQ_S(read_history(a), "aaaa\nXXXX\n");
+    clear_chunks();
+}
+
 void test_hist(void) {
     Arena *a = arena_new(0);
     test_names();
     test_append_and_read(a);
     test_seal_and_repair(a);
     test_listing(a);
+    test_legacy(a);
     arena_free(a);
 }

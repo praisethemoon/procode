@@ -46,7 +46,7 @@ The lap skill covers lap itself; this is the loop around it.
    start a follow-up session tagged with the same ticket and commit them,
    each with its intent and behavior.
 7. **git.** Stage by path — never `git add -A` or `.` — including
-   `.lap/log.jsonl` and `.coboard/log.jsonl`. One commit:
+   `.lap/log/` and `.coboard/log.jsonl`. One commit:
    `git commit -m "<what changed> (T-<n>)"`. **No `Co-Authored-By` or any
    AI attribution line.**
 8. **Close it.** `board_comment T-<n>` with: the lap session and git hash,

@@ -93,10 +93,8 @@ bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
     snprintf(h->dir, sizeof h->dir, "%s/%s", lapdir, LAP_LOG_DIR);
     snprintf(h->lineage, sizeof h->lineage, "%s", lineage);
     h->limit = hist_chunk_limit();
-    if (!plat_is_dir(h->dir))
-        return true;
     ListCtx c = {a, h, lineage};
-    if (!plat_walk(a, h->dir, on_log_entry, &c)) {
+    if (plat_is_dir(h->dir) && !plat_walk(a, h->dir, on_log_entry, &c)) {
         snprintf(err, errsz, "cannot list %s", h->dir);
         return false;
     }
@@ -113,10 +111,32 @@ bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
         start += h->v[i].size;
     }
     h->size = start;
+    if (h->n == 0 && strcmp(lineage, LAP_MAIN_LINEAGE) == 0) {
+        char legacy[LAP_PATH_MAX];
+        snprintf(legacy, sizeof legacy, "%s/%s", lapdir, LAP_LOG_NAME);
+        uint64_t size;
+        if (plat_file_size(legacy, &size)) {
+            h->legacy = true;
+            h->v = (HistChunk *)arena_alloc0(a, sizeof(HistChunk));
+            h->cap = 1;
+            h->n = 1;
+            snprintf(h->v[0].lineage, sizeof h->v[0].lineage, "%s", lineage);
+            h->v[0].n = 1;
+            snprintf(h->v[0].name, sizeof h->v[0].name, "%s", LAP_LOG_NAME);
+            h->v[0].size = size;
+            h->size = size;
+        }
+    }
     return true;
 }
 
 void hist_chunk_path(const Hist *h, int32_t i, char *out, size_t outsz) {
+    if (h->legacy) { /* <lapdir>/log.jsonl, beside the log directory */
+        size_t lapdir_len = strlen(h->dir) - strlen("/" LAP_LOG_DIR);
+        snprintf(out, outsz, "%.*s/%s", (int)lapdir_len, h->dir,
+                 h->v[i].name);
+        return;
+    }
     snprintf(out, outsz, "%s/%s", h->dir, h->v[i].name);
 }
 
@@ -362,5 +382,101 @@ bool hist_append(Arena *a, Hist *h, const char *line, size_t len, char *err,
     }
     h->v[i].size += (uint64_t)len;
     h->size += (uint64_t)len;
+    return true;
+}
+
+bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
+                         bool *converted, char *err, size_t errsz) {
+    *converted = false;
+    char legacy[LAP_PATH_MAX];
+    snprintf(legacy, sizeof legacy, "%s/%s", lapdir, LAP_LOG_NAME);
+    if (!plat_is_file(legacy))
+        return true;
+    char *old;
+    size_t old_len;
+    if (!plat_read_file_max(a, legacy, &old, &old_len, (size_t)-1)) {
+        snprintf(err, errsz, "cannot read %s", legacy);
+        return false;
+    }
+    size_t whole = old_len; /* a torn final line was never acknowledged */
+    while (old_len > 0 && old[old_len - 1] != '\n')
+        old_len--;
+
+    Hist h;
+    if (!hist_open(a, lapdir, LAP_MAIN_LINEAGE, &h, err, errsz))
+        return false;
+    if (!h.legacy && h.n > 0) {
+        char *have;
+        size_t have_len;
+        if (!hist_read_all(a, &h, &have, &have_len)) {
+            snprintf(err, errsz, "cannot read the history in %s", h.dir);
+            return false;
+        }
+        if (have_len >= old_len && memcmp(have, old, old_len) == 0) {
+            /* the conversion finished; only the removal did not */
+            if (!plat_remove_file(legacy)) {
+                snprintf(err, errsz, "cannot remove %s", legacy);
+                return false;
+            }
+            return true;
+        }
+        if (have_len > old_len || memcmp(have, old, have_len) != 0) {
+            snprintf(err, errsz,
+                     "both %s and %s hold history, and they differ: keep "
+                     "the one that is right and move the other away",
+                     legacy, h.dir);
+            return false;
+        }
+        /* chunks that are a prefix of the old file: an interrupted
+         * conversion, written again below */
+    }
+
+    char dir[LAP_PATH_MAX];
+    snprintf(dir, sizeof dir, "%s/%s", lapdir, LAP_LOG_DIR);
+    if (!plat_mkdirs(dir)) {
+        snprintf(err, errsz, "cannot create %s", dir);
+        return false;
+    }
+    int32_t n = 0;
+    size_t start = 0, pos = 0;
+    while (pos < old_len || start < pos) {
+        size_t end = pos;
+        while (end < old_len && old[end] != '\n')
+            end++;
+        size_t next = end < old_len ? end + 1 : end;
+        bool full = pos > start && (uint64_t)(next - start) > limit;
+        if (full || pos >= old_len) {
+            char name[64], path[LAP_PATH_MAX];
+            hist_chunk_name(LAP_MAIN_LINEAGE, ++n, name);
+            snprintf(path, sizeof path, "%s/%s", dir, name);
+            if (!plat_write_file_atomic(path, old + start, pos - start)) {
+                snprintf(err, errsz, "cannot write %s", path);
+                return false;
+            }
+            start = pos;
+            if (pos >= old_len)
+                break;
+        }
+        pos = next;
+    }
+    /* higher chunks an interrupted run with another limit may have left */
+    for (int32_t k = n + 1; k <= h.n; k++) {
+        char name[64], path[LAP_PATH_MAX];
+        hist_chunk_name(LAP_MAIN_LINEAGE, k, name);
+        snprintf(path, sizeof path, "%s/%s", dir, name);
+        plat_remove_file(path);
+    }
+    if (!plat_remove_file(legacy)) {
+        snprintf(err, errsz, "cannot remove %s", legacy);
+        return false;
+    }
+    if (whole != old_len)
+        fprintf(stderr,
+                "lap: repaired torn log tail (%llu bytes from an "
+                "interrupted append dropped)\n",
+                (unsigned long long)(whole - old_len));
+    fprintf(stderr, "lap: moved .lap/%s into %d chunk%s in .lap/%s/\n",
+            LAP_LOG_NAME, n, n == 1 ? "" : "s", LAP_LOG_DIR);
+    *converted = true;
     return true;
 }
