@@ -9,6 +9,9 @@
 
 bool plat_is_file(const char *path);
 bool plat_is_dir(const char *path);
+/* True when both paths reach one file or directory, however spelled:
+ * case, symlinks, "..". False when either does not exist. */
+bool plat_same_file(const char *a, const char *b);
 bool plat_mkdir(const char *path);       /* ok if already exists */
 bool plat_mkdirs(const char *path);      /* mkdir -p */
 bool plat_remove_file(const char *path);

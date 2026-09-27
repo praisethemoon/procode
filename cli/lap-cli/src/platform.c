@@ -206,6 +206,38 @@ bool plat_is_dir(const char *path) {
 #endif
 }
 
+bool plat_same_file(const char *a, const char *b) {
+#ifdef _WIN32
+    char wa[LAP_PATH_MAX], wb[LAP_PATH_MAX];
+    HANDLE ha = CreateFileA(winpath(wa, sizeof wa, a), 0,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE |
+                                FILE_SHARE_DELETE,
+                            NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS,
+                            NULL);
+    HANDLE hb = CreateFileA(winpath(wb, sizeof wb, b), 0,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE |
+                                FILE_SHARE_DELETE,
+                            NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS,
+                            NULL);
+    BY_HANDLE_FILE_INFORMATION ia, ib;
+    bool same = ha != INVALID_HANDLE_VALUE && hb != INVALID_HANDLE_VALUE &&
+                GetFileInformationByHandle(ha, &ia) &&
+                GetFileInformationByHandle(hb, &ib) &&
+                ia.dwVolumeSerialNumber == ib.dwVolumeSerialNumber &&
+                ia.nFileIndexHigh == ib.nFileIndexHigh &&
+                ia.nFileIndexLow == ib.nFileIndexLow;
+    if (ha != INVALID_HANDLE_VALUE)
+        CloseHandle(ha);
+    if (hb != INVALID_HANDLE_VALUE)
+        CloseHandle(hb);
+    return same;
+#else
+    struct stat sa, sb;
+    return stat(a, &sa) == 0 && stat(b, &sb) == 0 && sa.st_dev == sb.st_dev &&
+           sa.st_ino == sb.st_ino;
+#endif
+}
+
 bool plat_mkdir(const char *path) {
 #ifdef _WIN32
     char wb[LAP_PATH_MAX];

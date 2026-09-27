@@ -155,7 +155,9 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
         err_out(json, "bad_path", "cannot resolve %s", from);
         return LAP_EXIT_ERR;
     }
-    if (strcmp(here, there) == 0) {
+    /* one folder, however spelled (case, a symlink, ".."): the same
+     * directory on disk */
+    if (strcmp(here, there) == 0 || plat_same_file(here, there)) {
         err_out(json, "same_folder",
                 "a folder cannot be a branch of itself: run this in the new "
                 "folder, with --from naming the one it starts from");

@@ -1304,6 +1304,19 @@ cp "$WORK/bp/f.txt" f.txt
 expect_grep "unrelated_history" "$LAP" branch start --from ../bp --json
 cd "$WORK/bw" && expect_grep "already_branch" "$LAP" branch start --from ../bp --json
 
+t "a folder is not a branch of itself under another spelling of its path"
+cd "$WORK/bp" || exit 1
+lapsum() { find .lap -type f | sort | xargs cksum; }
+BEFORE=$(lapsum)
+ln -s bp "$WORK/bp-link"
+expect_grep "same_folder" "$LAP" branch start self --from ../bp-link --json
+expect_grep "same_folder" "$LAP" branch start self --from ../bx/../bp --json
+if [ -d ../BP ]; then # a disk that folds case
+    expect_grep "same_folder" "$LAP" branch start self --from ../BP --json
+fi
+[ "$(lapsum)" = "$BEFORE" ] || fail "a refused start changed .lap"
+rm "$WORK/bp-link"
+
 t "where branches exist, commits and session starts say which branch"
 cd "$WORK/bw" || exit 1
 printf 'five\n' >> f.txt
