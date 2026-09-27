@@ -56,12 +56,26 @@ it.
 
 In this order: the extension and its MCP servers run the CLIs from `PATH`.
 
-1. **The CLIs** go into `/usr/local/bin` (`PREFIX=...` to change it):
+1. **The CLIs.** On macOS and Linux they go into `/usr/local/bin`
+   (`PREFIX=...` to change it):
 
    ```sh
    sudo make -C cli/lap-cli install
    sudo make -C cli/kb-cli install
    ```
+
+   On Windows, build them with CMake and MSVC, from a Developer PowerShell
+   for Visual Studio in the repository root:
+
+   ```powershell
+   cmake -B build
+   cmake --build build --config Release
+   ```
+
+   This gives `build\cli\lap-cli\Release\lap.exe` and
+   `build\cli\kb-cli\Release\kb.exe`. Put them on `PATH`, for example with
+   `cmake --install build --config Release --prefix C:\tools\procode` and
+   then adding `C:\tools\procode\bin` to `PATH`.
 
 2. **The extension**, one `.vsix` for every platform:
 
