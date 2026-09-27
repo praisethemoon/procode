@@ -31,15 +31,25 @@ const dist = path.join(here, "dist");
 const VERSION = JSON.parse(fs.readFileSync(path.join(here, "package.json"), "utf8")).version;
 const PARTS = ["lap-vscode", "index-vscode", "coboard-vscode", "artifacts-vscode"];
 
-const run = (cmd, args) => execFileSync(cmd, args, { cwd: repo, stdio: "inherit" });
+/* npm, tsc and vsce all run as JavaScript on this Node. Their commands on
+ * PATH are .cmd wrappers on Windows, which execFileSync cannot start without
+ * a shell. npm names its own entry in npm_execpath for every script it runs;
+ * run directly, this script falls back to npm on PATH through a shell. */
+const node = (script, args, cwd = repo) =>
+    execFileSync(process.execPath, [script, ...args], { cwd, stdio: "inherit" });
+const npm = (args) =>
+    process.env.npm_execpath
+        ? node(process.env.npm_execpath, args)
+        : execFileSync("npm", args, { cwd: repo, stdio: "inherit", shell: process.platform === "win32" });
+const bin = (...p) => path.join(repo, "node_modules", ...p);
 const readJson = (p) => JSON.parse(fs.readFileSync(p, "utf8"));
 
 /* ---------------------------------------------------------- build the parts */
 
 for (const w of [...PARTS, "kb-mcp"]) {
-    run("npm", ["run", "compile", "--workspace", w]);
+    npm(["run", "compile", "--workspace", w]);
 }
-run("npx", ["tsc", "-p", path.join(here, "tsconfig.json")]);
+node(bin("typescript", "bin", "tsc"), ["-p", path.join(here, "tsconfig.json")]);
 
 /* --------------------------------------------------------------- fresh dist
  * dist/ is rebuilt from nothing so no file from an earlier build can ride
@@ -187,10 +197,6 @@ if (process.argv.includes("--package")) {
     // A .vsix that would fail to start is not worth producing.
     execFileSync(process.execPath, [path.join(here, "scripts", "check.mjs")], { cwd: here, stdio: "inherit" });
     const out = path.join(here, `procode-${VERSION}.vsix`);
-    execFileSync(
-        path.join(repo, "node_modules", ".bin", "vsce"),
-        ["package", "--no-dependencies", "--allow-missing-repository", "--out", out],
-        { cwd: dist, stdio: "inherit" },
-    );
+    node(bin("@vscode", "vsce", "vsce"), ["package", "--no-dependencies", "--allow-missing-repository", "--out", out], dist);
     console.log(`combined: packaged ${out}`);
 }
