@@ -136,6 +136,10 @@ void json_commit(StrBuf *sb, const Rec *rec, const char *note) {
         sb_puts(sb, ",\"branch\":");
         json_escape_c(sb, rec->lineage);
     }
+    if (rec->session) { /* the session as it is named outside this folder */
+        sb_puts(sb, ",\"session_ref\":");
+        json_escape_c(sb, session_ref(sb->a, rec->lineage, rec->session));
+    }
     if (note) {
         sb_puts(sb, ",\"match\":");
         json_escape_c(sb, note);
@@ -157,7 +161,10 @@ void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
     plat_ts_local(rec->ts, false, when);
     sb_field(sb, S_MUTED, when, 0);
     sb_puts(sb, "  ");
-    sb_field(sb, S_SESSION, rec->session ? rec->session : "-", 6);
+    sb_field(sb, S_SESSION,
+             rec->session ? session_ref(sb->a, rec->lineage, rec->session)
+                          : "-",
+             6);
     sb_putc(sb, ' ');
     if (with_region) {
         Region shown = {rec->old_start, rec->old_lines, rec->new_start,
@@ -514,5 +521,58 @@ bool repo_view_branch(Arena *a, Repo *r, const char *name, bool json) {
     }
     r->hist = view;
     r->foreign = true;
+    return true;
+}
+
+const char *session_ref(Arena *a, const char *lineage, const char *sid) {
+    if (!sid || !lineage || strcmp(lineage, LAP_MAIN_LINEAGE) == 0)
+        return sid;
+    return arena_printf(a, "%s/%s", lineage, sid);
+}
+
+bool session_resolve(Arena *a, Repo *r, const char *ref, const char **sid,
+                     bool *adopted, bool json) {
+    *adopted = false;
+    const char *slash = ref ? strrchr(ref, '/') : NULL;
+    if (!slash) {
+        *sid = ref;
+        return true;
+    }
+    const char *name = arena_strndup(a, ref, (size_t)(slash - ref));
+    const char *id = slash + 1;
+    Repo view = *r;
+    if (!repo_view_branch(a, &view, name, json))
+        return false;
+    *sid = id;
+    if (!view.foreign) /* the branch is this folder's own */
+        return true;
+    /* the branch's session_start, then whether lap merge adopted it here */
+    RecLog blog, mine;
+    char err[512];
+    const char *hash = NULL;
+    if (repo_log_load(a, &view, &blog, err, sizeof err)) {
+        for (int32_t i = 0; i < blog.count; i++) {
+            if (blog.v[i].type == REC_SESSION_START &&
+                strcmp(blog.v[i].id, id) == 0)
+                hash = blog.v[i].hash; /* the last: the branch's own */
+        }
+    }
+    if (!hash) {
+        err_out(json, "unknown_session", "branch %s has no session %s", name,
+                id);
+        return false;
+    }
+    if (repo_log_load(a, r, &mine, err, sizeof err)) {
+        for (int32_t i = 0; i < mine.count; i++) {
+            const Rec *s = &mine.v[i];
+            if (s->type == REC_SESSION_START && s->from &&
+                strcmp(s->from, hash) == 0) {
+                *sid = s->id;
+                *adopted = true;
+                return true;
+            }
+        }
+    }
+    *r = view;
     return true;
 }

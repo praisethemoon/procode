@@ -169,6 +169,10 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
         err_out(json, "no_repo", "%s", err);
         return LAP_EXIT_ERR;
     }
+    bool adopted = false;
+    if (f_session &&
+        !session_resolve(a, &repo, f_session, &f_session, &adopted, json))
+        return LAP_EXIT_ERR;
     char rel[LAP_PATH_MAX] = "";
     if (f_file && !repo_relpath(&repo, f_file, rel, sizeof rel, err,
                                 sizeof err)) {

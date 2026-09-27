@@ -83,6 +83,10 @@ int32_t cmd_log(Arena *a, int32_t argc, char **argv) {
                           flag_value(argc, argv, value_flags, "--branch"),
                           json))
         return LAP_EXIT_ERR;
+    bool adopted = false;
+    if (filt_session && !session_resolve(a, &repo, filt_session, &filt_session,
+                                         &adopted, json))
+        return LAP_EXIT_ERR;
 
     LogQuery q;
     q.session = rec_session_no(filt_session);

@@ -1550,6 +1550,36 @@ expect_not_grep "^b " "$LAP" branch list
 expect_grep "^d  *missing" "$LAP" branch list
 expect_grep "0 mismatch" "$LAP" verify --deep
 
+t "sessions are named <branch>/S<n> where ids repeat across folders"
+merge_pair q1; BP="$WORK/q1-p"; BW="$WORK/q1-w"
+cd "$BW" || exit 1
+expect_grep "session b/S1 started" "$LAP" session start "the branch's S1" --branch b
+expect_grep '"ref":"b/S1"' "$LAP" session current --json
+in_branch g.txt 's/^g2$/branch g2/' "rewrites g2 in the branch's S1"
+expect_grep "b/S1 " "$LAP" log -n 1
+expect_grep '"session_ref":"b/S1"' "$LAP" log -n 1 --json
+expect_grep "^b/S1 " "$LAP" session list
+expect_grep "(session b/S1)" "$LAP" show L5
+cd "$BP" || exit 1
+expect_grep "session S1 started" "$LAP" session start "the parent's S1" --branch main
+printf 'p\n' > p.txt
+expect_ok "$LAP" commit p.txt --branch main -i "work on the parent" -b "creates p.txt in the parent's S1"
+# from the parent, S1 is the parent's and b/S1 the branch's
+expect_grep "review S1 — the parent's S1" "$LAP" rr S1
+expect_grep "review b/S1 — the branch's S1" "$LAP" rr b/S1
+expect_grep "rewrites g2 in the branch's S1" "$LAP" log --session b/S1 --json
+expect_not_grep "creates p.txt" "$LAP" log --session b/S1 --json
+expect_grep "unknown_session" "$LAP" rr b/S9 --json
+expect_grep "unknown_branch" "$LAP" rr nope/S1 --json
+"$LAP" session end >/dev/null 2>&1
+cd "$BW" && "$LAP" session end >/dev/null 2>&1
+git_merge_b || fail "git merge q1"
+cd "$BP" && expect_grep "adopted 1 of 1" "$LAP" merge b
+# after the merge, b/S1 leads to the session adopted from it, with its from link
+expect_grep "review S2 (adopted from b/S1) — the branch's S1" "$LAP" rr b/S1
+expect_grep "(from #" "$LAP" rr b/S1 --no-diff
+expect_grep '"session":"S2"' "$LAP" log --session b/S1 --json
+
 t "lap merge refuses what it cannot merge"
 cd "$BP" && expect_grep "branch_not_found" "$LAP" merge nothing-by-that-name --json
 cd "$BW" && expect_grep "merge_in_branch" "$LAP" merge b --json

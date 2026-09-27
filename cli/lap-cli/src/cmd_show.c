@@ -146,7 +146,8 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
         sb_field(&sb, S_MUTED, rec->hash, 0);
         if (rec->session) {
             sb_puts(&sb, "  (session ");
-            sb_field(&sb, S_SESSION, rec->session, 0);
+            sb_field(&sb, S_SESSION,
+                     session_ref(a, rec->lineage, rec->session), 0);
             sb_putc(&sb, ')');
         }
         sb_puts(&sb, "\ndate: ");

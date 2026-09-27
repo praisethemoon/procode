@@ -97,6 +97,13 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
     }
     if (!repo_view_branch(a, &repo, view, json))
         return LAP_EXIT_ERR;
+    /* a session named <branch>/S<n> reads that branch, or the session lap
+     * merge adopted from it here */
+    bool adopted = false;
+    const char *named = pos0;
+    if (pos0 && !pos1 &&
+        !session_resolve(a, &repo, pos0, &pos0, &adopted, json))
+        return LAP_EXIT_ERR;
     RecLog log;
     if (!repo_log_load(a, &repo, &log, err, sizeof err)) {
         err_out(json, "log_unreadable", "%s", err);
@@ -130,7 +137,14 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
             return LAP_EXIT_ERR;
         }
         ok = range_from_session(&log, sess, &rng);
-        snprintf(label, sizeof label, "S%u", sess);
+        char sid[16];
+        snprintf(sid, sizeof sid, "S%u", sess);
+        const char *ref = session_ref(
+            a, repo.hist.parent[0] ? repo.hist.name : LAP_MAIN_LINEAGE, sid);
+        if (adopted)
+            snprintf(label, sizeof label, "%s (adopted from %s)", ref, named);
+        else
+            snprintf(label, sizeof label, "%s", ref);
     }
     if (!ok) {
         err_out(json, "empty_range", "%s holds no commits", label);

@@ -188,6 +188,13 @@ void test_branches(void) {
     ASSERT_TRUE(branch_check(a, &r, "0123456789ab", true));
     ASSERT_TRUE(!branch_check(a, &r, "main", true));
 
+    t_begin("session_ref: a branch's session is named with its branch, "
+            "main's and unlabeled ones as they are");
+    ASSERT_EQ_S(session_ref(a, "feat", "S4"), "feat/S4");
+    ASSERT_EQ_S(session_ref(a, "main", "S4"), "S4");
+    ASSERT_EQ_S(session_ref(a, NULL, "S4"), "S4");
+    ASSERT_TRUE(session_ref(a, "feat", NULL) == NULL);
+
     remove(path);
     arena_free(a);
 }

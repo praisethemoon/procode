@@ -75,6 +75,20 @@ bool branch_folder_is(Arena *a, const char *path, const char *id);
  * reporting unknown_branch. */
 bool repo_view_branch(Arena *a, Repo *r, const char *name, bool json);
 
+/* A session named on a command line: "S<n>", this folder's own, or
+ * "<branch>/S<n>", that branch's (its name or id). *sid is the id to look
+ * for in r's history. For a branch's session r is switched to the branch's
+ * history, as --branch does — unless lap merge adopted that session here,
+ * in which case *sid is the adopted session's id in this folder's history
+ * and *adopted is set. False after reporting unknown_branch or
+ * unknown_session. */
+bool session_resolve(Arena *a, Repo *r, const char *ref, const char **sid,
+                     bool *adopted, bool json);
+/* How a session is named to people and agents: "<branch>/S<n>" when the
+ * branch it belongs to (a record's lineage label) is not main, else
+ * "S<n>". Unique wherever it is copied to. */
+const char *session_ref(Arena *a, const char *lineage, const char *sid);
+
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);
 

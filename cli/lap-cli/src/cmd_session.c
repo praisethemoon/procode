@@ -96,8 +96,8 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
         if (json) {
             if (printed)
                 sb_putc(&sb, ',');
-            sb_printf(&sb, "{\"id\":\"%s\",\"hash\":\"%s\"", st->id,
-                      st->hash);
+            sb_printf(&sb, "{\"id\":\"%s\",\"ref\":\"%s\",\"hash\":\"%s\"",
+                      st->id, session_ref(a, st->lineage, st->id), st->hash);
             if (st->from)
                 sb_printf(&sb, ",\"from\":\"%s\"", st->from);
             sb_puts(&sb, ",\"msg\":");
@@ -112,7 +112,8 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
             rec_meta_json(&sb, st);
             sb_putc(&sb, '}');
         } else {
-            sb_field(&sb, active ? S_ACTIVE : S_SESSION, st->id, 6);
+            sb_field(&sb, active ? S_ACTIVE : S_SESSION,
+                     session_ref(a, st->lineage, st->id), 6);
             sb_putc(&sb, ' ');
             char when[40];
             plat_ts_local(st->ts, false, when);
@@ -184,13 +185,16 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
     }
 
     if (!sub || strcmp(sub, "current") == 0) {
+        const char *ref = session_ref(
+            a, repo.hist.parent[0] ? repo.hist.name : LAP_MAIN_LINEAGE,
+            repo.active_session);
         if (json) {
             StrBuf sb;
             sb_init(&sb, a);
             if (repo.active_session[0]) {
                 sb_printf(&sb, "{\"ok\":true,\"session\":{\"id\":\"%s\","
-                               "\"msg\":",
-                          repo.active_session);
+                               "\"ref\":\"%s\",\"msg\":",
+                          repo.active_session, ref);
                 json_escape_c(&sb, repo.active_session_msg);
                 /* The metadata lives on the session_start record, not in
                  * state.json, so it is read back from the log. */
@@ -215,8 +219,8 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
             puts(sb_finish(&sb));
         } else {
             if (repo.active_session[0])
-                printf("%s%s%s \"%s\"\n", sgr(S_ACTIVE), repo.active_session,
-                       sgr_off(), first_line(a, repo.active_session_msg));
+                printf("%s%s%s \"%s\"\n", sgr(S_ACTIVE), ref, sgr_off(),
+                       first_line(a, repo.active_session_msg));
             else
                 printf("no active session\n");
         }
@@ -284,10 +288,14 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
             goto done;
         }
         caches_sync_warn(a, &repo);
+        /* in a branch folder the session is named with its branch: that is
+         * what an agent copies into a ticket comment */
+        const char *ref = session_ref(
+            a, repo.hist.parent[0] ? repo.hist.name : LAP_MAIN_LINEAGE, idbuf);
         if (json)
-            printf("{\"ok\":true,\"id\":\"%s\"}\n", idbuf);
+            printf("{\"ok\":true,\"id\":\"%s\",\"ref\":\"%s\"}\n", idbuf, ref);
         else
-            printf("session %s%s%s started: %s\n", sgr(S_ACTIVE), idbuf,
+            printf("session %s%s%s started: %s\n", sgr(S_ACTIVE), ref,
                    sgr_off(), first_line(a, msg));
         rc = LAP_EXIT_OK;
     } else if (strcmp(sub, "end") == 0) {

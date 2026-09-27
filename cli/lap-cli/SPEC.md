@@ -271,7 +271,8 @@ and a `git merge` of the branch's code brings its chunks as new files.
 - Ids go on from the base: the branch's next `L` and `S` numbers follow
   its parent's at the base, so one folder never shows an id twice. Two
   folders do — the parent goes on from the base too — so text that leaves
-  a folder names commits by hash.
+  a folder names commits by hash and sessions as `<branch>/S<n>`
+  (§Naming sessions).
 - A branch starts with no session open, whatever its parent had open.
 - A branch's parent is a `main` folder: a branch of a branch is refused
   (`nested_branch`).
@@ -386,6 +387,29 @@ and git merged cleanly, there is no difference.
 
 `--dry-run` reports what would be adopted and where each file would stop,
 reading the branch folder in place, and writes nothing.
+
+### Naming sessions
+
+A branch and its parent both go on counting sessions from the base, and an
+adopted session gets a new id in the parent, so a bare `S<n>` is ambiguous
+once it leaves its folder — in a ticket comment, say. **`<branch>/S<n>`**
+(the branch's name or id) names a session of that branch:
+
+- Every command that takes a session (`lap rr <session>`, `lap log
+  --session`, `lap search --session`) accepts it, reading that branch as
+  `--branch` does. A bare `S<n>` still means this folder's own.
+- Once `lap merge` adopted that session into this folder, the name leads
+  to the adopted session here, found by its `from` link: `lap rr
+  feat/S4` in the parent reviews the adopted one, labelled `S9 (adopted
+  from feat/S4)`, its commits showing their `from`. An old comment written
+  in the branch still finds the work.
+- lap prints sessions in that form wherever they are a branch's: in a
+  branch folder (`session feat/S4 started`, `session current`, `session
+  list`, log and search rows, `show`), and for another branch's history
+  read with `--branch`. JSON carries it as `ref` (sessions) and
+  `session_ref` (commits); `id` and `session` stay the bare ids.
+- A name that is no branch here is `unknown_branch`; a session the branch
+  does not have is `unknown_session`.
 
 ### Reading another branch
 

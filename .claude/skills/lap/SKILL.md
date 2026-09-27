@@ -169,7 +169,9 @@ lap branch start parser --from ../proj         # its own line of history
   commits (`#<hash>`) it stands for.
 - Ids repeat across folders (both go on from the base). In text that
   leaves the folder — a ticket comment, another branch's commit — cite
-  commits by hash and sessions as `<branch>/S<n>`.
+  commits by hash and sessions as `<branch>/S<n>`. lap prints a branch's
+  sessions that way, and `lap rr`, `log --session` and `search --session`
+  take it: `lap rr parser/S4`, from the parent after a merge too.
 
 ## Using the history (do this before changing unfamiliar code)
 
