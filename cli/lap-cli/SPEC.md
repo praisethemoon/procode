@@ -303,7 +303,7 @@ Creates `.lap/` in the cwd plus a starter `.lapignore` (kept if present).
 Active session, then every file with pending changes: `new` (line count),
 `modified` (numbered edit list with line ranges), `deleted`, or `binary`.
 
-### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B] [--force-message] [--no-session]`
+### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B] [--force-message] [--no-session] [--dry-run]`
 Records exactly one edit. The message comes from `-i`/`--intent` and
 `-b`/`--behavior` together, or from `-F`, never a mix:
 
@@ -331,6 +331,15 @@ Then, by the number of pending edits in the file:
 On success it prints the new commit's id and short hash (`L42 fa9cebd`);
 `--json` returns the id and the full `hash`. This is how an agent learns
 the hash to cite in its next commit.
+
+`--dry-run` does all of the above except write: it resolves the file and
+the edit, runs the message checks, and prints what would be recorded — id,
+session, op, file, region, intent and behavior — failing exactly as the
+commit would. `--json` returns `{"ok":true,"dry_run":true,"record":{…}}`,
+the record as it would be written without `prev` (and so without a hash,
+which neither exists until it is written). A dry run is a reader: it takes
+no lock and repairs nothing (no torn-tail cut, no state rewrite), and its
+predicted id is the one a commit made next would get.
 
 ### `lap log [--session S] [--file F] [-n N]`
 Commits newest-first: id, short hash, timestamp, session, op, file, range,

@@ -15,6 +15,7 @@ static const char *USAGE =
     "                             of a file (- = stdin)\n"
     "         [--edit <n> | --lines <a>-<b>]   pick one of several edits\n"
     "         [--force-message]   skip the repetition checks (not length)\n"
+    "         [--dry-run]         show what would be recorded; write nothing\n"
     "         [--no-session]      commit outside any session\n"
     "  log [--session S] [--file F] [-n N] [--json]\n"
     "  show <commit> [--full-file] [--json]   id, hash or hash prefix\n"

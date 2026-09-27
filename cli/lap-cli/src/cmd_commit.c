@@ -105,6 +105,46 @@ static const char *session_last_behavior(Arena *a, Repo *repo,
     return NULL;
 }
 
+/* What a dry run would record. The JSON is the record as it would be
+ * written, less `prev`: the chain link and the hash exist only once it is. */
+static void print_dry_run(Arena *a, bool json, Rec *rec, const char *rel) {
+    char ts[32];
+    plat_timestamp(ts);
+    rec->ts = ts;
+    rec->prev = "";
+    if (json) {
+        size_t len;
+        char *line = rec_encode(a, rec, &len);
+        static const char tail[] = ",\"prev\":\"\"}";
+        size_t tl = sizeof tail - 1;
+        if (len >= tl && strcmp(line + len - tl, tail) == 0)
+            memcpy(line + len - tl, "}", 2);
+        printf("{\"ok\":true,\"dry_run\":true,\"record\":%s}\n", line);
+        return;
+    }
+    Region shown = {rec->old_start, rec->old_lines, rec->new_start,
+                    rec->new_lines};
+    char desc[128];
+    region_describe(&shown, desc, sizeof desc);
+    StrBuf sb;
+    sb_init(&sb, a);
+    sb_puts(&sb, "dry run, nothing written: would record ");
+    sb_field(&sb, S_ID, rec->id, 0);
+    sb_puts(&sb, " in ");
+    sb_field(&sb, S_SESSION, rec->session ? rec->session : "(no session)", 0);
+    sb_printf(&sb, "\n  %s  ", rec->op);
+    sb_text(&sb, rel, strlen(rel));
+    sb_puts(&sb, "  ");
+    sb_field(&sb, S_MUTED, desc, 0);
+    if (rec->forced)
+        sb_puts(&sb, "  (forced)");
+    sb_puts(&sb, "\nintent:\n");
+    sb_indented(&sb, "  ", rec->intent);
+    sb_puts(&sb, "behavior:\n");
+    sb_indented(&sb, "  ", rec->behavior);
+    fputs(sb_finish(&sb), stdout);
+}
+
 /* Intent and behavior from -i/-b, or from the sections of a -F file. */
 static bool message_args(Arena *a, int32_t argc, char **argv,
                          const char *const *value_flags, bool json,
@@ -155,11 +195,16 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         "-i", "--intent", "-b", "--behavior", "-F", "--edit", "--lines",
         NULL};
     static const char *const bool_flags[] = {"--json", "--no-session",
-                                             "--force-message", NULL};
+                                             "--force-message", "--dry-run",
+                                             NULL};
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;
     bool force = has_flag(argc, argv, value_flags, "--force-message");
+    /* A dry run opens the repository as a reader: no lock, no torn-tail
+     * repair, counters healed in memory only. Everything up to the append
+     * is the same code, so its errors are the commit's errors. */
+    bool dry = has_flag(argc, argv, value_flags, "--dry-run");
     const char *file_arg = positional_arg(argc, argv, value_flags, 0);
     const char *edit_arg = flag_value(argc, argv, value_flags, "--edit");
     const char *lines_arg = flag_value(argc, argv, value_flags, "--lines");
@@ -169,7 +214,7 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         err_out(json, "usage",
                 "usage: lap commit <file> (-i \"intent\" -b \"behavior\" | "
                 "-F <file|->) [--edit <n> | --lines <a>-<b>] "
-                "[--force-message] [--no-session] [--json]");
+                "[--force-message] [--no-session] [--dry-run] [--json]");
         return LAP_EXIT_ERR;
     }
     const char *intent = NULL, *behavior = NULL;
@@ -182,7 +227,7 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
 
     Repo repo;
     char err[512];
-    if (!repo_open(a, &repo, true, err, sizeof err)) {
+    if (!repo_open(a, &repo, !dry, err, sizeof err)) {
         err_out(json, "no_repo", "%s", err);
         return LAP_EXIT_ERR;
     }
@@ -346,6 +391,11 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     char idbuf[32];
     snprintf(idbuf, sizeof idbuf, "L%lld", (long long)repo.next_commit);
     rec.id = idbuf;
+    if (dry) {
+        print_dry_run(a, json, &rec, rel);
+        rc = LAP_EXIT_OK;
+        goto done;
+    }
     repo.next_commit++;
 
     if (!repo_append(&repo, &rec, err, sizeof err)) {

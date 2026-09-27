@@ -583,6 +583,39 @@ printf 'junk\n' > .lap/shadow/coord.txt.tmp.987654
 expect_grep "0 mismatch" "$LAP" verify --deep
 rm -f .lap/shadow/coord.txt.tmp.987654
 
+t "commit --dry-run shows the record, fails as the commit would, and writes nothing"
+mkdir -p "$WORK/dry" && cd "$WORK/dry" || exit 1
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "dry run fixture" >/dev/null 2>&1
+lapsum() { find .lap -type f | LC_ALL=C sort | xargs shasum; }
+printf 'a\nb\nc\n' > d.txt
+BEFORE=$(lapsum)
+expect_grep "would record L1 in S1" "$LAP" commit d.txt -i "seed the dry run fixture" -b "creates d.txt with three lines" --dry-run
+expect_grep '"dry_run":true,"record":{"type":"commit","id":"L1"' "$LAP" commit d.txt -i "seed the dry run fixture" -b "creates d.txt with three lines" --dry-run --json
+expect_grep '"intent":"seed the dry run fixture","behavior":"creates d.txt with three lines"' "$LAP" commit d.txt -i "seed the dry run fixture" -b "creates d.txt with three lines" --dry-run --json
+expect_not_grep '"prev"\|"hash"' "$LAP" commit d.txt -i "seed the dry run fixture" -b "creates d.txt with three lines" --dry-run --json
+# the same refusals as a real commit
+expect_grep "message_too_short" "$LAP" commit d.txt -i "seed it" -b "creates d.txt with three lines" --dry-run --json
+expect_grep "behavior_repeats_intent" "$LAP" commit d.txt -i "seed the dry run fixture" -b "seed the dry run fixture" --dry-run --json
+expect_grep "unknown_file" "$LAP" commit nope.txt -i "seed the dry run fixture" -b "creates d.txt with three lines" --dry-run --json
+[ "$(lapsum)" = "$BEFORE" ] || fail "a dry run changed .lap/"
+# the id it predicts is the one the commit then gets
+PRED=$("$LAP" commit d.txt -i "seed the dry run fixture" -b "creates d.txt with three lines" --dry-run --json | sed 's/.*"id":"\(L[0-9]*\)".*/\1/')
+REAL=$("$LAP" commit d.txt -i "seed the dry run fixture" -b "creates d.txt with three lines" --json | sed 's/.*"id":"\(L[0-9]*\)".*/\1/')
+[ -n "$PRED" ] && [ "$PRED" = "$REAL" ] || fail "dry run predicted $PRED, commit got $REAL"
+expect_grep "no_changes" "$LAP" commit d.txt -i "seed the dry run fixture" -b "changes d.txt again" --dry-run --json
+printf 'A\nb\nC\n' > d.txt
+expect_grep "multiple_edits" "$LAP" commit d.txt -i "shout the edges" -b "uppercases the first line" --dry-run --json
+expect_grep "would record L2 in S1" "$LAP" commit d.txt -i "shout the edges" -b "uppercases the first line" --dry-run --edit 1
+expect_grep "behavior_repeats_previous" "$LAP" commit d.txt -i "shout the edges" -b "creates d.txt with three lines" --dry-run --edit 1 --json
+# a dry run is a reader: it repairs nothing it finds broken
+rm .lap/state.json
+printf '{"type":"commit","id":"L9' >> .lap/log.jsonl
+BEFORE=$(lapsum)
+expect_grep "would record L2 in S1" "$LAP" commit d.txt -i "shout the edges" -b "uppercases the first line" --dry-run --edit 1
+[ "$(lapsum)" = "$BEFORE" ] || fail "a dry run repaired the repository"
+cd "$WORK" && rm -rf dry
+
 t "status keeps a stat cache and trusts it only for settled, unchanged files"
 mkdir -p "$WORK/stat" && cd "$WORK/stat" || exit 1
 "$LAP" init >/dev/null 2>&1

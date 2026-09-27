@@ -88,6 +88,11 @@ get past a message you could have written better.
 
 Unknown flags are refused (`unknown_flag`), naming the flag.
 
+`--dry-run` checks a commit without making it: it picks the edit, runs the
+message checks and prints what would be recorded, failing exactly as the
+commit would, and writes nothing. Use it to test a message, to see which
+edit `--edit N` takes, or before a batch of baseline commits.
+
 ## When a commit is rejected: "N separate edits detected"
 
 You changed more than one place in the file, with at least one non-blank
