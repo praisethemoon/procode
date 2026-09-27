@@ -191,7 +191,10 @@ lap branch start parser --from ../proj         # its own line of history
   every branch commit it can place, with a `from` link to the original; a
   file where the branch's work conflicts with the parent's stops, and what
   is left shows in `lap status` — commit it as usual, citing the branch
-  commits (`#<hash>`) it stands for.
+  commits (`#<hash>`) it stands for. A change the parent had already made
+  the same way is reported as already done, not as a conflict; a file an
+  earlier merge stopped stays stopped (the report says so). The branch's
+  `lap amend` corrections come along with its commits.
 - **Branches of branches.** A branch folder can start branches too
   (`lap branch start sub --from ../proj-parser`), and merge them back the
   same way, in its own folder. A branch of a branch can also go straight

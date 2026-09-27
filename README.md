@@ -23,9 +23,14 @@ copy the folders in [.claude/skills/](.claude/skills/) into your project's
 
 Agents working in parallel each get a folder of their own — a git worktree
 or a copy — made a **lap branch** of the first folder (`lap branch start`),
-with its own line of history. `git merge` brings the code back and `lap
-merge` brings the history: every commit it can place lands in the first
-folder's history, linked to its original.
+with its own line of history. Merging back goes in one order: `git merge`
+brings the code — and the branch's history with it — then `lap merge`
+adopts that history: every commit it can place lands in the first folder's
+history, linked to its original. A file where both sides changed the same
+lines differently stops there and is left to commit by hand; a change both
+sides made alike is simply already done. Branch folders can start branches
+of their own, and a branch of a branch can be merged into its parent
+branch or straight into the first folder.
 
 The extension's **Lap History** view renders the sessions and their changes
 inside VS Code.
@@ -48,9 +53,11 @@ review.
 
 A project has one board, whatever folder you work in. In a lap branch
 folder, coboard works the parent folder's board (lap recorded where the
-parent is); anywhere else, set `COBOARD_DIR` for the MCP server, or
-**Board › Board Folder** in VS Code, to another folder's board. Writes take
-the board's lock, so agents in several folders share it safely.
+parent is), never the branch's git copy of it — if the parent folder has
+moved, it says so instead; anywhere else, set `COBOARD_DIR` for the MCP
+server, or **Board › Board Folder** in VS Code, to another folder's board (a
+relative path is taken from the folder worked in). Writes take the board's
+lock, so agents in several folders share it safely.
 
 ![coboard-vscode](assets/coboard-vscode.webp)
 

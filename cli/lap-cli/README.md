@@ -40,7 +40,9 @@ granularity agents work at.
    commits of one task. Committing without a session requires an explicit
    `--no-session`.
 4. **lap never writes to your files.** It records; it does not time-travel.
-   No branches, no checkout, no merge, no staging area.
+   No checkout, no revert, no staging area. Parallel work goes in other
+   folders made lap branches, and `lap merge` adopts a branch's *history*
+   after git has merged its code — lap never merges code itself.
 
 ## Build
 
@@ -162,6 +164,16 @@ with amendments needs this version of lap or later.
 | `lap rr` | review request: a run of work as trajectory, grouped by intent, + net change (`<session>`, `<from> <to>` as ids or hashes, `--no-diff`) |
 | `lap verify` | check the log's hash chain (`--deep`: replay everything, audit caches) |
 | `lap rebuild` | reconstruct every cache from the log (`--verify`: fail on a broken chain) |
+| `lap branch start [name] --from <folder>` | make this folder a branch of another: its own line of history from that folder's head |
+| `lap branch list` | the branches started here (and those known only by chunks git brought): active, merged, partly merged, missing |
+| `lap branch forget <branch>` / `move <branch> <path>` | tend that list when a branch's folder is gone or moved |
+| `lap merge <branch>` | after `git merge` brought a branch's code, adopt its history here (`--dry-run`, `--copy-from-folder`) |
+
+Where branches exist, `commit`, `amend` and `session start` take
+`--branch <name>` (or `LAP_BRANCH`) to say which line of history they record
+to; `log`, `show`, `rr` and `session list` take it to read another branch's
+history. A session of a branch is named `<branch>/S<n>`. Long flags take
+their value apart or joined (`--branch feat`, `--branch=feat`).
 
 Every command takes `--json` for machine-readable output. Exit codes: `0`
 success, `1` user or repository error, `2` internal failure.
@@ -183,15 +195,26 @@ colour never moves a column.
 
 An append-only JSONL log in `.lap/log/` — every record hash-chained to
 the previous one (tamper- and corruption-evident, checked by `lap verify`),
-kept as chunk files of up to 4 MB that are never written again once the
-next one starts — is the sole truth. A folder with the single-file
-`.lap/log.jsonl` of older versions is moved to chunks by its first write,
-record for record. Everything else in `.lap/` is a disposable
-acceleration cache: a fixed-width index with per-file chains (O(1) commit
-lookup, blame that walks only the file's own history), byte-budgeted
-content snapshots that bound replay cost, and the shadow store. Delete any
-of it, `lap rebuild` restores it; reads stay correct (slower) even without
-it. `.lapignore` (gitignore-like subset) controls what is tracked: list
+kept as chunk files of up to 4 MB that are **sealed** (never written
+again) once the next one starts — is the sole truth. Appending changes one
+file, the open chunk, so git sees small diffs and never a rewritten
+history. A folder with the single-file `.lap/log.jsonl` of older versions
+is moved to chunks by its first write, record for record, published in
+one rename so no reader sees it half done. A history with records of a
+type a newer lap wrote is read as far as this lap understands it and never
+written to.
+
+Everything else in `.lap/` is a disposable acceleration cache: a
+fixed-width index with per-file chains (O(1) commit lookup, blame that
+walks only the file's own history), byte-budgeted content snapshots that
+bound replay cost, the shadow store (each file as last committed), and a
+stat cache that lets `lap status` skip files whose size and mtime have not
+changed. Delete any of it, `lap rebuild` restores it; reads stay correct
+(slower) even without it. `rebuild` and `verify` read the history a chunk
+at a time, so their memory stays near one file's state, not the history's.
+
+lap reads CRLF as LF, as git stores text: a working file's `\r\n` endings
+are compared and recorded as `\n`. `.lapignore` (gitignore-like subset) controls what is tracked: list
 there whatever nobody edits by hand — build output, dependencies, and
 vendored or generated code (a copied-in parser can be megabytes, and every
 update of it would be another whole-file record). Files lap recorded before
@@ -200,7 +223,37 @@ you ignored them keep their history. Details in [SPEC.md](SPEC.md).
 ## Branches and merging
 
 Parallel work goes in another folder — usually a git worktree — made a
-lap branch of the first: `lap branch start <name> --from <parent folder>`.
+lap branch of the first:
+
+```sh
+git worktree add ../proj-parser -b parser
+cd ../proj-parser
+lap branch start parser --from ../proj
+```
+
+The parent's work must be committed first (lap and git): a branch starts
+from the parent's committed state, and `branch start` refuses a folder
+whose files differ (`not_clean`, naming files lap never recorded apart
+from changed ones). The branch records to chunks of its own, so the two
+folders never write to the same file. The parent keeps a registry of the
+branches it started.
+
+**Say which branch you record to.** Where branches exist, `lap commit`,
+`lap amend` and `lap session start` need `--branch <name>` (`--branch
+main` in the first folder) or `LAP_BRANCH`; a missing or wrong name is
+refused with a message naming this folder's branch — you may be in the
+wrong folder. A repository with no branches ignores `LAP_BRANCH` (set it
+for a whole run), while an explicit `--branch` is always checked.
+
+**Reading.** `lap branch list` shows each branch's state: active, merged,
+partly merged, or missing (its folder gone: `lap branch move` points the
+registry at the new place, `lap branch forget` drops it). A merged branch
+whose folder is gone leaves the registry by itself, and a branch known only
+by chunks git brought is listed too. `--branch <name>` on `log`, `show`,
+`rr` and `session list` reads another branch's history from here. Session
+ids repeat across folders, so a branch's sessions are named
+`<branch>/S<n>` — cite that in text that leaves the folder.
+
 When the work is done, merge it back in the parent folder, in this order:
 
 1. commit the parent's own pending work (lap and git);
@@ -220,15 +273,35 @@ checkout and none of its history is here yet. Run `git merge`, then
 folder anyway; use it only when you want the history before the code,
 knowing `lap status` will show the difference until the code arrives.
 Branches in plain folders without git are read from their folder directly.
-SPEC.md (Branches) has the details: conflicts, stopped files, the registry.
+
+Each branch commit is placed file by file against what the parent has done
+since the base. Where the parent changed the same lines differently, that
+file **stops** at that commit: its later commits are left, the rest of the
+branch is still adopted, and what is left shows in `lap status` to commit by
+hand, citing the branch commits (`#<hash>`). A change the parent already
+made identically is recorded as already done, not as a conflict. Adopted
+commits keep a `from` link to the original, and the branch's amendments
+(`lap amend`) come along.
+
+**Branches of branches.** A branch folder can start branches too, and merge
+them back the same way. A branch of a branch can also be merged straight
+into main: `git merge` it there, then `lap merge sub`, which adopts the work
+of the branch between up to where `sub` started, too.
+
+**The board.** In a lap branch folder, coboard works the parent's board,
+never the branch's git copy of it; if the parent folder has moved, it says
+so (`stale_parent`) rather than using the copy.
+
+SPEC.md (Branches) has the details.
 
 ## Limitations
 
 Worth knowing before you rely on it.
 
 **lap cannot restore anything.** It records; it never writes to your files.
-There is no checkout, revert, branch, merge, staging area, or remote. To
-get old content back you read it out of `lap show --full-file` yourself.
+There is no checkout, revert, staging area, or remote, and `lap merge`
+adopts history, never code. To get old content back you read it out of
+`lap show --full-file` yourself.
 
 **lap does not watch git.** It compares the working tree against its own
 last-committed copy and nothing else. So when git changes files underneath
@@ -246,7 +319,7 @@ the project's own `.gitignore`.
 *one folder* both record commits, merging them conflicts on the chunk both
 appended to, and resolving that by interleaving lines breaks the hash
 chain; `lap verify` detects it but cannot repair it. For parallel work, use
-lap branches (below): each records to its own chunks, and `lap merge`
+lap branches (above): each records to its own chunks, and `lap merge`
 adopts them without git ever conflicting on `.lap/log/`.
 
 **Renames are two commits**, because lap tracks paths, not file identity —
@@ -261,9 +334,13 @@ lap refuses to track it. Files larger than 64 MB are refused outright.
 scattered across a file becomes several commits — by design, but it does
 mean the unit of history is mechanical rather than semantic.
 
-**`lap status` reads every tracked file.** There is no stat cache, so it is
-linear in the size of the tree: roughly 0.6 s on a 7,450-file checkout
-against git's 0.02 s. Committing is unaffected.
+**`lap status` walks the whole tree.** A stat cache spares it reading files
+whose size and mtime have not changed, but it still visits every file, and
+content changed with both put back is not seen until the cache entry goes
+(as with git's index).
+
+**Line endings.** lap reads CRLF as LF: a file's `\r\n` endings are recorded
+as `\n`, so a change of line endings alone is no edit.
 
 **One writer at a time.** An exclusive lock serializes writing commands for
 their whole run; readers never lock and never block. A second writer waits

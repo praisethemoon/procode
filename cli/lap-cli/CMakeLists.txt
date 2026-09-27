@@ -44,6 +44,7 @@ set(LAP_LIB_SOURCES
     src/cmd_branch.c
     src/adopt.c
     src/cmd_merge.c
+    src/cmd_amend.c
     src/tty.c
 )
 
