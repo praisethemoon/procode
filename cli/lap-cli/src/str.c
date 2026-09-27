@@ -202,6 +202,27 @@ char *join_lines(Arena *a, Lines l, size_t *out_len) {
     return sb_finish(&sb);
 }
 
+size_t lines_bytes(Lines l) {
+    size_t n = 0;
+    for (int32_t i = 0; i < l.count; i++)
+        n += l.lines[i].len + (i + 1 < l.count || l.eof_nl ? 1 : 0);
+    return n;
+}
+
+Lines lines_copy(Arena *a, Lines l) {
+    Lines out = l;
+    if (l.count == 0)
+        return out;
+    out.lines = (Str *)arena_alloc(a, (size_t)l.count * sizeof(Str));
+    for (int32_t i = 0; i < l.count; i++) {
+        char *t = (char *)arena_alloc(a, l.lines[i].len + 1);
+        memcpy(t, l.lines[i].ptr, l.lines[i].len);
+        t[l.lines[i].len] = '\0';
+        out.lines[i] = (Str){t, l.lines[i].len};
+    }
+    return out;
+}
+
 Lines lines_without_cr(Arena *a, Lines l) {
     Lines out = l;
     if (l.count == 0)

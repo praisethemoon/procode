@@ -146,7 +146,13 @@ bool snap_rebuild_all(Arena *a, Repo *r, char *err, size_t errsz) {
         plat_remove_file(p);
     }
 
+    /* Memory stays bounded by one file's state, not the history: each
+     * file is replayed in an arena of its own, freed after it, and one
+     * that grows is compacted — the file's current lines copied into a
+     * fresh arena — every COMPACT_EVERY records. */
+    enum { COMPACT_EVERY = 256 };
     for (int32_t fid = 0; fid < idx->npaths; fid++) {
+        Arena *fa = arena_new(1 << 16);
         Lines cur = {NULL, 0, true};
         FileHead fh = {-1, -1, 0, 0};
         int64_t *chain = NULL;
@@ -160,30 +166,38 @@ bool snap_rebuild_all(Arena *a, Repo *r, char *err, size_t errsz) {
         for (size_t i = n; i > 0; i--) {
             int64_t e = chain[i - 1];
             Rec rec;
-            if (!idx_fetch(a, r, idx, e, &rec)) {
+            if (!idx_fetch(fa, r, idx, e, &rec)) {
                 snprintf(err, errsz, "cannot fetch record %lld during rebuild",
                          (long long)e);
+                arena_free(fa);
                 return false;
             }
-            rec_apply(a, &cur, &rec);
+            rec_apply(fa, &cur, &rec);
+            if ((n - i + 1) % COMPACT_EVERY == 0) {
+                Arena *fresh = arena_new(1 << 16);
+                cur = lines_copy(fresh, cur);
+                arena_free(fa);
+                fa = fresh;
+            }
             is_deleted = idx->v[e].op == IDX_OP_DELETE;
             fh.head = e;
             fh.delta_bytes += idx->v[e].len;
             fh.delta_count++;
-            if (!is_deleted && i > 1 && fh.delta_count >= SNAP_MIN_DELTAS) {
+            /* the file is joined only when a snapshot is due */
+            if (!is_deleted && i > 1 && fh.delta_count >= SNAP_MIN_DELTAS &&
+                fh.delta_bytes > 2 * lines_bytes(cur)) {
                 size_t blen;
-                char *bytes = join_lines(a, cur, &blen);
-                if (fh.delta_bytes > 2 * blen) {
-                    if (!snap_append(r, a, idx->paths[fid], e, cur.eof_nl,
-                                     bytes, blen)) {
-                        snprintf(err, errsz, "cannot write snapshot for %s",
-                                 idx->paths[fid]);
-                        return false;
-                    }
-                    fh.snap_at = e;
-                    fh.delta_bytes = 0;
-                    fh.delta_count = 0;
+                char *bytes = join_lines(fa, cur, &blen);
+                if (!snap_append(r, fa, idx->paths[fid], e, cur.eof_nl, bytes,
+                                 blen)) {
+                    arena_free(fa);
+                    snprintf(err, errsz, "cannot write snapshot for %s",
+                             idx->paths[fid]);
+                    return false;
                 }
+                fh.snap_at = e;
+                fh.delta_bytes = 0;
+                fh.delta_count = 0;
             }
         }
         /* final state -> shadow */
@@ -198,14 +212,16 @@ bool snap_rebuild_all(Arena *a, Repo *r, char *err, size_t errsz) {
             char *slash = strrchr(parent, '/');
             *slash = '\0';
             size_t blen;
-            char *bytes = join_lines(a, cur, &blen);
+            char *bytes = join_lines(fa, cur, &blen);
             if (!plat_mkdirs(parent) ||
                 !plat_write_file_atomic(spath, bytes, blen)) {
                 snprintf(err, errsz, "cannot write shadow for %s",
                          idx->paths[fid]);
+                arena_free(fa);
                 return false;
             }
         }
+        arena_free(fa);
         idx->heads[fid] = fh;
     }
     if (!idx_write_heads(r, idx, err, errsz))

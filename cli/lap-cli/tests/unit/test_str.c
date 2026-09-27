@@ -86,5 +86,26 @@ void test_str(void) {
     ASSERT_TRUE(str_hash(str_c("a")) != str_hash(str_c("b")));
     ASSERT_TRUE(str_hash(str_c("")) != str_hash(str_c(" ")));
 
+    t_begin("str: lines_bytes is join_lines' length, without joining");
+    const char *shapes[] = {"", "a\n", "a\nbb", "a\nbb\n", "\n\n", NULL};
+    for (int32_t i = 0; shapes[i]; i++) {
+        Lines l = split_lines(a, shapes[i], strlen(shapes[i]));
+        size_t joined;
+        join_lines(a, l, &joined);
+        ASSERT_EQ_I((int32_t)lines_bytes(l), (int32_t)joined);
+    }
+
+    t_begin("str: lines_copy keeps the lines and owns their text");
+    Arena *b = arena_new(0);
+    char src[] = "one\ntwo";
+    Lines orig = split_lines(a, src, strlen(src));
+    Lines copy = lines_copy(b, orig);
+    src[0] = 'X'; /* the copy does not see its source change */
+    ASSERT_EQ_I(copy.count, 2);
+    ASSERT_TRUE(!copy.eof_nl);
+    size_t cl;
+    ASSERT_EQ_S(join_lines(b, copy, &cl), "one\ntwo");
+    arena_free(b);
+
     arena_free(a);
 }

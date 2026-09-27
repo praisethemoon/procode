@@ -403,99 +403,121 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
     if (loaded && s.idx.h.covered == size)
         return true;
 
-    /* a history with nothing in it yet still gets its (empty) index */
-    char *data = "";
-    size_t dlen = (size_t)(size - s.idx.h.covered);
-    if (dlen > 0 && !hist_read(a, &r->hist, s.idx.h.covered, dlen, &data)) {
-        snprintf(err, errsz, "cannot read log tail");
-        return false;
-    }
+    /* The uncovered bytes are read a chunk at a time (records never span
+     * chunks) and each record decoded in a scratch arena: only the entries
+     * and paths stay in a, so indexing costs a chunk's memory, not the
+     * history's. A history with nothing in it yet still gets its (empty)
+     * index. */
+    Arena *ta = arena_new(1 << 16), *scratch = arena_new(1 << 16);
     uint64_t off = s.idx.h.covered;
     uint64_t covered = s.idx.h.covered;
-    Lines l = split_lines(a, data, dlen);
-    for (int32_t i = 0; i < l.count; i++) {
-        Str line = l.lines[i];
-        if (i == l.count - 1 && !l.eof_nl)
-            break; /* torn tail: not covered, next sync retries */
-        if (line.len == 0) {
-            off += 1;
-            covered = off;
+    bool torn = false;
+    for (int32_t k = 0; k < r->hist.n && !torn; k++) {
+        uint64_t cend = r->hist.v[k].start + r->hist.v[k].size;
+        if (cend <= off)
             continue;
-        }
-        Rec rec;
-        char derr[128];
-        if (!rec_decode(a, line.ptr, line.len, &rec, derr, sizeof derr)) {
-            snprintf(err, errsz, "log offset %llu: %s",
-                     (unsigned long long)off, derr);
+        arena_reset(ta);
+        char *data;
+        size_t dlen = (size_t)(cend - off);
+        if (!hist_read(ta, &r->hist, off, dlen, &data)) {
+            snprintf(err, errsz, "cannot read log tail");
+            arena_free(ta);
+            arena_free(scratch);
             return false;
         }
-        IdxEntry e;
-        memset(&e, 0, sizeof e);
-        e.off = off;
-        e.len = (uint32_t)line.len;
-        e.ts = idx_epoch(rec.ts);
-        e.file_id = UINT32_MAX;
-        e.prev_same_file = -1;
-        switch (rec.type) {
-        case REC_INIT:
-            e.kind = IDX_INIT;
-            break;
-        case REC_COMMIT: {
-            e.kind = IDX_COMMIT;
-            s.idx.h.commits++;
-            e.op = strcmp(rec.op, "create") == 0   ? IDX_OP_CREATE
-                   : strcmp(rec.op, "delete") == 0 ? IDX_OP_DELETE
-                                                   : IDX_OP_EDIT;
-            e.session = rec_session_no(rec.session);
-            e.old_start = (uint32_t)rec.old_start;
-            e.old_lines = (uint32_t)rec.old_lines;
-            e.new_start = (uint32_t)rec.new_start;
-            e.new_lines = (uint32_t)rec.new_lines;
-            int32_t fid = sync_file_id(a, &s, rec.file);
-            e.file_id = (uint32_t)fid;
-            e.prev_same_file = s.heads[fid].head;
-            int64_t self = (int64_t)s.idx.h.count + (int64_t)s.newn;
-            s.heads[fid].head = self;
-            s.heads[fid].delta_bytes += e.len;
-            s.heads[fid].delta_count++;
-            break;
-        }
-        case REC_SESSION_START: {
-            e.kind = IDX_SESSION_START;
-            uint32_t sn = rec_session_no(rec.id);
-            e.session = sn;
-            if (!rec.from) /* an adopted session is history, not open */
-                s.idx.h.open_session = sn;
-            if (sn > s.idx.h.sessions)
-                s.idx.h.sessions = sn;
-            break;
-        }
-        case REC_SESSION_END:
-            e.kind = IDX_SESSION_END;
-            e.session = rec_session_no(rec.id);
-            if (!rec.from)
+        Lines l = split_lines(ta, data, dlen);
+        for (int32_t i = 0; i < l.count; i++) {
+            Str line = l.lines[i];
+            if (i == l.count - 1 && !l.eof_nl) {
+                torn = true; /* not covered: the next sync retries */
+                break;
+            }
+            if (line.len == 0) {
+                off += 1;
+                covered = off;
+                continue;
+            }
+            Rec rec;
+            char derr[128];
+            arena_reset(scratch);
+            if (!rec_decode(scratch, line.ptr, line.len, &rec, derr,
+                            sizeof derr)) {
+                snprintf(err, errsz, "log offset %llu: %s",
+                         (unsigned long long)off, derr);
+                arena_free(ta);
+                arena_free(scratch);
+                return false;
+            }
+            IdxEntry e;
+            memset(&e, 0, sizeof e);
+            e.off = off;
+            e.len = (uint32_t)line.len;
+            e.ts = idx_epoch(rec.ts);
+            e.file_id = UINT32_MAX;
+            e.prev_same_file = -1;
+            switch (rec.type) {
+            case REC_INIT:
+                e.kind = IDX_INIT;
+                break;
+            case REC_COMMIT: {
+                e.kind = IDX_COMMIT;
+                s.idx.h.commits++;
+                e.op = strcmp(rec.op, "create") == 0   ? IDX_OP_CREATE
+                       : strcmp(rec.op, "delete") == 0 ? IDX_OP_DELETE
+                                                       : IDX_OP_EDIT;
+                e.session = rec_session_no(rec.session);
+                e.old_start = (uint32_t)rec.old_start;
+                e.old_lines = (uint32_t)rec.old_lines;
+                e.new_start = (uint32_t)rec.new_start;
+                e.new_lines = (uint32_t)rec.new_lines;
+                int32_t fid = sync_file_id(a, &s, rec.file);
+                e.file_id = (uint32_t)fid;
+                e.prev_same_file = s.heads[fid].head;
+                int64_t self = (int64_t)s.idx.h.count + (int64_t)s.newn;
+                s.heads[fid].head = self;
+                s.heads[fid].delta_bytes += e.len;
+                s.heads[fid].delta_count++;
+                break;
+            }
+            case REC_SESSION_START: {
+                e.kind = IDX_SESSION_START;
+                uint32_t sn = rec_session_no(rec.id);
+                e.session = sn;
+                if (!rec.from) /* an adopted session is history, not open */
+                    s.idx.h.open_session = sn;
+                if (sn > s.idx.h.sessions)
+                    s.idx.h.sessions = sn;
+                break;
+            }
+            case REC_SESSION_END:
+                e.kind = IDX_SESSION_END;
+                e.session = rec_session_no(rec.id);
+                if (!rec.from)
+                    s.idx.h.open_session = 0;
+                break;
+            case REC_BRANCH: /* a branch starts with no session open */
+                e.kind = IDX_BRANCH;
                 s.idx.h.open_session = 0;
-            break;
-        case REC_BRANCH: /* a branch starts with no session open */
-            e.kind = IDX_BRANCH;
-            s.idx.h.open_session = 0;
-            break;
-        case REC_MERGE:
-            e.kind = IDX_MERGE;
-            break;
-        case REC_AMEND:
-            e.kind = IDX_AMEND;
-            break;
-        case REC_UNKNOWN: /* a writer refuses a history holding one */
-            e.kind = IDX_UNKNOWN;
-            s.idx.h.unknown++;
-            break;
+                break;
+            case REC_MERGE:
+                e.kind = IDX_MERGE;
+                break;
+            case REC_AMEND:
+                e.kind = IDX_AMEND;
+                break;
+            case REC_UNKNOWN: /* a writer refuses a history holding one */
+                e.kind = IDX_UNKNOWN;
+                s.idx.h.unknown++;
+                break;
+            }
+            e.id = s.idx.h.commits;
+            ARENA_GROW(a, s.newv, s.newn, s.newcap, IdxEntry);
+            s.newv[s.newn++] = e;
+            off += line.len + 1;
+            covered = off;
         }
-        e.id = s.idx.h.commits;
-        ARENA_GROW(a, s.newv, s.newn, s.newcap, IdxEntry);
-        s.newv[s.newn++] = e;
-        off += line.len + 1;
-        covered = off;
     }
+    arena_free(ta);
+    arena_free(scratch);
     return sync_write(r, &s, covered, err, errsz);
 }

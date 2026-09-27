@@ -358,17 +358,37 @@ static bool newer_check(Arena *a, Repo *r, char *err, size_t errsz) {
         unknown = (int32_t)h.unknown;
         from = h.covered;
     }
-    if (unknown == 0 && from < r->hist.size) {
-        char *data, ierr[256];
-        size_t len = (size_t)(r->hist.size - from);
-        RecLog log;
-        if (hist_read(a, &r->hist, from, len, &data) &&
-            rec_log_parse(a, data, len, NULL, NULL, &log, ierr,
-                          sizeof ierr)) {
-            unknown = log.unknown_n;
-            type = log.unknown_type;
+    /* the bytes no index covers, a chunk at a time and each record in a
+     * scratch arena: a history no index covers yet can be large */
+    Arena *ca = arena_new(1 << 16), *ra = arena_new(1 << 16);
+    bool counted = unknown > 0; /* the index already knows */
+    for (int32_t k = 0; !counted && k < r->hist.n; k++) {
+        uint64_t cend = r->hist.v[k].start + r->hist.v[k].size;
+        if (cend <= from)
+            continue;
+        arena_reset(ca);
+        char *data;
+        size_t len = (size_t)(cend - from);
+        if (!hist_read(ca, &r->hist, from, len, &data))
+            break;
+        for (size_t start = 0; start < len;) {
+            const char *nl = memchr(data + start, '\n', len - start);
+            if (!nl)
+                break; /* a torn tail */
+            size_t n = (size_t)(nl - (data + start));
+            Rec rec;
+            char ierr[128];
+            arena_reset(ra);
+            if (n > 0 &&
+                rec_decode(ra, data + start, n, &rec, ierr, sizeof ierr) &&
+                rec.type == REC_UNKNOWN && unknown++ == 0)
+                type = arena_strdup(a, rec.name);
+            start += n + 1;
         }
+        from = cend;
     }
+    arena_free(ca);
+    arena_free(ra);
     if (unknown == 0)
         return true;
     open_code = "newer_history";
