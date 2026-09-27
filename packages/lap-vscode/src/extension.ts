@@ -13,7 +13,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { BranchRow, BranchView, branchView, parseBranchList } from "./branches";
-import { folderFiles, hasHistory, historyProblem, lineageFiles, readStream } from "./chunks";
+import { IncrementalLog, folderFiles, hasHistory, historyProblem, ownFiles, parseChunkName, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
     CommitRec,
@@ -24,7 +24,6 @@ import {
     createReader,
     localTime,
     mdEscape,
-    parseLog,
     readerFeed,
     regionLabel,
     replaySeeded,
@@ -175,9 +174,40 @@ class LapLogSource {
  * last known and gets a fresh page when lap answers. A branch's log is read
  * again only when its files grew. Registered folders are watched, so work in
  * them shows here as it happens. */
+/* What `lap branch list` depends on in this folder, as one string: the
+ * registry file's stat, how many merges its history records, and the
+ * branch chunks here with their sizes. "" when there is none of it. */
+function listSignature(root: string, merges: number): string {
+    const parts: string[] = [];
+    try {
+        const st = fs.statSync(path.join(root, ".lap", "branches.json"));
+        parts.push(`registry ${st.mtimeMs} ${st.size}`);
+    } catch {
+        /* no registry */
+    }
+    if (merges > 0) parts.push(`merges ${merges}`);
+    let names: string[] = [];
+    try {
+        names = fs.readdirSync(path.join(root, ".lap", "log"));
+    } catch {
+        /* no chunks */
+    }
+    for (const n of names.sort()) {
+        const c = parseChunkName(n);
+        if (!c || c.lineage === "main") continue;
+        try {
+            parts.push(`${n} ${fs.statSync(path.join(root, ".lap", "log", n)).size}`);
+        } catch {
+            /* gone meanwhile */
+        }
+    }
+    return parts.join("\n");
+}
+
 class BranchSource {
     views: BranchView[] = [];
-    private cache = new Map<string, { size: number; log: LapLog | null }>();
+    private logs = new Map<string, IncrementalLog>();
+    private signature = "\0"; /* nothing asked yet */
     private watchers: vscode.FileSystemWatcher[] = [];
     private watched = "";
     private timer: NodeJS.Timeout | undefined;
@@ -187,10 +217,24 @@ class BranchSource {
         private readonly onChange: () => void,
     ) {}
 
-    refresh(): void {
+    /* Asks lap for the list again only when something it depends on moved
+     * — the registry, this folder's merges, the branch chunks here — or
+     * when told to (a registered folder changed, the registry was fixed):
+     * a folder with no branches never runs lap at all. */
+    refresh(force = false): void {
         const root = this.source.repoRoot;
         if (!root) {
             this.views = [];
+            return;
+        }
+        const sig = listSignature(root, this.source.current.merges.length);
+        if (!force && sig === this.signature) return;
+        this.signature = sig;
+        if (sig === "") { /* no registry, no branch chunk, no merge */
+            if (this.views.length) {
+                this.views = [];
+                this.onChange();
+            }
             return;
         }
         execFile("lap", ["branch", "list", "--json"], { cwd: root, timeout: 10_000, maxBuffer: 16 * 1024 * 1024 }, (_err, stdout) => {
@@ -207,14 +251,17 @@ class BranchSource {
         });
     }
 
+    /* A branch's own records, from its folder while it is there and from
+     * its chunks here after: read as they grow, never again from the start
+     * (the history it started from is main's, read already). */
     private read(root: string, r: BranchRow): LapLog | null {
-        const files = r.present ? folderFiles(path.join(r.path, ".lap")) : lineageFiles(path.join(root, ".lap"), r.id);
-        const size = files.reduce((n, f) => n + f.size, 0);
-        const was = this.cache.get(r.id);
-        if (was && was.size === size) return was.log;
-        const log = files.length ? parseLog(readStream(files, 0, size).toString("utf8"), lineHash) : null;
-        this.cache.set(r.id, { size, log });
-        return log;
+        const lapDir = r.present ? path.join(r.path, ".lap") : path.join(root, ".lap");
+        let log = this.logs.get(r.id);
+        if (!log) {
+            log = new IncrementalLog(lineHash);
+            this.logs.set(r.id, log);
+        }
+        return log.update(ownFiles(lapDir, r.id));
     }
 
     private watch(rows: readonly BranchRow[]): void {
@@ -226,7 +273,7 @@ class BranchSource {
             const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(p), ".lap/log/*.jsonl"));
             const later = () => {
                 if (this.timer) clearTimeout(this.timer);
-                this.timer = setTimeout(() => this.refresh(), 300);
+                this.timer = setTimeout(() => this.refresh(true), 300);
             };
             w.onDidChange(later);
             w.onDidCreate(later);
@@ -256,7 +303,7 @@ class HistoryView implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly source: LapLogSource,
         private readonly onOpen: (id: string) => void,
-        private readonly branches: { readonly views: readonly BranchView[]; refresh(): void },
+        private readonly branches: { readonly views: readonly BranchView[]; refresh(force?: boolean): void },
     ) {}
 
     resolveWebviewView(view: vscode.WebviewView): void {
@@ -351,7 +398,7 @@ class HistoryView implements vscode.WebviewViewProvider {
             } catch {
                 void vscode.window.showErrorMessage("lap: the registry was not changed (is lap installed?)");
             }
-            this.branches.refresh();
+            this.branches.refresh(true);
         });
     }
 
@@ -606,7 +653,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const history = new HistoryView(context.extensionUri, tree, showCommitDiff, branches);
     pushPage = () => history.push();
     context.subscriptions.push(vscode.window.registerWebviewViewProvider("lapHistory", history));
-    branches.refresh();
+    branches.refresh(true);
 
     const status = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left,

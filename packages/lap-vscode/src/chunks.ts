@@ -7,6 +7,9 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { consumableBytes, createReader, readerFeed } from "./model";
+import type { LapLog, LineHash, LogReader } from "./model";
+
 export interface Chunk {
     path: string;
     size: number;
@@ -115,6 +118,23 @@ export function historyFiles(lapDir: string): Chunk[] {
  * parent's chunks up to the base chunk its branch record names, then its
  * own. Empty when its first chunk is not here or does not open with its
  * branch record. */
+/* The first line of a file, read through a window that doubles until the
+ * line fits — never the whole of a chunk that may hold megabytes. */
+export function firstLine(file: string): string {
+    const fd = fs.openSync(file, "r");
+    try {
+        for (let want = 64 * 1024; ; want *= 2) {
+            const buf = Buffer.alloc(want);
+            const got = fs.readSync(fd, buf, 0, want, 0);
+            const nl = buf.subarray(0, got).indexOf(10);
+            if (nl >= 0) return buf.subarray(0, nl).toString("utf8");
+            if (got < want) return buf.subarray(0, got).toString("utf8");
+        }
+    } finally {
+        fs.closeSync(fd);
+    }
+}
+
 /* The chunk names of lineage's history as the folder holds them, cut after
  * its own chunk `upto` (all of it for 0): main's chunks, or for a branch
  * its parent's history to its base chunk, then its own. A branch of a
@@ -129,7 +149,7 @@ function viewNames(dir: string, names: string[], lineage: string, upto: number, 
     let base = 0;
     let parent = "main";
     try {
-        const first = fs.readFileSync(path.join(dir, own[0]), "utf8").split("\n", 1)[0];
+        const first = firstLine(path.join(dir, own[0]));
         const rec = JSON.parse(first) as Record<string, unknown>;
         if (rec["type"] !== "branch" || rec["id"] !== lineage) return null;
         base = Number(rec["base_chunk"] ?? 0);
@@ -202,4 +222,64 @@ export function readStream(files: Chunk[], from: number, to: number): Buffer {
         start = end;
     }
     return buf.subarray(0, got);
+}
+
+/* One lineage's own chunks in a folder, in order, with their sizes now:
+ * for a branch, its records only, from its branch record on — not the
+ * history it started from. */
+export function ownFiles(lapDir: string, lineage: string): Chunk[] {
+    const dir = path.join(lapDir, "log");
+    let names: string[] = [];
+    try {
+        names = fs.readdirSync(dir);
+    } catch {
+        return [];
+    }
+    const out: Chunk[] = [];
+    for (const n of lineageChunks(names, lineage)) {
+        try {
+            out.push({ path: path.join(dir, n), size: fs.statSync(path.join(dir, n)).size });
+        } catch {
+            break;
+        }
+    }
+    return out;
+}
+
+/* A log read as it grows: each update reads only the bytes past what was
+ * read before, up to the last whole line (as the main log is read), and
+ * starts over when the files are another folder's or shrank. */
+export class IncrementalLog {
+    private reader: LogReader;
+    private offset = 0;
+    private source = "";
+
+    constructor(private readonly hash: LineHash) {
+        this.reader = createReader(hash);
+    }
+
+    /* The log as the files hold it now; null when there are none. */
+    update(files: Chunk[]): LapLog | null {
+        if (files.length === 0) return null;
+        const size = files.reduce((n, f) => n + f.size, 0);
+        if (files[0].path !== this.source || size < this.offset) {
+            this.reader = createReader(this.hash);
+            this.offset = 0;
+            this.source = files[0].path;
+        }
+        if (size > this.offset) {
+            const buf = readStream(files, this.offset, size);
+            const take = consumableBytes(buf, buf.length);
+            if (take > 0) {
+                readerFeed(this.reader, buf.subarray(0, take).toString("utf8"));
+                this.offset += take;
+            }
+        }
+        return this.reader.log;
+    }
+
+    /* How many bytes have been read so far. */
+    get read(): number {
+        return this.offset;
+    }
 }

@@ -9,7 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { hasHistory, historyFiles, historyProblem, lineageChunks, missingChunk, parseChunkName, readStream } from "../chunks";
+import { IncrementalLog, firstLine, hasHistory, historyFiles, historyProblem, lineageChunks, missingChunk, ownFiles, parseChunkName, readStream } from "../chunks";
 import { consumableBytes, createReader, parseLog, readerFeed } from "../model";
 
 const hash = (line: string) => createHash("sha256").update(line, "utf8").digest("hex");
@@ -127,4 +127,45 @@ test("a chunk missing from the middle is named, as lap names it, never read arou
     fs.writeFileSync(path.join(dir, "lineage"), "0123456789ab\n");
     fs.writeFileSync(path.join(dir, "log", "0123456789ab.000002.jsonl"), "");
     assert.match(historyProblem(dir) ?? "", /0123456789ab\.000001\.jsonl is missing/);
+});
+
+test("a branch is read as it grows: only new whole lines, from its own chunks, again from the start only when it shrank or moved", () => {
+    const dir = lapDir();
+    const id = "0123456789ab";
+    const own = (n: number) => path.join(dir, "log", `${id}.00000${n}.jsonl`);
+    const branch = rec({ type: "branch", id, name: "busy", parent: "main", base: "b", base_chunk: 1, ts, prev: "b" });
+    fs.mkdirSync(path.join(dir, "log"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "log", "main.000001.jsonl"), lines.join("")); // main's: not read
+    fs.writeFileSync(own(1), branch + rec({ type: "session_start", id: "S2", msg: "busy work", meta: {}, ts }));
+    assert.deepEqual(ownFiles(dir, id).map((f) => path.basename(f.path)), [`${id}.000001.jsonl`]);
+    const inc = new IncrementalLog(hash);
+    let log = inc.update(ownFiles(dir, id))!;
+    assert.equal(log.sessions.length, 1);
+    const first = inc.read;
+    assert.equal(first, fs.statSync(own(1)).size, "only its own chunk was read");
+    // grows, with a line still being written
+    fs.appendFileSync(own(1), commit("L9", "S2") + '{"type":"commit","partial');
+    log = inc.update(ownFiles(dir, id))!;
+    assert.deepEqual(log.commits.map((c) => c.id), ["L9"]);
+    assert.equal(inc.read, first + commit("L9", "S2").length, "the unfinished line waits");
+    // a new chunk: read on from where it was
+    fs.writeFileSync(own(1), branch + rec({ type: "session_start", id: "S2", msg: "busy work", meta: {}, ts }) + commit("L9", "S2"));
+    fs.writeFileSync(own(2), commit("L10", "S2"));
+    log = inc.update(ownFiles(dir, id))!;
+    assert.deepEqual(log.commits.map((c) => c.id), ["L9", "L10"]);
+    // shrank: read again from the start
+    fs.rmSync(own(2));
+    fs.writeFileSync(own(1), branch);
+    log = inc.update(ownFiles(dir, id))!;
+    assert.equal(log.commits.length, 0);
+    assert.equal(inc.update([]), null);
+});
+
+test("a chunk's first line is read however long it is, not the whole chunk", () => {
+    const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "lap-first-")), "c.jsonl");
+    const long = "x".repeat(200_000);
+    fs.writeFileSync(f, `${long}\nsecond\n`);
+    assert.equal(firstLine(f), long);
+    fs.writeFileSync(f, "no newline");
+    assert.equal(firstLine(f), "no newline");
 });
