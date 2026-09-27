@@ -115,7 +115,10 @@ else()
     target_link_libraries(kb-unit-tests PRIVATE m)
 endif()
 
-add_test(NAME kb.unit COMMAND kb-unit-tests)
+# The unit tests read their fixtures relative to this directory, as under
+# `make test`; ctest would otherwise run them from the build tree.
+add_test(NAME kb.unit COMMAND kb-unit-tests
+         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 if(UNIX)
     add_test(NAME kb.e2e
              COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/run.sh)
