@@ -37,6 +37,13 @@ function cliCommand(settingId: string, fallback: string): string {
     return vscode.workspace.getConfiguration(section).get<string>(key, fallback)?.trim() || fallback;
 }
 
+/* Board › Board Folder, handed to coboard's server as COBOARD_DIR so agents
+ * work the board this window does; nothing when it is empty. */
+function boardFolder(): Record<string, string> {
+    const dir = vscode.workspace.getConfiguration("coboard").get<string>("boardFolder", "")?.trim();
+    return dir ? { COBOARD_DIR: dir } : {};
+}
+
 /* ------------------------------------------------------------ MCP servers
  *
  * coboard's, kb's and artifacts' MCP servers, each bundled into one script under
@@ -63,7 +70,7 @@ export function servers(ctx: vscode.ExtensionContext): Server[] {
             label: "coboard: the board",
             command: process.execPath,
             args: [script("coboard")],
-            env: { ...node, LAP_BIN: cliCommand("coboard.lapPath", "lap") },
+            env: { ...node, LAP_BIN: cliCommand("coboard.lapPath", "lap"), ...boardFolder() },
         },
         {
             name: "kb",

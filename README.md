@@ -21,6 +21,12 @@ how to use it. To install the skills (`lap`, `tickets` and `artifacts`),
 copy the folders in [.claude/skills/](.claude/skills/) into your project's
 `.claude/skills/` (or `~/.claude/skills/` for every project).
 
+Agents working in parallel each get a folder of their own — a git worktree
+or a copy — made a **lap branch** of the first folder (`lap branch start`),
+with its own line of history. `git merge` brings the code back and `lap
+merge` brings the history: every commit it can place lands in the first
+folder's history, linked to its original.
+
 The extension's **Lap History** view renders the sessions and their changes
 inside VS Code.
 
@@ -39,6 +45,12 @@ view.
 Coboard works perfectly fine without lap. But if lap is available, a ticket
 also shows the sessions (groups of changes) made under it, for a smoother
 review.
+
+A project has one board, whatever folder you work in. In a lap branch
+folder, coboard works the parent folder's board (lap recorded where the
+parent is); anywhere else, set `COBOARD_DIR` for the MCP server, or
+**Board › Board Folder** in VS Code, to another folder's board. Writes take
+the board's lock, so agents in several folders share it safely.
 
 ![coboard-vscode](assets/coboard-vscode.webp)
 
@@ -198,16 +210,16 @@ specs/      the kb contract and the artifact format
 ## Limitations
 
 > [!WARNING]
-> **lap and board histories do not merge across git branches.** Both are
-> append-only logs committed to git (`.lap/log.jsonl`, `.coboard/log.jsonl`).
-> If two branches both record lap commits or change the board, merging them
-> conflicts on that log, and no resolution keeps both sides: each branch
-> has handed out the same next ids (`L…`, `S…`, `T-…`), and interleaving
-> lap's lines breaks its hash chain. Keep one side's log and discard the
-> other's.
+> **Parallel work needs lap branches and one board.** lap's history
+> (`.lap/log/`) and the board (`.coboard/log.jsonl`) are append-only logs
+> committed to git. Two git branches of *one folder* that both record lap
+> commits, or both change the board, conflict on those logs when merged,
+> and no resolution keeps both sides: each has handed out the same next ids
+> (`L…`, `S…`, `T-…`), and interleaving lap's lines breaks its hash chain.
 >
-> To avoid it, record lap sessions and board changes on one line of work,
-> or keep `.lap/` out of git so it stays on one machine.
+> So give each line of work its own folder as a lap branch (its history
+> goes in its own chunk files, and `lap merge` adopts it), and keep one
+> board: branch folders use their parent's.
 
 lap's other limits (it cannot restore files, it takes changes git makes
 for yours, renames are two commits) are in

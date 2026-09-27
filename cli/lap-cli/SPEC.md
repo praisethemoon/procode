@@ -50,6 +50,8 @@ intent and what it does; git keeps its normal human-scale history.
     statcache       cache: stat of every file status last found clean
     lock            exclusive lock file taken by writing commands
     lineage         a branch folder's id (§Branches): machine-local
+    parent          a branch folder's parent path, for other tools (the
+                    board): machine-local, a hint lap never reads
     branches.json   the branches started from this folder: machine-local
 ```
 

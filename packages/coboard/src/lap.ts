@@ -12,6 +12,8 @@
  */
 
 import { execFile } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 export interface LapSession {
     readonly id: string;
@@ -217,11 +219,47 @@ export async function commitDiff(root: string, commit: string): Promise<LapDiff>
     };
 }
 
-/* Starts a lap session for a ticket. Fails when lap does, e.g. because
- * another session is already active. */
-export async function startSession(root: string, ticket: string, purpose: string): Promise<string> {
-    const p = await run(root, ["session", "start", purpose, "--meta", `ticket=${ticket}`]);
+/* Starts a lap session for a ticket, in the lap folder at or above `cwd`
+ * (a branch folder records to its own line of history, even when the board
+ * is its parent's). Fails when lap does, e.g. because another session is
+ * already active. */
+export async function startSession(cwd: string, ticket: string, purpose: string): Promise<string> {
+    const p = await run(cwd, ["session", "start", purpose, "--meta", `ticket=${ticket}`, ...branchArgs(cwd)]);
     return String(p["id"]);
+}
+
+/* What lap needs to hear on a session start where branches exist: the
+ * branch folder's id (lap takes it for the name), or main in a folder with
+ * branches. Nothing where there are none, so a lap from before branches
+ * still works, and nothing when LAP_BRANCH already says it. */
+export function branchArgs(cwd: string): string[] {
+    if (process.env["LAP_BRANCH"]) {
+        return [];
+    }
+    let dir = path.resolve(cwd);
+    for (;;) {
+        const lapDir = path.join(dir, ".lap");
+        if (fs.existsSync(lapDir)) {
+            try {
+                const id = fs.readFileSync(path.join(lapDir, "lineage"), "utf8").trim();
+                if (id) return ["--branch", id];
+            } catch {
+                /* not a branch folder */
+            }
+            try {
+                const reg: unknown = JSON.parse(fs.readFileSync(path.join(lapDir, "branches.json"), "utf8"));
+                if (Array.isArray(reg) && reg.length > 0) return ["--branch", "main"];
+            } catch {
+                /* no branches, or a registry lap would read as none */
+            }
+            return [];
+        }
+        const up = path.dirname(dir);
+        if (up === dir) {
+            return [];
+        }
+        dir = up;
+    }
 }
 
 /* The command an agent should run to link its work to a ticket. */

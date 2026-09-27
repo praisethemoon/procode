@@ -17,7 +17,7 @@ import * as readline from "node:readline";
 import { ticketSessions, sessionCommits, sessionCommand } from "./lap";
 import { ARCHIVED_MODES, ArchivedMode, PRIORITIES, SIZES, TICKET_STATUSES } from "./model";
 import { search, view } from "./query";
-import { Board, BoardError, CreateInput, Fields, findBoard } from "./store";
+import { Board, BoardError, CreateInput, Fields, locateBoard } from "./store";
 
 const VERSION = "0.1.0";
 
@@ -71,15 +71,16 @@ function schema(properties: Json, required: string[] = []): Json {
     return { type: "object", properties, required, additionalProperties: false };
 }
 
-/* The board to read: the one above cwd, or an empty one. */
+/* The board to read: the project's (locateBoard), or an empty one. */
 function readBoard(ctx: Ctx): Board | null {
-    const root = findBoard(ctx.cwd);
+    const root = locateBoard(ctx.cwd).root;
     return root ? new Board(root) : null;
 }
 
-/* The board to write: the one above cwd, else a new one at the git root. */
+/* The board to write: the project's (locateBoard), else a new one at the
+ * git root. */
 function writeBoard(ctx: Ctx): Board {
-    const root = findBoard(ctx.cwd);
+    const root = locateBoard(ctx.cwd).root;
     if (root) {
         return new Board(root);
     }
@@ -140,7 +141,7 @@ export const TOOLS: readonly Tool[] = [
             const v = view(items(ctx), id, { archived: (args["archived"] as ArchivedMode | undefined) ?? "exclude" });
             if (!v) throw new BoardError("not_found", `no ${id.trim().toUpperCase()} on this board`);
             if (v.kind !== "ticket") return v;
-            const root = findBoard(ctx.cwd)!;
+            const root = locateBoard(ctx.cwd).root!;
             const sessions = await ticketSessions(root, v.ticket.id);
             return { ...v, sessions: sessions.value };
         },

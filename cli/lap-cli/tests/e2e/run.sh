@@ -1222,6 +1222,7 @@ cd "$WORK/bw" || exit 1
 expect_grep "branch feat (.*) started from .*/bp at" "$LAP" branch start feat --from ../bp
 ID=$(cat .lap/lineage)
 [ ${#ID} -eq 12 ] || fail "no branch id in .lap/lineage"
+grep -q '^/.*/bp$' .lap/parent || fail ".lap/parent does not name the parent folder"
 [ -f ".lap/log/$ID.000001.jsonl" ] || fail "the branch's first chunk is missing"
 head -1 ".lap/log/$ID.000001.jsonl" | grep -q '"type":"branch","id":"'"$ID"'","name":"feat","parent":"main"' || fail "the branch record is not first"
 grep -q '"base_chunk":1' ".lap/log/$ID.000001.jsonl" || fail "the base chunk is not 1"

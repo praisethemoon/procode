@@ -22,6 +22,7 @@
 #define LAP_LOG_DIR "log"         /* .lap/log/: the history's chunk files */
 #define LAP_MAIN_LINEAGE "main"   /* the first folder's line of history */
 #define LAP_LINEAGE_NAME "lineage" /* .lap/lineage: a branch folder's id */
+#define LAP_PARENT_NAME "parent"   /* .lap/parent: its parent folder's path */
 /* A chunk is sealed once an append would take it past this many bytes. A
  * constant, so every folder chunks alike; LAP_TEST_CHUNK_BYTES overrides it
  * for tests only. */

@@ -16,7 +16,7 @@ import {
     BoardError,
     Item,
     commitDiff,
-    findBoard,
+    locateBoard,
     search,
     sessionCommits,
     sessionReview,
@@ -38,16 +38,33 @@ function folder(): string | null {
     return f ? f.uri.fsPath : null;
 }
 
+/* How this window found its board, for the view to say when it is not the
+ * folder's own: set in Board Folder, or a lap branch folder's parent's. */
+let boardVia: "override" | "lap-parent" | "found" = "found";
+
 function currentBoard(): Board | null {
     const root = folder();
     if (!root) {
         return null;
     }
-    const found = findBoard(root) ?? root;
+    const setting = vscode.workspace.getConfiguration("coboard").get<string>("boardFolder", "");
+    const at = locateBoard(root, setting || process.env["COBOARD_DIR"]);
+    const found = at.root ?? root;
+    boardVia = at.via;
     if (!board || board.root !== found) {
         board = new Board(found);
     }
     return board;
+}
+
+/* The tree's description: whose board it is, when it is not this folder's. */
+function boardNote(): string {
+    const b = currentBoard();
+    if (!b || boardVia === "found") {
+        return "";
+    }
+    const name = b.root.split(/[\\/]/).filter(Boolean).pop() ?? b.root;
+    return boardVia === "lap-parent" ? `${name}'s board (this folder is a lap branch)` : `${name}'s board`;
 }
 
 function requireBoard(): Board {
@@ -115,6 +132,7 @@ class Sidebar implements vscode.WebviewViewProvider {
 
     refresh(): void {
         this.post({ type: "items", items: search(items(), "", { archived: "include" }), hasFolder: folder() !== null });
+        if (this.view) this.view.description = boardNote();
     }
 
     post(m: SidebarToView): void {
@@ -508,7 +526,8 @@ export function activate(ctx: vscode.ExtensionContext): void {
         });
         if (!purpose?.trim()) return;
         syncLapPath();
-        const s = await startSession(b.root, t.id, purpose.trim());
+        /* in this folder's lap history, even when the board is another's */
+        const s = await startSession(folder() ?? b.root, t.id, purpose.trim());
         void vscode.window.showInformationMessage(`lap session ${s} started for ${t.id}.`);
     });
     // Agents write through the MCP server; the log is the only signal.

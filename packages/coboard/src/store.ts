@@ -74,6 +74,61 @@ export function findBoard(from: string): string | null {
     }
 }
 
+/* Where the board is for work done in `from`. One board serves every
+ * folder of a project, lap branch folders included (their `.coboard/` is
+ * a copy git would later have to merge):
+ *
+ * 1. `override` — COBOARD_DIR, or the Board view's setting: a folder whose
+ *    `.coboard/` is the board, or that `.coboard/` itself;
+ * 2. in a lap branch folder, its parent folder, which `lap branch start`
+ *    wrote to `.lap/parent`, when that folder has a board;
+ * 3. the first `.coboard/` at or above `from`.
+ *
+ * `via` says which, so a view can tell the reader whose board it shows. */
+export function locateBoard(
+    from: string,
+    override: string | undefined = process.env["COBOARD_DIR"],
+): { root: string | null; via: "override" | "lap-parent" | "found" } {
+    if (override && override.trim()) {
+        const dir = path.resolve(override.trim());
+        return { root: path.basename(dir) === BOARD_DIR ? path.dirname(dir) : dir, via: "override" };
+    }
+    const parent = lapParent(from);
+    if (parent && isDir(path.join(parent, BOARD_DIR))) {
+        return { root: parent, via: "lap-parent" };
+    }
+    return { root: findBoard(from), via: "found" };
+}
+
+/* The parent folder a lap branch folder at or above `from` recorded in
+ * `.lap/parent`, or null outside a branch folder. */
+export function lapParent(from: string): string | null {
+    let dir = path.resolve(from);
+    for (;;) {
+        if (isDir(path.join(dir, ".lap"))) {
+            try {
+                const p = fs.readFileSync(path.join(dir, ".lap", "parent"), "utf8").trim();
+                return p ? p : null;
+            } catch {
+                return null;
+            }
+        }
+        const up = path.dirname(dir);
+        if (up === dir) {
+            return null;
+        }
+        dir = up;
+    }
+}
+
+function isDir(p: string): boolean {
+    try {
+        return fs.statSync(p).isDirectory();
+    } catch {
+        return false;
+    }
+}
+
 export interface Fields {
     title?: string;
     description?: string;

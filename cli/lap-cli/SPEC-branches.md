@@ -80,10 +80,11 @@ Built: `SPEC.md` §Branches → Registry, and the `lap branch` commands.
 
 ### The board
 
-Not branched. An agent in a branch folder works the parent's board: coboard
-gets a way to be pointed at another folder's `.coboard/` (a setting, and an
-environment variable for agents), and uses its existing write lock. One board
-means one answer to "is T-93 done?".
+Built. Not branched: an agent in a branch folder works the parent's board.
+coboard finds it (`locateBoard`, packages/coboard) through `COBOARD_DIR` or
+the Board Folder setting first, then the parent path `lap branch start`
+wrote to `.lap/parent` (`SPEC.md`, layout), then the board above; writes
+keep its lock. One board means one answer to "is T-93 done?".
 
 ### Views
 

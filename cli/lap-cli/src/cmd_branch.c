@@ -336,6 +336,13 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
         repo_close(&pr);
         return LAP_EXIT_ERR;
     }
+    /* where the parent is, for tools that serve the parent from here (the
+     * board): a hint like the registry, never read by lap itself */
+    char parent_file[LAP_PATH_MAX];
+    snprintf(parent_file, sizeof parent_file, "%s/%s", here_lap,
+             LAP_PARENT_NAME);
+    char *parent_line = arena_printf(a, "%s\n", there);
+    plat_write_file_atomic(parent_file, parent_line, strlen(parent_line));
     char short_base[8];
     snprintf(short_base, sizeof short_base, "%.7s", pr.last_hash);
     repo_close(&pr);

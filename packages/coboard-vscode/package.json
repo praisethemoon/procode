@@ -97,6 +97,11 @@
           "type": "string",
           "default": "lap",
           "description": "The lap executable, for the sessions linked to a ticket."
+        },
+        "coboard.boardFolder": {
+          "type": "string",
+          "default": "",
+          "description": "The folder whose board this window works (a folder holding .coboard/, or that .coboard/ itself), for one board across a project's folders. Empty: a lap branch folder uses its parent's board, any other folder the board found above it. Also handed to the board's MCP server as COBOARD_DIR."
         }
       }
     }

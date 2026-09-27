@@ -23,7 +23,9 @@ The lap skill covers lap itself; this is the loop around it.
 2. **Start the session.**
    `LAP_USER=claude lap session start "T-<n>: <what>" --meta ticket=T-<n>`.
    In a branch folder, or a folder with branches, add `--branch <name>`
-   (or set `LAP_BRANCH`) here and on every `lap commit`.
+   (or set `LAP_BRANCH`) here and on every `lap commit`. The board stays
+   one: in a lap branch folder coboard works the parent's board by itself;
+   an agent in any other folder sets `COBOARD_DIR` to the project's.
    One session per ticket. Check `lap session current` first; end a stale
    one only after its edits are committed.
 3. **Work, committing edits as you go.** After each change,

@@ -89,7 +89,11 @@ const vscode = new Proxy(
         workspace: new Proxy(
             {
                 workspaceFolders: [{ uri: { scheme: "file", fsPath: folder, path: folder } }],
-                getConfiguration: () => ({ get: (_k, d) => d, update: async () => undefined }),
+                /* defaults, but for a board folder set to show it is passed on */
+                getConfiguration: (section) => ({
+                    get: (k, d) => (section === "coboard" && k === "boardFolder" ? "/shared/project" : d),
+                    update: async () => undefined,
+                }),
             },
             handler,
         ),
@@ -130,6 +134,8 @@ for (const d of defs) {
     assert.equal(d.cwd.fsPath, folder);
 }
 assert.equal(defs[0].env.LAP_BIN, "lap", "coboard is handed Board › Lap Path, lap by default");
+assert.equal(defs[0].env.COBOARD_DIR, "/shared/project", "coboard is handed Board › Board Folder as COBOARD_DIR");
+assert.equal(defs[1].env.COBOARD_DIR, undefined, "only coboard is handed the board folder");
 assert.equal(defs[1].env.KB_BIN, "kb", "kb is handed Knowledge › Cli Path, kb by default");
 assert.equal(fs.existsSync(path.join(dist, "bin")), false, "the package carries no CLI");
 assert.equal(ext.resolveCli("kb", "/nowhere", () => false), null);
