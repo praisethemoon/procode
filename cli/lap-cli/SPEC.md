@@ -553,8 +553,9 @@ once it leaves its folder — in a ticket comment, say. **`<branch>/S<n>`**
   from feat/S4)`, its commits showing their `from`. An old comment written
   in the branch still finds the work.
 - lap prints sessions in that form wherever they are a branch's: in a
-  branch folder (`session feat/S4 started`, `session current`, `session
-  list`, log and search rows, `show`), and for another branch's history
+  branch folder (`session feat/S4 started` and `ended`, `session current`,
+  `session list`, `status`, what `commit` and its dry run print, log and
+  search rows, `show`), and for another branch's history
   read with `--branch`. JSON carries it as `ref` (sessions) and
   `session_ref` (commits); `id` and `session` stay the bare ids.
 - A name that is no branch here is `unknown_branch`; a session the branch

@@ -160,11 +160,15 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
     sb_init(&sb, a);
     int32_t dirty = 0;
 
+    /* the active session as it is named outside this folder */
+    const char *ref = session_ref(
+        a, repo.hist.parent[0] ? repo.hist.name : LAP_MAIN_LINEAGE,
+        repo.active_session);
     if (json) {
         sb_puts(&sb, "{\"ok\":true,");
         if (repo.active_session[0]) {
-            sb_printf(&sb, "\"session\":{\"id\":\"%s\",\"msg\":",
-                      repo.active_session);
+            sb_printf(&sb, "\"session\":{\"id\":\"%s\",\"ref\":\"%s\",\"msg\":",
+                      repo.active_session, ref);
             json_escape_c(&sb, repo.active_session_msg);
             sb_puts(&sb, "},");
         } else {
@@ -178,7 +182,7 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
             int32_t mlen = nl ? (int32_t)(nl - repo.active_session_msg)
                               : (int32_t)strlen(repo.active_session_msg);
             sb_puts(&sb, "session: ");
-            sb_field(&sb, S_ACTIVE, repo.active_session, 0);
+            sb_field(&sb, S_ACTIVE, ref, 0);
             sb_puts(&sb, " \"");
             sb_text(&sb, repo.active_session_msg, (size_t)mlen);
             sb_puts(&sb, "\"\n");

@@ -273,7 +273,8 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             sb_puts(&sb, ")\n");
             if (rec->session) {
                 sb_puts(&sb, "session: ");
-                sb_field(&sb, S_SESSION, rec->session, 0);
+                sb_field(&sb, S_SESSION,
+                         session_ref(a, rec->lineage, rec->session), 0);
                 sb_putc(&sb, '\n');
             }
             sb_puts(&sb, "intent:\n");

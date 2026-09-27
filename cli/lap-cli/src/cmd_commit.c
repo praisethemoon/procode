@@ -131,7 +131,10 @@ static void print_dry_run(Arena *a, bool json, Rec *rec, const char *rel) {
     sb_puts(&sb, "dry run, nothing written: would record ");
     sb_field(&sb, S_ID, rec->id, 0);
     sb_puts(&sb, " in ");
-    sb_field(&sb, S_SESSION, rec->session ? rec->session : "(no session)", 0);
+    sb_field(&sb, S_SESSION,
+             rec->session ? session_ref(a, rec->lineage, rec->session)
+                          : "(no session)",
+             0);
     sb_printf(&sb, "\n  %s  ", rec->op);
     sb_text(&sb, rel, strlen(rel));
     sb_puts(&sb, "  ");
@@ -284,6 +287,8 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
                   : (repo.active_session[0]
                          ? arena_strdup(a, repo.active_session)
                          : NULL);
+    /* not written: the branch the session is named with in output */
+    rec.lineage = repo.hist.parent[0] ? repo.hist.name : LAP_MAIN_LINEAGE;
 
     if (fd.work_exists && !fd.shadow_exists) {
         /* whole file is one edit (like git: empty history, one big change) */
@@ -473,7 +478,9 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         short_hash(&rec, sh);
         printf("[%s%s %s%s] %s%s%s %s: %s%s%s  \"%.*s\"\n", sgr(S_ID), rec.id,
                sh, sgr_off(), sgr(S_SESSION),
-               rec.session ? rec.session : "(no session)", sgr_off(), rel,
+               rec.session ? session_ref(a, rec.lineage, rec.session)
+                           : "(no session)",
+               sgr_off(), rel,
                sgr(S_MUTED), desc, sgr_off(), mlen, intent);
     }
     rc = LAP_EXIT_OK;

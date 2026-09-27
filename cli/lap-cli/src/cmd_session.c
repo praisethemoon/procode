@@ -316,11 +316,15 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
             goto done;
         }
         caches_sync_warn(a, &repo);
+        /* named with its branch, as session start names it */
+        const char *ref = session_ref(
+            a, repo.hist.parent[0] ? repo.hist.name : LAP_MAIN_LINEAGE,
+            rec.id);
         if (json)
-            printf("{\"ok\":true,\"id\":\"%s\"}\n", rec.id);
+            printf("{\"ok\":true,\"id\":\"%s\",\"ref\":\"%s\"}\n", rec.id,
+                   ref);
         else
-            printf("session %s%s%s ended\n", sgr(S_SESSION), rec.id,
-                   sgr_off());
+            printf("session %s%s%s ended\n", sgr(S_SESSION), ref, sgr_off());
         rc = LAP_EXIT_OK;
     } else {
         err_out(json, "usage",

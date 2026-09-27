@@ -1630,15 +1630,24 @@ merge_pair q1; BP="$WORK/q1-p"; BW="$WORK/q1-w"
 cd "$BW" || exit 1
 expect_grep "session b/S1 started" "$LAP" session start "the branch's S1" --branch b
 expect_grep '"ref":"b/S1"' "$LAP" session current --json
-in_branch g.txt 's/^g2$/branch g2/' "rewrites g2 in the branch's S1"
+sed 's/^g2$/branch g2/' g.txt > g.txt.new && mv g.txt.new g.txt
+expect_grep "^\[L5 [0-9a-f]*\] b/S1 g.txt" "$LAP" commit g.txt --branch b -i "work on the branch" -b "rewrites g2 in the branch's S1"
 expect_grep "b/S1 " "$LAP" log -n 1
 expect_grep '"session_ref":"b/S1"' "$LAP" log -n 1 --json
 expect_grep "^b/S1 " "$LAP" session list
 expect_grep "(session b/S1)" "$LAP" show L5
+expect_grep '^session: b/S1 "the branch' "$LAP" status
+expect_grep '"ref":"b/S1"' "$LAP" status --json
+cp g.txt g.keep && printf 'g6\n' >> g.txt
+expect_grep "would record L6 in b/S1" "$LAP" commit g.txt --dry-run --branch b -i "work on the branch" -b "appends g6 in a dry run"
+mv g.keep g.txt
+expect_grep "^session b/S1 ended$" "$LAP" session end
+"$LAP" session start "the branch's S2" --branch b >/dev/null 2>&1
+expect_grep '"ref":"b/S2"' "$LAP" session end --json
 cd "$BP" || exit 1
 expect_grep "session S1 started" "$LAP" session start "the parent's S1" --branch main
 printf 'p\n' > p.txt
-expect_ok "$LAP" commit p.txt --branch main -i "work on the parent" -b "creates p.txt in the parent's S1"
+expect_grep "^\[L[0-9]* [0-9a-f]*\] S1 p.txt" "$LAP" commit p.txt --branch main -i "work on the parent" -b "creates p.txt in the parent's S1"
 # from the parent, S1 is the parent's and b/S1 the branch's
 expect_grep "review S1 — the parent's S1" "$LAP" rr S1
 expect_grep "review b/S1 — the branch's S1" "$LAP" rr b/S1
