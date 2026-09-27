@@ -235,6 +235,28 @@ void test_branches(void) {
     remove(subpath);
     remove(path);
 
+    t_begin("merge_redo_point: no earlier run, or one followed by other "
+            "work, places against the latest record; one at the end is "
+            "redone from just before it");
+    Rec rl[4];
+    memset(rl, 0, sizeof rl);
+    rl[2].from = "h1"; /* an interrupted run's copies of h1 and h2 */
+    rl[3].from = "h2";
+    RecLog rlog;
+    memset(&rlog, 0, sizeof rlog);
+    rlog.v = rl;
+    rlog.count = 4;
+    StrSet nw;
+    strset_init(&nw, a);
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw), 3);
+    strset_add(&nw, "h1");
+    strset_add(&nw, "h2");
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw), 1);
+    rl[3].from = NULL; /* work recorded after the run's first copy */
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw), 3);
+    rl[3].from = "elsewhere";
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw), 3);
+
     t_begin("own_chunks: this folder's copy wins, and the branch folder is "
             "not read unless it may fill in");
     const char *oid = "0123456789ab";

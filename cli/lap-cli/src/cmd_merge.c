@@ -73,6 +73,21 @@ static bool in_view(const Hist *h, const char *lineage) {
     return false;
 }
 
+int32_t merge_redo_point(const RecLog *log, const StrSet *newer) {
+    int32_t p0 = -1; /* the interrupted run's first record here */
+    for (int32_t i = 0; i < log->count && p0 < 0; i++) {
+        if (log->v[i].from && strset_has(newer, log->v[i].from))
+            p0 = i;
+    }
+    if (p0 < 0)
+        return log->count - 1;
+    for (int32_t i = p0; i < log->count; i++) {
+        if (!log->v[i].from || !strset_has(newer, log->v[i].from))
+            return log->count - 1; /* other work since: no redo */
+    }
+    return p0 - 1;
+}
+
 /* Adds an adopted commit's id (and, for JSON, its original's hash) to the
  * report's list. */
 static void report_id(StrBuf *ids, bool json, const char *id,
@@ -419,21 +434,12 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     for (int32_t i = start; i < blog.count; i++)
         strset_add(&newer, blog.v[i].hash);
     Map done_from = {0}; /* branch record hash -> its copy already here */
-    int32_t p0 = plog.count;
     for (int32_t i = 0; i < plog.count; i++) {
         const Rec *p = &plog.v[i];
-        if (p->from && strset_has(&newer, p->from)) {
+        if (p->from && strset_has(&newer, p->from))
             map_put(a, &done_from, p->from, p->id);
-            if (i < p0)
-                p0 = i;
-        }
     }
-    bool redo = done_from.n > 0;
-    for (int32_t i = p0; redo && i < plog.count; i++) {
-        if (!plog.v[i].from || !strset_has(&newer, plog.v[i].from))
-            redo = false;
-    }
-    int32_t parent_at = redo ? p0 - 1 : plog.count - 1;
+    int32_t parent_at = merge_redo_point(&plog, &newer);
 
     /* Placement, file by file. */
     int32_t *at = (int32_t *)arena_alloc0(

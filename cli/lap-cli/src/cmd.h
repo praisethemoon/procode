@@ -107,6 +107,11 @@ typedef struct {
 bool own_chunks(Arena *a, const char *lapdir, const char *from,
                 const char *id, bool fill, OwnChunk **out, int32_t *n,
                 char *err, size_t errsz);
+/* Where lap merge takes this folder's files when placing a branch's new
+ * records (their hashes in newer): the index in log just before the
+ * records an interrupted run of the merge appended (found by their from),
+ * when they are the last thing in log; else log's last record. */
+int32_t merge_redo_point(const RecLog *log, const StrSet *newer);
 
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);
