@@ -221,6 +221,39 @@ test("unknown record types and non-string session ids are ignored safely", () =>
     assert.equal(log.noSession.length, 1);
 });
 
+test("amend records give a commit its latest text, keep the earlier ones and make no entry", () => {
+    const a1 = `{"type":"amend","of":"${sha(C1)}","user":"ann","intent":"seed a.c for the parser","behavior":"Declares the ints x and y","ts":"2026-09-20T11:00:00Z","prev":"e"}`;
+    const a2 = `{"type":"amend","of":"${sha(C1)}","user":"bo","intent":"seed a.c for the lexer","behavior":"Declares the ints x and y","forced":true,"ts":"2026-09-20T12:00:00Z","prev":"f"}`;
+    const lost = `{"type":"amend","of":"${"0".repeat(64)}","intent":"nobody's","behavior":"nothing","ts":"t","prev":"g"}`;
+    const log = parseLog([INIT, S1, C1, C2, E1, a1, lost, a2].join("\n") + "\n", sha);
+    assert.equal(log.commits.length, 2);
+    assert.equal(log.sessions[0].commits.length, 2);
+    const c = log.commits[0];
+    assert.equal(c.intent, "seed a.c for the lexer");
+    assert.equal(c.behavior, "Declares the ints x and y");
+    assert.equal(c.forced, true);
+    assert.equal(c.amendedBy, "bo");
+    assert.equal(c.amendedTs, "2026-09-20T12:00:00Z");
+    assert.deepEqual(c.earlier, [
+        { intent: "seed a.c", behavior: "Declares x and y", user: null, ts: "2026-09-20T10:00:02Z" },
+        { intent: "seed a.c for the parser", behavior: "Declares the ints x and y", user: "ann", ts: "2026-09-20T11:00:00Z" },
+    ]);
+    assert.deepEqual(log.commits[1].earlier, []);
+    assert.equal(log.commits[1].intent, "widen y: overflow seen in prod");
+    const text = renderCommit(c);
+    assert.match(text, /^amended: 2 times, last 2026-09-20T12:00:00Z by bo$/m);
+    assert.match(text, /^earlier text 1 of 2, written 2026-09-20T10:00:02Z:\n {2}intent:\n {4}seed a\.c\n/m);
+    assert.doesNotMatch(renderCommit(log.commits[1]), /amended|earlier/);
+});
+
+test("an amendment fed after its commit, in a later chunk of text, still applies", () => {
+    const r = createReader(sha);
+    readerFeed(r, [INIT, S1, C1].join("\n") + "\n");
+    readerFeed(r, `{"type":"amend","of":"${sha(C1)}","intent":"seed a.c again","behavior":"Declares x and y anew","ts":"t2","prev":"x"}\n`);
+    assert.equal(r.log.commits[0].intent, "seed a.c again");
+    assert.equal(r.log.commits[0].earlier.length, 1);
+});
+
 test("consumableBytes stops at the last record boundary", () => {
     const enc = (s: string) => Buffer.from(s, "utf8");
     assert.equal(consumableBytes(enc("a\nb\n"), 4), 4);

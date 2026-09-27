@@ -85,7 +85,9 @@ intent and what it does; git keeps its normal human-scale history.
   counter (ids are dense integers, so finding `L<n>` is a binary search and
   per-record access is a seek), and `prev_same_file`: the entry index of
   the file's previous commit. Blame, per-file log, and replay walk that
-  chain and never touch unrelated records.
+  chain and never touch unrelated records. `amend` records are entries of
+  their own kind: a reader decodes them once and gives each commit it
+  fetches its latest text, as a full scan would.
 - **Snapshots** (`.lap/snapshots/<path>.jsonl`): one JSON line per snapshot
   `{"at": <record index>, "eof_nl": …, "content": "…"}`. Policy (tunable,
   cache-only): a writer emits one after a commit when the file has
@@ -163,6 +165,11 @@ Record types:
  "head":"<branch hash adopted up to>","adopted":41,"left":6,
  "stopped":[{"file":"src/foo.c","at":"<first commit not adopted>"}],
  "user":"jane","ts":"...","prev":"..."}
+
+{"type":"amend","of":"<the commit's hash>",       // §Amendments
+ "user":"jane","intent":"...","behavior":"...",
+ "forced":true,                                 // present only with --force-message
+ "ts":"...","prev":"..."}
 ```
 
 A commit, `session_start` or `session_end` that `lap merge` adopted carries
@@ -171,6 +178,25 @@ after `id` respectively) and keeps the branch record's `ts` and `user`.
 
 A commit record without both `intent` and `behavior` is malformed,
 including one that carries a single `msg` in their place.
+
+**Amendments.** An `amend` record corrects what a commit says, never what
+it did: `lap amend` appends it, and nothing already written changes — a
+rewritten record would change its hash and every hash after it, and with
+them branches' bases, `from` links, `#hash` citations, chunks sealed under
+git and the chain's evidence. `of` always names the **commit** (never an
+earlier amendment); a commit amended twice has two records with the same
+`of`, and the **last in log order is the latest**. Its `intent`,
+`behavior` and `forced` replace the commit's wherever the commit is shown:
+`log`, `show`, `search` (`--msg` matches the latest text), `rr` and every
+JSON shape (`"amended":<n>` counts the amendments). `show` also lists the
+earlier texts, oldest first, each with who wrote it and when (JSON
+`earlier`, with `amended_by` and `amended_ts` for the latest). An amend
+record is no history entry of its own: `log`, `rr`, `search` and the views
+never list one. The commit → latest-text link is derived by readers, and
+cached only under the cache contract (the index keeps amend records as
+entries of their own kind); it is never written into the log. An `amend`
+without `of`, `intent` or `behavior` is malformed. One that `lap merge`
+carried from a branch has `from`, after `of` (§Merging).
 
 Sessions keep `msg`: a session's purpose is already an intent.
 
@@ -205,13 +231,18 @@ converted to UTC and compared as strings, which sort as times.
 newer lap wrote as far as it understands it. A record whose `type` it does
 not know is kept in the chain (its `prev`, `ts` and hash are checked like
 any record's) and otherwise skipped, with one notice per command: *"this
-history has records of a newer type ("amend") … Update lap to see them"*.
+history has records of a newer type ("annotate") … Update lap to see them"*.
 `verify` checks their chain and reports them (`unknown_records`,
 `unknown_type` in JSON). A **writer refuses** such a history
 (`newer_history`) before it repairs, heals or writes anything: what those
 records mean — a merge's, an amendment's — could make its write wrong.
 The rule protects the versions from this one on; an older lap refuses the
 whole history, as it always did.
+
+**Version note.** A history holding `amend` records needs the lap that
+added `lap amend`, or a later one. A lap from the version above reads it
+(commits show their original text) and writes nothing to it; an older one
+refuses it whole.
 
 ### Chunks
 
@@ -451,7 +482,14 @@ folder, `lap merge <branch> [--dry-run]`.
    - each placed commit, with the next `L` id, its region at the placed
      start, its session's adopted id, and the same text, intent, behavior,
      `forced` and `user` — the message checks are not run again;
-   - a branch `session_end`, for its adopted session.
+   - a branch `session_end`, for its adopted session;
+   - a branch `amend`, with `of` naming the commit adopted here for the
+     one it amends — found in one step through that commit's `from` (or,
+     when the branch had itself adopted the commit, through the `from` of
+     that) — and `from` naming the branch's amend record. An amendment of
+     a commit not adopted here (a stopped file, a change already done
+     here) stays in the branch and is counted as left; one already here,
+     straight or by way of a branch between, is not appended again.
    Adopted records keep the branch's `ts`. They never change this folder's
    own active session: a `session_start` or `session_end` with `from` is
    history, not state. A session still open at the branch's head stays open
@@ -753,13 +791,34 @@ which neither exists until it is written). A dry run is a reader: it takes
 no lock and repairs nothing (no torn-tail cut, no state rewrite), and its
 predicted id is the one a commit made next would get.
 
+### `lap amend <commit> (-i "intent" -b "behavior" | -F <file|->) [--force-message] [--branch B]`
+Corrects what a commit says (§The log → Amendments): appends an `amend`
+record, and changes nothing already written. The code is never touched —
+a wrong edit is fixed by a new commit. `<commit>` is an id, a hash or a
+hash prefix (§References). The message is given as for `lap commit`: both
+fields, always (repeat one to keep it), from `-i`/`-b` or `-F`, and it
+passes the same checks (§Messages) — `behavior_repeats_previous` against
+the commit before it in its session, `behavior_restates_code` against the
+commit's own changed lines. `--branch` (or `LAP_BRANCH`) is required where
+branches exist, as for commits. Needs no session.
+
+Only commits of **this folder's own line of history** can be amended: in
+a branch folder, a commit from before its base is its parent's
+(`not_own_commit`: amend it there). Also refused: `not_a_commit` (the
+reference names another record), `same_message` (the commit already says
+that), `unknown_ref`/`ambiguous_ref`. Prints `[L42 fa9cebd] amended (<n>)`
+and the new intent's first line; `--json` returns the commit's `id`,
+`hash` and `amended` (the count).
+
 ### `lap log [--session S] [--file F] [-n N] [--branch B]`
 Commits newest-first: id, short hash, timestamp, session, op, file, range,
 intent summary.
 
 ### `lap show <commit> [--full-file] [--branch B]`
 Full record: metadata with the full hash, the complete intent and behavior,
-`forced` when set, and a unified-diff-style hunk.
+`forced` when set, for an amended commit how often and last when and by
+whom with its earlier texts after the behavior, and a unified-diff-style
+hunk.
 `<commit>` is an id, a hash or a hash prefix (§References).
 `--full-file` additionally reconstructs the whole file as of that commit by
 replaying its history.
@@ -861,9 +920,12 @@ Adopts a branch's history into this folder's (§Branches → Merging).
 instead of refusing with `git_merge_first`. Prints
 what was adopted of how many commits, with the new ids, then each stopped
 file with the first commit not adopted and why, then each commit already
-done here; `nothing new to adopt` when the branch has nothing after the
+done here, then how many of the branch's amendments were carried and how
+many stayed in the branch (a dry run does not count them); `nothing new to
+adopt` when the branch has nothing after the
 last merge. `--json` returns `dry_run`, `branch`, `name`, `new`, `adopted`,
-`left`, `head`, `stopped` (`[{file, at, why}]`), `already` (hashes) and
+`left`, `head`, `stopped` (`[{file, at, why}]`), `already` (hashes),
+`amendments` (`{carried, left}`) and
 `commits` (`[{id, from}]`). Errors:
 `branch_not_found`, `merge_in_branch`, `unrelated_history`, `log_broken`,
 `git_merge_first`.

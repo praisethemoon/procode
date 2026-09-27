@@ -2,7 +2,10 @@
 
 #include <time.h>
 
-#define IDX_MAGIC "LAPIDX02" /* 02: offsets into the chunked history */
+/* 02: offsets into the chunked history. 03: amend entries; a lap from
+ * before them finds no index it knows, reads the history itself and so
+ * sees the amend records it cannot write after. */
+#define IDX_MAGIC "LAPIDX03"
 
 _Static_assert(sizeof(IdxHeader) == 40, "index header is 40 bytes");
 _Static_assert(sizeof(IdxEntry) == 64, "index entries are 64 bytes");
@@ -94,6 +97,7 @@ Idx *idx_ready(Arena *a, const Repo *r) {
         return NULL;
     Idx *idx = (Idx *)arena_alloc(a, sizeof(Idx));
     if (idx_load(a, r, idx, true) && idx->h.covered == r->hist.size) {
+        idx->arena = a;
         if (idx->h.unknown > 0)
             rec_note_newer(NULL);
         return idx;
@@ -130,6 +134,44 @@ int64_t idx_find_commit(const Idx *idx, int64_t commit_no) {
     return -1;
 }
 
+/* Applies to commit c, read from entry, the amendments naming it: the
+ * amend records are decoded once per index, and only those after the
+ * commit can name it. */
+static void idx_amend(const Repo *r, const Idx *cidx, int64_t entry, Rec *c) {
+    Idx *idx = (Idx *)cidx; /* the amend cache only */
+    Arena *a = idx->arena;
+    if (!a)
+        return;
+    if (!idx->amends_read) {
+        idx->amends_read = true;
+        size_t cap = 0, atcap = 0;
+        for (uint64_t i = 0; i < idx->h.count; i++) {
+            const IdxEntry *e = &idx->v[i];
+            char *line;
+            char err[128];
+            Rec am;
+            if (e->kind != IDX_AMEND ||
+                !hist_read(a, &r->hist, e->off, e->len, &line) ||
+                !rec_decode(a, line, e->len, &am, err, sizeof err))
+                continue;
+            ARENA_GROW(a, idx->amends, (size_t)idx->amends_n, cap, Rec);
+            ARENA_GROW(a, idx->amend_at, (size_t)idx->amends_n, atcap,
+                       int64_t);
+            idx->amend_at[idx->amends_n] = (int64_t)i;
+            idx->amends[idx->amends_n++] = am;
+        }
+    }
+    int32_t room = 0;
+    for (int32_t i = 0; i < idx->amends_n; i++)
+        room += idx->amend_at[i] > entry &&
+                strcmp(idx->amends[i].of, c->hash) == 0;
+    for (int32_t i = 0; room > 0 && i < idx->amends_n; i++) {
+        if (idx->amend_at[i] > entry &&
+            strcmp(idx->amends[i].of, c->hash) == 0)
+            rec_amend_one(a, c, &idx->amends[i], room);
+    }
+}
+
 bool idx_fetch(Arena *a, const Repo *r, const Idx *idx, int64_t entry,
                Rec *out) {
     const IdxEntry *e = &idx->v[entry];
@@ -139,6 +181,8 @@ bool idx_fetch(Arena *a, const Repo *r, const Idx *idx, int64_t entry,
         !rec_decode(a, line, e->len, out, err, sizeof err))
         return false;
     out->lineage = hist_label(&r->hist, hist_locate(&r->hist, e->off));
+    if (out->type == REC_COMMIT)
+        idx_amend(r, idx, entry, out);
     return true;
 }
 
@@ -400,6 +444,9 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
             break;
         case REC_MERGE:
             e.kind = IDX_MERGE;
+            break;
+        case REC_AMEND:
+            e.kind = IDX_AMEND;
             break;
         case REC_UNKNOWN: /* a writer refuses a history holding one */
             e.kind = IDX_UNKNOWN;

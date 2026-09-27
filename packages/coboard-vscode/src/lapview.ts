@@ -81,8 +81,18 @@ export function commentText(d: LapDiff, sessionMsg: string | null): { author: st
         ? `session ${d.session}` + (sessionMsg ? `: ${summaryLine(sessionMsg)}` : "")
         : "committed outside any session (--no-session)";
     const forced = d.forced ? `\n\n**forced**: *${mdEscape("committed with --force-message, past lap's message checks")}*` : "";
+    const amended = d.earlier.length
+        ? `\n\n**amended**: *${mdEscape(`corrected with lap amend ${d.earlier.length === 1 ? "once" : `${d.earlier.length} times`}; the earlier text${d.earlier.length === 1 ? "" : "s"}, oldest first:`)}*` +
+          d.earlier
+              .map((e) => {
+                  const who = [localTime(e.ts), e.user ?? ""].filter((s) => s !== "").join(" ");
+                  const quote = (s: string) => mdCommitText(s).split("\n").join("\n> ");
+                  return `\n\n> ${who ? `${mdEscape(who)}  \n> ` : ""}Intent: ${quote(e.intent)}  \n> Behavior: ${quote(e.behavior)}`;
+              })
+              .join("")
+        : "";
     return {
         author: `${d.id} · ${shortHash(d.hash)} @ ${localTime(d.ts)}` + (d.user ? ` ${d.user}` : "") + ":",
-        body: `**Intent**: ${mdCommitText(d.intent)}\n\n**Behavior**: ${mdCommitText(d.behavior)}${forced}\n\n---\n\n*${mdEscape(footer)}*\n\n&nbsp;`,
+        body: `**Intent**: ${mdCommitText(d.intent)}\n\n**Behavior**: ${mdCommitText(d.behavior)}${forced}${amended}\n\n---\n\n*${mdEscape(footer)}*\n\n&nbsp;`,
     };
 }

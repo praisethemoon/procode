@@ -299,6 +299,29 @@ body {
     color: var(--bk-color-foreground-muted);
 }
 
+/* A commit lap amend corrected: a quiet tag on its row, and the texts it
+ * replaced folded away in its detail. */
+.lh-amended {
+    flex: none;
+    font-size: 0.85em;
+    color: var(--bk-color-foreground-muted);
+    border: 1px solid var(--bk-color-border);
+    border-radius: 3px;
+    padding: 0 4px;
+}
+.lh-earlier {
+    margin-top: 4px;
+}
+.lh-earlier > summary {
+    cursor: pointer;
+    color: var(--bk-color-foreground-muted);
+}
+.lh-earlier-text {
+    margin: 4px 0 0 12px;
+    padding-left: 6px;
+    border-left: 2px solid var(--bk-color-border);
+}
+
 /* Branches: the state's icon, colored as the state reads. */
 .lh-branch-merged {
     color: var(--bk-color-success);

@@ -132,6 +132,21 @@ lap verify                              # is the history intact?
 
 Deleting a file is a commit too: `rm` it, then `lap commit <path> -i "why" -b "what is gone"`.
 
+A message written wrong is corrected with `lap amend`, not in a later
+commit's message:
+
+```sh
+lap amend fa9cebd -i "retry on 429: staging returns it under load" \
+    -b "calls retry() when send() answers 429 or 503"
+```
+
+It appends an amendment and changes nothing already written, so every hash
+stays valid. From then on the commit shows its latest text everywhere,
+marked "amended"; `lap show` lists the earlier texts. Only this folder's own
+commits can be amended (a branch cannot amend what it inherited), and
+`lap merge` carries a branch's amendments with its commits. A history
+with amendments needs this version of lap or later.
+
 ### Commands
 
 | command | purpose |
@@ -139,6 +154,7 @@ Deleting a file is a commit too: `rm` it, then `lap commit <path> -i "why" -b "w
 | `lap init` | create a repository in the current directory |
 | `lap status` | pending edits per file, numbered |
 | `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several, `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
+| `lap amend <commit> -i "intent" -b "behavior"` | correct what a commit of this folder says; nothing written changes (`-F`, `--force-message` as for commit) |
 | `lap log` | commits, newest first (`--session`, `--file`, `-n`) |
 | `lap show <commit>` | one commit in full, by id, hash or hash prefix (`--full-file` reconstructs the file) |
 | `lap search` | blame a line (`--file F --line N`), find text (`--text`), intents and behaviors (`--msg`), sessions, time ranges |

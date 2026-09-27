@@ -44,6 +44,16 @@ export interface LapMessage {
     readonly intent: string;
     readonly behavior: string;
     readonly forced?: true;
+    /* How often lap amend corrected the text, which is then the latest. */
+    readonly amended?: number;
+}
+
+/* A commit's text that a later lap amend replaced. */
+export interface LapEarlierText {
+    readonly intent: string;
+    readonly behavior: string;
+    readonly user: string | null;
+    readonly ts: string;
 }
 
 export interface LapCommit extends LapMessage {
@@ -235,6 +245,9 @@ export interface LapDiff {
     readonly intent: string;
     readonly behavior: string;
     readonly forced: boolean;
+    /* lap amend: intent and behavior are the latest text; these it
+     * replaced, oldest first (empty when never amended) */
+    readonly earlier: readonly LapEarlierText[];
     readonly ts: string;
     readonly user: string;
     readonly session: string | null;
@@ -283,6 +296,14 @@ export async function commitDiff(root: string, commit: string): Promise<LapDiff>
         intent: String(p["intent"] ?? ""),
         behavior: String(p["behavior"] ?? ""),
         forced: p["forced"] === true,
+        earlier: Array.isArray(p["earlier"])
+            ? (p["earlier"] as Record<string, unknown>[]).map((e) => ({
+                  intent: String(e["intent"] ?? ""),
+                  behavior: String(e["behavior"] ?? ""),
+                  user: typeof e["user"] === "string" ? e["user"] : null,
+                  ts: String(e["ts"] ?? ""),
+              }))
+            : [],
         ts: String(p["ts"] ?? ""),
         user: String(p["user"] ?? ""),
         session: typeof p["session"] === "string" ? p["session"] : null,

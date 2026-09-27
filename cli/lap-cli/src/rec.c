@@ -12,6 +12,7 @@ static const char *type_name(RecType t) {
     case REC_SESSION_END: return "session_end";
     case REC_BRANCH: return "branch";
     case REC_MERGE: return "merge";
+    case REC_AMEND: return "amend";
     case REC_UNKNOWN: break; /* never written by this lap */
     }
     return "?";
@@ -133,6 +134,21 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
             sb_puts(&sb, ",\"user\":");
             json_escape_c(&sb, rec->user);
         }
+        break;
+    case REC_AMEND:
+        sb_printf(&sb, ",\"of\":\"%s\"", rec->of);
+        if (rec->from)
+            sb_printf(&sb, ",\"from\":\"%s\"", rec->from);
+        if (rec->user) {
+            sb_puts(&sb, ",\"user\":");
+            json_escape_c(&sb, rec->user);
+        }
+        sb_puts(&sb, ",\"intent\":");
+        json_escape_c(&sb, rec->intent);
+        sb_puts(&sb, ",\"behavior\":");
+        json_escape_c(&sb, rec->behavior);
+        if (rec->forced)
+            sb_puts(&sb, ",\"forced\":true");
         break;
     case REC_UNKNOWN: /* only ever read: a writer refuses such a history */
         break;
@@ -280,6 +296,18 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
             snprintf(err, errsz, "branch record missing field");
             return false;
         }
+    } else if (strcmp(type, "amend") == 0) {
+        out->type = REC_AMEND;
+        out->of = jobj_str(v, "of");
+        out->from = jobj_str(v, "from");
+        out->user = jobj_str(v, "user");
+        out->intent = jobj_str(v, "intent");
+        out->behavior = jobj_str(v, "behavior");
+        out->forced = jobj_bool(v, "forced", false);
+        if (!out->of || !out->intent || !out->behavior) {
+            snprintf(err, errsz, "amend record missing field");
+            return false;
+        }
     } else if (strcmp(type, "merge") == 0) {
         out->type = REC_MERGE;
         out->branch = jobj_str(v, "branch");
@@ -351,6 +379,62 @@ static void where_line(const char *data, uint64_t off, char *out,
             line++;
     }
     snprintf(out, outsz, "log line %d", line);
+}
+
+void rec_amend_one(Arena *a, Rec *c, const Rec *am, int32_t room) {
+    if (!c->earlier_intent) {
+        size_t n = (size_t)(room > 0 ? room : 1);
+        c->earlier_intent = (const char **)arena_alloc(a, n * sizeof(char *));
+        c->earlier_behavior =
+            (const char **)arena_alloc(a, n * sizeof(char *));
+        c->earlier_user = (const char **)arena_alloc(a, n * sizeof(char *));
+        c->earlier_ts = (const char **)arena_alloc(a, n * sizeof(char *));
+    }
+    /* the text being replaced: the commit's own, then each amendment's,
+     * written by whoever wrote it, when they did */
+    int32_t k = c->earlier_n++;
+    c->earlier_intent[k] = c->intent;
+    c->earlier_behavior[k] = c->behavior;
+    c->earlier_user[k] = c->amended ? c->amend_user : c->user;
+    c->earlier_ts[k] = c->amended ? c->amend_ts : c->ts;
+    c->intent = am->intent;
+    c->behavior = am->behavior;
+    c->forced = am->forced;
+    c->amend_user = am->user;
+    c->amend_ts = am->ts;
+    c->amended++;
+}
+
+void rec_amend_log(Arena *a, RecLog *log) {
+    int32_t amends = 0;
+    for (int32_t i = 0; i < log->count; i++)
+        amends += log->v[i].type == REC_AMEND;
+    if (amends == 0)
+        return;
+    /* each amendment's commit, found by hash; then how many each has, so
+     * its earlier texts get room for all of them */
+    int32_t *target = (int32_t *)arena_alloc(
+        a, (size_t)log->count * sizeof(int32_t));
+    int32_t *room = (int32_t *)arena_alloc0(
+        a, (size_t)log->count * sizeof(int32_t));
+    for (int32_t i = 0; i < log->count; i++) {
+        target[i] = -1;
+        if (log->v[i].type != REC_AMEND)
+            continue;
+        for (int32_t j = i - 1; j >= 0; j--) {
+            if (log->v[j].type == REC_COMMIT &&
+                strcmp(log->v[j].hash, log->v[i].of) == 0) {
+                target[i] = j;
+                room[j]++;
+                break;
+            }
+        }
+    }
+    for (int32_t i = 0; i < log->count; i++) {
+        if (target[i] >= 0)
+            rec_amend_one(a, &log->v[target[i]], &log->v[i],
+                          room[target[i]]);
+    }
 }
 
 bool rec_log_parse(Arena *a, const char *data, size_t len, RecWhereFn where,

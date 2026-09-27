@@ -349,32 +349,32 @@ void test_rec(void) {
 
     t_begin("rec: a record of a newer type decodes as unknown, in the chain, "
             "its type kept");
-    const char *newer = "{\"type\":\"amend\",\"of\":\"x\",\"intent\":\"i\","
+    const char *newer = "{\"type\":\"annotate\",\"of\":\"x\",\"intent\":\"i\","
                         "\"ts\":\"t\",\"prev\":\"p\"}";
     Rec nu;
     ASSERT_TRUE(rec_decode(a, newer, strlen(newer), &nu, err, sizeof err));
     ASSERT_TRUE(nu.type == REC_UNKNOWN);
-    ASSERT_EQ_S(nu.name, "amend");
+    ASSERT_EQ_S(nu.name, "annotate");
     ASSERT_EQ_S(nu.prev, "p");
     ASSERT_EQ_I((int32_t)strlen(nu.hash), 64);
-    const char *no_prev = "{\"type\":\"amend\",\"ts\":\"t\"}";
+    const char *no_prev = "{\"type\":\"annotate\",\"ts\":\"t\"}";
     ASSERT_TRUE(!rec_decode(a, no_prev, strlen(no_prev), &nu, err,
                             sizeof err));
 
     t_begin("rec: a log with newer records parses, counts them, and checks "
             "their chain");
     char *n1 = tline; /* S1 from above, prev zero */
-    char *n2 = arena_printf(a, "{\"type\":\"amend\",\"of\":\"%s\",\"ts\":\"t\","
+    char *n2 = arena_printf(a, "{\"type\":\"annotate\",\"of\":\"%s\",\"ts\":\"t\","
                                "\"prev\":\"%s\"}",
                             r1.hash, r1.hash);
-    Rec amend;
-    ASSERT_TRUE(rec_decode(a, n2, strlen(n2), &amend, err, sizeof err));
+    Rec later;
+    ASSERT_TRUE(rec_decode(a, n2, strlen(n2), &later, err, sizeof err));
     Rec r3;
     memset(&r3, 0, sizeof r3);
     r3.type = REC_SESSION_END;
     r3.id = "S1";
     r3.ts = "t";
-    r3.prev = amend.hash;
+    r3.prev = later.hash;
     size_t l3n;
     char *n3 = rec_encode(a, &r3, &l3n);
     char *whole = arena_printf(a, "%s\n%s\n%s\n", n1, n2, n3);
@@ -383,8 +383,100 @@ void test_rec(void) {
                               sizeof err));
     ASSERT_EQ_I(nl.count, 3);
     ASSERT_EQ_I(nl.unknown_n, 1);
-    ASSERT_EQ_S(nl.unknown_type, "amend");
+    ASSERT_EQ_S(nl.unknown_type, "annotate");
     ASSERT_TRUE(nl.chain_ok);
+
+    t_begin("rec: an amend record round-trips and needs of, intent and "
+            "behavior");
+    Rec am;
+    memset(&am, 0, sizeof am);
+    am.type = REC_AMEND;
+    am.of = r1.hash;
+    am.from = "b1";
+    am.user = "ann";
+    am.intent = "the right \"why\"";
+    am.behavior = "the right what";
+    am.forced = true;
+    am.ts = "2026-09-28T00:00:00Z";
+    am.prev = r1.hash;
+    size_t alen;
+    char *aline = rec_encode(a, &am, &alen);
+    Rec aback;
+    ASSERT_TRUE(rec_decode(a, aline, alen, &aback, err, sizeof err));
+    ASSERT_TRUE(aback.type == REC_AMEND);
+    ASSERT_EQ_S(aback.of, r1.hash);
+    ASSERT_EQ_S(aback.from, "b1");
+    ASSERT_EQ_S(aback.user, "ann");
+    ASSERT_EQ_S(aback.intent, "the right \"why\"");
+    ASSERT_EQ_S(aback.behavior, "the right what");
+    ASSERT_TRUE(aback.forced);
+    ASSERT_EQ_S(aback.hash, am.hash);
+    const char *no_of = "{\"type\":\"amend\",\"intent\":\"i\","
+                        "\"behavior\":\"b\",\"ts\":\"t\",\"prev\":\"p\"}";
+    ASSERT_TRUE(!rec_decode(a, no_of, strlen(no_of), &aback, err,
+                            sizeof err));
+    const char *no_bhv = "{\"type\":\"amend\",\"of\":\"x\","
+                              "\"intent\":\"i\",\"ts\":\"t\",\"prev\":\"p\"}";
+    ASSERT_TRUE(!rec_decode(a, no_bhv, strlen(no_bhv), &aback,
+                            err, sizeof err));
+
+    t_begin("rec: amendments apply in log order, the latest text wins and "
+            "the earlier ones are kept oldest first");
+    RecLog alog;
+    memset(&alog, 0, sizeof al);
+    Rec v[6];
+    memset(v, 0, sizeof v);
+    v[0].type = REC_COMMIT;
+    v[0].intent = "first why";
+    v[0].behavior = "first what";
+    v[0].user = "cy";
+    v[0].ts = "t0";
+    snprintf(v[0].hash, sizeof v[0].hash, "%s", "c0");
+    v[1].type = REC_COMMIT;
+    v[1].intent = "other why";
+    v[1].behavior = "other what";
+    snprintf(v[1].hash, sizeof v[1].hash, "%s", "c1");
+    v[2] = (Rec){.type = REC_AMEND, .of = "c0", .intent = "second why",
+                 .behavior = "second what", .user = "di", .ts = "t2"};
+    v[3] = (Rec){.type = REC_AMEND, .of = "nowhere", .intent = "lost",
+                 .behavior = "lost"};
+    v[4] = (Rec){.type = REC_AMEND, .of = "c0", .intent = "third why",
+                 .behavior = "third what", .user = "ed", .ts = "t4",
+                 .forced = true};
+    v[5] = (Rec){.type = REC_AMEND, .of = "c5", .intent = "too early",
+                 .behavior = "too early"};
+    alog.v = v;
+    alog.count = 6;
+    rec_amend_log(a, &alog);
+    ASSERT_EQ_I(v[0].amended, 2);
+    ASSERT_EQ_S(v[0].intent, "third why");
+    ASSERT_EQ_S(v[0].behavior, "third what");
+    ASSERT_TRUE(v[0].forced);
+    ASSERT_EQ_S(v[0].amend_user, "ed");
+    ASSERT_EQ_S(v[0].amend_ts, "t4");
+    ASSERT_EQ_I(v[0].earlier_n, 2);
+    ASSERT_EQ_S(v[0].earlier_intent[0], "first why");
+    ASSERT_EQ_S(v[0].earlier_user[0], "cy");
+    ASSERT_EQ_S(v[0].earlier_ts[0], "t0");
+    ASSERT_EQ_S(v[0].earlier_behavior[1], "second what");
+    ASSERT_EQ_S(v[0].earlier_user[1], "di");
+    ASSERT_EQ_S(v[0].earlier_ts[1], "t2");
+    ASSERT_EQ_I(v[1].amended, 0);
+    ASSERT_EQ_S(v[1].intent, "other why");
+
+    t_begin("rec: an amendment names a commit before it, never one after");
+    Rec w[2];
+    memset(w, 0, sizeof w);
+    w[0] = (Rec){.type = REC_AMEND, .of = "c9", .intent = "early",
+                 .behavior = "early"};
+    w[1].type = REC_COMMIT;
+    w[1].intent = "kept why";
+    w[1].behavior = "kept what";
+    snprintf(w[1].hash, sizeof w[1].hash, "%s", "c9");
+    RecLog wl = {.v = w, .count = 2};
+    rec_amend_log(a, &wl);
+    ASSERT_EQ_I(w[1].amended, 0);
+    ASSERT_EQ_S(w[1].intent, "kept why");
 
     arena_free(a);
 }

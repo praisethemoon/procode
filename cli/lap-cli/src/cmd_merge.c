@@ -440,6 +440,20 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             map_put(a, &done_from, p->from, p->id);
     }
     int32_t parent_at = merge_redo_point(&plog, &newer);
+    /* A branch's amendments land on the commits adopted here for the ones
+     * they name: branch commit hash -> its copy's hash. An amendment that
+     * came here by another route (a branch between) is not carried twice. */
+    Map copy_of = {0};
+    StrSet amends_here;
+    strset_init(&amends_here, a);
+    for (int32_t i = 0; i < plog.count; i++) {
+        const Rec *p = &plog.v[i];
+        if (p->type == REC_COMMIT && p->from)
+            map_put(a, &copy_of, p->from, p->hash);
+        else if (p->type == REC_AMEND && p->from)
+            strset_add(&amends_here, p->from);
+    }
+    int32_t amends_carried = 0, amends_left = 0;
 
     /* Placement, file by file. */
     int32_t *at = (int32_t *)arena_alloc0(
@@ -623,6 +637,28 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 rec.intent = b->intent;
                 rec.behavior = b->behavior;
                 rec.forced = b->forced;
+            } else if (b->type == REC_AMEND) {
+                if (strset_has(&amends_here, b->hash) ||
+                    (b->from && strset_has(&amends_here, b->from)))
+                    continue; /* carried already */
+                /* the commit it names, adopted here straight from this
+                 * branch or from the branch that commit came from */
+                const char *of = map_get(&copy_of, b->of);
+                int32_t j = of ? -1 : find_hash(&blog, b->of);
+                if (j >= 0 && blog.v[j].from)
+                    of = map_get(&copy_of, blog.v[j].from);
+                if (!of) { /* not adopted: it stays in the branch */
+                    amends_left++;
+                    continue;
+                }
+                amends_carried++;
+                if (map_get(&done_from, b->hash))
+                    continue; /* appended by an interrupted run */
+                rec.type = REC_AMEND;
+                rec.of = of;
+                rec.intent = b->intent;
+                rec.behavior = b->behavior;
+                rec.forced = b->forced;
             } else {
                 continue;
             }
@@ -635,8 +671,10 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 err_out(json, "io_error", "%s", err);
                 goto done;
             }
-            if (rec.type == REC_COMMIT)
+            if (rec.type == REC_COMMIT) {
                 report_id(&ids, json, rec.id, b->hash);
+                map_put(a, &copy_of, b->hash, arena_strdup(a, rec.hash));
+            }
         }
         /* One merge record per branch of the chain with anything new: a
          * branch it started from advances to the base of the next. */
@@ -714,7 +752,9 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         sb_puts(&sb, "],\"already\":[");
         for (size_t s = 0; s < nalready; s++)
             sb_printf(&sb, s ? ",\"%s\"" : "\"%s\"", already[s]);
-        sb_printf(&sb, "],\"commits\":[%s]}", ids.len ? sb_finish(&ids) : "");
+        sb_printf(&sb, "],\"amendments\":{\"carried\":%d,\"left\":%d}",
+                  amends_carried, amends_left);
+        sb_printf(&sb, ",\"commits\":[%s]}", ids.len ? sb_finish(&ids) : "");
         puts(sb_finish(&sb));
     } else if (start >= blog.count) {
         printf("branch %s: nothing new to adopt since the last merge\n",
@@ -732,6 +772,13 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             printf("  already done here: #%.7s (this folder made the same "
                    "change)\n",
                    already[s]);
+        if (amends_carried > 0)
+            printf("  amendments carried: %d (lap amend on the branch)\n",
+                   amends_carried);
+        if (amends_left > 0)
+            printf("  amendments left in the branch: %d (their commits were "
+                   "not adopted)\n",
+                   amends_left);
         if (left > 0 && !dry)
             printf("what is left shows in lap status: commit it as usual, "
                    "citing the branch commits it stands for (#<hash>)\n");

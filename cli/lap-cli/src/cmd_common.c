@@ -130,6 +130,8 @@ void json_commit(StrBuf *sb, const Rec *rec, const char *note) {
     json_escape_c(sb, rec->behavior);
     if (rec->forced)
         sb_puts(sb, ",\"forced\":true");
+    if (rec->amended)
+        sb_printf(sb, ",\"amended\":%d", rec->amended);
     if (rec->from)
         sb_printf(sb, ",\"from\":\"%s\"", rec->from);
     if (rec->lineage) {
@@ -187,7 +189,19 @@ void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
     }
     sb_puts(sb, "       ");
     sb_text(sb, rec->intent, (size_t)mlen);
+    if (rec->amended) {
+        sb_putc(sb, ' ');
+        sb_field(sb, S_MUTED, amend_marker(sb->a, rec), 0);
+    }
     sb_putc(sb, '\n');
+}
+
+const char *amend_marker(Arena *a, const Rec *rec) {
+    if (rec->amended == 1)
+        return "(amended)";
+    char buf[48];
+    snprintf(buf, sizeof buf, "(amended %d times)", rec->amended);
+    return arena_strdup(a, buf);
 }
 
 bool ref_is_id(const char *ref) {

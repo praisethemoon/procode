@@ -67,6 +67,15 @@ export function ForcedTag(): JSX.Element {
     );
 }
 
+/* Marks a commit whose intent and behavior lap amend corrected. */
+export function AmendedTag(props: { n: number }): JSX.Element {
+    return (
+        <span className="cb-label cb-amended" title="Corrected with lap amend: this is the latest text; lap show lists the earlier ones">
+            {props.n === 1 ? "amended" : `amended ${props.n}×`}
+        </span>
+    );
+}
+
 /* One lap commit under its group's intent: what it makes the code do, a mark
  * when it was forced, where it is when given, and its short hash and id.
  * Opens the commit's diff. */
@@ -88,6 +97,7 @@ export function CommitLine(props: { commit: LapMessage & { id: string; hash: str
                 <CommitText text={c.behavior} />
             </span>
             {c.forced ? <ForcedTag /> : null}
+            {c.amended ? <AmendedTag n={c.amended} /> : null}
             {props.lines ? <span className="cb-step-lines">{props.lines}</span> : null}
             <code className="cb-step-hash">{shortHash(c.hash)}</code>
             <code className="cb-step-id">{c.id}</code>

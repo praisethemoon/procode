@@ -38,7 +38,7 @@ import {
     isFiltering,
 } from "../src/history";
 import type { BranchState, BranchView } from "../src/branches";
-import { shortHash } from "../src/model";
+import { localTime, shortHash } from "../src/model";
 import type { ToHost, ToView } from "../src/protocol";
 import { parseRefs } from "../src/refs";
 
@@ -191,6 +191,11 @@ const OP_ICON: Record<string, string> = { create: "diff-added", delete: "diff-re
 
 const FORCED = "forced: the message checks were skipped (--force-message)";
 
+/* "amended", "amended 3 times": a commit lap amend corrected. */
+function amendedLabel(n: number): string {
+    return n === 1 ? "amended" : `amended ${n} times`;
+}
+
 /* A commit's text with each reference to another commit a link. */
 function Linked(props: { text: string }): JSX.Element {
     return (
@@ -254,7 +259,8 @@ function CommitLine(props: { c: CommitRow; depth: number; showSession: boolean; 
                 title={
                     `${c.id} ${shortHash(c.hash)} · ${c.file} · ${c.region} · ${c.ts}` +
                     `${c.session ? ` · session ${c.session}` : " · no session"}${c.user ? ` · ${c.user}` : ""}` +
-                    `\n\nIntent: ${c.intent}\n\nBehavior: ${c.behavior}${c.forced ? `\n\n${FORCED}` : ""}`
+                    `\n\nIntent: ${c.intent}\n\nBehavior: ${c.behavior}${c.forced ? `\n\n${FORCED}` : ""}` +
+                    (c.earlier.length ? `\n\n${amendedLabel(c.earlier.length)} (lap amend)` : "")
                 }
                 onClick={open}
                 onKeyDown={(e) => {
@@ -276,6 +282,7 @@ function CommitLine(props: { c: CommitRow; depth: number; showSession: boolean; 
                 <span className="lh-id">{c.id}</span>
                 <span className="lh-hash">{shortHash(c.hash)}</span>
                 {c.forced ? <Codicon name="warning" className="lh-icon lh-forced" /> : null}
+                {c.earlier.length ? <span className="lh-amended">{amendedLabel(c.earlier.length)}</span> : null}
                 <span className="lh-desc">
                     {c.file} · {c.region}
                     {props.showSession && c.session ? ` · ${c.session}` : ""}
@@ -310,6 +317,27 @@ function CommitLine(props: { c: CommitRow; depth: number; showSession: boolean; 
                         <div className="lh-forced-note">
                             <Codicon name="warning" className="lh-forced" /> {FORCED}
                         </div>
+                    ) : null}
+                    {c.earlier.length ? (
+                        <details className="lh-earlier">
+                            <summary>
+                                {amendedLabel(c.earlier.length)}: the earlier text{c.earlier.length === 1 ? "" : "s"}, oldest first
+                            </summary>
+                            {c.earlier.map((e, i) => (
+                                <div key={i} className="lh-earlier-text">
+                                    <div className="lh-muted">
+                                        {localTime(e.ts)}
+                                        {e.user ? ` · ${e.user}` : ""}
+                                    </div>
+                                    <div className="lh-field">
+                                        <span className="lh-label">Intent:</span> <Linked text={e.intent} />
+                                    </div>
+                                    <div className="lh-field">
+                                        <span className="lh-label">Behavior:</span> <Linked text={e.behavior} />
+                                    </div>
+                                </div>
+                            ))}
+                        </details>
                     ) : null}
                 </div>
             ) : null}

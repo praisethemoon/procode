@@ -328,6 +328,19 @@ test("lap: a session tagged with a ticket is found through the board", { skip: !
     assert.equal((await commitDiff(dir, "L2")).forced, false);
     const created = await commitDiff(dir, "L1");
     assert.deepEqual([created.op, created.before, created.after], ["create", "", "hello\n"]);
+    assert.deepEqual(created.earlier, []);
+
+    // An amended commit reads with its latest text, and its earlier one kept.
+    lap("amend", "L1", "-i", "Start the greeting file for the demo", "-b", "The file now opens with one hello line");
+    const amended = await commitDiff(dir, "L1");
+    assert.equal(amended.behavior, "The file now opens with one hello line");
+    assert.deepEqual(
+        amended.earlier.map((e) => [e.intent, e.behavior, e.user]),
+        [["Start the greeting file for the demo", "The file now opens with a single salutation", "tester"]],
+    );
+    const again = JSON.parse((await call(dir, "board_sessions", { ticket: "T-1" })).text);
+    const c1 = again.sessions[0].commits[0];
+    assert.deepEqual([c1.behavior, c1.amended], ["The file now opens with one hello line", 1]);
 });
 
 /* ------------------------------------------------------------- archiving */

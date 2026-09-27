@@ -130,6 +130,28 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
             json_escape(&sb, rec->new_text[i].ptr, rec->new_text[i].len);
         }
         sb_printf(&sb, "],\"eof_nl\":%s", rec->eof_nl ? "true" : "false");
+        if (rec->amended) {
+            sb_puts(&sb, ",\"amended_by\":");
+            if (rec->amend_user)
+                json_escape_c(&sb, rec->amend_user);
+            else
+                sb_puts(&sb, "null");
+            sb_printf(&sb, ",\"amended_ts\":\"%s\",\"earlier\":[",
+                      rec->amend_ts);
+            for (int32_t i = 0; i < rec->earlier_n; i++) {
+                sb_puts(&sb, i ? ",{\"intent\":" : "{\"intent\":");
+                json_escape_c(&sb, rec->earlier_intent[i]);
+                sb_puts(&sb, ",\"behavior\":");
+                json_escape_c(&sb, rec->earlier_behavior[i]);
+                sb_puts(&sb, ",\"user\":");
+                if (rec->earlier_user[i])
+                    json_escape_c(&sb, rec->earlier_user[i]);
+                else
+                    sb_puts(&sb, "null");
+                sb_printf(&sb, ",\"ts\":\"%s\"}", rec->earlier_ts[i]);
+            }
+            sb_putc(&sb, ']');
+        }
         if (have_content) {
             sb_printf(&sb, ",\"file_deleted\":%s,\"file_content\":",
                       deleted ? "true" : "false");
@@ -165,6 +187,15 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
         if (rec->forced)
             sb_puts(&sb, "forced: the message checks were skipped "
                          "(--force-message)\n");
+        if (rec->amended) {
+            char at[40];
+            plat_ts_local(rec->amend_ts, true, at);
+            sb_printf(&sb, "amended: %d time%s, last %s%s%s (lap amend; "
+                           "the earlier texts follow the behavior)\n",
+                      rec->amended, rec->amended == 1 ? "" : "s", at,
+                      rec->amend_user ? " by " : "",
+                      rec->amend_user ? rec->amend_user : "");
+        }
         if (rec->from)
             sb_printf(&sb, "from: #%.7s (adopted from a branch by lap "
                            "merge; the original is %s)\n",
@@ -173,6 +204,20 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
         sb_indented(&sb, "  ", rec->intent);
         sb_puts(&sb, "behavior:\n");
         sb_indented(&sb, "  ", rec->behavior);
+        for (int32_t i = 0; i < rec->earlier_n; i++) {
+            char at[40];
+            plat_ts_local(i + 1 < rec->earlier_n ? rec->earlier_ts[i + 1]
+                                                 : rec->amend_ts,
+                          true, at);
+            sb_printf(&sb, "earlier text %d of %d, replaced %s%s%s:\n", i + 1,
+                      rec->earlier_n, at,
+                      rec->earlier_user[i] ? ", written by " : "",
+                      rec->earlier_user[i] ? rec->earlier_user[i] : "");
+            sb_puts(&sb, "  intent:\n");
+            sb_indented(&sb, "    ", rec->earlier_intent[i]);
+            sb_puts(&sb, "  behavior:\n");
+            sb_indented(&sb, "    ", rec->earlier_behavior[i]);
+        }
         sb_puts(&sb, "diff:\n");
         render_commit_diff(&sb, rec);
         if (have_content) {

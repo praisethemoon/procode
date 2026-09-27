@@ -18,7 +18,7 @@ test("the region reads like lap's own", () => {
 
 const H = "1a2b3c4d".padEnd(64, "0");
 const diff = (extra: Partial<LapDiff> = {}): LapDiff => ({
-    id: "L3", hash: H, file: "f", op: "edit", intent: "why", behavior: "what", forced: false,
+    id: "L3", hash: H, file: "f", op: "edit", intent: "why", behavior: "what", forced: false, earlier: [],
     ts: "2026-09-25T20:00:00Z", user: "claude", session: "S1", before: "", after: "", line: 4, ...at, ...extra,
 });
 
@@ -43,6 +43,23 @@ test("a behavior is shown as written, whatever it says", () => {
 test("a forced commit is marked", () => {
     assert.doesNotMatch(commentText(diff(), null).body, /forced/);
     assert.match(commentText(diff({ forced: true }), null).body, /\n\n\*\*forced\*\*: \*committed with \\-\\-force\\-message, past lap's message checks\*\n\n---/);
+});
+
+test("an amended commit shows its latest text, then the earlier ones quoted, oldest first", () => {
+    assert.doesNotMatch(commentText(diff(), null).body, /amended/);
+    const body = commentText(
+        diff({
+            intent: "why, better",
+            behavior: "what, better",
+            earlier: [
+                { intent: "why", behavior: "what", user: "claude", ts: "" },
+                { intent: "why again", behavior: "two\nlines", user: null, ts: "" },
+            ],
+        }),
+        null,
+    ).body;
+    assert.match(body, /^\*\*Intent\*\*: why, better\n\n\*\*Behavior\*\*: what, better\n\n\*\*amended\*\*: \*corrected with lap amend 2 times; the earlier texts, oldest first:\*/);
+    assert.match(body, /\n\n> claude {2}\n> Intent: why {2}\n> Behavior: what\n\n> Intent: why again {2}\n> Behavior: two {2}\n> lines\n\n---/);
 });
 
 test("commits named in the text, by hash or by id, link to themselves", () => {

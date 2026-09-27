@@ -20,6 +20,10 @@ static const char *USAGE =
     "         [--branch <name>]   the line of history this records to;\n"
     "                             required where branches exist\n"
     "                             (LAP_BRANCH stands in for it)\n"
+    "  amend <commit> -i \"intent\" -b \"behavior\"   correct what a commit\n"
+    "                             of this folder says (-F, --force-message\n"
+    "                             and --branch as for commit); its code\n"
+    "                             and every written record stay as they are\n"
     "  log [--session S] [--file F] [-n N] [--json]\n"
     "  show <commit> [--full-file] [--json]   id, hash or hash prefix\n"
     "  search [--file F [--line N]] [--text STR [--added|--removed]]\n"
@@ -102,6 +106,8 @@ int main(int argc, char **argv) {
         rc = cmd_status(a, argc2, argv2);
     else if (strcmp(cmd, "commit") == 0)
         rc = cmd_commit(a, argc2, argv2);
+    else if (strcmp(cmd, "amend") == 0)
+        rc = cmd_amend(a, argc2, argv2);
     else if (strcmp(cmd, "log") == 0)
         rc = cmd_log(a, argc2, argv2);
     else if (strcmp(cmd, "show") == 0)

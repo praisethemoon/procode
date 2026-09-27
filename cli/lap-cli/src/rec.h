@@ -21,6 +21,7 @@ typedef enum {
     REC_SESSION_END,
     REC_BRANCH, /* the first record of a branch's own lineage */
     REC_MERGE,  /* closes a lap merge: what of a branch was adopted */
+    REC_AMEND,  /* a commit's intent and behavior, corrected */
     /* a type a newer lap wrote: in the chain (prev, ts, hash), otherwise
      * not understood; its type name is kept in name */
     REC_UNKNOWN
@@ -72,6 +73,10 @@ typedef struct {
     int32_t stopped_n;
     const char **already;
     int32_t already_n;
+    /* amend only: the hash of the commit whose intent and behavior (this
+     * record's) replace what it said; from, when lap merge carried it over
+     * from a branch, the branch's amend record */
+    const char *of;
     const char *prev;    /* hex chain hash */
     int32_t old_start, old_lines, new_start, new_lines; /* commit only */
     Str *old_text;
@@ -84,6 +89,15 @@ typedef struct {
      * name ("main", or the branch's name), set by the readers that know
      * the chunks (repo_log_load, idx_fetch); NULL elsewhere. */
     const char *lineage;
+    /* Not encoded: a commit's amendments, applied by readers (rec_amend_log,
+     * idx_fetch) — intent and behavior then hold the latest text; amended
+     * counts them, and earlier_* hold every text before it, oldest first
+     * (the commit's own, then each replaced amendment's). */
+    int32_t amended;
+    const char **earlier_intent, **earlier_behavior;
+    const char **earlier_user, **earlier_ts;
+    int32_t earlier_n;
+    const char *amend_user, *amend_ts; /* who wrote the latest text, when */
     char hash[65];   /* SHA-256 of raw, filled by decode/append */
     const char *raw; /* serialized line (no trailing newline) */
     size_t raw_len;
@@ -119,6 +133,15 @@ typedef struct {
  * "main.000002.jsonl line 7". */
 typedef void (*RecWhereFn)(const void *ctx, const char *data, uint64_t off,
                            char *out, size_t outsz);
+
+/* Applies amendment am to commit c: the latest text replaces c's, which
+ * goes to its earlier texts (room: how many amendments c has in all, for
+ * the first allocation). */
+void rec_amend_one(Arena *a, Rec *c, const Rec *am, int32_t room);
+/* Applies every amendment in log to the commit it names, in log order, so
+ * each commit holds its latest text; the amend records stay in the log but
+ * are no history entries of their own. */
+void rec_amend_log(Arena *a, RecLog *log);
 
 /* Tells the user, once a command, that the history holds records of a type
  * a newer lap wrote (type NULL when the name is not at hand): readers skip

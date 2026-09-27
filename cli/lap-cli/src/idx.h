@@ -20,12 +20,13 @@ enum {
     IDX_SESSION_END,
     IDX_BRANCH,
     IDX_MERGE,
-    IDX_UNKNOWN /* a record type a newer lap wrote */
+    IDX_UNKNOWN, /* a record type a newer lap wrote */
+    IDX_AMEND
 };
 enum { IDX_OP_EDIT, IDX_OP_CREATE, IDX_OP_DELETE };
 
 typedef struct {
-    char magic[8];    /* "LAPIDX02" */
+    char magic[8];    /* "LAPIDX03" */
     uint64_t covered; /* history bytes these entries describe */
     uint64_t count;
     uint32_t commits;      /* total commits indexed */
@@ -62,6 +63,14 @@ typedef struct Idx {
     char **paths;
     FileHead *heads;
     int32_t npaths;
+    /* the amend records, decoded on the first idx_fetch of a commit
+     * (amends_read false until then), in the arena the index was loaded
+     * in, which outlives any the fetch was given */
+    Arena *arena;
+    Rec *amends;
+    int64_t *amend_at; /* each one's entry */
+    int32_t amends_n;
+    bool amends_read;
 } Idx;
 
 /* The index's header, read only (it may cover less than the history now):

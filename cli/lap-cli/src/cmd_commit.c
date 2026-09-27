@@ -145,8 +145,7 @@ static void print_dry_run(Arena *a, bool json, Rec *rec, const char *rel) {
     fputs(sb_finish(&sb), stdout);
 }
 
-/* Intent and behavior from -i/-b, or from the sections of a -F file. */
-static bool message_args(Arena *a, int32_t argc, char **argv,
+bool message_args(Arena *a, int32_t argc, char **argv,
                          const char *const *value_flags, bool json,
                          const char **intent, const char **behavior) {
     const char *i = flag_value2(argc, argv, value_flags, "-i", "--intent");

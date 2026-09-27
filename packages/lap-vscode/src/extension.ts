@@ -570,6 +570,12 @@ class CommitComments {
                 `\n\n*${mdEscape("forced: the message checks were skipped (--force-message)")}*`,
             );
         }
+        if (commit.earlier.length) {
+            const n = commit.earlier.length;
+            body.appendMarkdown(
+                `\n\n*${mdEscape(`amended ${n === 1 ? "once" : `${n} times`} (lap amend): Lap History shows the earlier text${n === 1 ? "" : "s"}`)}*`,
+            );
+        }
         const footer = commit.session
             ? `session ${commit.session}` +
               (session ? `: ${summaryLine(session.msg)}` : "")

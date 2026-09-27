@@ -1721,14 +1721,14 @@ done
 CH24=$(ls .lap/log/main.*.jsonl | tail -n 1)
 PREV24=$(tail -n 1 "$CH24" | tr -d '\n' | shasum -a 256 | cut -d' ' -f1)
 # a record a newer lap would write, chained like any other
-printf '{"type":"amend","of":"x","intent":"better","behavior":"clearer","ts":"2026-09-27T00:00:00Z","prev":"%s"}\n' "$PREV24" >> "$CH24"
+printf '{"type":"annotate","of":"x","intent":"better","behavior":"clearer","ts":"2026-09-27T00:00:00Z","prev":"%s"}\n' "$PREV24" >> "$CH24"
 expect_grep "records a.txt as it starts" "$LAP" log --json
-expect_grep 'newer type ("amend")' "$LAP" log
+expect_grep 'newer type ("annotate")' "$LAP" log
 expect_grep "records a.txt as it starts" "$LAP" show L1
 expect_grep "before the newer lap" "$LAP" rr S1
 expect_grep "clean" "$LAP" status
 expect_grep "chain ok: 6 records" "$LAP" verify
-expect_grep '1 record of a type this lap does not know ("amend")' "$LAP" verify
+expect_grep '1 record of a type this lap does not know ("annotate")' "$LAP" verify
 printf 'b\n' >> a.txt
 SUM24=$(find .lap -type f ! -name lock | sort | xargs cksum)
 expect_grep '"error":"newer_history"' "$LAP" commit a.txt --no-session -i "try to write on it" -b "appends b to a.txt" --json
@@ -2073,6 +2073,65 @@ if [ "$(id -u)" != 0 ]; then
 else
     echo "skip: running as root, a read-only parent cannot be made"
 fi
+cd "$WORK"
+
+t "lap amend corrects a commit's message, and nothing already written changes"
+mkdir -p "$WORK/am" && cd "$WORK/am" && "$LAP" init >/dev/null 2>&1
+"$LAP" session start "amend fixture" >/dev/null 2>&1
+printf 'a\n' > a.txt
+"$LAP" commit a.txt -i "Seed the amend fixture." -b "Creates a.txt with one line." >/dev/null 2>&1
+printf 'b\n' >> a.txt
+"$LAP" commit a.txt -i "Seed the amend fixture." -b "Appends a second letter to a.txt." >/dev/null 2>&1
+AMB=$(cat .lap/log/main.*.jsonl)
+expect_grep "amended (1)" "$LAP" amend L1 -i "Seed the amend fixture." -b "Creates a.txt holding the letter a."
+expect_grep "amended (2)" "$LAP" amend L1 -i "Give the amend tests a file." -b "Creates a.txt holding the letter a."
+case "$(cat .lap/log/main.*.jsonl)" in
+"$AMB"*) ;;
+*) fail "amend changed bytes already written" ;;
+esac
+expect_grep "Give the amend tests a file" "$LAP" show L1
+expect_grep "^amended: 2 times" "$LAP" show L1
+expect_grep "earlier text 1 of 2" "$LAP" show L1
+expect_grep "Creates a.txt with one line" "$LAP" show L1
+expect_grep '"earlier":\[{"intent":"Seed the amend fixture.","behavior":"Creates a.txt with one line."' "$LAP" show L1 --json
+expect_grep "Give the amend tests a file. (amended 2 times)" "$LAP" log
+expect_grep '"amended":2' "$LAP" log --json
+[ "$("$LAP" log --json | grep -o '"id":"L[0-9]*"' | wc -l | tr -d ' ')" = 2 ] ||
+    fail "log lists something besides the two commits"
+expect_grep "Creates a.txt holding the letter a. (amended 2 times)" "$LAP" rr S1 --no-diff
+[ "$("$LAP" rr S1 --json | grep -o '"id":"L[0-9]*"' | wc -l | tr -d ' ')" = 2 ] ||
+    fail "rr lists something besides the two commits"
+expect_grep "L1" "$LAP" search --msg "Give the amend tests"
+expect_grep "message_too_short" "$LAP" amend L1 -i "too short" -b "still short" --json
+expect_grep "behavior_repeats_intent" "$LAP" amend L1 -i "Creates a.txt holding the letter a." -b "Creates a.txt holding the letter a." --json
+expect_grep "behavior_repeats_previous" "$LAP" amend L2 -i "Seed the amend fixture." -b "Creates a.txt holding the letter a." --json
+expect_grep "same_message" "$LAP" amend L1 -i "Give the amend tests a file." -b "Creates a.txt holding the letter a." --json
+expect_grep "unknown_ref" "$LAP" amend L9 -i "Give the amend tests a file." -b "Creates a.txt holding a letter." --json
+expect_grep "0 mismatch" "$LAP" verify --deep
+AMS=$("$LAP" show L1 --json); AML=$("$LAP" log --json); AMR=$("$LAP" rr S1 --json)
+rm .lap/index
+[ "$("$LAP" show L1 --json)" = "$AMS" ] || fail "show differs without the index"
+[ "$("$LAP" log --json)" = "$AML" ] || fail "log differs without the index"
+[ "$("$LAP" rr S1 --json)" = "$AMR" ] || fail "rr differs without the index"
+cd "$WORK"
+
+t "a branch's amendments reach the parent through git merge and lap merge; inherited commits are not its to amend"
+merge_pair ma; BP="$WORK/ma-p"; BW="$WORK/ma-w"
+cd "$BW" && "$LAP" session start "branch work" --branch b >/dev/null 2>&1
+expect_grep "not_own_commit" "$LAP" amend L1 --branch b -i "Seed the merge fixture again." -b "Records f.txt as the base of it all." --json
+in_branch g.txt 's/^g2$/G2/' "uppercases g2 on the branch"
+MAH=$("$LAP" log -n 1 --json | grep -o '"hash":"[0-9a-f]*"' | head -n 1 | cut -d'"' -f4)
+expect_grep "amended (1)" "$LAP" amend "$MAH" --branch b -i "work on the branch" -b "Turns g2 into upper case, on the branch."
+cd "$BW" && "$LAP" session end >/dev/null 2>&1
+in_parent f.txt 's/^line 30$/LINE 30/' "uppercases line 30 on the parent"
+git_merge_b || fail "git merge ma"
+cd "$BP" && expect_grep "amendments carried: 1" "$LAP" merge b
+expect_grep "Turns g2 into upper case, on the branch. (amended)" "$LAP" rr --branch main S1 --no-diff
+expect_grep '"amended":1' "$LAP" log --json -n 1
+expect_grep "0 mismatch" "$LAP" verify --deep
+expect_grep "nothing new to adopt" "$LAP" merge b
+[ "$(cat .lap/log/main.*.jsonl | grep -c '"type":"amend"')" = 1 ] ||
+    fail "the parent does not hold exactly one amend record"
 cd "$WORK"
 else
     echo "skip: git not found, the branch scenarios did not run"

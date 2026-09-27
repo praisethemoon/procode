@@ -251,6 +251,10 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
                 sb_putc(&sb, ' ');
                 sb_field(&sb, S_MUTED, "(forced)", 0);
             }
+            if (rec->amended) {
+                sb_putc(&sb, ' ');
+                sb_field(&sb, S_MUTED, amend_marker(a, rec), 0);
+            }
             if (rec->from) {
                 char from[32];
                 snprintf(from, sizeof from, "(from #%.7s)", rec->from);

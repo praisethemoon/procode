@@ -18,7 +18,7 @@
  * recent commit first. Commits made outside any session are one group, last.
  */
 
-import { CommitRec, LapLog, SessionRec, regionLabel, summaryLine } from "./model";
+import { CommitRec, EarlierText, LapLog, SessionRec, regionLabel, summaryLine } from "./model";
 
 export const RANGES = ["recent", "today", "3d", "week", "30d", "all"] as const;
 export type Range = (typeof RANGES)[number];
@@ -107,6 +107,8 @@ export interface CommitRow {
     readonly intent: string;
     readonly behavior: string;
     readonly forced: boolean;
+    /* lap amend: the texts intent and behavior replaced, oldest first */
+    readonly earlier: readonly EarlierText[];
     /* adopted by lap merge: the original's hash */
     readonly from: string | null;
     readonly session: string | null;
@@ -209,6 +211,7 @@ export function row(c: CommitRec): CommitRow {
         intent: c.intent,
         behavior: c.behavior,
         forced: c.forced,
+        earlier: c.earlier,
         from: c.from,
         session: c.session,
         user: c.user,

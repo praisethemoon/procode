@@ -93,6 +93,25 @@ message checks and prints what would be recorded, failing exactly as the
 commit would, and writes nothing. Use it to test a message, to see which
 edit `--edit N` takes, or before a batch of baseline commits.
 
+### A message written wrong: `lap amend`
+
+When a commit's intent or behavior turns out wrong (it describes another
+fragment, it claims what the edit does not do), **correct it with
+`lap amend`** — never in a later commit's message (which describes only
+its own edit) or in a board comment:
+
+```
+lap amend fa9cebd -i "<the intent, repeated if it was right>" -b "<what the edit really does>"
+```
+
+Both fields are always given, and the commit message checks apply. It
+appends a correction and changes nothing already written; the commit then
+shows the new text everywhere, marked "amended", and `lap show` keeps the
+earlier ones. The code is not touched: a wrong *edit* is fixed by a new
+commit. Only this folder's own commits can be amended (in a branch folder,
+not those from before its base: `not_own_commit`); `lap merge` carries a
+branch's amendments to the parent.
+
 ## When a commit is rejected: "N separate edits detected"
 
 You changed more than one place in the file, with at least one non-blank

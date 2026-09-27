@@ -613,6 +613,7 @@ bool repo_log_load(Arena *a, Repo *r, RecLog *out, char *err, size_t errsz) {
             k++; /* records are in chunk order */
         out->v[i].lineage = hist_label(&r->hist, k);
     }
+    rec_amend_log(a, out);
     if (!out->chain_ok) {
         /* A record whose prev does not match was usually preceded by a
          * changed record: the chunk holding that one is to blame, which for

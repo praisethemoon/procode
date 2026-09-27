@@ -35,6 +35,20 @@ export interface CommitRec {
     /* adopted by lap merge: the hash of the branch commit it came from */
     from: string | null;
     ts: string;
+    /* lap amend: intent, behavior and forced above are the latest text;
+     * earlier holds every text it replaced, oldest first, and amendedBy /
+     * amendedTs who wrote the latest one and when (null: never amended) */
+    earlier: EarlierText[];
+    amendedBy: string | null;
+    amendedTs: string | null;
+}
+
+/* A commit's text that a later lap amend replaced. */
+export interface EarlierText {
+    intent: string;
+    behavior: string;
+    user: string | null;
+    ts: string;
 }
 
 export interface SessionRec {
@@ -82,6 +96,7 @@ export type LineHash = (line: string) => string;
 export interface LogReader {
     log: LapLog;
     byId: Map<string, SessionRec>;
+    byHash: Map<string, CommitRec>; /* for amend records, which name one */
     hash: LineHash;
 }
 
@@ -106,6 +121,7 @@ export function createReader(hash: LineHash): LogReader {
             branchName: null,
         },
         byId: new Map(),
+        byHash: new Map(),
         hash,
     };
 }
@@ -149,8 +165,12 @@ function foldLine(r: LogReader, line: string): void {
             forced: rec["forced"] === true,
             from: typeof rec["from"] === "string" ? (rec["from"] as string) : null,
             ts: String(rec["ts"] ?? ""),
+            earlier: [],
+            amendedBy: null,
+            amendedTs: null,
         };
         log.commits.push(c);
+        r.byHash.set(c.hash, c);
         if (c.session !== null) {
             const s = r.byId.get(c.session);
             if (s) {
@@ -200,6 +220,24 @@ function foldLine(r: LogReader, line: string): void {
             stopped: stopped.map((s) => ({ file: String(s["file"] ?? ""), at: String(s["at"] ?? "") })),
             ts: String(rec["ts"] ?? ""),
         });
+    } else if (type === "amend") {
+        /* matches the CLI: the commit named takes the text, the last
+         * amendment in log order being the latest; no entry of its own */
+        const c = r.byHash.get(String(rec["of"] ?? ""));
+        if (c) {
+            const amended = c.earlier.length > 0;
+            c.earlier.push({
+                intent: c.intent,
+                behavior: c.behavior,
+                user: amended ? c.amendedBy : c.user,
+                ts: amended ? (c.amendedTs ?? "") : c.ts,
+            });
+            c.intent = String(rec["intent"] ?? "");
+            c.behavior = String(rec["behavior"] ?? "");
+            c.forced = rec["forced"] === true;
+            c.amendedBy = typeof rec["user"] === "string" ? (rec["user"] as string) : null;
+            c.amendedTs = String(rec["ts"] ?? "");
+        }
     } else {
         /* "init", "snapshot"-style future kinds: counted, not visualized */
     }
@@ -308,6 +346,10 @@ export function renderCommit(c: CommitRec): string {
     if (c.forced) {
         out.push("forced: the message checks were skipped (--force-message)");
     }
+    if (c.earlier.length > 0) {
+        const n = c.earlier.length;
+        out.push(`amended: ${n} time${n === 1 ? "" : "s"}, last ${c.amendedTs ?? ""}${c.amendedBy ? ` by ${c.amendedBy}` : ""}`);
+    }
     out.push("intent:");
     for (const line of c.intent.split("\n")) {
         out.push(`  ${line}`);
@@ -316,6 +358,17 @@ export function renderCommit(c: CommitRec): string {
     for (const line of c.behavior.split("\n")) {
         out.push(`  ${line}`);
     }
+    c.earlier.forEach((e, i) => {
+        out.push(`earlier text ${i + 1} of ${c.earlier.length}, written ${e.ts}${e.user ? ` by ${e.user}` : ""}:`);
+        out.push("  intent:");
+        for (const line of e.intent.split("\n")) {
+            out.push(`    ${line}`);
+        }
+        out.push("  behavior:");
+        for (const line of e.behavior.split("\n")) {
+            out.push(`    ${line}`);
+        }
+    });
     out.push("diff:");
     out.push(
         `@@ -${c.oldStart},${c.oldLines} +${c.newStart},${c.newLines} @@`,

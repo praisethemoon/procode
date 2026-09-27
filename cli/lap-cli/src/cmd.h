@@ -22,6 +22,7 @@ int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv);
 int32_t cmd_rr(Arena *a, int32_t argc, char **argv);
 int32_t cmd_branch(Arena *a, int32_t argc, char **argv);
 int32_t cmd_merge(Arena *a, int32_t argc, char **argv);
+int32_t cmd_amend(Arena *a, int32_t argc, char **argv);
 
 /* ---- shared helpers (cmd_common.c) ----
  *
@@ -128,6 +129,9 @@ void json_commit(StrBuf *sb, const Rec *rec, const char *note);
 void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
                         const char *note);
 
+/* "(amended)", or "(amended <n> times)", for a commit lap amend corrected. */
+const char *amend_marker(Arena *a, const Rec *rec);
+
 /* The first 7 hex digits of a commit's hash. */
 #define SHORT_HASH_LEN 7
 void short_hash(const Rec *rec, char out[SHORT_HASH_LEN + 1]);
@@ -139,6 +143,12 @@ void sb_indented(StrBuf *sb, const char *indent, const char *text);
  * whitespace trimmed. False with a reason in err. */
 bool read_text_arg(Arena *a, const char *path, char **out, char *err,
                    size_t errsz);
+
+/* Intent and behavior from -i/-b, or from the sections of a -F file
+ * (lap commit, lap amend). False after reporting the error. */
+bool message_args(Arena *a, int32_t argc, char **argv,
+                  const char *const *value_flags, bool json,
+                  const char **intent, const char **behavior);
 
 /* Where a commit reference (SPEC §References) points in a loaded log: an
  * id ("L42"), or a hash or hash prefix of at least 7 hex digits, with or
