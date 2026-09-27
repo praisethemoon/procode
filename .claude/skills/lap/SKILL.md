@@ -141,6 +141,30 @@ a listed range.
   run lap through a pseudo-terminal, pass `--color=never` (or set
   `NO_COLOR=1`) to keep escape sequences out of what you read back.
 
+## Branches: parallel work in other folders
+
+Two agents in one folder see each other's edits as their own. Parallel
+work goes in **branch folders**: a git worktree (or a plain copy) of the
+project, made a branch of the first folder:
+
+```
+git worktree add ../proj-parser -b parser     # the folder: git's job
+cd ../proj-parser
+lap branch start parser --from ../proj         # its own line of history
+```
+
+- The parent's work must be committed (lap and git) first: a branch starts
+  from the parent's committed state, and `branch start` refuses files that
+  differ (`not_clean`).
+- **Say which branch you record to.** Where branches exist, `lap commit`
+  and `lap session start` need `--branch <name>` (`--branch main` in the
+  first folder), or `LAP_BRANCH=<name>` in the environment. A missing or
+  wrong name is refused and the error names the folder's branch: it means
+  you may be in the wrong folder — check before retrying.
+- Ids repeat across folders (both go on from the base). In text that
+  leaves the folder — a ticket comment, another branch's commit — cite
+  commits by hash and sessions as `<branch>/S<n>`.
+
 ## Using the history (do this before changing unfamiliar code)
 
 - Why does this line exist? →

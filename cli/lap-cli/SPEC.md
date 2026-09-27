@@ -300,6 +300,21 @@ parent's branches (`name_taken`); it defaults to the id.
 branch folders, and the first folder only merges. A branch then always
 starts from a folder nobody is editing.
 
+### Committing: say where
+
+In a folder that is a branch, or that has branches registered, `lap
+commit` (dry runs included) and `lap session start` need `--branch
+<name>` — the branch's name or id, or `main` — or else `branch_required`.
+A name that is not this folder's is `wrong_branch`, in any folder. Both
+errors name this folder's branch, so the fix is in the message. The
+environment variable `LAP_BRANCH` counts as the flag when the flag is not
+given (the flag wins), so an orchestrator sets it once per agent and tools
+that call lap need not pass it. A folder with no branches at all keeps its
+commands unchanged.
+
+It costs a flag and catches the one mistake that corrupts a merge: an agent
+recording in a folder it thinks it is not in.
+
 ### Registry
 
 The parent's `.lap/branches.json` lists the branches started from it:
@@ -449,7 +464,7 @@ Creates `.lap/` in the cwd plus a starter `.lapignore` (kept if present).
 Active session, then every file with pending changes: `new` (line count),
 `modified` (numbered edit list with line ranges), `deleted`, or `binary`.
 
-### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B] [--force-message] [--no-session] [--dry-run]`
+### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B] [--force-message] [--no-session] [--dry-run] [--branch B]`
 Records exactly one edit. The message comes from `-i`/`--intent` and
 `-b`/`--behavior` together, or from `-F`, never a mix:
 
@@ -511,6 +526,9 @@ Asks the history questions; criteria AND together:
 One active session at a time; `start` requires a purpose, given as its
 argument or read with `-F <file|->` (the whole text); a crashed
 session simply stays open. `list` shows every session with commit counts.
+
+`start` takes `--branch` where branches exist (§Branches → Committing: say
+where).
 
 `--meta key=value` (repeatable) on `start` tags the session with metadata,
 stored as a flat object on the `session_start` record — always present, `{}`

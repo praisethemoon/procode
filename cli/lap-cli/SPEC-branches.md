@@ -71,15 +71,7 @@ Built: `SPEC.md` §Branches → Starting one.
 
 ### Committing: say where
 
-In a folder that is a branch, or that has branches registered, `lap commit`
-and `lap session start` require `--branch <name>` (or `--branch main`), and it
-must name this folder's own lineage; otherwise `branch_required` or
-`wrong_branch`, which name this folder's branch. It costs a flag and catches
-the one mistake that corrupts a merge: an agent working in the folder it
-thinks it is not in. A folder with no branches at all keeps today's commands
-unchanged. The environment variable `LAP_BRANCH` counts as the flag when
-the flag is not given, so an orchestrator sets it once per agent and tools
-that call lap (the board, the editor views) need not pass it.
+Built: `SPEC.md` §Branches → Committing: say where.
 
 ### Merging: adopt, then commit the rest
 

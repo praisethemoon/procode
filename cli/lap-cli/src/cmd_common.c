@@ -1,5 +1,7 @@
 #include "cmd.h"
 
+#include "branches.h"
+
 #include <stdarg.h>
 
 static bool is_value_flag(const char *const *value_flags, const char *arg) {
@@ -424,4 +426,37 @@ void render_commit_diff(StrBuf *sb, const Rec *rec) {
         sb_diff_line(sb, S_REMOVED, "", "- ", rec->old_text[i]);
     for (int32_t i = 0; i < rec->new_n; i++)
         sb_diff_line(sb, S_ADDED, "", "+ ", rec->new_text[i]);
+}
+
+const char *branch_given(int32_t argc, char **argv,
+                         const char *const *value_flags) {
+    const char *flag = flag_value(argc, argv, value_flags, "--branch");
+    if (flag)
+        return flag;
+    const char *env = getenv("LAP_BRANCH");
+    return env && env[0] ? env : NULL;
+}
+
+bool branch_check(Arena *a, const Repo *r, const char *given, bool json) {
+    bool is_branch = r->hist.parent[0] != '\0';
+    const char *mine = is_branch ? r->hist.name : LAP_MAIN_LINEAGE;
+    if (given) {
+        if (strcmp(given, mine) == 0 ||
+            (is_branch && strcmp(given, r->hist.lineage) == 0))
+            return true;
+        err_out(json, "wrong_branch",
+                "this folder (%s) records to %s, not %s: you may be in the "
+                "wrong folder; here, pass --branch %s",
+                r->root, mine, given, mine);
+        return false;
+    }
+    Branches reg;
+    branches_load(a, r->lapdir, &reg);
+    if (!is_branch && reg.n == 0)
+        return true;
+    err_out(json, "branch_required",
+            "this folder (%s) %s: say which line of history this records "
+            "to with --branch %s (or LAP_BRANCH=%s)",
+            r->root, is_branch ? "is a branch" : "has branches", mine, mine);
+    return false;
 }

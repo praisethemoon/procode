@@ -22,6 +22,8 @@ The lap skill covers lap itself; this is the loop around it.
    *Done when*. Then `board_update T-<n> status=doing assignee=claude`.
 2. **Start the session.**
    `LAP_USER=claude lap session start "T-<n>: <what>" --meta ticket=T-<n>`.
+   In a branch folder, or a folder with branches, add `--branch <name>`
+   (or set `LAP_BRANCH`) here and on every `lap commit`.
    One session per ticket. Check `lap session current` first; end a stale
    one only after its edits are committed.
 3. **Work, committing edits as you go.** After each change,
@@ -49,7 +51,8 @@ The lap skill covers lap itself; this is the loop around it.
    `.lap/log/` and `.coboard/log.jsonl`. One commit:
    `git commit -m "<what changed> (T-<n>)"`. **No `Co-Authored-By` or any
    AI attribution line.**
-8. **Close it.** `board_comment T-<n>` with: the lap session and git hash,
+8. **Close it.** `board_comment T-<n>` with: the lap session (as
+   `<branch>/S<n>` when the work was in a branch folder) and git hash,
    what changed (as the reader needs it, not a diff), what was decided and
    why, test counts, and anything not verified. Then
    `board_update T-<n> status=done`. Close a milestone or epic when its

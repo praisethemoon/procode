@@ -50,6 +50,17 @@ const char *flag_value2(int32_t argc, char **argv,
 
 void err_out(bool json_mode, const char *code, const char *fmt, ...);
 
+/* Where branches exist, a commit or a session start says which line of
+ * history it records to: `given` is --branch's value, or $LAP_BRANCH when
+ * the flag is absent (NULL when neither). A folder that is a branch, or has
+ * branches registered, needs it (branch_required); a name that is not this
+ * folder's is wrong_branch, wherever it is given. Both messages name this
+ * folder's branch. False after reporting the error. */
+bool branch_check(Arena *a, const Repo *r, const char *given, bool json);
+/* --branch's value, else $LAP_BRANCH, else NULL. */
+const char *branch_given(int32_t argc, char **argv,
+                         const char *const *value_flags);
+
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);
 

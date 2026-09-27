@@ -193,7 +193,7 @@ static bool message_args(Arena *a, int32_t argc, char **argv,
 int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     static const char *const value_flags[] = {
         "-i", "--intent", "-b", "--behavior", "-F", "--edit", "--lines",
-        NULL};
+        "--branch", NULL};
     static const char *const bool_flags[] = {"--json", "--no-session",
                                              "--force-message", "--dry-run",
                                              NULL};
@@ -229,6 +229,11 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     char err[512];
     if (!repo_open(a, &repo, !dry, err, sizeof err)) {
         err_out(json, "no_repo", "%s", err);
+        return LAP_EXIT_ERR;
+    }
+    if (!branch_check(a, &repo, branch_given(argc, argv, value_flags),
+                      json)) {
+        repo_close(&repo);
         return LAP_EXIT_ERR;
     }
 

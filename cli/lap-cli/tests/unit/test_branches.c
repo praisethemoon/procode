@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "branches.h"
+#include "cmd.h"
 #include "platform.h"
 #include "test.h"
 
@@ -52,6 +53,37 @@ void test_branches(void) {
     branches_load(a, T_REGDIR, &back);
     ASSERT_EQ_I(back.n, 1);
     ASSERT_EQ_S(back.v[0].name, "y");
+
+    t_begin("branch_check: a folder with no branches needs no name, and "
+            "takes only main");
+    remove(path);
+    Repo r;
+    memset(&r, 0, sizeof r);
+    snprintf(r.root, sizeof r.root, "/w/plain");
+    snprintf(r.lapdir, sizeof r.lapdir, "%s", T_REGDIR);
+    ASSERT_TRUE(branch_check(a, &r, NULL, true));
+    ASSERT_TRUE(branch_check(a, &r, "main", true));
+    ASSERT_TRUE(!branch_check(a, &r, "feat", true));
+
+    t_begin("branch_check: a parent with branches needs main said");
+    Branches one;
+    memset(&one, 0, sizeof one);
+    branches_add(a, &one, (BranchEntry){"0123456789ab", "feat", "/w/feat",
+                                        "abc", "t"});
+    ASSERT_TRUE(branches_save(a, T_REGDIR, &one));
+    ASSERT_TRUE(!branch_check(a, &r, NULL, true));
+    ASSERT_TRUE(branch_check(a, &r, "main", true));
+    ASSERT_TRUE(!branch_check(a, &r, "feat", true));
+
+    t_begin("branch_check: a branch folder takes its name or its id");
+    snprintf(r.hist.parent, sizeof r.hist.parent, "main");
+    snprintf(r.hist.name, sizeof r.hist.name, "feat");
+    snprintf(r.hist.lineage, sizeof r.hist.lineage, "0123456789ab");
+    remove(path); /* a branch needs it whether or not it has branches */
+    ASSERT_TRUE(!branch_check(a, &r, NULL, true));
+    ASSERT_TRUE(branch_check(a, &r, "feat", true));
+    ASSERT_TRUE(branch_check(a, &r, "0123456789ab", true));
+    ASSERT_TRUE(!branch_check(a, &r, "main", true));
 
     remove(path);
     arena_free(a);

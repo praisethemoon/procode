@@ -1246,16 +1246,16 @@ expect_grep "clean" "$LAP" status
 cd "$WORK/bw" || exit 1
 
 t "a branch's ids go on from its base, and both folders commit"
-"$LAP" session start "branch work" >/dev/null 2>&1
+"$LAP" session start "branch work" --branch feat >/dev/null 2>&1
 expect_grep "S2" "$LAP" session current
 printf 'four\n' >> f.txt
-expect_grep "L4 " "$LAP" commit f.txt -i "extend on the branch" -b "appends a fourth line"
+expect_grep "L4 " "$LAP" commit f.txt --branch feat -i "extend on the branch" -b "appends a fourth line"
 "$LAP" session end >/dev/null 2>&1
 git add -A && git commit -qm "branch work"
 cd "$WORK/bp" || exit 1
-"$LAP" session start "parent work" >/dev/null 2>&1
+LAP_BRANCH=main "$LAP" session start "parent work" >/dev/null 2>&1
 printf 'g\n' > g.txt
-expect_grep "L4 " "$LAP" commit g.txt -i "extend on the parent" -b "creates g.txt on the parent"
+expect_grep "L4 " env LAP_BRANCH=main "$LAP" commit g.txt -i "extend on the parent" -b "creates g.txt on the parent"
 "$LAP" session end >/dev/null 2>&1
 [ -s .lap/log/main.000002.jsonl ] || fail "the parent did not append to its new chunk"
 git add -A && git commit -qm "parent work"
@@ -1275,9 +1275,9 @@ cp -R "$WORK/bp" "$WORK/bc" && cd "$WORK/bc" || exit 1
 expect_ok "$LAP" branch start copied --from ../bp
 [ -e .lap/branches.json ] && fail "the copy kept the parent's registry"
 expect_grep "clean" "$LAP" status
-"$LAP" session start "work in the copy" >/dev/null 2>&1
+"$LAP" session start "work in the copy" --branch copied >/dev/null 2>&1
 printf 'copy\n' >> f.txt
-expect_grep "L5 " "$LAP" commit f.txt -i "extend in the copy" -b "appends a line in the copied folder"
+expect_grep "L5 " "$LAP" commit f.txt --branch copied -i "extend in the copy" -b "appends a line in the copied folder"
 expect_grep "0 mismatch" "$LAP" verify --deep
 grep -q '"name":"copied"' "$WORK/bp/.lap/branches.json" || fail "the parent does not list the copy"
 
@@ -1304,10 +1304,35 @@ cp "$WORK/bp/f.txt" f.txt
 expect_grep "unrelated_history" "$LAP" branch start --from ../bp --json
 cd "$WORK/bw" && expect_grep "already_branch" "$LAP" branch start --from ../bp --json
 
+t "where branches exist, commits and session starts say which branch"
+cd "$WORK/bw" || exit 1
+printf 'five\n' >> f.txt
+expect_grep "branch_required" "$LAP" commit f.txt -i "say where it goes" -b "appends a fifth line" --json
+expect_grep "with --branch feat" "$LAP" commit f.txt -i "say where it goes" -b "appends a fifth line"
+expect_grep "branch_required" "$LAP" commit f.txt -i "say where it goes" -b "appends a fifth line" --dry-run --json
+expect_grep "branch_required" "$LAP" session start "unnamed" --json
+expect_grep "wrong_branch" "$LAP" commit f.txt --branch main -i "say where it goes" -b "appends a fifth line" --json
+expect_grep "records to feat, not other" env LAP_BRANCH=other "$LAP" commit f.txt -i "say where it goes" -b "appends a fifth line"
+expect_grep "would record" "$LAP" commit f.txt --branch feat -i "say where it goes" -b "appends a fifth line" --dry-run --no-session
+expect_grep "would record" "$LAP" commit f.txt --branch "$(cat .lap/lineage)" -i "say where it goes" -b "appends a fifth line" --dry-run --no-session
+# the flag wins over the environment
+expect_grep "would record" env LAP_BRANCH=other "$LAP" commit f.txt --branch feat -i "say where it goes" -b "appends a fifth line" --dry-run --no-session
+expect_grep "S3 started" env LAP_BRANCH=feat "$LAP" session start "named by the environment"
+expect_ok env LAP_BRANCH=feat "$LAP" commit f.txt -i "say where it goes" -b "appends a fifth line"
+cd "$WORK/bp" || exit 1
+expect_grep "has branches: .*--branch main" "$LAP" session start "unnamed"
+expect_grep "wrong_branch" "$LAP" session start "on the parent" --branch feat --json
+cd "$WORK/legacy" || exit 1
+printf 'plain\n' >> old.txt
+expect_grep "wrong_branch" "$LAP" commit old.txt --no-session --branch feat -i "no branches here" -b "appends a plain line" --json
+expect_ok "$LAP" commit old.txt --no-session --branch main -i "no branches here" -b "appends a plain line"
+printf 'plain 2\n' >> old.txt
+expect_ok "$LAP" commit old.txt --no-session -i "no branches here" -b "appends a second plain line"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"
-    cd "$WORK/bp" && "$LAP" session start "fill the open chunk" >/dev/null 2>&1 && cd "$WORK/br"
+    cd "$WORK/bp" && "$LAP" session start "fill the open chunk" --branch main >/dev/null 2>&1 && cd "$WORK/br"
     chmod a-w "$WORK/bp/.lap" "$WORK/bp/.lap/log"
     expect_grep "parent_read_only" "$LAP" branch start --from ../bp --json
     chmod u+w "$WORK/bp/.lap" "$WORK/bp/.lap/log"

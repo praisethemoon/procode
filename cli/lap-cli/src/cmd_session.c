@@ -151,7 +151,8 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
 }
 
 int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"-F", "--meta", NULL};
+    static const char *const value_flags[] = {"-F", "--meta", "--branch",
+                                              NULL};
     static const char *const bool_flags[] = {"--json", NULL};
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
@@ -215,6 +216,9 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
     } else if (strcmp(sub, "list") == 0) {
         rc = session_list(a, &repo, json, &meta);
     } else if (strcmp(sub, "start") == 0) {
+        if (!branch_check(a, &repo, branch_given(argc, argv, value_flags),
+                          json))
+            goto done;
         const char *msg = positional_arg(argc, argv, value_flags, 1);
         const char *file = flag_value(argc, argv, value_flags, "-F");
         if (msg && file) {
