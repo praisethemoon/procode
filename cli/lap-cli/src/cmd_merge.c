@@ -307,11 +307,6 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         err_out(json, "log_unreadable", "%s", err);
         goto done;
     }
-    if (!blog.chain_ok) {
-        err_out(json, "log_broken", "branch %s's history is broken: %s", key,
-                blog.chain_err);
-        goto done;
-    }
     /* Which branch of the chain each record belongs to (-1: this folder's
      * own part), and where each branch's records lie. */
     int32_t *lof = (int32_t *)arena_alloc(
@@ -343,6 +338,13 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     if (find_hash(&plog, blog.v[bi].base) < 0) {
         err_out(json, "unrelated_history",
                 "branch %s did not start from this folder's history", key);
+        goto done;
+    }
+    /* After the base check: an unrelated branch's record does not chain
+     * from this folder's history either, and should be named as such. */
+    if (!blog.chain_ok) {
+        err_out(json, "log_broken", "branch %s's history is broken: %s", key,
+                blog.chain_err);
         goto done;
     }
 

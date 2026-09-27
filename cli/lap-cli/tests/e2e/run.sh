@@ -1598,6 +1598,32 @@ cd "$BP" && expect_grep "branch_not_found" "$LAP" merge nothing-by-that-name --j
 cd "$BW" && expect_grep "merge_in_branch" "$LAP" merge b --json
 cd "$WORK"
 
+t "a refused merge leaves both folders' .lap as they were"
+merge_pair m15; BP="$WORK/m15-p"; BW="$WORK/m15-w"
+rm "$BW/.git" # a plain folder: lap merge would read and copy its chunks
+cd "$BW" && "$LAP" session start "work to break" --branch b >/dev/null 2>&1
+in_branch g.txt 's/^g1$/broken later/' "a commit after the damaged session start"
+ID15=$(cat "$BW/.lap/lineage")
+sed '2s/work to break/WORK TO BREAK/' ".lap/log/$ID15.000001.jsonl" > t.new && # the chain breaks after it
+    mv t.new ".lap/log/$ID15.000001.jsonl"
+both15() { (cd "$BP" && find .lap -type f | sort | xargs cksum; cd "$BW" && find .lap -type f | sort | xargs cksum); }
+SUM15=$(both15)
+cd "$BP" && expect_grep "log_broken" "$LAP" merge b --json
+[ "$(both15)" = "$SUM15" ] || fail "a merge refused as log_broken changed a .lap"
+# an unrelated history's branch, its chunk here as a git merge could bring it
+mkdir -p "$WORK/m15-u" && cd "$WORK/m15-u" && "$LAP" init >/dev/null 2>&1
+printf 'elsewhere\n' > u.txt
+for f in u.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "start another project" -b "records $f there" >/dev/null 2>&1
+done
+cp -R "$WORK/m15-u" "$WORK/m15-ux" && cd "$WORK/m15-ux" && "$LAP" branch start x --from ../m15-u >/dev/null 2>&1 ||
+    fail "unrelated branch start"
+cp .lap/log/"$(cat .lap/lineage)".000001.jsonl "$BP/.lap/log/"
+cd "$BP" && SUM15=$(both15)
+expect_grep "unrelated_history" "$LAP" merge x --json
+[ "$(both15)" = "$SUM15" ] || fail "a merge refused as unrelated_history changed a .lap"
+cd "$WORK"
+
 t "lap merge adopts only what git merge brought, so .lap/log never conflicts"
 merge_pair m12; BP="$WORK/m12-p"; BW="$WORK/m12-w"
 cd "$BW" && "$LAP" session start "staged work" --branch b >/dev/null 2>&1
