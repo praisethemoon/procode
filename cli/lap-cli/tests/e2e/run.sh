@@ -1608,6 +1608,34 @@ expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$BW" && expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "identical changes on both sides are already done, and later commits are adopted"
+merge_pair m14; BP="$WORK/m14-p"; BW="$WORK/m14-w"
+cd "$BW" && "$LAP" session start "same work" --branch b >/dev/null 2>&1
+in_branch g.txt 's/^g1$/same/' "makes g1 what the parent makes it"
+in_branch g.txt 's/^g3$/later/' "a later branch-only change to g.txt"
+cd "$BW" && rm f.txt && "$LAP" commit f.txt --branch b -i "drop f on both sides" \
+    -b "deletes f.txt on the branch" >/dev/null 2>&1 || fail "branch delete"
+printf 'twin\n' > n.txt && "$LAP" commit n.txt --branch b -i "add n on both sides" \
+    -b "creates n.txt on the branch" >/dev/null 2>&1 || fail "branch create"
+in_parent g.txt 's/^g1$/same/' "makes g1 what the branch makes it"
+cd "$BP" && rm f.txt && "$LAP" commit f.txt --branch main --no-session \
+    -i "drop f on both sides" -b "deletes f.txt on the parent" >/dev/null 2>&1 ||
+    fail "parent delete"
+printf 'twin\n' > n.txt && "$LAP" commit n.txt --branch main --no-session \
+    -i "add n on both sides" -b "creates n.txt on the parent" >/dev/null 2>&1 ||
+    fail "parent create"
+git_merge_b || fail "git merge m14"
+expect_grep '"adopted":1,"left":0' "$LAP" merge b --dry-run --json
+expect_grep '"stopped":\[\],"already":\["[0-9a-f]*","[0-9a-f]*","[0-9a-f]*"\]' \
+    "$LAP" merge b --dry-run --json
+expect_grep "already done here: #" "$LAP" merge b
+grep -q '"type":"merge".*"already":\["' .lap/log/main.*.jsonl ||
+    fail "the merge record does not list the already-done commits"
+expect_grep "clean" "$LAP" status
+expect_grep "later" cat g.txt
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
 t "lap merge before git merge is git_merge_first; --copy-from-folder takes the folder's"
 merge_pair m13; BP="$WORK/m13-p"; BW="$WORK/m13-w"
 cd "$BW" && "$LAP" session start "early work" --branch b >/dev/null 2>&1

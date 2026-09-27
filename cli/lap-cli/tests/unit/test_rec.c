@@ -279,6 +279,28 @@ void test_rec(void) {
     ASSERT_EQ_S(mback.stopped_file[1], "src/b \"q\".c");
     ASSERT_EQ_S(mback.stopped_at[1], "bb");
     ASSERT_EQ_S(mback.hash, mr.hash);
+    ASSERT_TRUE(strstr(mline, "\"already\"") == NULL);
+    ASSERT_EQ_I(mback.already_n, 0);
+
+    t_begin("rec: a merge record's already list round-trips; a bad one is "
+            "refused");
+    const char *al[] = {"c0ffee", "decade"};
+    mr.already = al;
+    mr.already_n = 2;
+    mline = rec_encode(a, &mr, &mlen);
+    ASSERT_TRUE(strstr(mline, "\"already\":[\"c0ffee\",\"decade\"]") != NULL);
+    ASSERT_TRUE(rec_decode(a, mline, mlen, &mback, err, sizeof err));
+    ASSERT_EQ_I(mback.already_n, 2);
+    ASSERT_EQ_S(mback.already[1], "decade");
+    ASSERT_EQ_S(mback.hash, mr.hash);
+    const char *bad_al = "{\"type\":\"merge\",\"branch\":\"b\",\"name\":\"n\","
+                         "\"head\":\"h\",\"adopted\":0,\"left\":0,"
+                         "\"stopped\":[],\"already\":[1],\"ts\":\"t\","
+                         "\"prev\":\"p\",\"hash\":\"x\"}";
+    ASSERT_TRUE(!rec_decode(a, bad_al, strlen(bad_al), &mback, err,
+                            sizeof err));
+    mr.already = NULL;
+    mr.already_n = 0;
 
     t_begin("rec: from links survive on commits and sessions, and are absent "
             "otherwise");

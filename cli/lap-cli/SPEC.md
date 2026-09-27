@@ -382,6 +382,16 @@ folder, `lap merge <branch> [--dry-run]`.
    parent's text where it would land (compared blind to CRLF `\r`). **The
    first conflict stops that file**: none of its later commits are adopted,
    in this merge or later ones. Other files carry on.
+
+   **Identical changes are already done.** A commit that overlaps exactly
+   one parent change, of exactly its region and size, and lands where the
+   parent's text already is its new text (with the same final newline) is
+   not a conflict: the parent made the same change. Nothing is adopted for
+   it and nothing stops; that change is common ground for the file's later
+   commits. A file deleted on both sides, or created on both with the same
+   lines, is this case. Identical means the text, as lap's diff aligns it:
+   a change one line different is a conflict. A rename (delete one path,
+   create another) is two changes, each judged by itself.
 4. **Appending**, under the lock, in the branch's order:
    - a branch `session_start` not adopted before, as a new session with
      the next `S` id, the same purpose and meta (so `--meta ticket=T-12`
@@ -397,8 +407,10 @@ folder, `lap merge <branch> [--dry-run]`.
    merge appends to the session already adopted. The shadow takes the
    placed commits; the working tree is never written (core rule 4).
 5. **The merge record** closes the run: the branch, its head, the commits
-   adopted and left, and the files a conflict stopped with the first commit
-   not adopted in each. A later merge of the branch starts after `head` and
+   adopted and left, the files a conflict stopped with the first commit
+   not adopted in each, and `already`: the hashes of the commits already
+   done here (left out when there are none), so the history says they were
+   seen, not lost. A later merge of the branch starts after `head` and
    keeps every stopped file stopped.
 
 **What is left.** The working tree holds what `git merge` made; the shadow
@@ -408,8 +420,9 @@ shows in `lap status` and is committed as usual, with a behavior that cites
 the branch commits it stands for (`#9f3e21a`). When everything was adopted
 and git merged cleanly, there is no difference.
 
-`--dry-run` reports what would be adopted and where each file would stop,
-reading the branch folder in place, and writes nothing.
+`--dry-run` reports what would be adopted, what is already done and where
+each file would stop, reading exactly what the merge would read (rule 2),
+and writes nothing.
 
 ### Naming sessions
 
@@ -770,10 +783,11 @@ Adopts a branch's history into this folder's (§Branches → Merging).
 `--copy-from-folder` takes a git checkout's missing chunks from its folder
 instead of refusing with `git_merge_first`. Prints
 what was adopted of how many commits, with the new ids, then each stopped
-file with the first commit not adopted and why; `nothing new to adopt` when
-the branch has nothing after the last merge. `--json` returns `dry_run`,
-`branch`, `name`, `new`, `adopted`, `left`, `head`, `stopped`
-(`[{file, at, why}]`) and `commits` (`[{id, from}]`). Errors:
+file with the first commit not adopted and why, then each commit already
+done here; `nothing new to adopt` when the branch has nothing after the
+last merge. `--json` returns `dry_run`, `branch`, `name`, `new`, `adopted`,
+`left`, `head`, `stopped` (`[{file, at, why}]`), `already` (hashes) and
+`commits` (`[{id, from}]`). Errors:
 `branch_not_found`, `merge_in_branch`, `unrelated_history`, `log_broken`,
 `git_merge_first`.
 

@@ -15,6 +15,13 @@
  * change: either order would be a guess), and so is a commit whose old
  * text is not the parent's text where it would land. The first conflict
  * stops the file: no later commit to it is placed.
+ *
+ * One exception: a commit whose region is exactly one parent change, and
+ * whose new text is the parent's text there, is already done — the parent
+ * made the same change. Nothing is placed for it and nothing stops; that
+ * parent change is then common ground for the commits after it. A file
+ * deleted on both sides, or created on both with the same lines, is this
+ * case too. Near is not identical: one line different is a conflict.
  */
 #ifndef LAP_ADOPT_H
 #define LAP_ADOPT_H
@@ -22,7 +29,10 @@
 #include "rec.h"
 
 typedef struct {
-    int32_t placed;  /* commits placed, counted from the first */
+    int32_t placed;  /* commits placed, counted from the first; those
+                        already done count as placed */
+    bool *already;   /* commit k: the parent had already made exactly its
+                        change, so nothing of it is to be adopted */
     int32_t *start;  /* placed commit k: its start in the parent's version
                         as it stood just before it */
     bool *eof_nl;    /* placed commit k: the trailing-newline state after

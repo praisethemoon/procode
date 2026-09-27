@@ -309,6 +309,8 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     bool *gone = (bool *)arena_alloc0(a, nfiles ? nfiles : 1);
     const char **stop_file = NULL, **stop_at = NULL, **stop_why = NULL;
     size_t nstop = 0, scap = 0, scap2 = 0, scap3 = 0;
+    const char **already = NULL; /* branch commits this folder had made */
+    size_t nalready = 0, acap = 0;
     int32_t adopted = 0, left = 0;
     for (size_t f = 0; f < nfiles; f++) {
         const Rec **mine = NULL;
@@ -336,16 +338,23 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         Placement p;
         adopt_place(a, base, parent, (const Rec *const *)mine, (int32_t)n,
                     &p);
+        int32_t last = -1; /* the last commit placed, not already done */
         for (int32_t k = 0; k < p.placed; k++) {
+            if (p.already[k]) { /* seen, and nothing to adopt */
+                ARENA_GROW(a, already, nalready, acap, const char *);
+                already[nalready++] = mine[k]->hash;
+                continue;
+            }
             at[idx[k]] = p.start[k];
             eof[idx[k]] = p.eof_nl[k];
+            adopted++;
+            last = k;
         }
-        adopted += p.placed;
         left += (int32_t)n - p.placed;
-        if (p.placed > 0) {
+        if (last >= 0) {
             changed[f] = true;
             results[f] = p.result;
-            gone[f] = strcmp(mine[p.placed - 1]->op, "delete") == 0;
+            gone[f] = strcmp(mine[last]->op, "delete") == 0;
         }
         if (p.placed < (int32_t)n) {
             size_t s2 = nstop, s3 = nstop;
@@ -451,6 +460,8 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         m.stopped_file = stop_file;
         m.stopped_at = stop_at;
         m.stopped_n = (int32_t)nstop;
+        m.already = already;
+        m.already_n = (int32_t)nalready;
         m.user = repo_user(&repo);
         if (!repo_append(&repo, &m, err, sizeof err)) {
             err_out(json, "io_error", "%s", err);
@@ -481,7 +492,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     }
 
     /* The report. */
-    int32_t total = adopted + left;
+    int32_t total = adopted + left + (int32_t)nalready;
     if (json) {
         StrBuf sb;
         sb_init(&sb, a);
@@ -499,6 +510,9 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             json_escape_c(&sb, stop_why[s]);
             sb_putc(&sb, '}');
         }
+        sb_puts(&sb, "],\"already\":[");
+        for (size_t s = 0; s < nalready; s++)
+            sb_printf(&sb, s ? ",\"%s\"" : "\"%s\"", already[s]);
         sb_printf(&sb, "],\"commits\":[%s]}", ids.len ? sb_finish(&ids) : "");
         puts(sb_finish(&sb));
     } else if (start >= blog.count) {
@@ -513,6 +527,10 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         for (size_t s = 0; s < nstop; s++)
             printf("  stopped: %s at #%.7s (%s)\n", stop_file[s], stop_at[s],
                    stop_why[s]);
+        for (size_t s = 0; s < nalready; s++)
+            printf("  already done here: #%.7s (this folder made the same "
+                   "change)\n",
+                   already[s]);
         if (left > 0 && !dry)
             printf("what is left shows in lap status: commit it as usual, "
                    "citing the branch commits it stands for (#<hash>)\n");

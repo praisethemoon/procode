@@ -34,6 +34,7 @@ void adopt_place(Arena *a, Lines base, Lines parent, const Rec *const *commits,
     out->start = (int32_t *)arena_alloc(a, (size_t)(n ? n : 1) *
                                                sizeof(int32_t));
     out->eof_nl = (bool *)arena_alloc(a, (size_t)(n ? n : 1) * sizeof(bool));
+    out->already = (bool *)arena_alloc0(a, (size_t)(n ? n : 1) * sizeof(bool));
 
     Lines branch = base;
     Lines merged = parent;
@@ -52,20 +53,53 @@ void adopt_place(Arena *a, Lines base, Lines parent, const Rec *const *commits,
         bool del = strcmp(c->op, "delete") == 0;
         int32_t s = c->old_start < 1 ? 1 : c->old_start;
         int32_t e = s + c->old_lines;
-        int32_t offset = 0;
-        const char *why = NULL;
-        for (int32_t i = 0; i < pr.count && !why; i++) {
+        int32_t offset = 0, hits = 0, hit = -1;
+        for (int32_t i = 0; i < pr.count; i++) {
+            if (ch[i].len < 0)
+                continue; /* made common ground by an already-done commit */
             int32_t ps = ch[i].start, pe = ch[i].start + ch[i].len;
-            if (s <= pe && ps <= e)
-                why = ch[i].len == 0 && c->old_lines == 0 && ps == s
-                          ? "both sides insert at the same point"
-                          : "it overlaps or touches a change the parent "
-                            "made";
-            else if (pe < s)
+            if (s <= pe && ps <= e) {
+                if (hits++ == 0)
+                    hit = i;
+            } else if (pe < s) {
                 offset += ch[i].delta;
+            }
         }
         int32_t at = s + offset;
         Lines mnocr = lines_without_cr(a, merged);
+
+        /* The parent made exactly this change: already done. */
+        if (hits == 1 && ch[hit].start == s && ch[hit].len == c->old_lines &&
+            ch[hit].delta == c->new_n - c->old_lines &&
+            text_at(mnocr, at, strip_text(a, c->new_text, c->new_n),
+                    c->new_n) &&
+            (del ? merged.count == 0
+                 : c->eof_nl == branch.eof_nl || c->eof_nl == merged.eof_nl)) {
+            if (del) {
+                branch.lines = NULL;
+                branch.count = 0;
+                branch.eof_nl = true;
+            } else {
+                branch = lines_replace(a, branch, s, c->old_lines, c->new_text,
+                                       c->new_n, c->eof_nl);
+            }
+            ch[hit].len = -1;
+            for (int32_t i = 0; i < pr.count; i++) {
+                if (ch[i].start >= e)
+                    ch[i].start += c->new_n - c->old_lines;
+            }
+            out->already[k] = true;
+            out->start[k] = at;
+            out->eof_nl[k] = merged.eof_nl;
+            out->placed = k + 1;
+            continue;
+        }
+
+        const char *why = NULL;
+        if (hits > 0)
+            why = ch[hit].len == 0 && c->old_lines == 0 && ch[hit].start == s
+                      ? "both sides insert at the same point"
+                      : "it overlaps or touches a change the parent made";
         if (!why &&
             !text_at(mnocr, at, strip_text(a, c->old_text, c->old_n),
                      c->old_n))

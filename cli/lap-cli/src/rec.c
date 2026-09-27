@@ -106,6 +106,12 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
             sb_printf(&sb, ",\"at\":\"%s\"}", rec->stopped_at[i]);
         }
         sb_putc(&sb, ']');
+        if (rec->already_n > 0) { /* absent when none: older records */
+            sb_puts(&sb, ",\"already\":[");
+            for (int32_t i = 0; i < rec->already_n; i++)
+                sb_printf(&sb, i ? ",\"%s\"" : "\"%s\"", rec->already[i]);
+            sb_putc(&sb, ']');
+        }
         if (rec->user) {
             sb_puts(&sb, ",\"user\":");
             json_escape_c(&sb, rec->user);
@@ -283,6 +289,24 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
             out->stopped_at[i] = at;
         }
         out->stopped_n = (int32_t)st->arr.n;
+        JVal *al = jobj_get(v, "already");
+        if (al) {
+            if (al->t != J_ARR) {
+                snprintf(err, errsz, "merge record has a bad already list");
+                return false;
+            }
+            size_t an = al->arr.n ? al->arr.n : 1;
+            out->already = (const char **)arena_alloc(a, an * sizeof(char *));
+            for (size_t i = 0; i < al->arr.n; i++) {
+                if (al->arr.items[i]->t != J_STR) {
+                    snprintf(err, errsz,
+                             "merge record has a bad already entry");
+                    return false;
+                }
+                out->already[i] = al->arr.items[i]->s.ptr;
+            }
+            out->already_n = (int32_t)al->arr.n;
+        }
     } else {
         snprintf(err, errsz, "unknown record type \"%s\"", type);
         return false;

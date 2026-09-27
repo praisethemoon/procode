@@ -229,5 +229,54 @@ void test_adopt(void) {
     adopt_place(a, big, rewritten, c17, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
 
+    t_begin("adopt: the same edit on both sides is already done, and the "
+            "file's later commits carry on");
+    Lines twenty = numbered(a, 20);
+    Rec *same = edit(a, twenty, 5, 1, "X\n");
+    Lines same_v = after(a, twenty, same);
+    const Rec *c18[] = {same, edit(a, same_v, 12, 1, "Y\n")};
+    adopt_place(a, twenty, same_v, c18, 2, &p);
+    ASSERT_EQ_I(p.placed, 2);
+    ASSERT_TRUE(p.already[0] && !p.already[1]);
+    ASSERT_EQ_I(p.start[1], 12);
+    ASSERT_TRUE(str_eq_c(p.result.lines[4], "X"));
+    ASSERT_TRUE(str_eq_c(p.result.lines[11], "Y"));
+    ASSERT_EQ_I(p.result.count, 20);
+    ASSERT_TRUE(p.why == NULL);
+
+    t_begin("adopt: a near-identical edit, one line different, still "
+            "conflicts");
+    Lines near = lines_replace(a, twenty, 5, 1, L(a, "X2\n").lines, 1, true);
+    adopt_place(a, twenty, near, c18, 2, &p);
+    ASSERT_EQ_I(p.placed, 0);
+    ASSERT_TRUE(!p.already[0]);
+    ASSERT_TRUE(p.why != NULL);
+
+    t_begin("adopt: a file deleted on both sides is already done");
+    adopt_place(a, five, none, c15, 1, &p);
+    ASSERT_EQ_I(p.placed, 1);
+    ASSERT_TRUE(p.already[0]);
+    ASSERT_EQ_I(p.result.count, 0);
+
+    t_begin("adopt: a file created on both sides with the same lines is "
+            "already done");
+    adopt_place(a, none, L(a, "new\nfile\n"), c16, 1, &p);
+    ASSERT_EQ_I(p.placed, 1);
+    ASSERT_TRUE(p.already[0]);
+    ASSERT_EQ_S(text(a, p.result), "new\nfile\n");
+
+    t_begin("adopt: an identical insertion becomes common ground: later "
+            "commits are not moved by it twice");
+    Rec *ins = edit(a, twenty, 3, 0, "I\n");
+    Lines bi = after(a, twenty, ins);
+    Lines pi = lines_replace(a, bi, 16, 1, L(a, "P\n").lines, 1, true);
+    const Rec *c19[] = {ins, edit(a, bi, 10, 1, "Z\n")};
+    adopt_place(a, twenty, pi, c19, 2, &p);
+    ASSERT_EQ_I(p.placed, 2);
+    ASSERT_TRUE(p.already[0] && !p.already[1]);
+    ASSERT_EQ_I(p.start[1], 10);
+    ASSERT_TRUE(str_eq_c(p.result.lines[9], "Z"));
+    ASSERT_TRUE(str_eq_c(p.result.lines[15], "P"));
+
     arena_free(a);
 }

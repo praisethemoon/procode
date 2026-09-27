@@ -59,13 +59,16 @@ typedef struct {
     /* merge only: branch is the adopted branch's id (name its name), head
      * the hash of its last record adopted, adopted and left the commits
      * placed and not, stopped the files a conflict stopped with the hash
-     * of the first commit to each that was not placed. */
+     * of the first commit to each that was not placed, already the hashes
+     * of branch commits whose change this folder had already made. */
     const char *branch;
     const char *head;
     int32_t adopted, left;
     const char **stopped_file;
     const char **stopped_at;
     int32_t stopped_n;
+    const char **already;
+    int32_t already_n;
     const char *prev;    /* hex chain hash */
     int32_t old_start, old_lines, new_start, new_lines; /* commit only */
     Str *old_text;
