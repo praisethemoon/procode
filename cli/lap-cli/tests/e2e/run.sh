@@ -1437,6 +1437,8 @@ in_branch g.txt 's/^g3$/G3/' "uppercases g3 on the branch later"
 in_branch f.txt 's/^line 20$/branch 20/' "rewrites line 20 on the branch later"
 git_merge_b || fail "git merge m3 again"
 cd "$BP" && expect_grep "adopted 1 of 2" "$LAP" merge b
+expect_grep "^b  *partly merged" "$LAP" branch list
+expect_grep "  stopped: f.txt" "$LAP" branch list
 expect_grep "uppercases g3 on the branch later" "$LAP" log -n 1 --json
 expect_grep "modified  f.txt" "$LAP" status
 expect_grep "0 mismatch" "$LAP" verify --deep
@@ -1494,6 +1496,55 @@ expect_grep "branch b: CHAIN BROKEN" "$LAP" verify
 expect_fail "$LAP" verify
 mv .lap/branch.bak "$BC"
 expect_ok "$LAP" verify
+
+t "branch list shows each branch's state, and forget and move tend it"
+merge_pair r1; BP="$WORK/r1-p"; BW="$WORK/r1-w"
+cd "$BW" && "$LAP" session start "list work" --branch b >/dev/null 2>&1
+in_branch g.txt 's/^g1$/listed/' "changes g1 for the list"
+for n in c d; do
+    cp -R "$BP" "$WORK/r1-$n" && cd "$WORK/r1-$n" &&
+        "$LAP" branch start "$n" --from ../r1-p >/dev/null 2>&1 || fail "start $n"
+done
+cd "$BP" || exit 1
+expect_grep "^b  *active  */.*/r1-w\$" "$LAP" branch list
+expect_grep "1 commit since its base, 1 since the last merge" "$LAP" branch list
+expect_grep '"name":"b","state":"active","present":true' "$LAP" branch list --json
+expect_grep '"self":null' "$LAP" branch list --json
+cd "$BW" && expect_grep "this folder is branch b (.*) of main" "$LAP" branch list
+expect_grep '"self":{"id":"[0-9a-f]*","name":"b","parent":"main"' "$LAP" branch list --json
+# an unmerged branch whose folder is deleted is missing, until forgotten
+rm -rf "$WORK/r1-c"
+cd "$BP" || exit 1
+expect_grep "^c  *missing" "$LAP" branch list
+expect_grep "lap branch forget c if it is no more" "$LAP" branch list
+expect_ok "$LAP" session start "a writer keeps an unmerged gone branch" --branch main
+expect_grep "^c  *missing" "$LAP" branch list
+expect_grep "forgot branch c" "$LAP" branch forget c
+expect_not_grep "^c " "$LAP" branch list
+expect_grep "unknown_branch" "$LAP" branch forget c --json
+# a moved folder is missing until moved back into the registry
+mv "$WORK/r1-d" "$WORK/r1-d-moved"
+expect_grep "^d  *missing" "$LAP" branch list
+expect_grep "not_that_branch" "$LAP" branch move d "$WORK/r1-w" --json
+expect_grep "branch d now at" "$LAP" branch move d "$WORK/r1-d-moved"
+expect_grep "^d  *active  */.*/r1-d-moved\$" "$LAP" branch list
+# a folder reused for something else is not taken for the branch
+mv "$WORK/r1-d-moved" "$WORK/r1-d-old"
+mkdir -p "$WORK/r1-d-moved" && (cd "$WORK/r1-d-moved" && "$LAP" init >/dev/null 2>&1)
+expect_grep "^d  *missing" "$LAP" branch list
+expect_grep '"name":"d","state":"missing","present":false' "$LAP" branch list --json
+
+t "a merged branch whose folder is gone leaves the registry on the next write"
+git_merge_b || fail "git merge r1"
+cd "$BP" && expect_grep "adopted 1 of 1" "$LAP" merge b
+expect_grep "^b  *merged" "$LAP" branch list
+rm -rf "$BW"
+expect_grep "^b  *merged  *.* (gone)" "$LAP" branch list
+OUT=$("$LAP" session end 2>&1)
+[ "$OUT" = "session S1 ended" ] || fail "pruning said something: $OUT"
+expect_not_grep "^b " "$LAP" branch list
+expect_grep "^d  *missing" "$LAP" branch list
+expect_grep "0 mismatch" "$LAP" verify --deep
 
 t "lap merge refuses what it cannot merge"
 cd "$BP" && expect_grep "branch_not_found" "$LAP" merge nothing-by-that-name --json

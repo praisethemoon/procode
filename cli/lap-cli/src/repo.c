@@ -1,5 +1,6 @@
 #include "repo.h"
 
+#include "branches.h"
 #include "json.h"
 #include "sha256.h"
 #include "snap.h"
@@ -294,6 +295,38 @@ bool repo_abspath(const char *user_path, char *out, size_t outsz) {
     return normalize_path(absbuf, out, outsz);
 }
 
+/* Writers drop the registry entries of branches merged up to their head
+ * whose folder is gone: their history is in this folder's chunks, nothing
+ * is lost. Nothing else about the registry is acted on, and nothing here
+ * can fail the command: hints never do. */
+static void prune_branches(Arena *a, Repo *r) {
+    Branches reg;
+    branches_load(a, r->lapdir, &reg);
+    bool any_gone = false; /* the common case costs one stat per branch */
+    for (int32_t i = 0; i < reg.n && !any_gone; i++) {
+        char elap[LAP_PATH_MAX];
+        snprintf(elap, sizeof elap, "%s/%s", reg.v[i].path, LAP_DIR);
+        any_gone = !plat_is_dir(elap);
+    }
+    if (!any_gone)
+        return;
+    RecLog log;
+    char err[256];
+    if (!repo_log_load(a, r, &log, err, sizeof err))
+        return;
+    Branches keep;
+    memset(&keep, 0, sizeof keep);
+    for (int32_t i = 0; i < reg.n; i++) {
+        BranchStatus st;
+        branches_status(a, r->lapdir, &log, &reg.v[i], &st);
+        if (!st.present && strcmp(st.state, "merged") == 0)
+            continue;
+        branches_add(a, &keep, reg.v[i]);
+    }
+    if (keep.n != reg.n)
+        branches_save(a, r->lapdir, &keep);
+}
+
 bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
     char root[LAP_PATH_MAX];
     if (!find_root(root, sizeof root)) {
@@ -396,6 +429,8 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
                 return false;
         }
     }
+    if (for_write)
+        prune_branches(a, r);
     return true;
 }
 

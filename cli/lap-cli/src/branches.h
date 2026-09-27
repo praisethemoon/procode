@@ -7,7 +7,7 @@
 #ifndef LAP_BRANCHES_H
 #define LAP_BRANCHES_H
 
-#include "arena.h"
+#include "rec.h"
 
 #define LAP_BRANCHES_NAME "branches.json"
 
@@ -34,5 +34,29 @@ bool branches_save(Arena *a, const char *lapdir, const Branches *b);
 /* The entry whose id or name is key, or NULL. */
 const BranchEntry *branches_find(const Branches *b, const char *key);
 void branches_add(Arena *a, Branches *b, BranchEntry e);
+
+/* What the parent knows of one registered branch. An entry is checked,
+ * never trusted: its folder counts only while it exists and its .lap is
+ * that branch. The branch's history is read from that folder, else from
+ * its chunks in the parent. */
+typedef struct {
+    bool present;       /* its folder is there and still this branch */
+    bool readable;      /* its history could be read */
+    const char *head;   /* the hash of its last record, when readable */
+    const char *merged; /* the head the last merge of it adopted, or NULL */
+    int32_t since_base; /* commits after its start; -1 when not readable */
+    int32_t since_merge; /* commits after the last merged head; -1 idem */
+    const char **stopped; /* files a merge of it stopped, for good */
+    int32_t nstopped;
+    /* "active", "merged" (adopted up to its head), "partly merged" (a file
+     * stopped), or "missing" (its folder is gone, and it was not merged
+     * up to its head) */
+    const char *state;
+} BranchStatus;
+
+/* The status of entry e of the registry in lapdir, whose own history
+ * (holding any merge records) is log. */
+void branches_status(Arena *a, const char *lapdir, const RecLog *log,
+                     const BranchEntry *e, BranchStatus *out);
 
 #endif /* LAP_BRANCHES_H */

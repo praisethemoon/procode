@@ -54,6 +54,109 @@ void test_branches(void) {
     ASSERT_EQ_I(back.n, 1);
     ASSERT_EQ_S(back.v[0].name, "y");
 
+    t_begin("branches_status: a gone, unmerged branch is missing, with its "
+            "commits counted from the chunks here");
+    remove(path);
+    const char *id = "0123456789ab";
+    Rec init, br, c1, c2;
+    memset(&init, 0, sizeof init);
+    init.type = REC_INIT;
+    init.version = 1;
+    init.ts = "t0";
+    init.prev = LAP_HASH_ZERO;
+    size_t n0, n1, n2, n3;
+    char *l0 = rec_encode(a, &init, &n0);
+    memset(&br, 0, sizeof br);
+    br.type = REC_BRANCH;
+    br.id = id;
+    br.name = "feat";
+    br.parent = "main";
+    br.base = init.hash;
+    br.base_chunk = 1;
+    br.ts = "t1";
+    br.prev = init.hash;
+    char *l1 = rec_encode(a, &br, &n1);
+    Str none = {"x", 1};
+    memset(&c1, 0, sizeof c1);
+    c1.type = REC_COMMIT;
+    c1.id = "L1";
+    c1.file = "f.txt";
+    c1.op = "create";
+    c1.new_text = &none;
+    c1.new_n = c1.new_lines = 1;
+    c1.old_start = c1.new_start = 1;
+    c1.intent = "make the file";
+    c1.behavior = "creates it";
+    c1.ts = "t2";
+    c1.prev = br.hash;
+    char *l2 = rec_encode(a, &c1, &n2);
+    c2 = c1;
+    c2.id = "L2";
+    c2.op = "edit";
+    c2.old_text = &none;
+    c2.old_n = c2.old_lines = 1;
+    c2.prev = c1.hash;
+    char *l3 = rec_encode(a, &c2, &n3);
+    char p1[256], p2[256];
+    snprintf(p1, sizeof p1, "%s/log", T_REGDIR);
+    plat_mkdirs(p1);
+    snprintf(p1, sizeof p1, "%s/log/main.000001.jsonl", T_REGDIR);
+    plat_write_file_atomic(p1, arena_printf(a, "%s\n", l0), n0 + 1);
+    snprintf(p2, sizeof p2, "%s/log/%s.000001.jsonl", T_REGDIR, id);
+    char *bl = arena_printf(a, "%s\n%s\n%s\n", l1, l2, l3);
+    plat_write_file_atomic(p2, bl, strlen(bl));
+    BranchEntry ent = {id, "feat", "/nonexistent-lap-branch-folder",
+                       init.hash, "t1"};
+    RecLog plog;
+    memset(&plog, 0, sizeof plog);
+    BranchStatus st;
+    branches_status(a, T_REGDIR, &plog, &ent, &st);
+    ASSERT_TRUE(!st.present);
+    ASSERT_TRUE(st.readable);
+    ASSERT_EQ_S(st.state, "missing");
+    ASSERT_EQ_I(st.since_base, 2);
+    ASSERT_EQ_I(st.since_merge, 2);
+    ASSERT_EQ_S(st.head, c2.hash);
+
+    t_begin("branches_status: merged up to its head is merged; one commit "
+            "short, or with a stopped file, is not");
+    Rec mr;
+    memset(&mr, 0, sizeof mr);
+    mr.type = REC_MERGE;
+    mr.branch = id;
+    mr.head = c2.hash;
+    Rec logv[1] = {mr};
+    plog.v = logv;
+    plog.count = 1;
+    branches_status(a, T_REGDIR, &plog, &ent, &st);
+    ASSERT_EQ_S(st.state, "merged");
+    ASSERT_EQ_I(st.since_merge, 0);
+    logv[0].head = c1.hash;
+    branches_status(a, T_REGDIR, &plog, &ent, &st);
+    ASSERT_EQ_S(st.state, "missing");
+    ASSERT_EQ_I(st.since_merge, 1);
+    logv[0].head = c2.hash;
+    const char *sf[] = {"f.txt"};
+    const char *sa[] = {"h"};
+    logv[0].stopped_file = sf;
+    logv[0].stopped_at = sa;
+    logv[0].stopped_n = 1;
+    branches_status(a, T_REGDIR, &plog, &ent, &st);
+    ASSERT_EQ_S(st.state, "missing");
+    ASSERT_EQ_I(st.nstopped, 1);
+    ASSERT_EQ_S(st.stopped[0], "f.txt");
+
+    t_begin("branches_status: a branch with no chunk anywhere is unreadable "
+            "and missing");
+    BranchEntry ghost = {"ba9876543210", "ghost", "/nonexistent-lap-ghost",
+                         "b", "t"};
+    branches_status(a, T_REGDIR, &plog, &ghost, &st);
+    ASSERT_TRUE(!st.readable);
+    ASSERT_EQ_I(st.since_base, -1);
+    ASSERT_EQ_S(st.state, "missing");
+    remove(p1);
+    remove(p2);
+
     t_begin("branch_check: a folder with no branches needs no name, and "
             "takes only main");
     remove(path);

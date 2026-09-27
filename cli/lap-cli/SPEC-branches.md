@@ -74,41 +74,9 @@ Built: `SPEC.md` §Branches → Committing: say where.
 
 Built: `SPEC.md` §Branches → Merging.
 
-### Registry
+### Registry and commands
 
-The parent's `.lap/branches.json` lists the branches started from it:
-
-```jsonc
-[{"id":"7c1e9a02d4b8","name":"parser-fix","path":"/abs/path/to/folder",
-  "base":"<hash>","started":"<ts>"}]
-```
-
-It is **machine-local**: a path means nothing on another machine, so it is
-not committed. It is neither history nor a cache — it cannot be rebuilt from
-the log — and it is **hints only**:
-
-1. **No command fails because of it.** A missing, moved or reused folder is
-   never an error; the only error is `lap merge` finding the branch's history
-   nowhere.
-2. **An entry is checked, never trusted:** it counts only if its folder exists
-   and that folder's `.lap` is that branch (by id).
-3. **Merged and gone → dropped silently** by the next writing command, when a
-   merge adopted the branch up to its head and the folder is gone: the
-   history is in the parent's chunks, nothing is lost.
-4. **Unmerged, or stopped at a conflict, and gone → kept**, shown as
-   `missing` with its last path. `lap branch forget <branch>` drops it;
-   `lap branch move <branch> <path>` points it at a moved folder.
-
-### Commands
-
-Built: `branch start`, `merge`, and `--branch` on `log`, `show` and `rr`
-(`SPEC.md`). Still to come:
-
-- `lap branch list [--json]` — this folder's branches from the registry, each
-  with its state: `active`, `merged` (up to head), `partly merged` (stopped
-  files), `missing`; commits since base and since the last merge. In a branch
-  folder, also its own name, parent and base.
-- `lap branch forget <branch>`, `lap branch move <branch> <path>`.
+Built: `SPEC.md` §Branches → Registry, and the `lap branch` commands.
 
 ### The board
 

@@ -410,7 +410,20 @@ The parent's `.lap/branches.json` lists the branches started from it:
 machine-local (not committed: a path means nothing elsewhere), neither
 history nor a cache — nothing rebuilds it — and **hints only**: a missing
 or malformed registry reads as no branches, and no command fails because
-of what it says.
+of what it says. The one error about a branch's whereabouts is `lap merge`
+finding its history nowhere.
+
+- **Checked, never trusted.** An entry's folder counts only while it
+  exists and its `.lap/lineage` names that branch; a folder moved away, or
+  reused for something else, is not the branch.
+- **States.** `merged`: a merge adopted it up to its head, with no file
+  stopped. `partly merged`: a merge stopped a file. `missing`: its folder
+  is gone and it was not merged up to its head. `active`: anything else.
+- **Merged and gone → dropped silently** by the next writing command: its
+  history is in this folder's chunks, nothing is lost. Everything else
+  stays — an unmerged or stopped branch whose folder is gone is shown as
+  `missing` until `lap branch forget` drops it or `lap branch move` points
+  it at the folder's new place.
 
 ## Messages
 
@@ -663,6 +676,21 @@ returns `id`, `name`, `parent`, `base`, `base_chunk`. Errors:
 `missing_from`, `bad_name`, `same_folder`, `already_branch`, `no_parent`,
 `nested_branch`, `unrelated_history`, `not_clean`, `name_taken`,
 `parent_read_only`.
+
+### `lap branch list`, `lap branch forget <branch>`, `lap branch move <branch> <path>`
+`list` shows, in a branch folder, its own name, id, parent and base, then
+each branch this folder started (§Registry): its name, state and last
+known path (`(gone)` when its folder is not there), its commits since its
+base and since the last merge, the files a merge stopped, and for a
+`missing` one the two fixes. `--json`: `{"ok":true,"self":{id, name,
+parent, base} | null,"branches":[{id, name, state, present, path, base,
+started, since_base, since_merge, merged, stopped}]}`, the counts `null`
+when the branch's history is nowhere to be read, `merged` the last merged
+head or `null`.
+
+`forget` drops an entry; `move` points it at a folder that holds that
+branch (else `not_that_branch`). Both are writers; an entry not in the
+registry is `unknown_branch`.
 
 ### `lap merge <branch> [--dry-run]`
 Adopts a branch's history into this folder's (§Branches → Merging). Prints

@@ -368,13 +368,175 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
     return LAP_EXIT_OK;
 }
 
+static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
+    static const char *const bool_flags[] = {"--json", NULL};
+    if (!flags_known(argc, argv, NULL, bool_flags))
+        return LAP_EXIT_ERR;
+    Repo repo;
+    char err[512];
+    if (!repo_open(a, &repo, false, err, sizeof err)) {
+        err_out(json, "no_repo", "%s", err);
+        return LAP_EXIT_ERR;
+    }
+    RecLog log;
+    if (!repo_log_load(a, &repo, &log, err, sizeof err)) {
+        err_out(json, "log_unreadable", "%s", err);
+        return LAP_EXIT_ERR;
+    }
+    Branches reg;
+    branches_load(a, repo.lapdir, &reg);
+    StrBuf sb;
+    sb_init(&sb, a);
+    const Hist *h = &repo.hist;
+    if (json) {
+        sb_puts(&sb, "{\"ok\":true,\"self\":");
+        if (h->parent[0]) {
+            sb_printf(&sb, "{\"id\":\"%s\",\"name\":", h->lineage);
+            json_escape_c(&sb, h->name);
+            sb_printf(&sb, ",\"parent\":\"%s\",\"base\":\"%s\"}", h->parent,
+                      h->base);
+        } else {
+            sb_puts(&sb, "null");
+        }
+        sb_puts(&sb, ",\"branches\":[");
+    } else if (h->parent[0]) {
+        sb_printf(&sb, "this folder is branch %s (%s) of %s, from %.7s\n",
+                  h->name, h->lineage, h->parent, h->base);
+    }
+    for (int32_t i = 0; i < reg.n; i++) {
+        const BranchEntry *e = &reg.v[i];
+        BranchStatus st;
+        branches_status(a, repo.lapdir, &log, e, &st);
+        if (json) {
+            sb_puts(&sb, i ? ",{\"id\":" : "{\"id\":");
+            json_escape_c(&sb, e->id);
+            sb_puts(&sb, ",\"name\":");
+            json_escape_c(&sb, e->name);
+            sb_printf(&sb, ",\"state\":\"%s\",\"present\":%s,\"path\":",
+                      st.state, st.present ? "true" : "false");
+            json_escape_c(&sb, e->path);
+            sb_printf(&sb, ",\"base\":\"%s\",\"started\":\"%s\"", e->base,
+                      e->started);
+            if (st.readable)
+                sb_printf(&sb, ",\"since_base\":%d,\"since_merge\":%d",
+                          st.since_base, st.since_merge);
+            else
+                sb_puts(&sb, ",\"since_base\":null,\"since_merge\":null");
+            sb_puts(&sb, ",\"merged\":");
+            if (st.merged)
+                sb_printf(&sb, "\"%s\"", st.merged);
+            else
+                sb_puts(&sb, "null");
+            sb_puts(&sb, ",\"stopped\":[");
+            for (int32_t k = 0; k < st.nstopped; k++) {
+                if (k)
+                    sb_putc(&sb, ',');
+                json_escape_c(&sb, st.stopped[k]);
+            }
+            sb_puts(&sb, "]}");
+            continue;
+        }
+        sb_printf(&sb, "%-16s %-14s %s%s\n", e->name, st.state, e->path,
+                  st.present ? "" : " (gone)");
+        if (st.readable)
+            sb_printf(&sb, "  %d commit%s since its base, %d since the last "
+                           "merge\n",
+                      st.since_base, st.since_base == 1 ? "" : "s",
+                      st.since_merge);
+        for (int32_t k = 0; k < st.nstopped; k++)
+            sb_printf(&sb, "  stopped: %s\n", st.stopped[k]);
+        if (strcmp(st.state, "missing") == 0)
+            sb_printf(&sb, "  its folder is gone: lap branch move %s <path> "
+                           "if it moved, lap branch forget %s if it is no "
+                           "more\n",
+                      e->name, e->name);
+    }
+    if (json) {
+        sb_puts(&sb, "]}");
+        puts(sb_finish(&sb));
+    } else {
+        if (reg.n == 0 && !h->parent[0])
+            sb_puts(&sb, "no branches started from this folder\n");
+        fputs(sb_finish(&sb), stdout);
+    }
+    return LAP_EXIT_OK;
+}
+
+/* forget and move: the registry changed under the lock. */
+static int32_t branch_edit(Arena *a, int32_t argc, char **argv, bool json,
+                           bool move) {
+    static const char *const bool_flags[] = {"--json", NULL};
+    if (!flags_known(argc, argv, NULL, bool_flags))
+        return LAP_EXIT_ERR;
+    const char *key = positional_arg(argc, argv, NULL, 1);
+    const char *to = positional_arg(argc, argv, NULL, 2);
+    if (!key || (move && !to) || positional_arg(argc, argv, NULL, move ? 3 : 2)) {
+        err_out(json, "bad_args", move ? "usage: lap branch move <branch> "
+                                         "<path>"
+                                       : "usage: lap branch forget <branch>");
+        return LAP_EXIT_ERR;
+    }
+    Repo repo;
+    char err[512];
+    if (!repo_open(a, &repo, true, err, sizeof err)) {
+        err_out(json, "no_repo", "%s", err);
+        return LAP_EXIT_ERR;
+    }
+    int32_t rc = LAP_EXIT_ERR;
+    Branches reg;
+    branches_load(a, repo.lapdir, &reg);
+    BranchEntry *e = (BranchEntry *)branches_find(&reg, key);
+    char path[LAP_PATH_MAX];
+    if (!e) {
+        err_out(json, "unknown_branch",
+                "no branch %s in this folder's registry", key);
+        goto done;
+    }
+    if (move) {
+        if (!repo_abspath(to, path, sizeof path) ||
+            !branch_folder_is(a, path, e->id)) {
+            err_out(json, "not_that_branch",
+                    "%s does not hold branch %s: its .lap/lineage must name "
+                    "%s",
+                    to, e->name, e->id);
+            goto done;
+        }
+        e->path = path;
+    } else {
+        *e = reg.v[reg.n - 1];
+        reg.n--;
+    }
+    if (!branches_save(a, repo.lapdir, &reg)) {
+        err_out(json, "io_error", "cannot write %s/%s", repo.lapdir,
+                LAP_BRANCHES_NAME);
+        goto done;
+    }
+    if (json)
+        printf("{\"ok\":true}\n");
+    else if (move)
+        printf("branch %s now at %s\n", key, path);
+    else
+        printf("forgot branch %s\n", key);
+    rc = LAP_EXIT_OK;
+done:
+    repo_close(&repo);
+    return rc;
+}
+
 int32_t cmd_branch(Arena *a, int32_t argc, char **argv) {
     static const char *const value_flags[] = {"--from", NULL};
     bool json = has_flag(argc, argv, value_flags, "--json");
     const char *sub = positional_arg(argc, argv, value_flags, 0);
     if (sub && strcmp(sub, "start") == 0)
         return branch_start(a, argc, argv, json);
-    err_out(json, "bad_args", "usage: lap branch start [name] --from <parent "
-                              "folder>");
+    if (sub && strcmp(sub, "list") == 0)
+        return branch_list(a, argc, argv, json);
+    if (sub && strcmp(sub, "forget") == 0)
+        return branch_edit(a, argc, argv, json, false);
+    if (sub && strcmp(sub, "move") == 0)
+        return branch_edit(a, argc, argv, json, true);
+    err_out(json, "bad_args",
+            "usage: lap branch start [name] --from <parent folder> | list | "
+            "forget <branch> | move <branch> <path>");
     return LAP_EXIT_ERR;
 }
