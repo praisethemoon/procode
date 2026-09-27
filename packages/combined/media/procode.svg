@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 32 32" width="256" height="256" role="img" aria-label="procode: a lowercase p drawn as one spiral stroke">
+  <!-- procode's p: the lap spiral turned into a letter. One 2px round stroke on
+       the 24x24 grid the view icons share: three half-turns opening outward
+       (the bowl), then straight down from the outermost one (the stem), the
+       way Knowledge's magnifier leaves its spiral. lap's warm orange on a dark
+       tile, so it reads on light and dark backgrounds alike. The extension
+       icon is procode.png, rendered from this file (VS Code takes no SVG
+       there): rsvg-convert -w 256 -h 256 procode.svg -o procode.png -->
+  <rect x="-4" y="-4" width="32" height="32" rx="7" fill="#1e1e1e"/>
+  <path d="M15 9 A3 3 0 1 0 9 9 A5 5 0 1 0 19 9 A7 7 0 1 0 5 9 V22"
+        fill="none" stroke="#e2641f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -16,6 +16,7 @@
  *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/artifacts.js
  *                      the MCP servers, one file each
  *   media/             the parts' activity-bar icons
+ *   icon.png           procode's own icon, from packages/combined/media
  */
 
 import { execFileSync } from "node:child_process";
@@ -100,6 +101,7 @@ const manifest = {
     license: "MIT",
     engines: { vscode: "^1.101.0" },
     categories: ["Other"],
+    icon: "icon.png",
     main: "./out/extension.js",
     activationEvents: [...activation],
     contributes,
@@ -130,6 +132,9 @@ for (const part of PARTS) {
 // pdf.js, beside the bundle where Knowledge imports it from (index-vscode/src/pdf.ts).
 fs.cpSync(path.join(repo, "packages", "index-vscode", "out", "pdfjs"), path.join(dist, "out", "pdfjs"), { recursive: true });
 fs.copyFileSync(path.join(repo, "LICENSE"), path.join(dist, "LICENSE"));
+// The Extensions view's icon: a PNG rendered from media/procode.svg, since
+// VS Code does not take an SVG there.
+fs.copyFileSync(path.join(here, "media", "procode.png"), path.join(dist, "icon.png"));
 // dist/ holds exactly what ships; this only tells vsce so.
 fs.writeFileSync(path.join(dist, ".vscodeignore"), "**/*.map\n");
 fs.writeFileSync(
