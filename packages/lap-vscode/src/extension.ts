@@ -13,7 +13,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { BranchRow, BranchView, branchView, parseBranchList } from "./branches";
-import { folderFiles, hasHistory, lineageFiles, readStream } from "./chunks";
+import { folderFiles, hasHistory, historyProblem, lineageFiles, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
     CommitRec,
@@ -64,6 +64,8 @@ class LapLogSource {
     private repo: Repo | undefined;
     private reader: LogReader = createReader(lineHash);
     private offset = 0;
+    /* why the history cannot be shown (a missing chunk), or null */
+    problem: string | null = null;
 
     constructor(private readonly state: vscode.Memento) {
         this.refresh();
@@ -101,6 +103,13 @@ class LapLogSource {
             this.reset(found);
         }
         if (this.repo) {
+            /* a broken history is named, never shown in part */
+            this.problem = historyProblem(this.repo.lapDir);
+            if (this.problem) {
+                this.reader = createReader(lineHash);
+                this.offset = 0;
+                return;
+            }
             try {
                 const files = folderFiles(this.repo.lapDir);
                 const size = files.reduce((n, f) => n + f.size, 0);
@@ -294,8 +303,9 @@ class HistoryView implements vscode.WebviewViewProvider {
                   active: log.activeSessionId,
                   reveal: reveal === null ? null : { id: reveal, filter: this.filter },
                   branches: this.branches.views,
+                  problem: this.source.problem,
               }
-            : { type: "page", page: null, hasRepo: false, active: null, reveal: null, branches: [] };
+            : { type: "page", page: null, hasRepo: false, active: null, reveal: null, branches: [], problem: null };
         void this.view.webview.postMessage(msg);
     }
 

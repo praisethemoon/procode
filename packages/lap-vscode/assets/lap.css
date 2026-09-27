@@ -337,6 +337,16 @@ body {
 .lh-empty code {
     font-family: var(--bk-font-family-mono);
 }
+.lh-problem {
+    overflow-wrap: anywhere; /* the path is long and has no spaces */
+}
+.lh-problem p:first-child {
+    color: var(--bk-color-foreground);
+}
+.lh-problem .codicon {
+    color: var(--bk-color-danger);
+    vertical-align: text-bottom;
+}
 
 /* The pager, pinned under the list. */
 .lh-pager {

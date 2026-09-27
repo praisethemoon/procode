@@ -9,7 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { hasHistory, historyFiles, lineageChunks, parseChunkName, readStream } from "../chunks";
+import { hasHistory, historyFiles, historyProblem, lineageChunks, missingChunk, parseChunkName, readStream } from "../chunks";
 import { consumableBytes, createReader, parseLog, readerFeed } from "../model";
 
 const hash = (line: string) => createHash("sha256").update(line, "utf8").digest("hex");
@@ -110,4 +110,21 @@ test("the single-file log is read when there is no chunk, and chunks win over it
     assert.equal(readStream(legacy, 0, legacy[0].size).toString(), whole);
     writeChunks(dir, [lines.slice(0, 2).join("")]);
     assert.deepEqual(historyFiles(dir).map((f) => path.basename(f.path)), ["main.000001.jsonl"]);
+});
+
+test("a chunk missing from the middle is named, as lap names it, never read around", () => {
+    assert.equal(missingChunk(["main.000001.jsonl", "main.000002.jsonl"], "main"), null);
+    assert.equal(missingChunk(["main.000001.jsonl", "main.000003.jsonl"], "main"), "main.000002.jsonl");
+    assert.equal(missingChunk(["main.000002.jsonl"], "main"), "main.000001.jsonl");
+    assert.equal(missingChunk([], "main"), null);
+    const dir = lapDir();
+    writeChunks(dir, [lines.slice(0, 2).join(""), lines.slice(2, 3).join(""), lines.slice(3).join("")]);
+    assert.equal(historyProblem(dir), null);
+    fs.rmSync(path.join(dir, "log", "main.000002.jsonl"));
+    assert.equal(historyProblem(dir), `history chunk main.000002.jsonl is missing from ${path.join(dir, "log")}`);
+    // a branch folder: its own lineage is checked too
+    fs.writeFileSync(path.join(dir, "log", "main.000002.jsonl"), lines.slice(2, 3).join(""));
+    fs.writeFileSync(path.join(dir, "lineage"), "0123456789ab\n");
+    fs.writeFileSync(path.join(dir, "log", "0123456789ab.000002.jsonl"), "");
+    assert.match(historyProblem(dir) ?? "", /0123456789ab\.000001\.jsonl is missing/);
 });

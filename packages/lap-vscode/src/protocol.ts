@@ -18,6 +18,9 @@ export type ToView =
           /* The branches this folder started (lap branch list), each with its
            * own sessions; empty where there are none or lap cannot say. */
           readonly branches: readonly BranchView[];
+          /* why the history cannot be shown (a chunk missing from its
+           * middle), in lap's words; then page is empty */
+          readonly problem: string | null;
       }
     | { readonly type: "collapseAll" };
 

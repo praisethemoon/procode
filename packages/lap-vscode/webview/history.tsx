@@ -549,7 +549,7 @@ function History(): JSX.Element {
     const [selected, setSelected] = useState<string | null>(null);
     /* A commit just revealed, to scroll to once it is drawn. */
     const [revealed, setRevealed] = useState<string | null>(null);
-    const [data, setData] = useState<{ page: HistoryPage | null; hasRepo: boolean; active: string | null; branches: readonly BranchView[] } | null>(null);
+    const [data, setData] = useState<{ page: HistoryPage | null; hasRepo: boolean; active: string | null; branches: readonly BranchView[]; problem: string | null } | null>(null);
     const list = useRef<HTMLDivElement>(null);
     const shown = useRef<readonly SessionRow[]>([]);
     shown.current = data?.page?.sessions ?? [];
@@ -561,7 +561,7 @@ function History(): JSX.Element {
         const handler = (e: MessageEvent) => {
             const m = e.data as ToView;
             if (m.type === "page") {
-                setData({ page: m.page, hasRepo: m.hasRepo, active: m.active, branches: m.branches ?? [] });
+                setData({ page: m.page, hasRepo: m.hasRepo, active: m.active, branches: m.branches ?? [], problem: m.problem ?? null });
                 if (m.reveal && m.page) {
                     /* The host chose the filter and page that show the
                      * commit; the view takes them, opens its session and the
@@ -622,6 +622,18 @@ function History(): JSX.Element {
             <p className="lh-empty">
                 No lap repository in this workspace. Create one with <code>lap init</code>, and commits appear here as they are made.
             </p>
+        );
+    }
+    if (data?.problem) {
+        return (
+            <div className="lh-empty lh-problem" role="alert">
+                <p>
+                    <Codicon name="error" /> This history cannot be shown: {data.problem}.
+                </p>
+                <p>
+                    lap refuses it too. Restore the missing chunk (from git, or the folder it was copied from), then <code>lap verify</code>.
+                </p>
+            </div>
         );
     }
     const p = data?.page ?? null;

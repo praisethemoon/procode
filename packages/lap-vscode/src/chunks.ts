@@ -40,6 +40,46 @@ export function lineageChunks(names: string[], lineage: string): string[] {
     return out;
 }
 
+/* The first chunk missing from a lineage's numbers while later ones are
+ * there: the history is broken at it (lap refuses to read on). null when
+ * the numbers run on, or the lineage has no chunk. */
+export function missingChunk(names: string[], lineage: string): string | null {
+    const have = new Set<number>();
+    for (const name of names) {
+        const c = parseChunkName(name);
+        if (c && c.lineage === lineage) have.add(c.n);
+    }
+    const max = Math.max(0, ...have);
+    for (let n = 1; n <= max; n++) {
+        if (!have.has(n)) return `${lineage}.${String(n).padStart(6, "0")}.jsonl`;
+    }
+    return null;
+}
+
+/* Why the folder's history cannot be shown, in lap's words, or null: a
+ * chunk missing from the middle of its lineage (or of main's, which a
+ * branch folder's history starts with). */
+export function historyProblem(lapDir: string): string | null {
+    const dir = path.join(lapDir, "log");
+    let names: string[] = [];
+    try {
+        names = fs.readdirSync(dir);
+    } catch {
+        return null; /* no chunks: nothing to be broken */
+    }
+    let lineage = "main";
+    try {
+        lineage = fs.readFileSync(path.join(lapDir, "lineage"), "utf8").trim() || "main";
+    } catch {
+        /* a main folder */
+    }
+    for (const l of lineage === "main" ? ["main"] : [lineage, "main"]) {
+        const gone = missingChunk(names, l);
+        if (gone) return `history chunk ${gone} is missing from ${dir}`;
+    }
+    return null;
+}
+
 /* True when lapDir holds a history in either shape. */
 export function hasHistory(lapDir: string): boolean {
     return historyFiles(lapDir).length > 0;
