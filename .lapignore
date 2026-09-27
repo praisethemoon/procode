@@ -25,6 +25,12 @@ package-lock.json
 # the combined extension is assembled here by its build
 dist/
 
+# vendored code (tree-sitter, its generated grammars, utf8proc): copied in
+# from upstream, never edited here, and megabytes a record; the notes on how
+# it was vendored (TREE-SITTER.md) stay tracked
+cli/kb-cli/src/third_party/tree-sitter*/
+cli/kb-cli/src/third_party/utf8proc/
+
 # the board keeps its own append-only history; recording its log here would
 # be a second history of the same thing
 .coboard/

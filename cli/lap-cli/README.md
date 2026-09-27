@@ -191,8 +191,11 @@ acceleration cache: a fixed-width index with per-file chains (O(1) commit
 lookup, blame that walks only the file's own history), byte-budgeted
 content snapshots that bound replay cost, and the shadow store. Delete any
 of it, `lap rebuild` restores it; reads stay correct (slower) even without
-it. `.lapignore` (gitignore-like subset) controls what is tracked. Details
-in [SPEC.md](SPEC.md).
+it. `.lapignore` (gitignore-like subset) controls what is tracked: list
+there whatever nobody edits by hand — build output, dependencies, and
+vendored or generated code (a copied-in parser can be megabytes, and every
+update of it would be another whole-file record). Files lap recorded before
+you ignored them keep their history. Details in [SPEC.md](SPEC.md).
 
 ## Branches and merging
 
