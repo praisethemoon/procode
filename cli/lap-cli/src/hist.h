@@ -74,6 +74,13 @@ bool hist_folder_lineage(Arena *a, const char *lapdir,
                          char out[HIST_LINEAGE_MAX], char *err, size_t errsz);
 /* Writes lapdir/lineage. */
 bool hist_write_lineage(const char *lapdir, const char *lineage);
+/* Writes chunk `name` into logdir whole, atomically, its temp file in the
+ * folder above (.lap/) so none is ever in log/. */
+bool hist_write_chunk(const char *logdir, const char *name, const void *data,
+                      size_t len);
+/* Removes the temp files in lapdir/log: under the lock every one is a
+ * leftover (of a crash, or of a lap that wrote them there). */
+void hist_clear_tmp(Arena *a, const char *lapdir);
 
 /* A folder's whole history: for main, hist_open's; for a branch, the
  * parent's chunks up to the base chunk its branch record names, then the

@@ -563,10 +563,8 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             const OwnChunk *c = &lin[k].own[j];
             if (!c->write)
                 continue;
-            char dst[LAP_PATH_MAX];
-            snprintf(dst, sizeof dst, "%s/%s", repo.hist.dir, c->name);
             if (!plat_mkdirs(repo.hist.dir) ||
-                !plat_write_file_atomic(dst, c->data, c->len)) {
+                !hist_write_chunk(repo.hist.dir, c->name, c->data, c->len)) {
                 err_out(json, "io_error", "cannot copy %s into %s", c->name,
                         repo.hist.dir);
                 goto done;

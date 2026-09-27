@@ -60,6 +60,10 @@ bool plat_tty_ansi(FILE *f);
 bool plat_is_tmp_name(const char *name);
 /* Writes via a per-process temp file + atomic rename. */
 bool plat_write_file_atomic(const char *path, const void *data, size_t len);
+/* The same, its temp file in tmpdir (NULL: next to path), which must be
+ * on path's filesystem: for a folder that must never hold one. */
+bool plat_write_file_atomic_in(const char *path, const char *tmpdir,
+                               const void *data, size_t len);
 /* Appends and flushes to disk before returning. */
 bool plat_append_file_sync(const char *path, const void *data, size_t len);
 

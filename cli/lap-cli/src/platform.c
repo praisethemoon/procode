@@ -537,6 +537,11 @@ bool plat_truncate(const char *path, uint64_t new_size) {
 }
 
 bool plat_write_file_atomic(const char *path, const void *data, size_t len) {
+    return plat_write_file_atomic_in(path, NULL, data, len);
+}
+
+bool plat_write_file_atomic_in(const char *path, const char *tmpdir,
+                               const void *data, size_t len) {
     char tmp[LAP_PATH_MAX];
 #ifdef _WIN32
     unsigned long pid = (unsigned long)GetCurrentProcessId();
@@ -545,8 +550,11 @@ bool plat_write_file_atomic(const char *path, const void *data, size_t len) {
 #endif
     /* per-process temp name: concurrent writers to the same target never
      * clobber each other's half-written temp file */
-    if (snprintf(tmp, sizeof tmp, "%s.tmp.%lu", path, pid) >=
-        (int)sizeof tmp)
+    const char *base = strrchr(path, '/');
+    int w = tmpdir ? snprintf(tmp, sizeof tmp, "%s/%s.tmp.%lu", tmpdir,
+                              base ? base + 1 : path, pid)
+                   : snprintf(tmp, sizeof tmp, "%s.tmp.%lu", path, pid);
+    if (w < 0 || w >= (int)sizeof tmp)
         return false;
 #ifdef _WIN32
     char wb[LAP_PATH_MAX];

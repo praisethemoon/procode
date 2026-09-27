@@ -712,6 +712,35 @@ bool hist_folder_lineage(Arena *a, const char *lapdir,
     return true;
 }
 
+bool hist_write_chunk(const char *logdir, const char *name, const void *data,
+                      size_t len) {
+    /* its temp file goes in .lap/, next to log/: git and readers never
+     * see one in log/ */
+    char path[LAP_PATH_MAX], lap[LAP_PATH_MAX];
+    snprintf(path, sizeof path, "%s/%s", logdir, name);
+    snprintf(lap, sizeof lap, "%s", logdir);
+    char *slash = strrchr(lap, '/');
+    if (slash)
+        *slash = '\0';
+    return plat_write_file_atomic_in(path, slash ? lap : NULL, data, len);
+}
+
+void hist_clear_tmp(Arena *a, const char *lapdir) {
+    char dir[LAP_PATH_MAX];
+    snprintf(dir, sizeof dir, "%s/%s", lapdir, LAP_LOG_DIR);
+    if (!plat_is_dir(dir))
+        return;
+    Names ns = {a, NULL, 0, 0};
+    plat_walk(a, dir, on_name, &ns);
+    for (int32_t i = 0; i < ns.n; i++) {
+        if (!plat_is_tmp_name(ns.v[i]))
+            continue;
+        char path[LAP_PATH_MAX];
+        snprintf(path, sizeof path, "%s/%s", dir, ns.v[i]);
+        plat_remove_file(path);
+    }
+}
+
 bool hist_write_lineage(const char *lapdir, const char *lineage) {
     char path[LAP_PATH_MAX], text[HIST_LINEAGE_MAX + 1];
     snprintf(path, sizeof path, "%s/%s", lapdir, LAP_LINEAGE_NAME);

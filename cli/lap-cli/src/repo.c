@@ -415,6 +415,7 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
         if (!hist_convert_legacy(a, r->lapdir, hist_chunk_limit(), &converted,
                                  err, errsz))
             return false;
+        hist_clear_tmp(a, r->lapdir);
     }
     /* listed under the lock, so a writer's view cannot go stale */
     if (!hist_open_folder(a, r->lapdir, &r->hist, err, errsz))

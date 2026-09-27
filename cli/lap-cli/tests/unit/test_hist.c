@@ -1,4 +1,7 @@
 #include <stdio.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #include "hist.h"
 #include "rec.h"
@@ -702,6 +705,37 @@ static void test_check(Arena *a) {
     clear_chunks();
 }
 
+static void test_tmp_files(Arena *a) {
+    char dir[256], blocker[256], left[256];
+    snprintf(dir, sizeof dir, "%s/%s", T_LAPDIR, LAP_LOG_DIR);
+    plat_mkdirs(dir);
+
+#ifndef _WIN32
+    t_begin("hist: a chunk is written with its temp file outside log/");
+    clear_chunks();
+    /* a folder where the temp file would be if it were made in log/: the
+     * write can only succeed by putting it elsewhere */
+    snprintf(blocker, sizeof blocker, "%s/main.000001.jsonl.tmp.%lu", dir,
+             (unsigned long)getpid());
+    plat_mkdirs(blocker);
+    ASSERT_TRUE(hist_write_chunk(dir, "main.000001.jsonl", "aaaa\n", 5));
+    ASSERT_EQ_S(read_history(a), "aaaa\n");
+    plat_rmdir(blocker);
+#endif
+
+    t_begin("hist: leftover temp files in log/ are removed, chunks kept, "
+            "and never read as chunks");
+    clear_chunks();
+    put_file("main.000001.jsonl", "aaaa\n");
+    snprintf(left, sizeof left, "%s/main.000002.jsonl.tmp.4242", dir);
+    plat_write_file_atomic(left, "bbbb\n", 5);
+    ASSERT_EQ_S(read_history(a), "aaaa\n");
+    hist_clear_tmp(a, T_LAPDIR);
+    ASSERT_TRUE(!plat_is_file(left));
+    ASSERT_EQ_S(read_history(a), "aaaa\n");
+    clear_chunks();
+}
+
 void test_hist(void) {
     Arena *a = arena_new(0);
     test_names();
@@ -712,5 +746,6 @@ void test_hist(void) {
     test_branch_history(a);
     test_nested_history(a);
     test_check(a);
+    test_tmp_files(a);
     arena_free(a);
 }

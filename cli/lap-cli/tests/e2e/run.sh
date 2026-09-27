@@ -1162,6 +1162,16 @@ expect_grep "chunk $(basename "$LASTC") does not continue sealed chunk $(basenam
 mv .lap/open.bak "$LASTC"
 expect_grep "chain ok" "$LAP" verify
 
+t "a temp file left in .lap/log is never read as a chunk, and the next writer removes it"
+cp "$LASTC" "$LASTC.tmp.4242"
+printf 'junk\n' >> "$LASTC.tmp.4242"
+expect_grep "chain ok" "$LAP" verify
+expect_ok "$LAP" log
+[ -e "$LASTC.tmp.4242" ] || fail "a reader removed the temp file"
+expect_ok "$LAP" rebuild
+[ -e "$LASTC.tmp.4242" ] && fail "the writer left the temp file in .lap/log"
+ls .lap/log | grep -q '\.tmp\.' && fail "a writer left a temp file in .lap/log"
+
 t "a gap in the chunk numbers is refused, naming the missing chunk"
 mv .lap/log/main.000002.jsonl .lap/gap.bak
 expect_grep "main.000002.jsonl is missing" "$LAP" log

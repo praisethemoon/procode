@@ -286,7 +286,11 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   names both (*"chunk `main.000003.jsonl` does not continue sealed chunk
   `main.000002.jsonl`"*).
 - git tracks `.lap/log/`. Appending changes one file, the open chunk; a
-  sealed chunk never changes again.
+  sealed chunk never changes again. A chunk written whole (a branch's
+  first, one `lap merge` copies) goes through a temp file in `.lap/` and
+  one rename, so `.lap/log/` never holds a temp file; one left there by an
+  older lap is not a chunk to readers, and the next writer, holding the
+  lock, removes it.
 - **The single-file log of older versions.** A folder holding
   `.lap/log.jsonl` and no main chunk is read as it is, and readers never
   change it. The first writing command splits it at record boundaries into

@@ -307,10 +307,9 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
     repo_write_gitignore(pr.lapdir); /* a hint there: a failure is harmless */
     for (int32_t i = 0; i <= filled; i++) {
         const HistChunk *k = &pr.hist.v[i];
-        char path[LAP_PATH_MAX];
-        snprintf(path, sizeof path, "%s/%s", here_log, k->name);
-        if (!plat_write_file_atomic(path, theirs + k->start, (size_t)k->size)) {
-            err_out(json, "io_error", "cannot write %s", path);
+        if (!hist_write_chunk(here_log, k->name, theirs + k->start,
+                              (size_t)k->size)) {
+            err_out(json, "io_error", "cannot write %s/%s", here_log, k->name);
             repo_close(&pr);
             return LAP_EXIT_ERR;
         }
@@ -342,11 +341,10 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
     rec.prev = pr.last_hash;
     size_t len;
     char *line = rec_encode(a, &rec, &len);
-    char chunk[64], path[LAP_PATH_MAX];
+    char chunk[64];
     hist_chunk_name(id, 1, chunk);
-    snprintf(path, sizeof path, "%s/%s", here_log, chunk);
     char *with_nl = arena_printf(a, "%s\n", line);
-    if (!plat_write_file_atomic(path, with_nl, len + 1) ||
+    if (!hist_write_chunk(here_log, chunk, with_nl, len + 1) ||
         !hist_write_lineage(here_lap, id)) {
         err_out(json, "io_error", "cannot write the branch record in %s",
                 here_log);
