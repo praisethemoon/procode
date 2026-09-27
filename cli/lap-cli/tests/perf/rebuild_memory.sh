@@ -1,5 +1,6 @@
 #!/bin/sh
-# Peak memory of `lap rebuild` on a generated history.
+# Peak memory of `lap rebuild`, `lap verify` and `lap verify --deep` on a
+# generated history.
 #
 #   tests/perf/rebuild_memory.sh <lap> <folder> [megabytes]
 #
@@ -75,14 +76,22 @@ for path, lines in files.items():
 PY
 cd "$DIR"
 HIST=$(cat .lap/log/*.jsonl | wc -c)
-if [ "$(uname)" = Darwin ]; then
-    PEAK=$( { /usr/bin/time -l "$LAP" rebuild >/dev/null; } 2>&1 | awk '/maximum resident set size/ {print $1}')
-    PEAK_MB=$((PEAK / 1024 / 1024))
-else
-    PEAK=$( { /usr/bin/time -v "$LAP" rebuild >/dev/null; } 2>&1 | awk -F: '/Maximum resident set size/ {print $2}')
-    PEAK_MB=$((PEAK / 1024))
-fi
+# peak_mb <command...>: the command's peak resident set size, in MB
+peak_mb() {
+    if [ "$(uname)" = Darwin ]; then
+        P=$( { /usr/bin/time -l "$@" >/dev/null; } 2>&1 | awk '/maximum resident set size/ {print $1}')
+        echo $((P / 1024 / 1024))
+    else
+        P=$( { /usr/bin/time -v "$@" >/dev/null; } 2>&1 | awk -F: '/Maximum resident set size/ {print $2}')
+        echo $((P / 1024))
+    fi
+}
+REBUILD=$(peak_mb "$LAP" rebuild)
 "$LAP" verify --deep | tail -n 1
+VERIFY=$(peak_mb "$LAP" verify)
+DEEP=$(peak_mb "$LAP" verify --deep)
 BOUND_MB=$((64 + 12 * $(wc -c < .lap/index) / 1024 / 1024))
-echo "history: $((HIST / 1024 / 1024)) MB, rebuild peak: $PEAK_MB MB (bound $BOUND_MB MB)"
-[ "$PEAK_MB" -le "$BOUND_MB" ] || { echo "over the bound" >&2; exit 1; }
+echo "history: $((HIST / 1024 / 1024)) MB, peaks: rebuild $REBUILD MB, verify $VERIFY MB, verify --deep $DEEP MB (bound $BOUND_MB MB)"
+for p in "$REBUILD" "$VERIFY" "$DEEP"; do
+    [ "$p" -le "$BOUND_MB" ] || { echo "over the bound" >&2; exit 1; }
+done

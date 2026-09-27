@@ -326,6 +326,34 @@ static void test_listing(Arena *a) {
                        "chunk main.000002.jsonl does not continue sealed "
                        "chunk main.000001.jsonl") != NULL);
 
+    t_begin("hist_scan: counts records across chunks and follows the chain");
+    HistScan sc;
+    clear_chunks();
+    put_file("main.000001.jsonl", c12);
+    put_file("main.000002.jsonl", c3);
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(hist_scan(a, &h, &sc, err, sizeof err));
+    ASSERT_EQ_I(sc.records, 3);
+    ASSERT_TRUE(sc.chain_ok);
+    ASSERT_EQ_S(sc.last_hash, s[2].hash);
+    ASSERT_EQ_I((int32_t)sc.torn_bytes, 0);
+
+    t_begin("hist_scan: a broken chain, a torn tail and a newer type are "
+            "reported");
+    clear_chunks();
+    put_file("main.000001.jsonl", arena_printf(a, "%s\n", sl[0]));
+    put_file("main.000002.jsonl",
+             arena_printf(a, "%s\n{\"type\":\"annotate\",\"ts\":\"t\","
+                             "\"prev\":\"%s\"}\n{\"type\":\"comm",
+                          sl[2], s[2].hash));
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(hist_scan(a, &h, &sc, err, sizeof err));
+    ASSERT_EQ_I(sc.records, 3);
+    ASSERT_TRUE(!sc.chain_ok);
+    ASSERT_EQ_I((int32_t)sc.torn_bytes, 13); /* {"type":"comm */
+    ASSERT_EQ_I(sc.unknown_n, 1);
+    ASSERT_EQ_S(sc.unknown_type, "annotate");
+
     t_begin("hist: a break inside a sealed chunk blames that chunk");
     BREAK_OF(arena_printf(a, "%s\n%s\n", sl[0], sl[2]), c3, (char *)NULL);
     ASSERT_TRUE(strstr(log.chain_err,

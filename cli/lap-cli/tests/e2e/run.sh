@@ -485,6 +485,16 @@ t "verify --deep detects a missing shadow file"
 rm .lap/shadow/torn.txt
 expect_fail "$LAP" verify --deep
 expect_grep "missing shadow" "$LAP" verify --deep
+# a changed shadow too; and the index-led check finds what the whole-log
+# one does
+SH=$(ls .lap/shadow | grep -v '^torn.txt$' | head -n 1)
+cp ".lap/shadow/$SH" .lap/shadow.bak && printf 'changed\n' >> ".lap/shadow/$SH"
+expect_grep "shadow/log mismatch: $SH" "$LAP" verify --deep
+DEEP=$("$LAP" verify --deep --json)
+cp .lap/index .lap/index.keep && rm .lap/index
+[ "$("$LAP" verify --deep --json)" = "$DEEP" ] || fail "verify --deep differs without the index"
+mv .lap/index.keep .lap/index
+mv .lap/shadow.bak ".lap/shadow/$SH"
 
 t "a writing command heals lost state.json and rebuilds shadows"
 rm .lap/state.json

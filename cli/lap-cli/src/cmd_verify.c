@@ -114,6 +114,233 @@ static WalkAction on_snapshot_file(const char *rel, bool is_dir,
     return WALK_CONT;
 }
 
+/* The files under a folder, as paths relative to it. */
+typedef struct {
+    Arena *a;
+    const char **rels;
+    size_t n, cap;
+} RelList;
+
+static WalkAction collect_rel(const char *rel, bool is_dir,
+                              const PlatStat *st, void *ud) {
+    (void)st;
+    RelList *rl = (RelList *)ud;
+    if (!is_dir && !plat_is_tmp_name(rel)) {
+        ARENA_GROW(rl->a, rl->rels, rl->n, rl->cap, const char *);
+        rl->rels[rl->n++] = arena_strdup(rl->a, rel);
+    }
+    return WALK_CONT;
+}
+
+/* One snapshot line of a file: where it is in the snapshot file and the
+ * entry it was taken at; its content is read only when it is checked. */
+typedef struct {
+    uint64_t off;
+    size_t len;
+    int64_t at;
+} SnapLine;
+
+static int cmp_snap(const void *pa, const void *pb) {
+    const SnapLine *x = (const SnapLine *)pa, *y = (const SnapLine *)pb;
+    return x->at < y->at ? -1 : x->at > y->at;
+}
+
+static void deep_flag(DeepCheck *dc, const char *fmt, const char *rel) {
+    dc->mismatched++;
+    if (dc->json) {
+        if (dc->mismatched > 1)
+            sb_putc(dc->out, ',');
+        json_escape_c(dc->out, rel);
+    } else {
+        sb_printf(dc->out, fmt, rel);
+    }
+}
+
+/* A snapshot file's lines, found by reading it a block at a time: offsets,
+ * lengths and each one's `at` (-1 when it is not a line lap writes). */
+static SnapLine *snap_lines(Arena *a, const char *path, int32_t *n) {
+    enum { BLOCK = 1 << 20 };
+    *n = 0;
+    uint64_t size;
+    if (!plat_file_size(path, &size) || size == 0)
+        return NULL;
+    SnapLine *v = NULL;
+    size_t cap = 0, count = 0;
+    Arena *ba = arena_new(1 << 16);
+    uint64_t line_start = 0;
+    for (uint64_t off = 0; off < size; off += BLOCK) {
+        size_t len = size - off < BLOCK ? (size_t)(size - off) : BLOCK;
+        char *data;
+        arena_reset(ba);
+        if (!plat_read_range(ba, path, off, len, &data))
+            break;
+        for (size_t i = 0; i < len; i++) {
+            if (data[i] != '\n')
+                continue;
+            uint64_t end = off + i;
+            if (end > line_start) {
+                ARENA_GROW(a, v, count, cap, SnapLine);
+                v[count++] = (SnapLine){line_start,
+                                        (size_t)(end - line_start), -1};
+            }
+            line_start = end + 1;
+        }
+    }
+    arena_free(ba);
+    /* each line's `at`, from its first bytes: {"at":N,... */
+    Arena *ha = arena_new(1 << 12);
+    for (size_t i = 0; i < count; i++) {
+        char *head;
+        size_t hl = v[i].len < 40 ? v[i].len : 40;
+        arena_reset(ha);
+        if (plat_read_range(ha, path, v[i].off, hl, &head) && hl > 6 &&
+            memcmp(head, "{\"at\":", 6) == 0)
+            v[i].at = strtoll(head + 6, NULL, 10);
+    }
+    arena_free(ha);
+    *n = (int32_t)count;
+    return v;
+}
+
+/* Whether snapshot s of the file at path holds state l. */
+static bool snap_holds(Arena *a, const char *path, const SnapLine *s,
+                       Lines l) {
+    char *line;
+    char err[128];
+    if (s->at < 0 || !plat_read_range(a, path, s->off, s->len, &line))
+        return false;
+    JVal *j = json_parse(a, line, s->len, err, sizeof err);
+    JVal *content = j ? jobj_get(j, "content") : NULL;
+    if (!content || content->t != J_STR)
+        return false;
+    size_t n;
+    char *joined = join_lines(a, l, &n);
+    return n == content->s.len && memcmp(joined, content->s.ptr, n) == 0;
+}
+
+static bool lines_equal(Arena *a, Lines l, Str bytes) {
+    size_t n;
+    char *joined = join_lines(a, l, &n);
+    return n == bytes.len && memcmp(joined, bytes.ptr, n) == 0;
+}
+
+/* --deep through the index: each file replayed once along its own chain,
+ * in an arena of its own (compacted as it grows), its snapshots checked on
+ * the way and its final state against its shadow. Memory is one file's,
+ * not the history's, and the results are the whole-log check's. */
+static void deep_indexed(Arena *a, Repo *repo, Idx *idx, DeepCheck *dc) {
+    enum { COMPACT_EVERY = 256 };
+    char shadow_root[LAP_PATH_MAX], snapdir[LAP_PATH_MAX];
+    snprintf(shadow_root, sizeof shadow_root, "%s/%s", repo->lapdir,
+             LAP_SHADOW_NAME);
+    snprintf(snapdir, sizeof snapdir, "%s/snapshots", repo->lapdir);
+    /* files with a shadow, and what their check found */
+    RelList shadows = {a, NULL, 0, 0};
+    plat_walk(a, shadow_root, collect_rel, &shadows);
+    StrSet with_shadow, live_ok, live;
+    strset_init(&with_shadow, a);
+    strset_init(&live_ok, a);
+    strset_init(&live, a);
+    for (size_t i = 0; i < shadows.n; i++)
+        strset_add(&with_shadow, shadows.rels[i]);
+    for (int32_t fid = 0; fid < idx->npaths; fid++) {
+        const char *rel = idx->paths[fid];
+        Arena *fa = arena_new(1 << 16);
+        char spath[LAP_PATH_MAX];
+        snprintf(spath, sizeof spath, "%s/%s.jsonl", snapdir, rel);
+        int32_t ns;
+        SnapLine *snaps = snap_lines(fa, spath, &ns);
+        if (ns > 1)
+            qsort(snaps, (size_t)ns, sizeof *snaps, cmp_snap);
+        int64_t *chain = NULL;
+        size_t n = 0, cap = 0;
+        for (int64_t e = idx->heads[fid].head; e >= 0;
+             e = idx->v[e].prev_same_file) {
+            ARENA_GROW(a, chain, n, cap, int64_t);
+            chain[n++] = e;
+        }
+        Lines cur = {NULL, 0, true};
+        bool exists = false, fetched_all = true;
+        int32_t s = 0;
+        for (size_t i = n; i > 0; i--) {
+            int64_t e = chain[i - 1];
+            /* snapshots taken before this record see the state so far */
+            for (; s < ns && snaps[s].at < e; s++) {
+                dc->checked++;
+                if (!exists || !snap_holds(fa, spath, &snaps[s], cur))
+                    deep_flag(dc, "  stale snapshot: %s\n", rel);
+            }
+            Rec rec;
+            if (!idx_fetch(fa, repo, idx, e, &rec)) {
+                fetched_all = false;
+                break;
+            }
+            rec_apply(fa, &cur, &rec);
+            exists = idx->v[e].op != IDX_OP_DELETE;
+            if ((n - i + 1) % COMPACT_EVERY == 0) {
+                /* the snapshot list moves along */
+                Arena *fresh = arena_new(1 << 16);
+                cur = lines_copy(fresh, cur);
+                SnapLine *moved = (SnapLine *)arena_alloc(
+                    fresh, (size_t)(ns ? ns : 1) * sizeof(SnapLine));
+                memcpy(moved, snaps, (size_t)ns * sizeof(SnapLine));
+                snaps = moved;
+                arena_free(fa);
+                fa = fresh;
+            }
+        }
+        for (; s < ns; s++) { /* taken at or after the last record */
+            dc->checked++;
+            if (!exists || !fetched_all ||
+                !snap_holds(fa, spath, &snaps[s], cur))
+                deep_flag(dc, "  stale snapshot: %s\n", rel);
+        }
+        if (exists && fetched_all) {
+            strset_add(&live, rel);
+            char *sdata;
+            size_t slen;
+            snprintf(spath, sizeof spath, "%s/%s", shadow_root, rel);
+            if (plat_read_file(fa, spath, &sdata, &slen) &&
+                lines_equal(fa, cur, (Str){sdata, slen}))
+                strset_add(&live_ok, rel);
+        }
+        arena_free(fa);
+    }
+    /* every shadow must be a live file's final state */
+    for (size_t i = 0; i < shadows.n; i++) {
+        dc->checked++;
+        if (!strset_has(&live_ok, shadows.rels[i]))
+            deep_flag(dc, "  shadow/log mismatch: %s\n", shadows.rels[i]);
+    }
+    /* and every live file must have one */
+    for (int32_t fid = 0; fid < idx->npaths; fid++) {
+        const char *rel = idx->paths[fid];
+        if (strset_has(&live, rel) && !strset_has(&with_shadow, rel)) {
+            dc->checked++;
+            deep_flag(dc, "  missing shadow: %s\n", rel);
+        }
+    }
+    /* snapshots of files the history does not know */
+    RelList snapfiles = {a, NULL, 0, 0};
+    plat_walk(a, snapdir, collect_rel, &snapfiles);
+    for (size_t i = 0; i < snapfiles.n; i++) {
+        size_t len = strlen(snapfiles.rels[i]);
+        if (len < 7 || strcmp(snapfiles.rels[i] + len - 6, ".jsonl") != 0)
+            continue;
+        char *rel = arena_strndup(a, snapfiles.rels[i], len - 6);
+        if (idx_file_id(idx, rel) >= 0)
+            continue;
+        char path[LAP_PATH_MAX];
+        snprintf(path, sizeof path, "%s/%s", snapdir, snapfiles.rels[i]);
+        int32_t ns;
+        snap_lines(a, path, &ns);
+        for (int32_t k = 0; k < ns; k++) {
+            dc->checked++;
+            deep_flag(dc, "  stale snapshot: %s\n", rel);
+        }
+    }
+}
+
 int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
     static const char *const bool_flags[] = {"--json", "--deep", NULL};
     bool json = has_flag(argc, argv, NULL, "--json");
@@ -127,16 +354,49 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         err_out(json, repo_error_code(), "%s", err);
         return LAP_EXIT_ERR;
     }
-    RecLog log;
-    if (!repo_log_load(a, &repo, &log, err, sizeof err)) {
+    /* A pass a chunk at a time answers a sound history; the whole log is
+     * read only to name a broken chain's blame, or for --deep where no
+     * index can lead the replay. */
+    HistScan scan;
+    if (!hist_scan(a, &repo.hist, &scan, err, sizeof err)) {
         err_out(json, "log_unreadable", "%s", err);
         return LAP_EXIT_ERR;
+    }
+    Idx *ix = deep && scan.chain_ok ? idx_ready(a, &repo) : NULL;
+    bool whole = !scan.chain_ok || (deep && !ix);
+    RecLog log;
+    memset(&log, 0, sizeof log);
+    if (whole) {
+        if (!repo_log_load(a, &repo, &log, err, sizeof err)) {
+            err_out(json, "log_unreadable", "%s", err);
+            return LAP_EXIT_ERR;
+        }
+    } else {
+        log.count = scan.records;
+        log.chain_ok = true;
+        log.chain_break_index = -1;
+        log.torn_tail = scan.torn_bytes > 0;
+        log.torn_bytes = scan.torn_bytes;
+        log.unknown_n = scan.unknown_n;
+        log.unknown_type = scan.unknown_type;
+        if (scan.unknown_n > 0)
+            rec_note_newer(scan.unknown_type);
     }
 
     StrBuf deep_out;
     sb_init(&deep_out, a);
     int32_t checked = 0, mismatched = 0;
-    if (deep) {
+    if (deep && !whole) {
+        DeepCheck dc;
+        memset(&dc, 0, sizeof dc);
+        dc.a = a;
+        dc.repo = &repo;
+        dc.out = &deep_out;
+        dc.json = json;
+        deep_indexed(a, &repo, ix, &dc);
+        checked = dc.checked;
+        mismatched = dc.mismatched;
+    } else if (deep) {
         DeepCheck dc;
         memset(&dc, 0, sizeof dc);
         dc.a = a;
@@ -202,9 +462,17 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
             continue;
         Repo other = repo;
         RecLog olog;
+        memset(&olog, 0, sizeof olog);
+        HistScan oscan;
         bool read = hist_open_lineage(a, repo.lapdir, lineages[i],
                                       &other.hist, err, sizeof err) &&
-                    repo_log_load(a, &other, &olog, err, sizeof err);
+                    hist_scan(a, &other.hist, &oscan, err, sizeof err);
+        if (read && oscan.chain_ok) {
+            olog.count = oscan.records;
+            olog.chain_ok = true;
+        } else if (read) { /* the whole branch only to name its break */
+            read = repo_log_load(a, &other, &olog, err, sizeof err);
+        }
         bool chain = read && olog.chain_ok;
         others_ok = others_ok && chain;
         const char *name = read ? other.hist.name : lineages[i];

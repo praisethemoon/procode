@@ -1038,3 +1038,54 @@ void hist_name_break(const Hist *h, const char *data, RecLog *log) {
                  was);
     }
 }
+
+bool hist_scan(Arena *a, const Hist *h, HistScan *out, char *err,
+               size_t errsz) {
+    memset(out, 0, sizeof *out);
+    out->chain_ok = true;
+    snprintf(out->last_hash, sizeof out->last_hash, "%s", LAP_HASH_ZERO);
+    Arena *ca = arena_new(1 << 16), *ra = arena_new(1 << 16);
+    bool ok = true;
+    for (int32_t k = 0; ok && k < h->n; k++) {
+        if (h->v[k].size == 0)
+            continue;
+        arena_reset(ca);
+        char *data;
+        size_t len = (size_t)h->v[k].size;
+        if (!hist_read(ca, h, h->v[k].start, len, &data)) {
+            snprintf(err, errsz, "cannot read %s", h->v[k].name);
+            ok = false;
+            break;
+        }
+        for (size_t start = 0; start < len;) {
+            const char *nl = memchr(data + start, '\n', len - start);
+            if (!nl) { /* only the open chunk can end mid-line */
+                out->torn_bytes = len - start;
+                break;
+            }
+            size_t n = (size_t)(nl - (data + start));
+            if (n > 0) {
+                arena_reset(ra);
+                Rec rec;
+                char derr[128];
+                if (!rec_decode(ra, data + start, n, &rec, derr,
+                                sizeof derr)) {
+                    snprintf(err, errsz, "%s: %s", h->v[k].name, derr);
+                    ok = false;
+                    break;
+                }
+                if (strcmp(rec.prev, out->last_hash) != 0)
+                    out->chain_ok = false;
+                if (rec.type == REC_UNKNOWN && out->unknown_n++ == 0)
+                    out->unknown_type = arena_strdup(a, rec.name);
+                snprintf(out->last_hash, sizeof out->last_hash, "%s",
+                         rec.hash);
+                out->records++;
+            }
+            start += n + 1;
+        }
+    }
+    arena_free(ca);
+    arena_free(ra);
+    return ok;
+}

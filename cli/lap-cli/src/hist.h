@@ -110,6 +110,20 @@ int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out);
 bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
                        Rec *out, char *err, size_t errsz);
 
+/* What one pass over a history finds, a chunk at a time and each record in
+ * a scratch arena, so it costs a chunk's memory, not the history's. */
+typedef struct {
+    int32_t records;
+    bool chain_ok;
+    uint64_t torn_bytes;      /* an unterminated final line, dropped */
+    int32_t unknown_n;        /* records of a type a newer lap wrote */
+    const char *unknown_type; /* the first one's, in the caller's arena */
+    char last_hash[65];
+} HistScan;
+/* False only when a chunk cannot be read or a record parsed (err says). */
+bool hist_scan(Arena *a, const Hist *h, HistScan *out, char *err,
+               size_t errsz);
+
 /* Names, in log->chain_err, the chunk to blame for the chain break that
  * rec_log_parse found in h's bytes (data, as hist_read_all read them). */
 void hist_name_break(const Hist *h, const char *data, RecLog *log);
