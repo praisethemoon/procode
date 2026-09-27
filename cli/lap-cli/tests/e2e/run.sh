@@ -1448,6 +1448,7 @@ expect_grep "0 mismatch" "$LAP" verify --deep
 t "a plain-copy branch's chunks are copied by lap merge and outlive its folder"
 cd "$WORK/m2-p" || exit 1
 cp -R "$WORK/m2-p" "$WORK/m5-w" && cd "$WORK/m5-w" || exit 1
+rm -rf "$WORK/m5-w/.git" # a plain copy: no git on this side
 expect_ok "$LAP" branch start copy --from ../m2-p
 ID5=$(cat .lap/lineage)
 "$LAP" session start "copy work" --branch copy >/dev/null 2>&1
@@ -1458,7 +1459,7 @@ cd "$WORK/m2-p" || exit 1
 [ -e ".lap/log/$ID5.000001.jsonl" ] && fail "the copy's chunk was here before the merge"
 expect_grep "adopted 1 of 1" "$LAP" merge copy
 [ -e ".lap/log/$ID5.000001.jsonl" ] || fail "lap merge did not copy the branch's chunk"
-[ -e "$WORK/m5-w/.lap/log/$ID5.000002.jsonl" ] || fail "lap merge did not seal the branch's chunk"
+[ -e "$WORK/m5-w/.lap/log/$ID5.000002.jsonl" ] && fail "lap merge sealed the branch's chunk"
 rm -rf "$WORK/m5-w"
 expect_grep "clean" "$LAP" status
 expect_grep "0 mismatch" "$LAP" verify --deep
@@ -1583,6 +1584,47 @@ expect_grep '"session":"S2"' "$LAP" log --session b/S1 --json
 t "lap merge refuses what it cannot merge"
 cd "$BP" && expect_grep "branch_not_found" "$LAP" merge nothing-by-that-name --json
 cd "$BW" && expect_grep "merge_in_branch" "$LAP" merge b --json
+cd "$WORK"
+
+t "lap merge adopts only what git merge brought, so .lap/log never conflicts"
+merge_pair m12; BP="$WORK/m12-p"; BW="$WORK/m12-w"
+cd "$BW" && "$LAP" session start "staged work" --branch b >/dev/null 2>&1
+in_branch f.txt 's/^line 2$/B1/' "B1 edits line 2"
+cd "$BW" && git add -A && git commit -qm G1 >/dev/null
+cd "$BP" && git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge G1"
+in_branch f.txt 's/^line 5$/B2/' "B2 edits line 5"
+cd "$BW" && git add -A && git commit -qm G2 >/dev/null
+in_branch f.txt 's/^line 9$/B3/' "B3 edits line 9" # not in git yet
+cd "$BP" || exit 1
+expect_grep "adopted 1 of 1" "$LAP" merge b
+expect_grep "clean" "$LAP" status # no B2 or B3 claimed without their code
+git add -A && git commit -qm "lap merge of G1" >/dev/null
+git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge G2 conflicted"
+expect_grep "adopted 1 of 1" "$LAP" merge b
+expect_grep "B2 edits line 5" "$LAP" log -n 2 --json
+expect_not_grep "B3 edits line 9" "$LAP" log --json
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$BW" && expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
+t "lap merge before git merge is git_merge_first; --copy-from-folder takes the folder's"
+merge_pair m13; BP="$WORK/m13-p"; BW="$WORK/m13-w"
+cd "$BW" && "$LAP" session start "early work" --branch b >/dev/null 2>&1
+in_branch g.txt 's/^g2$/early/' "changes g2 before any git merge"
+ID13=$(cat "$BW/.lap/lineage")
+cd "$BP" || exit 1
+SUM13=$(ls .lap/log; cat .lap/log/*.jsonl | cksum)
+expect_grep "git_merge_first" "$LAP" merge b --json
+expect_grep "git_merge_first" "$LAP" merge b --dry-run --json
+[ "$(ls .lap/log; cat .lap/log/*.jsonl | cksum)" = "$SUM13" ] ||
+    fail "git_merge_first wrote something"
+expect_grep "would adopt 1 of 1" "$LAP" merge b --dry-run --copy-from-folder
+[ -e ".lap/log/$ID13.000001.jsonl" ] && fail "a dry run copied the chunk"
+expect_grep "adopted 1 of 1" "$LAP" merge b --copy-from-folder
+[ -e ".lap/log/$ID13.000001.jsonl" ] || fail "--copy-from-folder did not copy the chunk"
+[ -e "$BW/.lap/log/$ID13.000002.jsonl" ] && fail "lap merge sealed the branch's chunk"
+expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
 t "a read-only parent refuses the start and nothing is made here"

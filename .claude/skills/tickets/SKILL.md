@@ -70,6 +70,10 @@ The lap skill covers lap itself; this is the loop around it.
   which ids they should delete in the editor.
 - **Never delete computed paths in shell** (`rm -rf "$X"`). Use the
   scratchpad for experiments and leave it.
+- **Bringing a branch folder's work back:** in the parent folder, commit
+  its own work, `git merge` the branch, then `lap merge <branch>` — in that
+  order. On `git_merge_first`, run the `git merge` you skipped and merge
+  again; never use `--copy-from-folder` unless the user asks for it.
 - **The CLIs are the user's to build.** Do not add tickets for CLI
   packaging or releases unless asked.
 - Report failures as failures: a skipped test, an unverified claim, a

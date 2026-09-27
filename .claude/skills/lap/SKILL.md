@@ -162,7 +162,11 @@ lap branch start parser --from ../proj         # its own line of history
   wrong name is refused and the error names the folder's branch: it means
   you may be in the wrong folder — check before retrying.
 - **Merging back**, in the parent folder: commit its own work, `git merge`
-  the branch, then `lap merge <branch>` (try `--dry-run` first). lap adopts
+  the branch, then `lap merge <branch>` (try `--dry-run` first) — always in
+  that order. lap adopts the history `git merge` brought; on
+  `git_merge_first` run the `git merge` you skipped, then `lap merge`
+  again. Never reach for `--copy-from-folder` unless the user asks for
+  it. lap adopts
   every branch commit it can place, with a `from` link to the original; a
   file where the branch's work conflicts with the parent's stops, and what
   is left shows in `lap status` — commit it as usual, citing the branch

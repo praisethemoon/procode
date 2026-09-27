@@ -89,6 +89,25 @@ bool session_resolve(Arena *a, Repo *r, const char *ref, const char **sid,
  * "S<n>". Unique wherever it is copied to. */
 const char *session_ref(Arena *a, const char *lineage, const char *sid);
 
+/* One of a branch's own chunks, as lap merge reads it. */
+typedef struct {
+    char name[64];
+    char *data; /* complete lines only */
+    size_t len;
+    bool write; /* not here as read: missing here, or a shorter copy */
+} OwnChunk;
+/* A branch's own chunks, each taken from this folder's copy (lapdir) when
+ * there is one. Under git that copy is what git merge brought, so the
+ * history lap merge adopts is the one whose code is here, and a file git
+ * tracks is never rewritten. The branch folder (from; NULL when
+ * unreachable) fills in only when fill is set — a folder without git, or
+ * --copy-from-folder — and then also extends a copy here that is a byte
+ * prefix of its own, since without git nothing else brings the rest. Stops
+ * at the first chunk neither side has. */
+bool own_chunks(Arena *a, const char *lapdir, const char *from,
+                const char *id, bool fill, OwnChunk **out, int32_t *n,
+                char *err, size_t errsz);
+
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);
 

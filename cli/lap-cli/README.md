@@ -178,6 +178,31 @@ of it, `lap rebuild` restores it; reads stay correct (slower) even without
 it. `.lapignore` (gitignore-like subset) controls what is tracked. Details
 in [SPEC.md](SPEC.md).
 
+## Branches and merging
+
+Parallel work goes in another folder — usually a git worktree — made a
+lap branch of the first: `lap branch start <name> --from <parent folder>`.
+When the work is done, merge it back in the parent folder, in this order:
+
+1. commit the parent's own pending work (lap and git);
+2. `git merge` the branch's git branch — this brings its code **and** its
+   lap history (the chunks in `.lap/log/`);
+3. `lap merge <branch>` (try `--dry-run` first).
+
+lap adopts the branch history that `git merge` brought, as far as it
+reaches, and never rewrites those files — so history and code agree, and
+the next `git merge` of the branch never conflicts on `.lap/log/`. Work the
+branch has not git-committed yet is adopted by the next `git merge` +
+`lap merge`.
+
+**`git_merge_first`** means step 2 was skipped: the branch folder is a git
+checkout and none of its history is here yet. Run `git merge`, then
+`lap merge` again. `--copy-from-folder` takes the history from the branch
+folder anyway; use it only when you want the history before the code,
+knowing `lap status` will show the difference until the code arrives.
+Branches in plain folders without git are read from their folder directly.
+SPEC.md (Branches) has the details: conflicts, stopped files, the registry.
+
 ## Limitations
 
 Worth knowing before you rely on it.

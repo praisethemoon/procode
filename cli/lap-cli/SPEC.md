@@ -338,12 +338,35 @@ folder, `lap merge <branch> [--dry-run]`.
    them); neither → `branch_not_found`. Run in a branch folder →
    `merge_in_branch`. The branch record's base must be in this folder's
    history, else `unrelated_history`.
-2. **Its chunks.** When the registered folder is reachable (it exists and
-   its `.lap/lineage` names the branch), lap seals the branch's open chunk
-   under the branch's lock, as a branch start seals its parent's, and
-   copies the branch's chunks here. So the originals stay readable after the
-   folder is gone, whether or not git carried them, and every copy is final:
-   a later `git merge` of the branch finds the same file on both sides.
+2. **Its chunks: the ones here first.** lap reads the branch's history
+   from this folder's copies of its chunks, as they are: `git merge`
+   brought them (or an earlier merge wrote them). Adoption runs as far as
+   those copies reach, which under git is exactly the history whose code
+   `git merge` brought, so history and files agree at every step; the next
+   `git merge` and `lap merge` adopt the rest. lap never rewrites a copy
+   git brought, so the next `git merge` finds that file unchanged on this
+   side and never conflicts on `.lap/log/`. Nothing in the branch folder is
+   sealed or written.
+
+   The registered folder (reachable: it exists and its `.lap/lineage`
+   names the branch) fills in only what is not here:
+   - **A git checkout** (the branch folder has a `.git` entry, a directory
+     or a worktree's file; lap never runs git): with no chunk of the branch
+     here, `lap merge` refuses with **`git_merge_first`** and writes
+     nothing — run `git merge` first. Taken from the folder, the history
+     would run ahead of the code, and the next `git merge` would conflict
+     on the copies. **`--copy-from-folder`** takes the folder's chunks
+     anyway, for a user who wants the history before the code, knowingly.
+   - **No git** (plain copies): nothing brings the history by itself, so
+     lap takes from the folder every chunk missing here, and extends a copy
+     here that is a byte prefix of the folder's. History may then run ahead
+     of files the user has not copied back yet; `lap status` shows that
+     difference.
+
+   Chunks taken from the folder are written here once every check has
+   passed (a dry run writes none), so the history stays readable after the
+   folder is gone. Only complete lines are taken: a line the branch is
+   still writing waits for the next merge.
 3. **Placing, file by file.** A merge takes the branch's records after the
    last merge's `head` (after the branch record, the first time). For each
    file those commits touch, the three versions are the branch's version at
@@ -742,14 +765,17 @@ with the first commit not adopted in each (`[{file, at}]`).
 branch (else `not_that_branch`). Both are writers; an entry not in the
 registry is `unknown_branch`.
 
-### `lap merge <branch> [--dry-run]`
-Adopts a branch's history into this folder's (§Branches → Merging). Prints
+### `lap merge <branch> [--dry-run] [--copy-from-folder]`
+Adopts a branch's history into this folder's (§Branches → Merging).
+`--copy-from-folder` takes a git checkout's missing chunks from its folder
+instead of refusing with `git_merge_first`. Prints
 what was adopted of how many commits, with the new ids, then each stopped
 file with the first commit not adopted and why; `nothing new to adopt` when
 the branch has nothing after the last merge. `--json` returns `dry_run`,
 `branch`, `name`, `new`, `adopted`, `left`, `head`, `stopped`
 (`[{file, at, why}]`) and `commits` (`[{id, from}]`). Errors:
-`branch_not_found`, `merge_in_branch`, `unrelated_history`, `log_broken`.
+`branch_not_found`, `merge_in_branch`, `unrelated_history`, `log_broken`,
+`git_merge_first`.
 
 ### `lap rebuild [--verify]`
 Deletes and reconstructs every derived cache from the log — the executable

@@ -56,45 +56,82 @@ static Lines file_at(Arena *a, const RecLog *log, const char *file,
     return l;
 }
 
-/* Seals the branch folder's open chunk under its lock, then copies the
- * branch's own chunks here: the originals stay readable after the folder
- * is gone, and each copy is final, so a later git merge of the branch
- * finds the same file on both sides. */
-static bool bring_chunks(Arena *a, const Repo *r, const char *path,
-                         const char *id, char *err, size_t errsz) {
-    Repo br;
-    if (!repo_open_at(a, &br, path, true, err, errsz))
+/* A branch folder under git: it has a .git entry (a directory, or the file
+ * a worktree holds). lap never runs git; this is the whole check. */
+static bool folder_is_git(const char *path) {
+    char g[LAP_PATH_MAX];
+    snprintf(g, sizeof g, "%s/.git", path);
+    return plat_is_dir(g) || plat_is_file(g);
+}
+
+bool own_chunks(Arena *a, const char *lapdir, const char *from,
+                const char *id, bool fill, OwnChunk **out, int32_t *n,
+                char *err, size_t errsz) {
+    Hist here, there;
+    memset(&there, 0, sizeof there);
+    if (!hist_open(a, lapdir, id, &here, err, errsz))
         return false;
-    bool ok = hist_seal(a, &br.hist, err, errsz);
-    for (int32_t i = 0; ok && i < br.hist.n; i++) {
-        const HistChunk *k = &br.hist.v[i];
-        if (strcmp(k->lineage, id) != 0 || k->size == 0)
-            continue;
-        char *data;
-        char dst[LAP_PATH_MAX];
-        snprintf(dst, sizeof dst, "%s/%s/%s", r->lapdir, LAP_LOG_DIR,
-                 k->name);
-        ok = hist_read(a, &br.hist, k->start, (size_t)k->size, &data) &&
-             plat_mkdirs(r->hist.dir) &&
-             plat_write_file_atomic(dst, data, (size_t)k->size);
-        if (!ok)
-            snprintf(err, errsz, "cannot copy %s into %s", k->name,
-                     r->hist.dir);
+    if (from && fill) {
+        char flap[LAP_PATH_MAX];
+        snprintf(flap, sizeof flap, "%s/%s", from, LAP_DIR);
+        if (!hist_open(a, flap, id, &there, err, errsz))
+            return false;
     }
-    repo_close(&br);
-    return ok;
+    int32_t max = here.n > there.n ? here.n : there.n;
+    OwnChunk *v =
+        (OwnChunk *)arena_alloc0(a, (size_t)(max ? max : 1) * sizeof(OwnChunk));
+    int32_t k = 0;
+    for (; k < max; k++) {
+        char path[LAP_PATH_MAX];
+        char *hd = NULL, *td = NULL;
+        size_t hl = 0, tl = 0;
+        bool has_h = k < here.n, has_t = k < there.n;
+        if (has_h) {
+            hist_chunk_path(&here, k, path, sizeof path);
+            if (!plat_read_file(a, path, &hd, &hl)) {
+                snprintf(err, errsz, "cannot read %s", path);
+                return false;
+            }
+        }
+        if (has_t) {
+            hist_chunk_path(&there, k, path, sizeof path);
+            if (!plat_read_file(a, path, &td, &tl)) {
+                snprintf(err, errsz, "cannot read %s", path);
+                return false;
+            }
+            while (tl > 0 && td[tl - 1] != '\n')
+                tl--; /* a line the branch is still writing */
+        }
+        OwnChunk *c = &v[k];
+        hist_chunk_name(id, k + 1, c->name);
+        if (has_h && !(has_t && tl > hl && memcmp(td, hd, hl) == 0)) {
+            c->data = hd;
+            c->len = hl;
+        } else if (has_t && tl > 0) {
+            c->data = td;
+            c->len = tl;
+            c->write = true;
+        } else {
+            break;
+        }
+    }
+    *out = v;
+    *n = k;
+    return true;
 }
 
 int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
-    static const char *const bool_flags[] = {"--json", "--dry-run", NULL};
+    static const char *const bool_flags[] = {"--json", "--dry-run",
+                                             "--copy-from-folder", NULL};
     bool json = has_flag(argc, argv, NULL, "--json");
     if (!flags_known(argc, argv, NULL, bool_flags))
         return LAP_EXIT_ERR;
     bool dry = has_flag(argc, argv, NULL, "--dry-run");
+    bool copy = has_flag(argc, argv, NULL, "--copy-from-folder");
     const char *key = positional_arg(argc, argv, NULL, 0);
     if (!key || positional_arg(argc, argv, NULL, 1)) {
         err_out(json, "usage", "usage: lap merge <branch> [--dry-run] "
-                               "[--json]");
+                               "[--copy-from-folder] [--json]");
         return LAP_EXIT_ERR;
     }
     Repo repo;
@@ -126,34 +163,75 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 key, repo.hist.dir);
         goto done;
     }
-    if (reachable && !dry &&
-        !bring_chunks(a, &repo, ent->path, id, err, sizeof err)) {
-        err_out(json, "io_error", "%s", err);
+    /* The branch's own chunks, this folder's copies first. A git checkout's
+     * history comes here through git merge, never from its folder unless
+     * the user asks: taken earlier, it would run ahead of the code, and the
+     * next git merge would conflict on the copies. */
+    bool git = reachable && folder_is_git(ent->path);
+    OwnChunk *own;
+    int32_t nown;
+    if (!own_chunks(a, repo.lapdir, reachable ? ent->path : NULL, id,
+                    reachable && (!git || copy), &own, &nown, err,
+                    sizeof err)) {
+        err_out(json, "log_unreadable", "%s", err);
         goto done;
     }
-    Hist bh;
-    bool opened;
-    if (reachable && dry) { /* a dry run reads the folder, copying nothing */
-        char lapdir[LAP_PATH_MAX];
-        snprintf(lapdir, sizeof lapdir, "%s/%s", ent->path, LAP_DIR);
-        opened = hist_open_folder(a, lapdir, &bh, err, sizeof err);
-    } else {
-        opened = hist_open_lineage(a, repo.lapdir, id, &bh, err, sizeof err);
+    if (nown == 0 && git && !copy) {
+        err_out(json, "git_merge_first",
+                "branch %s's history has not come through git yet: no chunk "
+                "of it is in %s. Run git merge on its git branch first, then "
+                "lap merge",
+                key, repo.hist.dir);
+        goto done;
     }
-    if (!opened) {
+    if (nown == 0) {
         err_out(json, "branch_not_found",
                 "branch %s is registered but its history is nowhere to be "
-                "read: %s",
-                key, err);
+                "read: no chunk of it is in %s, nor in its folder %s",
+                key, repo.hist.dir, ent ? ent->path : "(unknown)");
         goto done;
     }
 
+    /* Its history as one stream: its parent's chunks up to its base chunk,
+     * as its branch record (its first line) names them, then its own. */
+    Rec first;
+    const char *nl = memchr(own[0].data, '\n', own[0].len);
+    if (!nl ||
+        !rec_decode(a, own[0].data, (size_t)(nl - own[0].data), &first, err,
+                    sizeof err) ||
+        first.type != REC_BRANCH || strcmp(first.id, id) != 0) {
+        err_out(json, "log_broken",
+                "branch %s's history does not open with its branch record",
+                key);
+        goto done;
+    }
+    Hist ph;
+    char *pdata;
+    if (!hist_open(a, repo.lapdir, first.parent, &ph, err, sizeof err)) {
+        err_out(json, "log_unreadable", "%s", err);
+        goto done;
+    }
+    if (first.base_chunk < 1 || first.base_chunk > ph.n) {
+        err_out(json, "unrelated_history",
+                "branch %s did not start from this folder's history", key);
+        goto done;
+    }
+    const HistChunk *bc = &ph.v[first.base_chunk - 1];
+    if (!hist_read(a, &ph, 0, (size_t)(bc->start + bc->size), &pdata)) {
+        err_out(json, "log_unreadable", "cannot read %s", ph.dir);
+        goto done;
+    }
+    StrBuf all;
+    sb_init(&all, a);
+    sb_putn(&all, pdata, (size_t)(bc->start + bc->size));
+    for (int32_t k = 0; k < nown; k++)
+        sb_putn(&all, own[k].data, own[k].len);
+    size_t blen = all.len;
+    char *bdata = sb_finish(&all);
+
     /* Both histories, and the branch's record. */
     RecLog plog, blog;
-    char *bdata;
-    size_t blen;
     if (!repo_log_load(a, &repo, &plog, err, sizeof err) ||
-        !hist_read_all(a, &bh, &bdata, &blen) ||
         !rec_log_parse(a, bdata, blen, NULL, NULL, &blog, err, sizeof err)) {
         err_out(json, "log_unreadable", "%s", err);
         goto done;
@@ -278,6 +356,22 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             stop_at[nstop] = mine[p.placed]->hash;
             stop_why[nstop] = p.why;
             nstop++;
+        }
+    }
+
+    /* Chunks read from the branch folder are kept here, so the history
+     * stays readable once that folder is gone — written only now, with
+     * every check passed. */
+    for (int32_t k = 0; !dry && k < nown; k++) {
+        if (!own[k].write)
+            continue;
+        char dst[LAP_PATH_MAX];
+        snprintf(dst, sizeof dst, "%s/%s", repo.hist.dir, own[k].name);
+        if (!plat_mkdirs(repo.hist.dir) ||
+            !plat_write_file_atomic(dst, own[k].data, own[k].len)) {
+            err_out(json, "io_error", "cannot copy %s into %s", own[k].name,
+                    repo.hist.dir);
+            goto done;
         }
     }
 

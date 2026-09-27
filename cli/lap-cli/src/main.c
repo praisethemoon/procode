@@ -44,6 +44,8 @@ static const char *USAGE =
     "                             code here: adopt its commits into this\n"
     "                             history; what cannot be placed is left\n"
     "                             to commit by hand\n"
+    "     [--copy-from-folder]    take a git branch's history from its\n"
+    "                             folder before git merge brought it\n"
     "\n"
     "global:\n"
     "  --color=auto|always|never  colour output (auto: only at a terminal;\n"
