@@ -62,10 +62,10 @@ static void test_markdown(Arena *a) {
     ASSERT_EQ_S(c.v[1].heading, "Second");
     /* The second chunk must actually contain its own text, which is what the
      * span is for. */
-    ASSERT_TRUE(memmem(doc + c.v[1].start, c.v[1].end - c.v[1].start, "gamma",
-                       5) != NULL);
-    ASSERT_TRUE(memmem(doc + c.v[0].start, c.v[0].end - c.v[0].start, "gamma",
-                       5) == NULL);
+    ASSERT_TRUE(str_find(str_n(doc + c.v[1].start, c.v[1].end - c.v[1].start),
+                         str_c("gamma")) >= 0);
+    ASSERT_TRUE(str_find(str_n(doc + c.v[0].start, c.v[0].end - c.v[0].start),
+                         str_c("gamma")) < 0);
 
     t_begin("chunk: a hash inside a fence is a comment, not a heading");
     /* The case that makes a naive line-scanner wrong. A shell comment in a
@@ -175,7 +175,8 @@ static void test_hygiene(void) {
     ASSERT_TRUE(with_json > 0);
     if (with_json) {
         const Chunk *j = &c.v[with_json - 1];
-        ASSERT_TRUE(memmem(md + j->start, j->end - j->start, "hybrid", 6) != NULL);
+        ASSERT_TRUE(str_find(str_n(md + j->start, j->end - j->start),
+                             str_c("hybrid")) >= 0);
     }
     ASSERT_TRUE(c.n <= 2);
     spans_are_sane(&c, strlen(md), "tiny siblings");
