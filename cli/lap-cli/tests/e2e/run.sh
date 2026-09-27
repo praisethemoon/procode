@@ -1418,6 +1418,13 @@ printf 'tool state\n' > state.jsonl
 expect_grep "Never recorded by lap there (1): state.jsonl" "$LAP" branch start --from ../bp
 expect_grep "Commit them in the parent (lap commit <file>), or add them to .lapignore there" "$LAP" branch start --from ../bp
 rm state.jsonl
+# a file lap cannot read is never taken for equal
+if [ "$(id -u)" != 0 ]; then
+    chmod 000 g.txt
+    expect_grep "Unreadable here, so not compared (1): g.txt" "$LAP" branch start --from ../bp
+    expect_grep '"error":"not_clean"' "$LAP" branch start --from ../bp --json
+    chmod 644 g.txt
+fi
 [ -e .lap/lineage ] && fail "a refused start left a lineage file"
 grep -q '"path":"'"$WORK/bx"'"' "$WORK/bp/.lap/branches.json" && fail "a refused start was registered"
 cp "$WORK/bp/f.txt" f.txt

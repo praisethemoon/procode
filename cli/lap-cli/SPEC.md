@@ -375,7 +375,8 @@ holding the parent's lock throughout:
    did: commit them in the parent, or add them to its `.lapignore`) and
    the files changed from what it recorded, with their usual causes: a
    worktree checked out from a git commit older than lap's history, and
-   files lap tracks that git ignores.
+   files lap tracks that git ignores. A file lap cannot read here (no
+   permission, over 64 MB) is listed as unreadable, never taken for equal.
 3. **Sealing.** The parent's open chunk is sealed (its next chunk created,
    empty). The chunk this folder copies is then final on both sides, and a
    later `git merge` finds it unchanged. An open chunk that is still empty
