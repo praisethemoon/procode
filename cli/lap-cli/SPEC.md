@@ -1005,6 +1005,11 @@ segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git`
   the log tail; the next **writer** detects the mismatch and heals —
   rebuilding counters, the active session, *and the entire shadow tree*
   from a full replay. Readers that hit the mismatch heal in memory only.
+- **Names are durable before anything depends on them.** After creating a
+  chunk, writing one whole into `.lap/log/`, publishing a conversion's
+  `log/` or writing `.lap/lineage`, the folder itself is synced, so a power
+  loss cannot keep a later step (a record appended to the chunk, the old
+  `log.jsonl` removed) while losing the name it stands on.
 - **Damage is not a crash.** A torn line anywhere but the open chunk's end
   was not made by a crash (lap repairs its own before sealing or merging):
   a sealed chunk cut or copied short. Every command refuses such a

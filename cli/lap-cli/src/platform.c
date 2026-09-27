@@ -486,6 +486,23 @@ bool plat_fsync(FILE *f) {
 #endif
 }
 
+bool plat_fsync_dir(const char *path) {
+#ifdef _WIN32
+    /* NTFS journals its metadata: a name is durable once the call that
+     * made it returns */
+    return plat_is_dir(path);
+#else
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return false;
+    /* EINVAL: a filesystem that cannot sync a directory has nothing to
+     * sync */
+    bool ok = fsync(fd) == 0 || errno == EINVAL;
+    close(fd);
+    return ok;
+#endif
+}
+
 bool plat_tty_ansi(FILE *f) {
 #ifdef _WIN32
     int fd = _fileno(f);

@@ -53,6 +53,9 @@ bool plat_read_range_into(const char *path, uint64_t off, size_t len,
 bool plat_file_size(const char *path, uint64_t *size);
 /* Flushes a stream all the way to disk. */
 bool plat_fsync(FILE *f);
+/* Makes the names in a folder durable: a file created, renamed into or
+ * removed from it survives a power loss once this returns true. */
+bool plat_fsync_dir(const char *path);
 /* True when f is an interactive terminal that renders ANSI styling. On
  * Windows this also switches the console into VT mode; a console that
  * refuses is reported as not styleable. */

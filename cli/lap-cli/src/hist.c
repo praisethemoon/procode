@@ -423,7 +423,9 @@ static bool new_chunk(Arena *a, Hist *h, int32_t n, char *err, size_t errsz) {
     k->start = h->size;
     char path[LAP_PATH_MAX];
     snprintf(path, sizeof path, "%s/%s", h->dir, k->name);
-    if (!plat_append_file_sync(path, "", 0)) {
+    /* the new name made durable too: records appended to a chunk whose
+     * entry a power loss dropped would be lost with it */
+    if (!plat_append_file_sync(path, "", 0) || !plat_fsync_dir(h->dir)) {
         snprintf(err, errsz, "cannot create %s", path);
         return false;
     }
@@ -645,7 +647,13 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
             return false;
         }
     }
-    if (!plat_rename(tmp, dir)) {
+    /* the chunks' names durable in the working folder, then log/'s in
+     * .lap/, before the old file goes: a power loss never leaves neither */
+    if (!plat_fsync_dir(tmp)) {
+        snprintf(err, errsz, "cannot make %s durable", tmp);
+        return false;
+    }
+    if (!plat_rename(tmp, dir) || !plat_fsync_dir(lapdir)) {
         snprintf(err, errsz, "cannot publish %s as %s", tmp, dir);
         return false;
     }
@@ -730,7 +738,8 @@ bool hist_write_chunk(const char *logdir, const char *name, const void *data,
     char *slash = strrchr(lap, '/');
     if (slash)
         *slash = '\0';
-    return plat_write_file_atomic_in(path, slash ? lap : NULL, data, len);
+    return plat_write_file_atomic_in(path, slash ? lap : NULL, data, len) &&
+           plat_fsync_dir(logdir);
 }
 
 void hist_clear_tmp(Arena *a, const char *lapdir) {
@@ -753,7 +762,8 @@ bool hist_write_lineage(const char *lapdir, const char *lineage) {
     char path[LAP_PATH_MAX], text[HIST_LINEAGE_MAX + 1];
     snprintf(path, sizeof path, "%s/%s", lapdir, LAP_LINEAGE_NAME);
     snprintf(text, sizeof text, "%s\n", lineage);
-    return plat_write_file_atomic(path, text, strlen(text));
+    return plat_write_file_atomic(path, text, strlen(text)) &&
+           plat_fsync_dir(lapdir);
 }
 
 /* The first record of the chunk at path (named name, for messages), read

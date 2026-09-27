@@ -65,6 +65,11 @@ void test_platform(void) {
     else
         ASSERT_TRUE(!plat_same_file(T_PLATDIR "/SUB", T_PLATDIR "/sub"));
 
+    t_begin("plat_fsync_dir: a folder's names are synced; a missing folder "
+            "is refused");
+    ASSERT_TRUE(plat_fsync_dir(T_PLATDIR "/sub"));
+    ASSERT_TRUE(!plat_fsync_dir(T_PLATDIR "/nothing"));
+
     t_begin("plat_is_writable_dir: a folder one may write in; not a file, "
             "not a missing path");
     ASSERT_TRUE(plat_is_writable_dir(T_PLATDIR "/sub"));
