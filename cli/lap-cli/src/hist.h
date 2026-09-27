@@ -19,6 +19,8 @@
 #include "rec.h"
 
 #define HIST_LINEAGE_MAX 16
+/* the highest chunk number: names hold six digits */
+#define HIST_MAX_CHUNK 999999
 
 typedef struct {
     char lineage[HIST_LINEAGE_MAX];

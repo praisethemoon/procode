@@ -263,7 +263,8 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   4 MB, the record starts chunk `n + 1` instead; a single record larger than
   that is a chunk of its own. 4 MB is a constant, not a setting, so every
   folder chunks alike. (`LAP_TEST_CHUNK_BYTES` overrides it, for tests
-  only.)
+  only.) Chunk numbers have six digits, so a lineage holds at most 999,999
+  chunks (about 4 TB); a write that would need the next one is refused.
 - **Order is the hash chain.** Chunks follow `n`, and a chunk's first record
   carries the previous chunk's last hash as `prev`, so the chain runs on
   across chunks exactly as it would in one file. No manifest lists the

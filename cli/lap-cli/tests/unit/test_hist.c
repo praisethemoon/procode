@@ -733,6 +733,17 @@ static void test_tmp_files(Arena *a) {
     hist_clear_tmp(a, T_LAPDIR);
     ASSERT_TRUE(!plat_is_file(left));
     ASSERT_EQ_S(read_history(a), "aaaa\n");
+
+    t_begin("hist: past the last chunk number nothing is created, and the "
+            "history says so");
+    Hist full;
+    char err[256];
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &full, err, sizeof err));
+    full.v[full.n - 1].n = HIST_MAX_CHUNK; /* as if it were the last */
+    ASSERT_TRUE(!hist_seal(a, &full, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "last chunk number") != NULL);
+    ASSERT_EQ_I(full.n, 1);
+    ASSERT_EQ_S(read_history(a), "aaaa\n");
     clear_chunks();
 }
 

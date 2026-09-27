@@ -396,6 +396,14 @@ bool hist_repair_torn_tail(Arena *a, Hist *h) {
 
 /* Creates the lineage's chunk n, empty, and lists it. */
 static bool new_chunk(Arena *a, Hist *h, int32_t n, char *err, size_t errsz) {
+    /* six digits name a chunk: past the last, a chunk would be one no
+     * reader lists (about 4 TB of history at the chunk limit) */
+    if (n > HIST_MAX_CHUNK) {
+        snprintf(err, errsz,
+                 "the history in %s has reached its last chunk number (%d)",
+                 h->dir, HIST_MAX_CHUNK);
+        return false;
+    }
     if (!plat_mkdirs(h->dir)) {
         snprintf(err, errsz, "cannot create %s", h->dir);
         return false;
