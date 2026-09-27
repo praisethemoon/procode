@@ -8,17 +8,15 @@
  * installs on every platform.
  */
 
-import { execFile } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { addArgv, findClaude, forClaude, removeArgv, shellLine, signature } from "./claude";
+import { forClaude } from "./claude";
 import { CLIS, missingMessage, resolveCli } from "./clis";
 import { outdated, withServers } from "./mcpjson";
 
-export { addArgv, findClaude, forClaude, removeArgv, resolveCli, shellLine, signature };
+export { forClaude, resolveCli };
 
 interface Part {
     activate(ctx: vscode.ExtensionContext): unknown;
@@ -112,10 +110,9 @@ function registerWithVsCode(ctx: vscode.ExtensionContext): void {
  * Claude Code reads a project's MCP servers from .mcp.json at its root, which
  * VS Code cannot fill in. This writes our two entries there — only when asked,
  * because it is a file in the user's project, and one with this machine's
- * paths in it — and keeps every other server in the file. Registering at user
- * scope (below) is the default; this is for anyone who wants it per project. After an update moves the extension's folder, the entries it
- * wrote point at a copy that is gone; activation notices and offers to fix
- * them. */
+ * paths in it — and keeps every other server in the file. After an update moves the
+ * extension's folder, the entries it wrote point at a copy that is gone;
+ * activation notices and offers to fix them. */
 
 function mcpJsonPath(): string | null {
     const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file");
@@ -175,98 +172,6 @@ function checkClaudeMcp(ctx: vscode.ExtensionContext): void {
         });
 }
 
-/* ------------------------------------------------- Claude Code, user scope
- *
- * Registered once per machine rather than written into each project (see
- * claude.ts). The first start that finds the `claude` CLI offers it; after
- * that, an update that moved the extension's folder re-registers silently,
- * because the entries point at a folder the update removed. The state is the
- * signature of what was registered, or "declined". */
-
-const USER_SCOPE = "procode.claude.userScope";
-
-function claudeCli(): string | null {
-    return findClaude(process.env["PATH"] ?? "", os.homedir(), (p) => {
-        try {
-            return fs.statSync(p).isFile();
-        } catch {
-            return false;
-        }
-    });
-}
-
-function run(cli: string, argv: string[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-        execFile(cli, argv, { cwd: os.homedir(), timeout: 30_000 }, (err, _out, stderr) =>
-            err ? reject(new Error(stderr.trim() || err.message)) : resolve(),
-        );
-    });
-}
-
-export async function registerUserScope(ctx: vscode.ExtensionContext, cli: string): Promise<void> {
-    const entries = servers(ctx).map(forClaude);
-    for (const s of entries) {
-        await run(cli, removeArgv(s.name)).catch(() => undefined); // not there yet
-        await run(cli, addArgv(s));
-    }
-    await ctx.globalState.update(USER_SCOPE, signature(entries));
-}
-
-async function registerClaudeMcp(ctx: vscode.ExtensionContext): Promise<void> {
-    const cli = claudeCli();
-    if (cli === null) {
-        const lines = servers(ctx)
-            .map(forClaude)
-            .map((s) => shellLine(addArgv(s)))
-            .join("\n");
-        await vscode.env.clipboard.writeText(lines);
-        void vscode.window.showInformationMessage(
-            "procode: the claude CLI was not found. The commands that register coboard, kb and artifacts for every project are on the clipboard; run them in a terminal.",
-        );
-        return;
-    }
-    try {
-        await registerUserScope(ctx, cli);
-        void vscode.window.showInformationMessage(
-            "procode: coboard, kb and artifacts are registered with Claude Code for every project. Start a new Claude Code session (or check /mcp) to pick them up.",
-        );
-    } catch (e) {
-        void vscode.window.showErrorMessage(`procode: registering with Claude Code failed: ${(e as Error).message}`);
-    }
-}
-
-export async function refreshClaudeUserScope(ctx: vscode.ExtensionContext): Promise<void> {
-    const state = ctx.globalState.get<string>(USER_SCOPE);
-    const cli = claudeCli();
-    if (cli === null || state === "declined") {
-        return;
-    }
-    if (state === undefined) {
-        const choice = await vscode.window.showInformationMessage(
-            "procode: register the coboard, kb and artifacts MCP servers with Claude Code, for every project on this machine?",
-            "Register",
-            "No thanks",
-        );
-        if (choice === "Register") {
-            await registerClaudeMcp(ctx);
-        } else {
-            // Offered once; the command stays in the palette.
-            await ctx.globalState.update(USER_SCOPE, "declined");
-        }
-        return;
-    }
-    if (state === signature(servers(ctx).map(forClaude))) {
-        return;
-    }
-    try {
-        await registerUserScope(ctx, cli);
-    } catch (e) {
-        void vscode.window.showWarningMessage(
-            `procode: Claude Code still runs procode's MCP servers from an older procode, and updating them failed: ${(e as Error).message}`,
-        );
-    }
-}
-
 /* Says once per window, for each CLI its setting cannot reach, what cannot
  * run and how to fix it. The parts report their own failures when used; this
  * is the one place that says it up front, with the setting one click away. */
@@ -301,10 +206,8 @@ export function activate(ctx: vscode.ExtensionContext): void {
     registerWithVsCode(ctx);
     ctx.subscriptions.push(
         vscode.commands.registerCommand("procode.setUpClaudeMcp", () => setUpClaudeMcp(ctx)),
-        vscode.commands.registerCommand("procode.registerClaudeMcp", () => registerClaudeMcp(ctx)),
     );
     checkClaudeMcp(ctx);
-    void refreshClaudeUserScope(ctx);
     checkClis();
 }
 

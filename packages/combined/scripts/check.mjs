@@ -145,45 +145,7 @@ assert.equal(written.mcpServers.other.command, "x", "an unrelated server is kept
 assert.equal(written.mcpServers.kb.args[0], defs[1].args[0], "Claude Code runs the same script as VS Code's agent");
 assert.equal(written.mcpServers.coboard.env.COBOARD_AUTHOR, "claude", "Claude Code's board comments are signed");
 
-// User scope, against a stand-in `claude` that records its arguments.
-const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), "procode-claude-"));
-const calls = path.join(fakeBin, "calls.jsonl");
-fs.writeFileSync(
-    path.join(fakeBin, "claude"),
-    `#!/bin/sh\nexec "${process.execPath}" -e 'require("fs").appendFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)) + "\\n")' "${calls}" "$@"\n`,
-    { mode: 0o755 },
-);
-process.env.PATH = fakeBin + path.delimiter + process.env.PATH;
-const state = new Map([["procode.claude.userScope", "a signature from an older install"]]);
-const ctx2 = { ...ctx, globalState: { get: (k) => state.get(k), update: async (k, v) => void state.set(k, v) } };
-const asked = () => (fs.existsSync(calls) ? fs.readFileSync(calls, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : []);
-
-await ext.refreshClaudeUserScope(ctx2);
-const first = asked();
-assert.deepEqual(first.map((a) => a.slice(0, 5).join(" ")), [
-    "mcp remove --scope user coboard",
-    "mcp add-json --scope user coboard",
-    "mcp remove --scope user kb",
-    "mcp add-json --scope user kb",
-    "mcp remove --scope user artifacts",
-    "mcp add-json --scope user artifacts",
-]);
-const coboardEntry = JSON.parse(first[1][5]);
-assert.equal(coboardEntry.type, "stdio");
-assert.equal(coboardEntry.args[0], defs[0].args[0], "user scope runs the installed script");
-assert.equal(coboardEntry.env.COBOARD_AUTHOR, "claude");
-assert.equal(JSON.parse(first[3][5]).env.KB_BIN, "kb", "user scope hands kb the configured CLI");
-
-await ext.refreshClaudeUserScope(ctx2);
-assert.equal(asked().length, 6, "a current registration is left alone");
-state.set("procode.claude.userScope", "declined");
-await ext.refreshClaudeUserScope(ctx2);
-assert.equal(asked().length, 6, "a declined offer is not made again");
-assert.equal(
-    ext.shellLine(["mcp", "add-json", "kb", `{"a":"it's"}`]),
-    `claude mcp add-json kb '{"a":"it'\\''s"}'`,
-    "the clipboard line survives a single quote",
-);
+assert.equal(registered.has("procode.registerClaudeMcp"), false, "Claude Code is set up per project only");
 
 console.log(`check: ${registered.size} commands registered, ${defs.length} MCP servers, no errors`);
-console.log(`check: workspace ${folder}, stand-in claude ${fakeBin}`);
+console.log(`check: workspace ${folder}`);

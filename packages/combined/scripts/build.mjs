@@ -86,7 +86,6 @@ for (const part of PARTS) {
     }
 }
 contributes.commands.push(
-    { command: "procode.registerClaudeMcp", title: "Register MCP Servers with Claude Code (All Projects)", category: "procode" },
     { command: "procode.setUpClaudeMcp", title: "Set Up MCP for Claude Code (This Project's .mcp.json)", category: "procode" },
 );
 contributes.mcpServerDefinitionProviders = [{ id: "procode.mcp", label: "procode" }];
@@ -150,11 +149,11 @@ fs.writeFileSync(path.join(dist, ".vscodeignore"), "**/*.map\n");
 fs.writeFileSync(
     path.join(dist, "README.md"),
     "# procode\n\nLap History, Knowledge, the Board and Artifacts in one extension.\n\n" +
-        "Knowledge and the Board run the `kb` and `lap` CLIs, which you build from the lap repository " +
-        "(`make -C cli/kb-cli install`, `make -C cli/lap-cli install`). They are found on PATH, or wherever " +
+        "Knowledge and the Board run the `kb` and `lap` CLIs, which you build with CMake from the procode " +
+        "repository (see its README). They are found on PATH, or wherever " +
         "the settings **Knowledge › Cli Path** and **Board › Lap Path** point.\n\n" +
         "The kb, coboard and artifacts MCP servers are registered with VS Code's agent automatically. For Claude Code, " +
-        "procode offers to register them once for every project; **procode: Register MCP Servers with Claude Code** does it on demand.\n",
+        "**procode: Set Up MCP for Claude Code** writes them into the project's `.mcp.json`.\n",
 );
 
 /* ----------------------------------------------------------------- bundles */
