@@ -107,6 +107,21 @@ test("mcp: a branch whose parent has no board yet creates the first one there", 
     }
 });
 
+test("locateBoard: a relative override is taken from the folder worked in, whatever the process's cwd; ~ is the home folder", () => {
+    const { parent, branch } = project();
+    const up = path.relative(branch, parent); /* "../proj" */
+    const saved = process.cwd();
+    try {
+        process.chdir(os.tmpdir());
+        assert.deepEqual(locateBoard(branch, up), { root: parent, via: "override" });
+        assert.deepEqual(locateBoard(branch, path.join(up, ".coboard")), { root: parent, via: "override" });
+    } finally {
+        process.chdir(saved);
+    }
+    assert.deepEqual(locateBoard(branch, "~/somewhere"), { root: path.join(os.homedir(), "somewhere"), via: "override" });
+    assert.deepEqual(locateBoard(branch, "~"), { root: os.homedir(), via: "override" });
+});
+
 test("locateBoard: a branch of a branch goes on up to main's board, past the branch between", () => {
     const { parent, branch } = project();
     const nested = path.join(path.dirname(branch), "proj-feat-sub");

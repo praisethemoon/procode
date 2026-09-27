@@ -201,6 +201,12 @@ lap branch start parser --from ../proj         # its own line of history
   commits by hash and sessions as `<branch>/S<n>`. lap prints a branch's
   sessions that way, and `lap rr`, `log --session` and `search --session`
   take it: `lap rr parser/S4`, from the parent after a merge too.
+- **Seeing branches.** `lap branch list` shows each branch started here
+  (and those known only by chunks git brought) with its state: active,
+  merged, partly merged, missing. `--branch <name>` on `log`, `show`, `rr`
+  and `session list` reads that branch's history from here. A branch whose
+  folder moved is `missing`: `lap branch move <branch> <path>` points the
+  registry at its new place, `lap branch forget <branch>` drops it.
 
 ## Using the history (do this before changing unfamiliar code)
 

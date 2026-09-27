@@ -22,6 +22,7 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import {
@@ -94,7 +95,13 @@ export function locateBoard(
     override: string | undefined = process.env["COBOARD_DIR"],
 ): { root: string | null; via: "override" | "lap-parent" | "found" | "stale-parent"; home?: string; stale?: string } {
     if (override && override.trim()) {
-        const dir = path.resolve(override.trim());
+        /* relative to the folder worked in, not to whichever process asks
+         * (the editor's cwd and the MCP server's differ); ~ is the home */
+        let given = override.trim();
+        if (given === "~" || given.startsWith("~/")) {
+            given = path.join(os.homedir(), given.slice(1));
+        }
+        const dir = path.resolve(from, given);
         return { root: path.basename(dir) === BOARD_DIR ? path.dirname(dir) : dir, via: "override" };
     }
     let parent = lapParent(from);

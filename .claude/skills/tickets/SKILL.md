@@ -25,7 +25,10 @@ The lap skill covers lap itself; this is the loop around it.
    In a branch folder, or a folder with branches, add `--branch <name>`
    (or set `LAP_BRANCH`) here and on every `lap commit`. The board stays
    one: in a lap branch folder coboard works the parent's board by itself;
-   an agent in any other folder sets `COBOARD_DIR` to the project's.
+   an agent in any other folder sets `COBOARD_DIR` to the project's (in
+   VS Code, the **Board › Board Folder** setting does the same). If coboard
+   answers `stale_parent`, the branch's parent folder moved: point
+   `COBOARD_DIR` at it rather than working the branch's copy.
    One session per ticket. Check `lap session current` first; end a stale
    one only after its edits are committed.
 3. **Work, committing edits as you go.** After each change,
