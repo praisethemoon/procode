@@ -56,8 +56,12 @@ your machine.
 
 Agents use it through the `kb` MCP server: research filed once is searched
 from disk the next time, instead of fetched again. You browse and search it
-in the extension's **Knowledge** view. The contract is in
-[specs/index-api.md](specs/index-api.md).
+in the extension's **Knowledge** view, and see how documents link to each
+other in its graph.
+
+![kb-vscode](assets/kb-vscode.webp)
+
+The contract is in [specs/index-api.md](specs/index-api.md).
 
 ## Artifacts
 
@@ -67,6 +71,8 @@ stored in `.artifact/` and published through the `artifacts` MCP server,
 and the extension's **Artifacts** view opens them in your VS Code theme.
 The format is in [specs/artifacts.md](specs/artifacts.md). These are almost
 identical to claude artifacts, except they stay local to your project.
+
+![artifact-extension](assets/artifact-extension.webp)
 
 ## Requirements
 
