@@ -14,10 +14,10 @@ skill); this extension just shows what they did, as they do it.
     switches to a **raw list** of all commits, newest-first.
   - Every commit shows `L<n>`, its short hash, the intent's first line, the
     file and edit range. Open it (its twistie, or a click) for the whole
-    intent, then the behavior, a mark when the message checks were skipped
-    (`--force-message`), and the full hash. References to other commits in
-    that text — `#<hash prefix>` or `L<n>` — are links that reveal the
-    commit in the tree. The filter matches ids, hashes, intents, behaviors
+    intent, then the behavior, and a mark when the message checks were
+    skipped (`--force-message`). References to other commits in that text —
+    `#<hash prefix>` or `L<n>` — are links that reveal the commit in the
+    tree. The filter matches ids, hashes, intents, behaviors
     and file paths.
   - Click a commit → the built-in (Monaco) **diff editor** opens directly
     on the file replayed to before vs. after that commit — full syntax

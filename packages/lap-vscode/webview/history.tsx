@@ -278,16 +278,17 @@ function CommitLine(props: { c: CommitRow; depth: number; showSession: boolean; 
             </div>
             {detail ? (
                 <div className="lh-detail" style={{ paddingLeft: `calc(${indent} + 42px)` }} role="group" aria-label={`${c.id} intent and behavior`}>
-                    <div className="lh-label">Intent</div>
-                    <Linked text={c.intent} />
-                    <div className="lh-label">Behavior</div>
-                    <Linked text={c.behavior} />
+                    <div className="lh-field">
+                        <span className="lh-label">Intent:</span> <Linked text={c.intent} />
+                    </div>
+                    <div className="lh-field">
+                        <span className="lh-label">Behavior:</span> <Linked text={c.behavior} />
+                    </div>
                     {c.forced ? (
                         <div className="lh-forced-note">
                             <Codicon name="warning" className="lh-forced" /> {FORCED}
                         </div>
                     ) : null}
-                    <div className="lh-full-hash">{c.hash}</div>
                 </div>
             ) : null}
         </>
