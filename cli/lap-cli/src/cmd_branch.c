@@ -125,46 +125,11 @@ static int32_t last_filled(const Hist *h) {
     return -1;
 }
 
-static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
-    static const char *const value_flags[] = {"--from", NULL};
-    static const char *const bool_flags[] = {"--json", NULL};
-    if (!flags_known(argc, argv, value_flags, bool_flags))
-        return LAP_EXIT_ERR;
-    const char *from = flag_value(argc, argv, value_flags, "--from");
-    const char *name = positional_arg(argc, argv, value_flags, 1);
-    if (!from) {
-        err_out(json, "missing_from",
-                "say which folder this branch starts from: lap branch start "
-                "[name] --from <parent folder>");
-        return LAP_EXIT_ERR;
-    }
-    if (positional_arg(argc, argv, value_flags, 2)) {
-        err_out(json, "bad_args", "branch start takes at most one name");
-        return LAP_EXIT_ERR;
-    }
-    if (name && !name_ok(name)) {
-        err_out(json, "bad_name",
-                "a branch name is 1-64 letters, digits, '.', '_' or '-', "
-                "and not \"main\": \"%s\"",
-                name);
-        return LAP_EXIT_ERR;
-    }
-    char here[LAP_PATH_MAX], there[LAP_PATH_MAX];
-    if (!repo_abspath(".", here, sizeof here) ||
-        !repo_abspath(from, there, sizeof there)) {
-        err_out(json, "bad_path", "cannot resolve %s", from);
-        return LAP_EXIT_ERR;
-    }
-    /* one folder, however spelled (case, a symlink, ".."): the same
-     * directory on disk */
-    if (strcmp(here, there) == 0 || plat_same_file(here, there)) {
-        err_out(json, "same_folder",
-                "a folder cannot be a branch of itself: run this in the new "
-                "folder, with --from naming the one it starts from");
-        return LAP_EXIT_ERR;
-    }
-    char here_lap[LAP_PATH_MAX];
-    snprintf(here_lap, sizeof here_lap, "%s/%s", here, LAP_DIR);
+/* branch start from its checks on, with this folder locked (here_lock,
+ * released before its caches are built). */
+static int32_t start_locked(Arena *a, bool json, const char *name,
+                            const char *here, const char *there,
+                            const char *here_lap, PlatLock **here_lock) {
     char err[1024];
     char lineage[HIST_LINEAGE_MAX];
     if (!hist_folder_lineage(a, here_lap, lineage, err, sizeof err)) {
@@ -362,7 +327,10 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
     snprintf(short_base, sizeof short_base, "%.7s", pr.last_hash);
     repo_close(&pr);
 
-    /* Caches here are built from the history just written. */
+    /* Caches here are built from the history just written, under the
+     * lock repo_open takes: this start's own is released first. */
+    plat_unlock(*here_lock);
+    *here_lock = NULL;
     Repo hr;
     if (!repo_open_at(a, &hr, here, true, err, sizeof err) ||
         !repo_rebuild(a, &hr, err, sizeof err)) {
@@ -388,6 +356,68 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
                short_base);
     }
     return LAP_EXIT_OK;
+}
+
+static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
+    static const char *const value_flags[] = {"--from", NULL};
+    static const char *const bool_flags[] = {"--json", NULL};
+    if (!flags_known(argc, argv, value_flags, bool_flags))
+        return LAP_EXIT_ERR;
+    const char *from = flag_value(argc, argv, value_flags, "--from");
+    const char *name = positional_arg(argc, argv, value_flags, 1);
+    if (!from) {
+        err_out(json, "missing_from",
+                "say which folder this branch starts from: lap branch start "
+                "[name] --from <parent folder>");
+        return LAP_EXIT_ERR;
+    }
+    if (positional_arg(argc, argv, value_flags, 2)) {
+        err_out(json, "bad_args", "branch start takes at most one name");
+        return LAP_EXIT_ERR;
+    }
+    if (name && !name_ok(name)) {
+        err_out(json, "bad_name",
+                "a branch name is 1-64 letters, digits, '.', '_' or '-', "
+                "and not \"main\": \"%s\"",
+                name);
+        return LAP_EXIT_ERR;
+    }
+    char here[LAP_PATH_MAX], there[LAP_PATH_MAX];
+    if (!repo_abspath(".", here, sizeof here) ||
+        !repo_abspath(from, there, sizeof there)) {
+        err_out(json, "bad_path", "cannot resolve %s", from);
+        return LAP_EXIT_ERR;
+    }
+    /* one folder, however spelled (case, a symlink, ".."): the same
+     * directory on disk */
+    if (strcmp(here, there) == 0 || plat_same_file(here, there)) {
+        err_out(json, "same_folder",
+                "a folder cannot be a branch of itself: run this in the new "
+                "folder, with --from naming the one it starts from");
+        return LAP_EXIT_ERR;
+    }
+    char here_lap[LAP_PATH_MAX];
+    snprintf(here_lap, sizeof here_lap, "%s/%s", here, LAP_DIR);
+    /* This folder is locked for the whole start, so two starts in it
+     * cannot both find it unbranched. A .lap made only for the lock goes
+     * again when the start is refused. */
+    bool made = !plat_is_dir(here_lap);
+    char lockpath[LAP_PATH_MAX];
+    snprintf(lockpath, sizeof lockpath, "%s/%s", here_lap, LAP_LOCK_NAME);
+    PlatLock *here_lock = plat_mkdirs(here_lap) ? plat_lock(a, lockpath)
+                                                : NULL;
+    int32_t rc = LAP_EXIT_ERR;
+    if (!here_lock)
+        err_out(json, "io_error", "cannot lock %s", here_lap);
+    else
+        rc = start_locked(a, json, name, here, there, here_lap, &here_lock);
+    if (here_lock)
+        plat_unlock(here_lock);
+    if (rc != LAP_EXIT_OK && made) {
+        plat_remove_file(lockpath);
+        plat_rmdir(here_lap); /* only when nothing else was written */
+    }
+    return rc;
 }
 
 /* True when lineage is main, or one whose chunks this folder's own history

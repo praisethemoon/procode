@@ -2158,6 +2158,24 @@ else
 fi
 cd "$WORK"
 
+t "two branch starts in one folder at once: one succeeds, the other is already_branch"
+for try in 1 2 3; do
+    mkdir -p "$WORK/two$try" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/two$try/"
+    cd "$WORK/two$try" || exit 1
+    "$LAP" branch start "one$try" --from ../bp --json > "$WORK/two$try-a.out" 2>&1 &
+    "$LAP" branch start "other$try" --from ../bp --json > "$WORK/two$try-b.out" 2>&1 &
+    wait
+    oks=$(cat "$WORK/two$try-a.out" "$WORK/two$try-b.out" | grep -c '"ok":true')
+    [ "$oks" = 1 ] || fail "try $try: $oks of 2 concurrent starts succeeded"
+    cat "$WORK/two$try-a.out" "$WORK/two$try-b.out" | grep -q '"error":"already_branch"' ||
+        fail "try $try: the losing start was not already_branch"
+    [ "$(grep -o "\"path\":\"$(pwd -P)\"" "$WORK/bp/.lap/branches.json" | wc -l | tr -d ' ')" = 1 ] ||
+        fail "try $try: the registry does not hold exactly one entry for the folder"
+    [ "$(ls .lap/log | grep -c '^[0-9a-f]\{12\}\.000001\.jsonl$')" = 1 ] ||
+        fail "try $try: the folder holds more than one lineage"
+done
+cd "$WORK"
+
 t "lap amend corrects a commit's message, and nothing already written changes"
 mkdir -p "$WORK/am" && cd "$WORK/am" && "$LAP" init >/dev/null 2>&1
 "$LAP" session start "amend fixture" >/dev/null 2>&1

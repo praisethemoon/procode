@@ -918,7 +918,10 @@ and the base's short hash; `--json` returns `id`, `name`, `parent`,
 `name_taken`, `parent_read_only`. `same_folder` is the folder itself under
 any spelling — another case, a symlink, a `..` path — told by the
 directory on disk (device and inode; volume and file id on Windows), not by
-the path's text.
+the path's text. The start holds this folder's lock throughout (making
+`.lap/` for it, and removing it again when the start is refused) and the
+parent's from its checks to its registration, so of two starts in one
+folder exactly one succeeds and the other is `already_branch`.
 
 ### `lap branch list`, `lap branch forget <branch>`, `lap branch move <branch> <path>`
 `list` shows, in a branch folder, its own name, id, parent and base, then
