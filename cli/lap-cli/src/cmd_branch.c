@@ -303,6 +303,13 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
         snprintf(legacy, sizeof legacy, "%s/%s", here_lap, LAP_LOG_NAME);
         plat_remove_file(legacy);
     }
+    /* a copied folder brought the parent's registry: those are the
+     * parent's branches, not this folder's */
+    char copied_reg[LAP_PATH_MAX];
+    snprintf(copied_reg, sizeof copied_reg, "%s/%s", here_lap,
+             LAP_BRANCHES_NAME);
+    if (plat_is_file(copied_reg))
+        plat_remove_file(copied_reg);
 
     /* 4. The branch record opens this folder's own lineage. */
     Rec rec;

@@ -21,15 +21,17 @@ intent and what it does; git keeps its normal human-scale history.
    a purpose ("fix the parser bug"). Committing requires an active session
    unless `--no-session` is passed explicitly.
 4. **lap never writes to tracked files.** The working tree is authoritative;
-   history is a recording. There is no checkout, branch, merge, or staging.
+   history is a recording. There is no checkout or staging. Branches
+   (§Branches) are lines of history in other folders, never a switch of the
+   working tree.
 5. **Commit ids are short and sequential** (`L1`, `L2`, ...; sessions `S1`,
    `S2`, ...). Integrity comes from a hash chain, not content-addressed ids.
    Every commit also has a **hash** (§The log), which is how one commit's
    text refers to another.
-6. **lap is for one developer's working copy.** There are no branches, and
-   logs are never merged. When work arrives from elsewhere (a merged pull
-   request), it lands in the working tree like any other change and is
-   committed edit by edit.
+6. **One folder, one line of history.** Parallel work happens in other
+   folders, as branches (§Branches). When work arrives from elsewhere (a
+   merged pull request), it lands in the working tree like any other change
+   and is committed edit by edit.
 
 ## Repository layout
 
@@ -47,6 +49,8 @@ intent and what it does; git keeps its normal human-scale history.
     snapshots/      cache: periodic full-content snapshots, per file
     statcache       cache: stat of every file status last found clean
     lock            exclusive lock file taken by writing commands
+    lineage         a branch folder's id (§Branches): machine-local
+    branches.json   the branches started from this folder: machine-local
 ```
 
 - Commands find the repository by walking upward from the cwd (like git).
@@ -111,9 +115,9 @@ intent and what it does; git keeps its normal human-scale history.
     seen until the entry goes.
 - `lap verify --deep` audits the layer: every shadow and every snapshot
   must equal a from-birth replay of the truth.
-- History is **linear by construction**: there are no branches, refs, or
-  merges; concurrency is serialized by the writer lock and expressed as
-  interleaved sessions.
+- History is **linear by construction** in each folder: a branch is
+  another folder's line (§Branches); within a folder, concurrency is
+  serialized by the writer lock and expressed as interleaved sessions.
 - Resolving a commit by hash (§References) scans the log's commit records;
   the index does not store hashes. A cache may be added for it later under
   the cache contract, without changing any output.
@@ -148,6 +152,10 @@ Record types:
 {"type":"session_start","id":"S2","user":"jane","msg":"purpose",
  "meta":{"ticket":"T-12"},"ts":"...","prev":"..."}   // meta: optional
 {"type":"session_end","id":"S2","ts":"...","prev":"..."}
+
+{"type":"branch","id":"7c1e9a02d4b8","name":"parser-fix", // §Branches
+ "parent":"main","base":"<parent head>","base_chunk":3,
+ "user":"jane","ts":"...","prev":"<the same base>"}
 ```
 
 A commit record without both `intent` and `behavior` is malformed,
@@ -229,6 +237,77 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   finishes a split whose chunks are a prefix of the old file, removes an
   old file that is a prefix of the chunks, and refuses anything else,
   keeping both.
+
+## Branches
+
+A **branch** is a lap repository in another folder — a git worktree or a
+plain copy — whose history is its parent's up to a **base** (the hash of
+the parent's last record when the branch started), then its own. Its own
+records form a **lineage** named by a 12-hex-digit id; the first folder's
+lineage is `main`. A branch's chunks are `<id>.<n>.jsonl` beside its
+parent's in `.lap/log/`, so two lines of history never write one file,
+and a `git merge` of the branch's code brings its chunks as new files.
+
+- A branch folder's history is the parent's chunks `1 … base_chunk`, then
+  its own. The **branch record** opens its own chunk 1: it names the
+  branch, its parent lineage, the base and the parent's chunk the base
+  ends, and chains from the base. The base is always the last record of a
+  sealed parent chunk (below), so the history is whole chunks.
+- **Which lineage a folder writes** is `main`, unless `.lap/lineage` names
+  a branch id. That file is machine-local, like the registry: after a `git
+  merge` the parent holds the branch's chunks too, and the chunks alone
+  cannot say which lineage is the folder's own.
+- Ids go on from the base: the branch's next `L` and `S` numbers follow
+  its parent's at the base, so one folder never shows an id twice. Two
+  folders do — the parent goes on from the base too — so text that leaves
+  a folder names commits by hash.
+- A branch starts with no session open, whatever its parent had open.
+- A branch's parent is a `main` folder: a branch of a branch is refused
+  (`nested_branch`).
+
+### Starting one
+
+The folder is made by whoever wants it — `git worktree add`, or a plain
+copy of the parent folder; lap does not create folders or run git. Then, in
+the new folder, `lap branch start [name] --from <parent folder>`, which,
+holding the parent's lock throughout:
+
+1. **History.** A folder with no history gets the parent's. One that has a
+   history (a copy, or a worktree whose git commit carries `.lap/log/`)
+   must hold a prefix of the parent's, byte for byte, else
+   `unrelated_history`; it is brought up to the parent's head.
+2. **Files.** Every file must equal the parent's committed state at the
+   base, as `lap status` would find it there; else `not_clean`, listing
+   them and naming the usual causes: a worktree checked out from a git
+   commit older than lap's history, and files lap tracks that git ignores.
+3. **Sealing.** The parent's open chunk is sealed (its next chunk created,
+   empty). The chunk this folder copies is then final on both sides, and a
+   later `git merge` finds it unchanged. An open chunk that is still empty
+   is not sealed again: a second branch started before the parent appended
+   anything shares the first one's base.
+4. **Registration.** The branch is added to the parent's `branches.json`
+   (§Registry). A parent that cannot be written refuses the start
+   (`parent_read_only`) before anything is written in this folder.
+5. **The branch record** starts the folder's lineage, and `.lap/lineage`
+   names it. A registry copied along with the folder is dropped.
+
+The id is the first 12 hex digits of SHA-256 over the base, the name, the
+time and a nonce, so two copies of one folder never make the same one. The
+name is 1–64 letters, digits, `.`, `_` or `-`, not `main`, unique among the
+parent's branches (`name_taken`); it defaults to the id.
+
+**The recommended layout** keeps the first folder quiet: agents work in
+branch folders, and the first folder only merges. A branch then always
+starts from a folder nobody is editing.
+
+### Registry
+
+The parent's `.lap/branches.json` lists the branches started from it:
+`[{"id","name","path","base","started"}]`, the path absolute. It is
+machine-local (not committed: a path means nothing elsewhere), neither
+history nor a cache — nothing rebuilds it — and **hints only**: a missing
+or malformed registry reads as no branches, and no command fails because
+of what it says.
 
 ## Messages
 
@@ -467,6 +546,14 @@ Walks the hash chain across every chunk, naming a modified sealed chunk
 (§Chunks). `--deep` also replays every file's history from
 birth and compares the result byte-for-byte with the shadow store and
 every snapshot. Verification never uses the caches it is checking.
+
+### `lap branch start [name] --from <folder>`
+Makes the current folder a branch of `<folder>` (§Branches → Starting one).
+Prints the name, the id, the parent and the base's short hash; `--json`
+returns `id`, `name`, `parent`, `base`, `base_chunk`. Errors:
+`missing_from`, `bad_name`, `same_folder`, `already_branch`, `no_parent`,
+`nested_branch`, `unrelated_history`, `not_clean`, `name_taken`,
+`parent_read_only`.
 
 ### `lap rebuild [--verify]`
 Deletes and reconstructs every derived cache from the log — the executable

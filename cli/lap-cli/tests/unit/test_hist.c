@@ -22,6 +22,8 @@ static void clear_chunks(void) {
     }
     snprintf(path, sizeof path, "%s/%s", T_LAPDIR, LAP_LOG_NAME);
     remove(path);
+    snprintf(path, sizeof path, "%s/%s", T_LAPDIR, LAP_LINEAGE_NAME);
+    remove(path);
 }
 
 static void put_legacy(const char *data) {
@@ -347,6 +349,83 @@ static void test_legacy(Arena *a) {
     clear_chunks();
 }
 
+static void test_branch_history(Arena *a) {
+    char err[256];
+    char lin[HIST_LINEAGE_MAX];
+    Hist h;
+
+    t_begin("hist: a folder without a lineage file writes main");
+    clear_chunks();
+    ASSERT_TRUE(hist_folder_lineage(a, T_LAPDIR, lin, err, sizeof err));
+    ASSERT_EQ_S(lin, "main");
+
+    t_begin("hist: the lineage file names a branch id, and nothing else");
+    ASSERT_TRUE(hist_write_lineage(T_LAPDIR, "0123456789ab"));
+    ASSERT_TRUE(hist_folder_lineage(a, T_LAPDIR, lin, err, sizeof err));
+    ASSERT_EQ_S(lin, "0123456789ab");
+    char path[256];
+    snprintf(path, sizeof path, "%s/%s", T_LAPDIR, LAP_LINEAGE_NAME);
+    plat_write_file_atomic(path, "main\n", 5);
+    ASSERT_TRUE(!hist_folder_lineage(a, T_LAPDIR, lin, err, sizeof err));
+    plat_write_file_atomic(path, "0123456789AB", 12);
+    ASSERT_TRUE(!hist_folder_lineage(a, T_LAPDIR, lin, err, sizeof err));
+
+    t_begin("hist: a branch's history is its parent's chunks to the base, "
+            "then its own");
+    clear_chunks();
+    put_file("main.000001.jsonl", "p1\np2\n");
+    put_file("main.000002.jsonl", "p3\n");
+    put_file("main.000003.jsonl", "after-the-base\n");
+    Rec br;
+    memset(&br, 0, sizeof br);
+    br.type = REC_BRANCH;
+    br.id = "0123456789ab";
+    br.name = "feat";
+    br.parent = "main";
+    br.base = "ab";
+    br.base_chunk = 2;
+    br.ts = "2026-09-27T00:00:00Z";
+    br.prev = "ab";
+    size_t blen;
+    char *bline = rec_encode(a, &br, &blen);
+    put_file("0123456789ab.000001.jsonl", arena_printf(a, "%s\nb1\n", bline));
+    ASSERT_TRUE(hist_write_lineage(T_LAPDIR, "0123456789ab"));
+    ASSERT_TRUE(hist_open_folder(a, T_LAPDIR, &h, err, sizeof err));
+    ASSERT_EQ_S(h.lineage, "0123456789ab");
+    ASSERT_EQ_S(h.parent, "main");
+    ASSERT_EQ_S(h.name, "feat");
+    ASSERT_EQ_I(h.base_chunk, 2);
+    ASSERT_EQ_I(h.n, 3);
+    ASSERT_EQ_S(h.v[2].name, "0123456789ab.000001.jsonl");
+    ASSERT_EQ_I(h.v[2].start, 9);
+    char *data;
+    size_t len;
+    ASSERT_TRUE(hist_read_all(a, &h, &data, &len));
+    ASSERT_EQ_S(data, arena_printf(a, "p1\np2\np3\n%s\nb1\n", bline));
+
+    t_begin("hist: a branch appends to its own chunk, never its parent's");
+    h.limit = 1000;
+    ASSERT_TRUE(hist_append(a, &h, "b2\n", 3, err, sizeof err));
+    ASSERT_EQ_I(h.n, 3);
+    ASSERT_EQ_S(read_history(a), "p1\np2\np3\nafter-the-base\n");
+
+    t_begin("hist: a branch whose base chunk is missing is refused");
+    char p2[256];
+    snprintf(p2, sizeof p2, "%s/%s/main.000002.jsonl", T_LAPDIR, LAP_LOG_DIR);
+    remove(p2);
+    snprintf(p2, sizeof p2, "%s/%s/main.000003.jsonl", T_LAPDIR, LAP_LOG_DIR);
+    remove(p2);
+    ASSERT_TRUE(!hist_open_folder(a, T_LAPDIR, &h, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "main.000002.jsonl") != NULL);
+
+    t_begin("hist: a branch chunk that does not open with its branch record "
+            "is refused");
+    put_file("main.000002.jsonl", "p3\n");
+    put_file("0123456789ab.000001.jsonl", "b1\n");
+    ASSERT_TRUE(!hist_open_folder(a, T_LAPDIR, &h, err, sizeof err));
+    clear_chunks();
+}
+
 void test_hist(void) {
     Arena *a = arena_new(0);
     test_names();
@@ -354,5 +433,6 @@ void test_hist(void) {
     test_seal_and_repair(a);
     test_listing(a);
     test_legacy(a);
+    test_branch_history(a);
     arena_free(a);
 }

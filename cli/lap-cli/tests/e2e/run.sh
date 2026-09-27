@@ -1197,6 +1197,130 @@ rm .lap/log.jsonl
 expect_ok "$LAP" status
 cd "$WORK"
 
+# ------------------------------------------------------------ branches
+# A parent folder with some history, as git and lap both keep it.
+branch_parent() {
+    mkdir -p "$1" && cd "$1" || exit 1
+    git init -q . && git config user.name e2e && git config user.email e2e@lap
+    printf '.lap/*\n!.lap/log/\n' > .gitignore
+    "$LAP" init >/dev/null 2>&1
+    "$LAP" session start "the parent's first work" >/dev/null 2>&1
+    printf 'one\ntwo\nthree\n' > f.txt
+    "$LAP" commit f.txt -i "seed the parent" -b "creates f.txt with three lines" >/dev/null 2>&1
+    "$LAP" commit .lapignore -i "seed the parent" -b "records the starter ignore patterns" >/dev/null 2>&1
+    "$LAP" commit .gitignore -i "seed the parent" -b "keeps only the chunk directory of .lap in git" >/dev/null 2>&1
+    "$LAP" session end >/dev/null 2>&1
+    git add -A && git commit -qm "parent base"
+}
+
+if command -v git >/dev/null 2>&1; then
+t "branch start in a git worktree: own lineage, sealed parent, no session"
+branch_parent "$WORK/bp"
+C1=$(cat .lap/log/main.000001.jsonl | shasum)
+git worktree add -q "$WORK/bw" -b feat
+cd "$WORK/bw" || exit 1
+expect_grep "branch feat (.*) started from .*/bp at" "$LAP" branch start feat --from ../bp
+ID=$(cat .lap/lineage)
+[ ${#ID} -eq 12 ] || fail "no branch id in .lap/lineage"
+[ -f ".lap/log/$ID.000001.jsonl" ] || fail "the branch's first chunk is missing"
+head -1 ".lap/log/$ID.000001.jsonl" | grep -q '"type":"branch","id":"'"$ID"'","name":"feat","parent":"main"' || fail "the branch record is not first"
+grep -q '"base_chunk":1' ".lap/log/$ID.000001.jsonl" || fail "the base chunk is not 1"
+[ -f "$WORK/bp/.lap/log/main.000002.jsonl" ] || fail "the parent's chunk was not sealed"
+[ -s "$WORK/bp/.lap/log/main.000002.jsonl" ] && fail "the parent's new chunk is not empty"
+[ "$(shasum < "$WORK/bp/.lap/log/main.000001.jsonl")" = "$C1" ] || fail "sealing changed the parent's chunk"
+grep -q '"name":"feat"' "$WORK/bp/.lap/branches.json" || fail "the parent does not list the branch"
+grep -q '"path":"/[^"]*/bw"' "$WORK/bp/.lap/branches.json" || fail "the registry has the wrong path"
+expect_grep "session: none" "$LAP" status
+expect_grep "clean" "$LAP" status
+expect_grep "chain ok: 7 records" "$LAP" verify
+expect_grep "0 mismatch" "$LAP" verify --deep
+
+t "a second branch before the parent appends shares the base, no new seal"
+cd "$WORK/bp" || exit 1
+mkdir -p "$WORK/bw2" && cp f.txt .lapignore .gitignore "$WORK/bw2/" && cd "$WORK/bw2" || exit 1
+expect_ok "$LAP" branch start second --from ../bp
+[ -e "$WORK/bp/.lap/log/main.000003.jsonl" ] && fail "an empty open chunk was sealed again"
+grep -q '"base_chunk":1' .lap/log/*.000001.jsonl 2>/dev/null || fail "the second branch has another base chunk"
+expect_grep "chain ok: 7 records" "$LAP" verify
+expect_grep "clean" "$LAP" status
+cd "$WORK/bw" || exit 1
+
+t "a branch's ids go on from its base, and both folders commit"
+"$LAP" session start "branch work" >/dev/null 2>&1
+expect_grep "S2" "$LAP" session current
+printf 'four\n' >> f.txt
+expect_grep "L4 " "$LAP" commit f.txt -i "extend on the branch" -b "appends a fourth line"
+"$LAP" session end >/dev/null 2>&1
+git add -A && git commit -qm "branch work"
+cd "$WORK/bp" || exit 1
+"$LAP" session start "parent work" >/dev/null 2>&1
+printf 'g\n' > g.txt
+expect_grep "L4 " "$LAP" commit g.txt -i "extend on the parent" -b "creates g.txt on the parent"
+"$LAP" session end >/dev/null 2>&1
+[ -s .lap/log/main.000002.jsonl ] || fail "the parent did not append to its new chunk"
+git add -A && git commit -qm "parent work"
+
+t "git merges a branch into its parent with no conflict in .lap/log/"
+git merge -q --no-edit feat >/dev/null 2>&1 || fail "git merge failed"
+[ -z "$(git diff --name-only --diff-filter=U)" ] || fail "git reported conflicts: $(git diff --name-only --diff-filter=U)"
+[ -f ".lap/log/$ID.000001.jsonl" ] || fail "git did not bring the branch's chunk"
+expect_grep "chain ok: 9 records" "$LAP" verify
+expect_grep "modified  f.txt" "$LAP" status
+git checkout -q -- f.txt 2>/dev/null
+git reset -q --hard HEAD~1 2>/dev/null
+cd "$WORK/bw" && expect_grep "chain ok: 10 records" "$LAP" verify
+
+t "a plain copy of the parent folder becomes a branch, caches and all"
+cp -R "$WORK/bp" "$WORK/bc" && cd "$WORK/bc" || exit 1
+expect_ok "$LAP" branch start copied --from ../bp
+[ -e .lap/branches.json ] && fail "the copy kept the parent's registry"
+expect_grep "clean" "$LAP" status
+"$LAP" session start "work in the copy" >/dev/null 2>&1
+printf 'copy\n' >> f.txt
+expect_grep "L5 " "$LAP" commit f.txt -i "extend in the copy" -b "appends a line in the copied folder"
+expect_grep "0 mismatch" "$LAP" verify --deep
+grep -q '"name":"copied"' "$WORK/bp/.lap/branches.json" || fail "the parent does not list the copy"
+
+t "branch start refuses what it cannot make a branch of"
+cd "$WORK/bp" || exit 1
+mkdir -p "$WORK/bx" && cp f.txt g.txt .lapignore .gitignore "$WORK/bx/" && cd "$WORK/bx" || exit 1
+expect_grep "missing_from" "$LAP" branch start --json
+expect_grep "same_folder" "$LAP" branch start --from . --json
+expect_grep "bad_name" "$LAP" branch start main --from ../bp --json
+expect_grep "name_taken" "$LAP" branch start feat --from ../bp --json
+expect_grep "nested_branch" "$LAP" branch start --from ../bw --json
+expect_grep "no_parent" "$LAP" branch start --from "$WORK/nothing-here" --json
+printf 'changed\n' > f.txt
+expect_grep "not_clean" "$LAP" branch start --from ../bp --json
+expect_grep "f.txt" "$LAP" branch start --from ../bp
+expect_grep "git-commit the parent's work first" "$LAP" branch start --from ../bp
+[ -e .lap/lineage ] && fail "a refused start left a lineage file"
+grep -q '"path":"'"$WORK/bx"'"' "$WORK/bp/.lap/branches.json" && fail "a refused start was registered"
+cp "$WORK/bp/f.txt" f.txt
+# a history of its own (an init alone can match the parent's byte for byte
+# when both were made in the same second)
+"$LAP" init >/dev/null 2>&1
+"$LAP" commit f.txt --no-session -i "start an unrelated history" -b "records f.txt in a history of its own" >/dev/null 2>&1
+expect_grep "unrelated_history" "$LAP" branch start --from ../bp --json
+cd "$WORK/bw" && expect_grep "already_branch" "$LAP" branch start --from ../bp --json
+
+t "a read-only parent refuses the start and nothing is made here"
+if [ "$(id -u)" != 0 ]; then
+    mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"
+    cd "$WORK/bp" && "$LAP" session start "fill the open chunk" >/dev/null 2>&1 && cd "$WORK/br"
+    chmod a-w "$WORK/bp/.lap" "$WORK/bp/.lap/log"
+    expect_grep "parent_read_only" "$LAP" branch start --from ../bp --json
+    chmod u+w "$WORK/bp/.lap" "$WORK/bp/.lap/log"
+    [ -e .lap ] && fail "a refused start made .lap here"
+    grep -q '"path":"'"$WORK/br"'"' "$WORK/bp/.lap/branches.json" && fail "a refused start was registered"
+else
+    echo "skip: running as root, a read-only parent cannot be made"
+fi
+cd "$WORK"
+else
+    echo "skip: git not found, the branch scenarios did not run"
+fi
+
 # ------------------------------------------------------------ summary
 echo "e2e: $TESTS scenarios, $FAILED failure(s)"
 [ "$FAILED" -eq 0 ] || exit 1

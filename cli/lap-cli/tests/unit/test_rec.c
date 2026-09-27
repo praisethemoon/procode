@@ -206,6 +206,47 @@ void test_rec(void) {
     ASSERT_TRUE(tl.torn_bytes > 0);
     ASSERT_TRUE(tl.chain_ok);
 
+    t_begin("rec: a branch record round-trips in its field order");
+    Rec br;
+    memset(&br, 0, sizeof br);
+    br.type = REC_BRANCH;
+    br.id = "7c1e9a02d4b8";
+    br.name = "parser \"fix\"";
+    br.parent = "main";
+    br.base = "ab12";
+    br.base_chunk = 3;
+    br.user = "claude";
+    br.ts = "2026-09-27T10:00:00Z";
+    br.prev = "ab12";
+    size_t blen;
+    char *bline = rec_encode(a, &br, &blen);
+    ASSERT_TRUE(strncmp(bline,
+                        "{\"type\":\"branch\",\"id\":\"7c1e9a02d4b8\","
+                        "\"name\":\"parser \\\"fix\\\"\",\"parent\":\"main\","
+                        "\"base\":\"ab12\",\"base_chunk\":3,\"user\":"
+                        "\"claude\",\"ts\":",
+                        strlen("{\"type\":\"branch\",\"id\":\"7c1e9a02d4b8\","
+                               "\"name\":\"parser \\\"fix\\\"\",\"parent\":"
+                               "\"main\",\"base\":\"ab12\",\"base_chunk\":3,"
+                               "\"user\":\"claude\",\"ts\":")) == 0);
+    Rec bback;
+    ASSERT_TRUE(rec_decode(a, bline, blen, &bback, err, sizeof err));
+    ASSERT_TRUE(bback.type == REC_BRANCH);
+    ASSERT_EQ_S(bback.id, "7c1e9a02d4b8");
+    ASSERT_EQ_S(bback.name, "parser \"fix\"");
+    ASSERT_EQ_S(bback.parent, "main");
+    ASSERT_EQ_S(bback.base, "ab12");
+    ASSERT_EQ_I(bback.base_chunk, 3);
+    ASSERT_EQ_S(bback.user, "claude");
+    ASSERT_EQ_S(bback.hash, br.hash);
+
+    t_begin("rec: a branch record without its base chunk is refused");
+    const char *nobase = "{\"type\":\"branch\",\"id\":\"7c1e9a02d4b8\","
+                         "\"name\":\"x\",\"parent\":\"main\",\"base\":\"ab\","
+                         "\"ts\":\"t\",\"prev\":\"ab\"}";
+    ASSERT_TRUE(!rec_decode(a, nobase, strlen(nobase), &bback, err,
+                            sizeof err));
+
     t_begin("rec: tampering changes the hash (chain detection)");
     Rec r1;
     memset(&r1, 0, sizeof r1);

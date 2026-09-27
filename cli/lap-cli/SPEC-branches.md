@@ -56,50 +56,8 @@ With the user, 2026-09-27:
 
 ## Chunks
 
-Built: `SPEC.md` §Chunks describes chunk files, sealing at the limit, order
-by the hash chain and `verify`. What branches add to them:
-
-```
-.lap/
-  log/
-    main.000001.jsonl      sealed
-    main.000002.jsonl      sealed
-    main.000003.jsonl      open: main appends here
-    7c1e9a02d4b8.000001.jsonl   a branch's lineage (after git merge, or in its folder)
-  ...caches as before...
-  branches.json            the registry (§Registry): local, not committed
-  lineage                  this folder's lineage when it is a branch: local, not committed
-```
-
-- A branch's lineage is its 12-hex-digit id (§Branches). Two copies of one
-  folder never create the same branch id, so chunk files never collide.
-- Starting a branch also seals the parent's open chunk: lap creates the
-  parent's chunk `n + 1`, empty, so the next append lands there. An open
-  chunk that is still empty is not sealed again: a second branch started
-  before the parent appended anything shares the first one's base.
-- **Which lineage a folder writes** is `main` unless `.lap/lineage` names a
-  branch id. `branch start` writes that file. It is machine-local, like the
-  registry: after `git merge` the parent folder holds the branch's chunks
-  too, so the chunks alone cannot say which lineage is this folder's.
-- A branch's first record carries its base as `prev` (§Branches).
-- A folder's history is its lineage's chunks, preceded by its parent's
-  chunks up to the base. Chunks of other lineages may sit in `.lap/log/` (a
-  `git merge` brings a branch's chunks into the parent's folder); they are
-  not part of this folder's history until adopted.
-
-### Why a branch start seals its parent's chunk
-
-A branch never writes to its parent's chunks, only to its own lineage's. But
-its folder holds copies of them. In a git worktree, git checked out the
-parent's chunks as its last git commit had them, usually behind the parent's
-lap history, and `branch start` brings them up to the parent's head. If the
-parent then kept appending to that same open chunk, git would see both sides
-change one file differently, and `git merge` would conflict on it. Sealed at
-the branch start, the chunk is identical on both sides from then on (an
-identical change merges cleanly), and the parent's new records go to a file
-the branch never had.
-
-### What changes elsewhere
+Built: `SPEC.md` §Chunks and §Branches (lineages, the branch record, the
+lineage file, sealing at a branch start). Still to come:
 
 - **`lap verify`** walks each lineage present, not only this folder's.
 - **Hash lookups** (`show #hash`) search every chunk present, including other
@@ -109,60 +67,7 @@ the branch never had.
 
 ### Starting one
 
-The folder is made by whoever wants it — `git worktree add`, or a plain copy
-of the parent folder. lap does not create folders. Then, in the new folder:
-
-```
-lap branch start [name] --from <parent folder>
-```
-
-1. **History.** If this folder has no `.lap/`, lap copies the parent's history
-   (its chunks up to the parent's head). If it has one (a copied folder, or a
-   worktree whose git commit carries `.lap/log/`), its head must be a record
-   of the parent's history, else `unrelated_history`; lap then brings it up
-   to the parent's head. The base is always the parent's head.
-2. **Files.** Every tracked file must equal the committed state at the base
-   (as `status` would find it clean). Otherwise `not_clean`, listing the
-   files: a branch's first commits must not silently absorb differences it
-   never made. The two usual causes are named in the error: the worktree was
-   checked out from a git commit older than lap's head (git-commit the
-   parent's work first), and files lap tracks but git ignores (a worktree
-   does not have them; copy them over).
-3. **Sealing.** Under the parent's lock, lap seals the parent's open chunk
-   (§Why a branch start seals its parent's chunk) and copies the sealed
-   version here.
-4. **The branch record** starts the new lineage's first chunk:
-   ```jsonc
-   {"type":"branch","id":"7c1e9a02d4b8","name":"parser-fix",
-    "parent":"main","base":"<parent head>","base_chunk":3,
-    "user":"...","ts":"...","prev":"<base>"}
-   ```
-   `id` is the first 12 hex digits of SHA-256 over base, name, time and a
-   random nonce; `name` is optional (defaults to the id) and is what people
-   type. `parent` is the parent's lineage. `base_chunk` is the parent's
-   chunk the base ends: sealing makes the base the last record of a sealed
-   chunk, so a folder's history is whole chunks — the parent's `1 …
-   base_chunk`, then its own.
-5. **Registration.** lap adds the branch to the parent's registry
-   (§Registry), under the same lock. If the parent cannot be written
-   (read-only), the branch does not start: sealing is what keeps the later
-   `git merge` free of log conflicts.
-
-6. **Lineage.** lap writes the branch id to this folder's `.lap/lineage`.
-
-It prints the id and the name. The parent must be a `main` folder: a branch
-of a branch is refused with `nested_branch` in this version.
-
-**The recommended layout** keeps the first folder quiet: agents work in
-branch folders, and the first folder only merges. Then a branch always
-starts from a folder nobody is editing, and a merge never meets pending
-work of its own.
-
-Ids inside a branch continue its parent's counters (`L` and `S` numbers after
-the base), so one folder never shows the same id twice. Two folders do: the
-parent and a branch both go on from the base, and the board is shared. So
-text that leaves a folder — a ticket comment, a commit cited from another
-branch — names a commit by its hash, and a session as `<branch>/S<n>`.
+Built: `SPEC.md` §Branches → Starting one.
 
 ### Committing: say where
 
