@@ -213,7 +213,7 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
 ```
 
 - A chunk is named `<lineage>.<n>.jsonl`: the lineage is `main` (other
-  lineages come with branches, `SPEC-branches.md`), and `n` counts its chunks
+  lineages come with branches, §Branches), and `n` counts its chunks
   from 1, six digits, zero-padded. Other files in the directory are ignored.
 - A lineage's **open** chunk is its highest `n`; every lower one is **sealed**
   and never written again. When an append would take the open chunk past
@@ -426,6 +426,22 @@ finding its history nowhere.
   stays — an unmerged or stopped branch whose folder is gone is shown as
   `missing` until `lap branch forget` drops it or `lap branch move` points
   it at the folder's new place.
+
+### Not in this version
+
+- Bringing a parent's newer work into a branch (merging the other way):
+  merge the branch into its parent, then start a fresh one.
+- Creating or deleting folders, or running git: lap records; git and the
+  user move code.
+- Adopting across unrelated histories, or merging two branches with each
+  other without their common parent.
+- A branch of a branch (`nested_branch`): every branch starts from a
+  `main` folder.
+- Retrying a stopped file (`lap merge --resume <file>`) once the parent has
+  resolved the conflict: a stopped file stays stopped for its branch.
+
+The chunk limit stays a constant (4 MB) so every folder chunks alike; it
+is revisited only with evidence.
 
 ## Messages
 

@@ -252,17 +252,6 @@ bool plat_remove_file(const char *path) {
 #endif
 }
 
-bool plat_rename(const char *from, const char *to) {
-#ifdef _WIN32
-    char wsrc[LAP_PATH_MAX], wdst[LAP_PATH_MAX];
-    return MoveFileExA(winpath(wsrc, sizeof wsrc, from),
-                       winpath(wdst, sizeof wdst, to),
-                       MOVEFILE_WRITE_THROUGH) != 0;
-#else
-    return rename(from, to) == 0;
-#endif
-}
-
 bool plat_getcwd(char *buf, size_t bufsz) {
 #ifdef _WIN32
     if (!_getcwd(buf, (int)bufsz))
