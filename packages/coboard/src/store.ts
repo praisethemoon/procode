@@ -47,7 +47,7 @@ export const LOG_FILE = "log.jsonl";
 
 export class BoardError extends Error {
     constructor(
-        readonly code: "not_found" | "invalid" | "in_use" | "no_board" | "locked",
+        readonly code: "not_found" | "invalid" | "in_use" | "no_board" | "locked" | "unwritable",
         message: string,
     ) {
         super(message);
@@ -292,11 +292,16 @@ export class Board {
     /* Runs `fn` against a fresh read of the log while holding
      * `.coboard/lock`, and appends whatever records it returns. */
     private write<T>(fn: (st: State) => { records: object[]; result: T }): T {
-        fs.mkdirSync(this.dir, { recursive: true });
-        // The log is meant to be committed; the lock never is.
-        const ignore = path.join(this.dir, ".gitignore");
-        if (!fs.existsSync(ignore)) {
-            fs.writeFileSync(ignore, "lock\n");
+        try {
+            fs.mkdirSync(this.dir, { recursive: true });
+            // The log is meant to be committed; the lock never is.
+            const ignore = path.join(this.dir, ".gitignore");
+            if (!fs.existsSync(ignore)) {
+                fs.writeFileSync(ignore, "lock\n");
+            }
+        } catch (e) {
+            const code = (e as NodeJS.ErrnoException).code;
+            throw new BoardError("unwritable", `cannot write the board in ${this.dir} (${code ?? String(e)}): is the folder writable?`);
         }
         const lock = path.join(this.dir, "lock");
         const deadline = Date.now() + 5000;
@@ -304,7 +309,15 @@ export class Board {
             try {
                 fs.writeFileSync(lock, String(process.pid), { flag: "wx" });
                 break;
-            } catch {
+            } catch (e) {
+                // Only "another writer holds it" is worth waiting for.
+                const code = (e as NodeJS.ErrnoException).code;
+                if (code !== "EEXIST") {
+                    throw new BoardError("unwritable", `cannot take the board's lock in ${this.dir} (${code ?? String(e)}): is the folder writable?`);
+                }
+                if (Date.now() > deadline) {
+                    throw new BoardError("locked", "the board is locked by another writer");
+                }
                 // A lock older than 30s belongs to a writer that died holding it.
                 try {
                     if (Date.now() - fs.statSync(lock).mtimeMs > 30_000) {
@@ -312,10 +325,7 @@ export class Board {
                         continue;
                     }
                 } catch {
-                    continue;
-                }
-                if (Date.now() > deadline) {
-                    throw new BoardError("locked", "the board is locked by another writer");
+                    continue; /* released meanwhile: try again */
                 }
                 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
             }

@@ -139,3 +139,26 @@ test("branchArgs: the branch id in a branch folder, main where branches exist, e
         else process.env["LAP_BRANCH"] = saved;
     }
 });
+
+test("a board whose folder cannot be written fails at once, as a refusal, never waiting", { skip: process.getuid?.() === 0 }, async () => {
+    const dir = tmp();
+    new Board(dir).create({ kind: "epic", title: "Read-only" });
+    fs.chmodSync(path.join(dir, ".coboard"), 0o555);
+    try {
+        const t0 = Date.now();
+        assert.throws(() => new Board(dir).create({ kind: "epic", title: "Nope" }), (e: unknown) => (e as { code?: string }).code === "unwritable");
+        assert.ok(Date.now() - t0 < 1000, "failed promptly, not after the lock's wait");
+        const saved = process.env["COBOARD_DIR"];
+        process.env["COBOARD_DIR"] = dir;
+        try {
+            const r = await call(tmp(), "board_create", { kind: "epic", title: "Nope" });
+            assert.equal(r.error, true);
+            assert.match(r.text, /is the folder writable/);
+        } finally {
+            if (saved === undefined) delete process.env["COBOARD_DIR"];
+            else process.env["COBOARD_DIR"] = saved;
+        }
+    } finally {
+        fs.chmodSync(path.join(dir, ".coboard"), 0o755);
+    }
+});
