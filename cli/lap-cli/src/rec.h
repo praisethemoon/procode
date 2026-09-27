@@ -74,6 +74,10 @@ typedef struct {
     int32_t new_n;
     bool eof_nl;     /* file ends with newline after this commit */
     int32_t version; /* init only */
+    /* Not encoded: the branch whose chunk the record was read from, by
+     * name ("main", or the branch's name), set by the readers that know
+     * the chunks (repo_log_load, idx_fetch); NULL elsewhere. */
+    const char *lineage;
     char hash[65];   /* SHA-256 of raw, filled by decode/append */
     const char *raw; /* serialized line (no trailing newline) */
     size_t raw_len;

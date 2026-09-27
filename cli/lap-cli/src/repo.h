@@ -22,6 +22,9 @@ typedef struct {
     char root[LAP_PATH_MAX];    /* absolute repo root, '/' separators */
     char lapdir[LAP_PATH_MAX];  /* <root>/.lap */
     Hist hist; /* this folder's history, as its chunks were at open */
+    /* hist is another branch's history (a reader's --branch): the index,
+     * the shadows and the state describe this folder's, not it. */
+    bool foreign;
 
     int64_t next_commit;  /* next L<n> */
     int64_t next_session; /* next S<n> */

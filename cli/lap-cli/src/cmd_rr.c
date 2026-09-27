@@ -79,13 +79,15 @@ static void render_net(StrBuf *sb, Arena *a, Lines before, Lines after,
 }
 
 int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
+    static const char *const value_flags[] = {"--branch", NULL};
     static const char *const bool_flags[] = {"--json", "--no-diff", NULL};
-    bool json = has_flag(argc, argv, NULL, "--json");
-    if (!flags_known(argc, argv, NULL, bool_flags))
+    bool json = has_flag(argc, argv, value_flags, "--json");
+    if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;
-    bool no_diff = has_flag(argc, argv, NULL, "--no-diff");
-    const char *pos0 = positional_arg(argc, argv, NULL, 0);
-    const char *pos1 = positional_arg(argc, argv, NULL, 1);
+    bool no_diff = has_flag(argc, argv, value_flags, "--no-diff");
+    const char *view = flag_value(argc, argv, value_flags, "--branch");
+    const char *pos0 = positional_arg(argc, argv, value_flags, 0);
+    const char *pos1 = positional_arg(argc, argv, value_flags, 1);
 
     Repo repo;
     char err[512];
@@ -93,6 +95,8 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
         err_out(json, "no_repo", "%s", err);
         return LAP_EXIT_ERR;
     }
+    if (!repo_view_branch(a, &repo, view, json))
+        return LAP_EXIT_ERR;
     RecLog log;
     if (!repo_log_load(a, &repo, &log, err, sizeof err)) {
         err_out(json, "log_unreadable", "%s", err);
@@ -232,6 +236,12 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
             if (rec->forced) {
                 sb_putc(&sb, ' ');
                 sb_field(&sb, S_MUTED, "(forced)", 0);
+            }
+            if (rec->from) {
+                char from[32];
+                snprintf(from, sizeof from, "(from #%.7s)", rec->from);
+                sb_putc(&sb, ' ');
+                sb_field(&sb, S_MUTED, from, 0);
             }
             sb_putc(&sb, '\n');
         }

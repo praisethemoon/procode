@@ -93,6 +93,9 @@ bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
 void hist_chunk_path(const Hist *h, int32_t i, char *out, size_t outsz);
 /* The chunk holding offset off (the last chunk for off == size), or -1. */
 int32_t hist_locate(const Hist *h, uint64_t off);
+/* The branch chunk i belongs to, as people name it: "main", the branch's
+ * name for the lineage this history is a branch's, else the lineage id. */
+const char *hist_label(const Hist *h, int32_t i);
 /* True for every chunk but the open one (the last). */
 bool hist_is_sealed(const Hist *h, int32_t i);
 /* "main.000002.jsonl line 7": where an offset is, for people. */

@@ -56,35 +56,6 @@ static Lines file_at(Arena *a, const RecLog *log, const char *file,
     return l;
 }
 
-/* The branch `key` names, by the registry or by the chunks present:
- * its id, or NULL. */
-static const char *find_branch(Arena *a, const Repo *r, const Branches *reg,
-                               const char *key) {
-    const BranchEntry *e = branches_find(reg, key);
-    if (e)
-        return e->id;
-    const char **ids;
-    int32_t n = hist_lineages(a, r->lapdir, &ids);
-    for (int32_t i = 0; i < n; i++) {
-        Rec br;
-        char err[256];
-        if (hist_first_record(a, r->lapdir, ids[i], &br, err, sizeof err) &&
-            br.type == REC_BRANCH &&
-            (strcmp(br.id, key) == 0 || strcmp(br.name, key) == 0))
-            return ids[i];
-    }
-    return NULL;
-}
-
-/* True when folder `path` is still branch `id`: its .lap names it. */
-static bool folder_is(Arena *a, const char *path, const char *id) {
-    char lapdir[LAP_PATH_MAX], lineage[HIST_LINEAGE_MAX], err[256];
-    snprintf(lapdir, sizeof lapdir, "%s/%s", path, LAP_DIR);
-    return plat_is_dir(lapdir) &&
-           hist_folder_lineage(a, lapdir, lineage, err, sizeof err) &&
-           strcmp(lineage, id) == 0;
-}
-
 /* Seals the branch folder's open chunk under its lock, then copies the
  * branch's own chunks here: the originals stay readable after the folder
  * is gone, and each copy is final, so a later git merge of the branch
@@ -144,9 +115,9 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     /* The branch, and where its history is. */
     Branches reg;
     branches_load(a, repo.lapdir, &reg);
-    const char *id = find_branch(a, &repo, &reg, key);
+    const char *id = branch_find(a, &repo, &reg, key);
     const BranchEntry *ent = id ? branches_find(&reg, id) : NULL;
-    bool reachable = ent && folder_is(a, ent->path, id);
+    bool reachable = ent && branch_folder_is(a, ent->path, id);
     if (!id) {
         err_out(json, "branch_not_found",
                 "no branch %s here: it is not in this folder's registry, and "

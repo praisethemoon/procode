@@ -132,6 +132,10 @@ void json_commit(StrBuf *sb, const Rec *rec, const char *note) {
         sb_puts(sb, ",\"forced\":true");
     if (rec->from)
         sb_printf(sb, ",\"from\":\"%s\"", rec->from);
+    if (rec->lineage) {
+        sb_puts(sb, ",\"branch\":");
+        json_escape_c(sb, rec->lineage);
+    }
     if (note) {
         sb_puts(sb, ",\"match\":");
         json_escape_c(sb, note);
@@ -442,4 +446,73 @@ bool branch_check(Arena *a, const Repo *r, const char *given, bool json) {
             "to with --branch %s (or LAP_BRANCH=%s)",
             r->root, is_branch ? "is a branch" : "has branches", mine, mine);
     return false;
+}
+
+const char *branch_find(Arena *a, const Repo *r, const Branches *reg,
+                        const char *key) {
+    const BranchEntry *e = branches_find(reg, key);
+    if (e)
+        return e->id;
+    const char **ids;
+    int32_t n = hist_lineages(a, r->lapdir, &ids);
+    for (int32_t i = 0; i < n; i++) {
+        Rec br;
+        char err[256];
+        if (hist_first_record(a, r->lapdir, ids[i], &br, err, sizeof err) &&
+            br.type == REC_BRANCH &&
+            (strcmp(br.id, key) == 0 || strcmp(br.name, key) == 0))
+            return ids[i];
+    }
+    return NULL;
+}
+
+bool branch_folder_is(Arena *a, const char *path, const char *id) {
+    char lapdir[LAP_PATH_MAX], lineage[HIST_LINEAGE_MAX], err[256];
+    snprintf(lapdir, sizeof lapdir, "%s/%s", path, LAP_DIR);
+    return plat_is_dir(lapdir) &&
+           hist_folder_lineage(a, lapdir, lineage, err, sizeof err) &&
+           strcmp(lineage, id) == 0;
+}
+
+bool repo_view_branch(Arena *a, Repo *r, const char *name, bool json) {
+    if (!name)
+        return true;
+    bool is_branch = r->hist.parent[0] != '\0';
+    if ((is_branch && (strcmp(name, r->hist.name) == 0 ||
+                       strcmp(name, r->hist.lineage) == 0)) ||
+        (!is_branch && strcmp(name, LAP_MAIN_LINEAGE) == 0))
+        return true; /* this folder's own history */
+    Hist view;
+    char err[512];
+    bool ok;
+    if (strcmp(name, LAP_MAIN_LINEAGE) == 0) {
+        ok = hist_open(a, r->lapdir, LAP_MAIN_LINEAGE, &view, err, sizeof err);
+    } else {
+        Branches reg;
+        branches_load(a, r->lapdir, &reg);
+        const char *id = branch_find(a, r, &reg, name);
+        const BranchEntry *e = id ? branches_find(&reg, id) : NULL;
+        if (!id) {
+            err_out(json, "unknown_branch",
+                    "no branch %s here: not in this folder's registry, and "
+                    "no chunk of it in %s",
+                    name, r->hist.dir);
+            return false;
+        }
+        if (e && branch_folder_is(a, e->path, id)) {
+            char lapdir[LAP_PATH_MAX];
+            snprintf(lapdir, sizeof lapdir, "%s/%s", e->path, LAP_DIR);
+            ok = hist_open_folder(a, lapdir, &view, err, sizeof err);
+        } else {
+            ok = hist_open_lineage(a, r->lapdir, id, &view, err, sizeof err);
+        }
+    }
+    if (!ok) {
+        err_out(json, "unknown_branch", "cannot read branch %s: %s", name,
+                err);
+        return false;
+    }
+    r->hist = view;
+    r->foreign = true;
+    return true;
 }

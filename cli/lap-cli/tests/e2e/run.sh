@@ -1382,6 +1382,7 @@ expect_grep "the parent's own session" "$LAP" session current
 expect_grep "T-7: branch work" "$LAP" session list --meta ticket=T-7
 expect_grep '"from":"' "$LAP" show L6 --json
 expect_grep "^from: #" "$LAP" show L7
+expect_grep "appends g4 on the branch (from #" "$LAP" rr S2 --no-diff
 expect_grep '"type":"merge","branch":"' history
 expect_grep "0 mismatch" "$LAP" verify --deep
 expect_grep "nothing new to adopt" "$LAP" merge b
@@ -1458,6 +1459,41 @@ rm -rf "$WORK/m5-w"
 expect_grep "clean" "$LAP" status
 expect_grep "0 mismatch" "$LAP" verify --deep
 expect_grep "nothing new to adopt" "$LAP" merge copy
+
+t "log, show and rr read a branch from its parent, before and after git merge"
+merge_pair m6; BP="$WORK/m6-p"; BW="$WORK/m6-w"
+cd "$BW" && "$LAP" session start "branch review work" --branch b >/dev/null 2>&1
+in_branch g.txt 's/^g1$/review me/' "puts a line to review in g.txt"
+cd "$BP" || exit 1
+# before git merge: the branch is read from its registered folder
+expect_grep '"behavior":"puts a line to review in g.txt".*"branch":"b"' "$LAP" log --branch b --json
+expect_not_grep "puts a line to review" "$LAP" log --json
+expect_grep "puts a line to review in g.txt" "$LAP" rr --branch b
+expect_grep "branch: b" "$LAP" show L5 --branch b
+expect_grep "unknown_branch" "$LAP" log --branch nope --json
+cd "$BW" && expect_not_grep "puts a line" "$LAP" log --branch main
+expect_grep '"branch":"main"' "$LAP" log --branch main --json
+git_merge_b || fail "git merge m6"
+# after git merge, with the branch folder gone: read from the chunks here
+mv "$BW" "$WORK/m6-away"
+cd "$BP" || exit 1
+expect_grep "puts a line to review in g.txt" "$LAP" log --branch b --json
+expect_grep "adopted 1 of 1" "$LAP" merge b
+FROM=$("$LAP" log -n 1 --json | sed 's/.*"from":"\([0-9a-f]*\)".*/\1/')
+[ ${#FROM} -eq 64 ] || fail "the adopted commit has no from link"
+expect_grep "branch: b" "$LAP" show "$FROM"
+expect_grep '"branch":"b"' "$LAP" show "#$(printf %.7s "$FROM")" --json
+expect_not_grep "^branch:" "$LAP" show L5
+expect_grep "branch b: chain ok: 8 records" "$LAP" verify
+expect_grep '"branches":\[{"branch":"b","records":8,"chain_ok":true}\]' "$LAP" verify --json
+BC=$(ls .lap/log/*.000001.jsonl | grep -v '/main\.')
+cp "$BC" .lap/branch.bak
+# the session start, which the branch's commit chains from
+sed 's/branch review work/BRANCH REVIEW WORK/' .lap/branch.bak > "$BC"
+expect_grep "branch b: CHAIN BROKEN" "$LAP" verify
+expect_fail "$LAP" verify
+mv .lap/branch.bak "$BC"
+expect_ok "$LAP" verify
 
 t "lap merge refuses what it cannot merge"
 cd "$BP" && expect_grep "branch_not_found" "$LAP" merge nothing-by-that-name --json

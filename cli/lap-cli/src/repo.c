@@ -492,6 +492,12 @@ bool repo_log_load(Arena *a, Repo *r, RecLog *out, char *err, size_t errsz) {
     if (!rec_log_parse(a, data, len, where_in_history, &r->hist, out, err,
                        errsz))
         return false;
+    for (int32_t i = 0, k = 0; i < out->count; i++) {
+        uint64_t off = (uint64_t)(out->v[i].raw - data);
+        while (k + 1 < r->hist.n && r->hist.v[k + 1].start <= off)
+            k++; /* records are in chunk order */
+        out->v[i].lineage = hist_label(&r->hist, k);
+    }
     if (!out->chain_ok) {
         /* A record whose prev does not match was usually preceded by a
          * changed record: the chunk holding that one is to blame, which for

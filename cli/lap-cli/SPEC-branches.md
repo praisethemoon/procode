@@ -57,11 +57,8 @@ With the user, 2026-09-27:
 ## Chunks
 
 Built: `SPEC.md` §Chunks and §Branches (lineages, the branch record, the
-lineage file, sealing at a branch start). Still to come:
-
-- **`lap verify`** walks each lineage present, not only this folder's.
-- **Hash lookups** (`show #hash`) search every chunk present, including other
-  lineages', so a `from` link can be followed from the parent.
+lineage file, sealing at a branch start, `verify` and `show #hash` over
+every lineage present).
 
 ## Branches
 
@@ -104,18 +101,14 @@ the log — and it is **hints only**:
 
 ### Commands
 
-- `lap branch start [name] --from <parent>` — above.
+Built: `branch start`, `merge`, and `--branch` on `log`, `show` and `rr`
+(`SPEC.md`). Still to come:
+
 - `lap branch list [--json]` — this folder's branches from the registry, each
   with its state: `active`, `merged` (up to head), `partly merged` (stopped
   files), `missing`; commits since base and since the last merge. In a branch
   folder, also its own name, parent and base.
 - `lap branch forget <branch>`, `lap branch move <branch> <path>`.
-- `lap merge <branch> [--dry-run]`.
-- `lap log`, `show`, `rr` accept `--branch <name>` to read another lineage
-  present in this folder (a merged-in branch's chunks, or a registered
-  folder's), so a branch's work can be reviewed from the parent.
-- `lap rr` of an adopted session shows the parent's view, with each commit's
-  `from` link.
 
 ### The board
 

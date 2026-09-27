@@ -82,6 +82,8 @@ static bool idx_load(Arena *a, const Repo *r, Idx *out, bool with_entries) {
 }
 
 Idx *idx_ready(Arena *a, const Repo *r) {
+    if (r->foreign) /* the index covers this folder's history only */
+        return NULL;
     Idx *idx = (Idx *)arena_alloc(a, sizeof(Idx));
     if (idx_load(a, r, idx, true) && idx->h.covered == r->hist.size)
         return idx;
@@ -122,8 +124,11 @@ bool idx_fetch(Arena *a, const Repo *r, const Idx *idx, int64_t entry,
     const IdxEntry *e = &idx->v[entry];
     char *line;
     char err[128];
-    return hist_read(a, &r->hist, e->off, e->len, &line) &&
-           rec_decode(a, line, e->len, out, err, sizeof err);
+    if (!hist_read(a, &r->hist, e->off, e->len, &line) ||
+        !rec_decode(a, line, e->len, out, err, sizeof err))
+        return false;
+    out->lineage = hist_label(&r->hist, hist_locate(&r->hist, e->off));
+    return true;
 }
 
 bool idx_write_heads(const Repo *r, const Idx *idx, char *err, size_t errsz) {

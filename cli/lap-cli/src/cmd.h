@@ -2,6 +2,7 @@
 #ifndef LAP_CMD_H
 #define LAP_CMD_H
 
+#include "branches.h"
 #include "diff.h"
 #include "ignore.h"
 #include "json.h"
@@ -61,6 +62,18 @@ bool branch_check(Arena *a, const Repo *r, const char *given, bool json);
 /* --branch's value, else $LAP_BRANCH, else NULL. */
 const char *branch_given(int32_t argc, char **argv,
                          const char *const *value_flags);
+/* The branch `key` (a name or an id) names, found in the registry reg or
+ * among the branch chunks in this folder: its id, or NULL. */
+const char *branch_find(Arena *a, const Repo *r, const Branches *reg,
+                        const char *key);
+/* True when folder `path` is still branch `id`: its .lap names it. */
+bool branch_folder_is(Arena *a, const char *path, const char *id);
+/* A reader's --branch: shows `name`'s history instead of this folder's —
+ * a registered branch's folder when it is reachable, else its chunks
+ * here; "main" in a branch folder is its parent's history to the base.
+ * NULL, or this folder's own branch, changes nothing. False after
+ * reporting unknown_branch. */
+bool repo_view_branch(Arena *a, Repo *r, const char *name, bool json);
 
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);

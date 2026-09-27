@@ -188,7 +188,45 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         mismatched = dc.mismatched;
     }
 
-    bool ok = log.chain_ok && mismatched == 0;
+    /* Other branches whose chunks are here (git merge brought them, or lap
+     * merge copied them): their chains are walked too, each from its base
+     * in this folder's chunks. */
+    StrBuf others_json, others_text;
+    sb_init(&others_json, a);
+    sb_init(&others_text, a);
+    bool others_ok = true;
+    const char **lineages;
+    int32_t nl = hist_lineages(a, repo.lapdir, &lineages);
+    for (int32_t i = 0; i < nl; i++) {
+        if (strcmp(lineages[i], repo.hist.lineage) == 0)
+            continue;
+        Repo other = repo;
+        RecLog olog;
+        bool read = hist_open_lineage(a, repo.lapdir, lineages[i],
+                                      &other.hist, err, sizeof err) &&
+                    repo_log_load(a, &other, &olog, err, sizeof err);
+        bool chain = read && olog.chain_ok;
+        others_ok = others_ok && chain;
+        const char *name = read ? other.hist.name : lineages[i];
+        const char *why = !read ? err : !olog.chain_ok ? olog.chain_err : "";
+        sb_puts(&others_json, others_json.len ? ",{\"branch\":" : "{\"branch\":");
+        json_escape_c(&others_json, name);
+        sb_printf(&others_json, ",\"records\":%d,\"chain_ok\":%s",
+                  read ? olog.count : 0, chain ? "true" : "false");
+        if (!chain) {
+            sb_puts(&others_json, ",\"chain_error\":");
+            json_escape_c(&others_json, why);
+        }
+        sb_putc(&others_json, '}');
+        if (chain)
+            sb_printf(&others_text, "%sbranch %s: chain ok%s: %d records\n",
+                      sgr(S_ADDED), name, sgr_off(), olog.count);
+        else
+            sb_printf(&others_text, "%sbranch %s: CHAIN BROKEN%s: %s\n",
+                      sgr(S_REMOVED), name, sgr_off(), why);
+    }
+
+    bool ok = log.chain_ok && mismatched == 0 && others_ok;
     if (json) {
         StrBuf sb;
         sb_init(&sb, a);
@@ -210,7 +248,10 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
             sb_putn(&sb, deep_out.data ? deep_out.data : "", deep_out.len);
             sb_puts(&sb, "]");
         }
-        sb_puts(&sb, "}");
+        sb_puts(&sb, ",\"branches\":[");
+        sb_putn(&sb, others_json.data ? others_json.data : "",
+                others_json.len);
+        sb_puts(&sb, "]}");
         puts(sb_finish(&sb));
     } else {
         if (log.chain_ok)
@@ -219,6 +260,7 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         else
             printf("%sCHAIN BROKEN%s: %s\n", sgr(S_REMOVED), sgr_off(),
                    log.chain_err);
+        fputs(others_text.len ? sb_finish(&others_text) : "", stdout);
         if (log.torn_tail)
             printf("note: torn trailing record ignored (%llu bytes from an "
                    "interrupted append; the next commit repairs it)\n",

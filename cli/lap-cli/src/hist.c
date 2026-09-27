@@ -153,6 +153,13 @@ int32_t hist_locate(const Hist *h, uint64_t off) {
     return lo;
 }
 
+const char *hist_label(const Hist *h, int32_t i) {
+    const char *lineage = h->v[i].lineage;
+    if (h->parent[0] && strcmp(lineage, h->lineage) == 0)
+        return h->name;
+    return lineage;
+}
+
 bool hist_is_sealed(const Hist *h, int32_t i) {
     return i >= 0 && i < h->n - 1;
 }

@@ -385,6 +385,24 @@ and git merged cleanly, there is no difference.
 `--dry-run` reports what would be adopted and where each file would stop,
 reading the branch folder in place, and writes nothing.
 
+### Reading another branch
+
+`lap log`, `lap show` and `lap rr` take `--branch <name>` to read another
+branch's history instead of this folder's: a registered branch from its
+folder when that is reachable, else from its chunks here (a `git merge`
+brought them, or `lap merge` copied them). In a branch folder, `--branch
+main` reads the parent's history up to the base. Naming this folder's own
+branch changes nothing; a name found nowhere is `unknown_branch`. It is a
+reader's flag: `LAP_BRANCH` does not set it.
+
+`lap show <hash>` without `--branch` also looks, when this history lacks
+the hash, in every branch whose chunks are here, so an adopted commit's
+`from` link opens its original. Commits in JSON output carry `branch`: the
+branch whose chunk holds the record (`main`, or the branch's name); `lap
+show` prints a `branch:` line for a commit that is not `main`'s. An
+adopted commit carries its `from` in JSON, a `from:` line in `lap show`,
+and `(from #<short hash>)` after its behavior in `lap rr`'s trajectory.
+
 ### Registry
 
 The parent's `.lap/branches.json` lists the branches started from it:
@@ -572,11 +590,11 @@ which neither exists until it is written). A dry run is a reader: it takes
 no lock and repairs nothing (no torn-tail cut, no state rewrite), and its
 predicted id is the one a commit made next would get.
 
-### `lap log [--session S] [--file F] [-n N]`
+### `lap log [--session S] [--file F] [-n N] [--branch B]`
 Commits newest-first: id, short hash, timestamp, session, op, file, range,
 intent summary.
 
-### `lap show <commit> [--full-file]`
+### `lap show <commit> [--full-file] [--branch B]`
 Full record: metadata with the full hash, the complete intent and behavior,
 `forced` when set, and a unified-diff-style hunk.
 `<commit>` is an id, a hash or a hash prefix (§References).
@@ -611,7 +629,7 @@ a `meta` object. This is how other tools link work to a session: coboard
 starts sessions with `--meta ticket=T-12` and finds a ticket's sessions with
 `lap session list --meta ticket=T-12`.
 
-### `lap rr [<session>] [<from> <to>] [--no-diff]`
+### `lap rr [<session>] [<from> <to>] [--no-diff] [--branch B]`
 A **review request**: what a run of work changed, and why. Two halves —
 the *trajectory* (every commit in the order the work happened) and the
 *net change* (each touched file replayed to just before the range and
@@ -631,7 +649,10 @@ the hunks, in both the human and JSON shapes. Read-only.
 
 ### `lap verify [--deep]`
 Walks the hash chain across every chunk, naming a modified sealed chunk
-(§Chunks). `--deep` also replays every file's history from
+(§Chunks), then the chain of every other branch whose chunks are here, one
+line each (`branch b: chain ok: 8 records`; in JSON, `branches:
+[{branch, records, chain_ok, chain_error?}]`). A broken one fails the
+command. `--deep` also replays every file's history from
 birth and compares the result byte-for-byte with the shadow store and
 every snapshot. Verification never uses the caches it is checking.
 

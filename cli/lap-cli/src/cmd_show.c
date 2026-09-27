@@ -20,12 +20,14 @@ static bool show_replay(Arena *a, Repo *repo, Idx *ix, const Rec *rec,
 }
 
 int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
+    static const char *const value_flags[] = {"--branch", NULL};
     static const char *const bool_flags[] = {"--json", "--full-file", NULL};
-    bool json = has_flag(argc, argv, NULL, "--json");
-    if (!flags_known(argc, argv, NULL, bool_flags))
+    bool json = has_flag(argc, argv, value_flags, "--json");
+    if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;
-    bool full_file = has_flag(argc, argv, NULL, "--full-file");
-    const char *id = positional_arg(argc, argv, NULL, 0);
+    bool full_file = has_flag(argc, argv, value_flags, "--full-file");
+    const char *view = flag_value(argc, argv, value_flags, "--branch");
+    const char *id = positional_arg(argc, argv, value_flags, 0);
     if (!id) {
         err_out(json, "usage", "usage: lap show <commit> [--full-file] "
                                "[--json]  (an id, a hash or a hash prefix)");
@@ -38,6 +40,8 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
         err_out(json, "no_repo", "%s", err);
         return LAP_EXIT_ERR;
     }
+    if (!repo_view_branch(a, &repo, view, json))
+        return LAP_EXIT_ERR;
     RecLog log;
     memset(&log, 0, sizeof log);
     Rec fetched;
@@ -60,6 +64,34 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
         }
         const char *code;
         int32_t at = ref_find(&log, id, &code, err, sizeof err);
+        /* A hash this history lacks may be another branch's, present here
+         * as its chunks: an adopted commit's from link. */
+        if (at < 0 && !view && !ref_is_id(id) &&
+            strcmp(code, "unknown_ref") == 0) {
+            const char **ids;
+            int32_t n = hist_lineages(a, repo.lapdir, &ids);
+            for (int32_t i = 0; i < n && at < 0; i++) {
+                Hist other;
+                char oerr[512];
+                if (strcmp(ids[i], repo.hist.lineage) == 0 ||
+                    !hist_open_lineage(a, repo.lapdir, ids[i], &other, oerr,
+                                       sizeof oerr))
+                    continue;
+                Repo alt = repo;
+                alt.hist = other;
+                alt.foreign = true;
+                RecLog olog;
+                const char *ocode;
+                if (!repo_log_load(a, &alt, &olog, oerr, sizeof oerr))
+                    continue;
+                int32_t oat = ref_find(&olog, id, &ocode, oerr, sizeof oerr);
+                if (oat >= 0) {
+                    repo = alt;
+                    log = olog;
+                    at = oat;
+                }
+            }
+        }
         if (at < 0) {
             err_out(json, code, "%s", err);
             return LAP_EXIT_ERR;
@@ -124,6 +156,8 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
         sb_putc(&sb, '\n');
         if (rec->user)
             sb_printf(&sb, "user: %s\n", rec->user);
+        if (rec->lineage && strcmp(rec->lineage, LAP_MAIN_LINEAGE) != 0)
+            sb_printf(&sb, "branch: %s\n", rec->lineage);
         sb_puts(&sb, "file: ");
         sb_text(&sb, rec->file, strlen(rec->file));
         sb_printf(&sb, "  (%s)\n", rec->op);

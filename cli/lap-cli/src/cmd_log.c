@@ -63,7 +63,7 @@ static bool log_via_scan(Arena *a, Repo *repo, const LogQuery *q, StrBuf *sb,
 
 int32_t cmd_log(Arena *a, int32_t argc, char **argv) {
     static const char *const value_flags[] = {"--session", "--file", "-n",
-                                              NULL};
+                                              "--branch", NULL};
     static const char *const bool_flags[] = {"--json", NULL};
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
@@ -79,6 +79,10 @@ int32_t cmd_log(Arena *a, int32_t argc, char **argv) {
         err_out(json, "no_repo", "%s", err);
         return LAP_EXIT_ERR;
     }
+    if (!repo_view_branch(a, &repo,
+                          flag_value(argc, argv, value_flags, "--branch"),
+                          json))
+        return LAP_EXIT_ERR;
 
     LogQuery q;
     q.session = rec_session_no(filt_session);

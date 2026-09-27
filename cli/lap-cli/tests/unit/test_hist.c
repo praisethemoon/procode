@@ -398,6 +398,9 @@ static void test_branch_history(Arena *a) {
     ASSERT_EQ_I(h.n, 3);
     ASSERT_EQ_S(h.v[2].name, "0123456789ab.000001.jsonl");
     ASSERT_EQ_I(h.v[2].start, 9);
+    ASSERT_EQ_S(hist_label(&h, 0), "main");
+    ASSERT_EQ_S(hist_label(&h, 1), "main");
+    ASSERT_EQ_S(hist_label(&h, 2), "feat");
     char *data;
     size_t len;
     ASSERT_TRUE(hist_read_all(a, &h, &data, &len));
