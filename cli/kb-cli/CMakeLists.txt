@@ -16,6 +16,10 @@ find_package(Threads REQUIRED)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# utf8proc is compiled into kb, not linked from a DLL: without this its header
+# declares every function dllimport on Windows, and MSVC refuses to define them.
+add_compile_definitions(UTF8PROC_STATIC)
+
 set(KB_LIB_SOURCES
     src/arena.c
     src/str.c

@@ -19,6 +19,8 @@ CFLAGS ?= -std=c11 -Wall -Wextra -O2 -g
 ifeq ($(SIMD),0)
 CFLAGS += -DKB_NO_SIMD
 endif
+# utf8proc is compiled in, as in the CMake build, which needs this on Windows.
+CFLAGS += -DUTF8PROC_STATIC
 LDFLAGS ?=
 # BM25 needs a natural logarithm. libm is part of the C standard library,
 # not a third-party dependency; some systems just keep it in its own file.
