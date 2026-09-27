@@ -3,19 +3,19 @@
 # lap
 
 **A flight recorder for AI agent work sessions.** lap records code changes
-the way agents actually make them — one small edit at a time, each with a
-stated reason — below git, without touching git.
+the way agents actually make them — one small edit at a time, each with its
+intent and what it does — below git, without touching git.
 
 ```
 $ lap session start "add retry logic to the fetcher"
 session S4 started: add retry logic to the fetcher
 
-$ lap commit src/fetch.c -m "retry helper: 3 attempts with backoff,
-because the flaky staging DNS drops ~2% of lookups"
-[L23] S4 src/fetch.c: lines 10-24 (insertion)
+$ lap commit src/fetch.c -i "survive the flaky staging DNS, which drops ~2% of lookups" \
+    -b "adds retry(): three attempts with exponential backoff"
+[L23 fa9cebd] S4 src/fetch.c: lines 10-24 (insertion)  "survive the flaky staging DNS, which drops ~2% of lookups"
 
 $ lap search --file src/fetch.c --line 12
-line 12 of src/fetch.c was last touched by L23 (2026-09-20T12:31:07Z)
+line 12 of src/fetch.c was last touched by L23 fa9cebd (2026-09-20T12:31:07Z)
 ```
 
 Where git answers *what changed between commits*, lap answers *why does this
@@ -29,9 +29,13 @@ granularity agents work at.
    `lap commit` enforces this and walks you through committing them one at
    a time. Blank lines are not anchors: a gap of only blank lines never
    splits an edit.
-2. **Every commit explains itself.** The message is mandatory (`-m "..."`,
-   or `-F <file>` / `-F -` for stdin when it is long) and should say why,
-   not what (the diff already says what).
+2. **Every commit explains itself, twice.** Its **intent** (`-i`) says why
+   the edit exists — edits serving one goal share it — and its
+   **behavior** (`-b`) says what this edit makes the code do. Both are
+   required (`-F <file>` / `-F -` reads them from `Intent:` and
+   `Behavior:` sections when they are long), and lap refuses a message that
+   is too short or only repeats the intent, the previous behavior or the
+   code. A commit cites another by its hash: `#fa9cebd`.
 3. **Work happens in sessions.** `lap session start "purpose"` groups the
    commits of one task. Committing without a session requires an explicit
    `--no-session`.
@@ -80,7 +84,8 @@ Record work as you do it:
 lap init                                    # creates .lap/ and a starter .lapignore
 lap session start "add retry handling"      # name the task before you begin
 # ... edit src/fetch.c ...
-lap commit src/fetch.c -m "retry on 429: staging returns it under load"
+lap commit src/fetch.c -i "retry on 429: staging returns it under load" \
+    -b "calls retry() when send() answers 429"
 lap session end
 ```
 
@@ -89,23 +94,25 @@ batch at the end. If you changed two separate places, lap refuses and shows
 you how to split them:
 
 ```
-$ lap commit src/fetch.c -m "..."
+$ lap commit src/fetch.c -i "..." -b "..."
 error: 2 separate edits detected in src/fetch.c
   [1] lines 10-12
   [2] lines 48-49
 a commit is one edit; pick one:
-  lap commit src/fetch.c -m "..." --edit <n>
-  lap commit src/fetch.c -m "..." --lines <start>-<end>
+  lap commit src/fetch.c -i "..." -b "..." --edit <n>
+  lap commit src/fetch.c -i "..." -b "..." --lines <start>-<end>
 ```
 
-Commit them one at a time, each with its own reason. After each commit the
-remaining edits are re-detected and **renumbered**, so read the fresh
-listing (or `lap status`) rather than reusing old numbers.
+Commit them one at a time: the same intent if they serve one goal, each
+with its own behavior. After each commit the remaining edits are
+re-detected and **renumbered**, so read the fresh listing (or `lap status`)
+rather than reusing old numbers.
 
-Long messages avoid shell-quoting pain through a file or stdin:
+Long messages avoid shell-quoting pain through a file or stdin, as two
+sections:
 
 ```sh
-printf 'summary line\n\nthe longer rationale...' | lap commit src/fetch.c -F -
+printf 'Intent:\nretry on 429...\n\nBehavior:\ncalls retry() when...\n' | lap commit src/fetch.c -F -
 ```
 
 Then interrogate the history:
@@ -114,15 +121,16 @@ Then interrogate the history:
 lap status                              # what is pending, per file, numbered
 lap search --file src/fetch.c --line 12 # why does this line exist?
 lap search --text retry_with_backoff    # when did this string appear or vanish?
-lap search --msg "429"                  # which reasons mention this?
+lap search --msg "429"                  # which intents/behaviors mention this?
 lap session list                        # what tasks happened
 lap log --session S4                    # what was done in one of them
 lap show L23 --full-file                # one commit, plus the file as of it
+lap show fa9cebd                        # the same commit, by hash or prefix
 lap rr S4                               # the whole task: why, then what
 lap verify                              # is the history intact?
 ```
 
-Deleting a file is a commit too: `rm` it, then `lap commit <path> -m "why"`.
+Deleting a file is a commit too: `rm` it, then `lap commit <path> -i "why" -b "what is gone"`.
 
 ### Commands
 
@@ -130,12 +138,12 @@ Deleting a file is a commit too: `rm` it, then `lap commit <path> -m "why"`.
 |---|---|
 | `lap init` | create a repository in the current directory |
 | `lap status` | pending edits per file, numbered |
-| `lap commit <file> -m "msg"` | record one edit (`--edit N` / `--lines A-B` to pick among several, `--no-session` to bypass sessions) |
+| `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several, `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
 | `lap log` | commits, newest first (`--session`, `--file`, `-n`) |
-| `lap show <id>` | one commit in full (`--full-file` reconstructs the file) |
-| `lap search` | blame a line (`--file F --line N`), find text (`--text`), messages (`--msg`), sessions, time ranges |
-| `lap session` | `start "purpose"` / `end` / `list` / `current` |
-| `lap rr` | review request: a run of work as trajectory + net change (`<session>`, `<from> <to>`, `--no-diff`) |
+| `lap show <commit>` | one commit in full, by id, hash or hash prefix (`--full-file` reconstructs the file) |
+| `lap search` | blame a line (`--file F --line N`), find text (`--text`), intents and behaviors (`--msg`), sessions, time ranges |
+| `lap session` | `start "purpose"` (or `-F <file>`) / `end` / `list` / `current` |
+| `lap rr` | review request: a run of work as trajectory, grouped by intent, + net change (`<session>`, `<from> <to>` as ids or hashes, `--no-diff`) |
 | `lap verify` | check the log's hash chain (`--deep`: replay everything, audit caches) |
 | `lap rebuild` | reconstruct every cache from the log (`--verify`: fail on a broken chain) |
 
@@ -190,7 +198,7 @@ work, or add `.lap/` to `.gitignore` and let it stay machine-local.
 
 **Renames are two commits**, because lap tracks paths, not file identity —
 record the old path's disappearance and the new path's appearance, and name
-the other path in each message. Blame and `lap log --file` cannot follow a
+the other path in each behavior. Blame and `lap log --file` cannot follow a
 rename.
 
 **Text files only.** A NUL byte in the first 8 KB marks a file binary and

@@ -114,27 +114,27 @@ if (sessions.length === 0) {
     // T-1: two edits to the server, one to the header.
     lap("session", "start", "T-1: accept loop on IOCP", "--meta", "ticket=T-1");
     write("src/server.h", "#pragma once\n\nint server_run(int port);\n");
-    lap("commit", "src/server.h", "-m", "the server's one entry point");
+    lap("commit", "src/server.h", "-i", "Give the IOCP accept loop a home.", "-b", "Declares server_run(port), the server's one entry point.");
     write("src/server.c", '#include "server.h"\n\nint server_run(int port) {\n    (void)port;\n    return 0;\n}\n');
-    lap("commit", "src/server.c", "-m", "a server that does nothing yet, so the loop has a place to live");
+    lap("commit", "src/server.c", "-i", "Give the IOCP accept loop a home.", "-b", "Defines server_run as a stub that returns 0, so the loop has a place to live.");
     write(
         "src/server.c",
         '#include "server.h"\n\nint server_run(int port) {\n    SOCKET listener = listen_on(port);\n    for (;;) {\n        accept_one(listener); /* AcceptEx under the hood */\n    }\n}\n',
     );
-    lap("commit", "src/server.c", "-m", "accept forever: AcceptEx hands each socket to the reader");
+    lap("commit", "src/server.c", "-i", "Accept connections forever on IOCP.", "-b", "Loops on accept_one over the listener; AcceptEx hands each socket to the reader.");
     lap("session", "end");
 
     // T-2: in progress, still open.
     lap("session", "start", "T-2: overlapped reads", "--meta", "ticket=T-2");
     write("src/read.c", "/* one WSARecv in flight per connection */\nvoid read_arm(Conn *c) {\n    WSARecv(c->sock, &c->buf, 1, NULL, &c->flags, &c->ov, NULL);\n}\n");
-    lap("commit", "src/read.c", "-m", "post the first read; completion re-arms it");
+    lap("commit", "src/read.c", "-i", "Keep one overlapped read in flight per connection.", "-b", "read_arm posts the first WSARecv; the completion handler re-arms it.");
     lap("session", "end");
 
     // Work not tied to any ticket, to show it is not picked up.
     lap("session", "start", "tidy the readme");
     write("README.md", "# playground\n\nA toy server for trying the Board, Knowledge and Lap History.\n");
-    lap("commit", "README.md", "-m", "say what this folder is");
-    lap("commit", ".lapignore", "-m", "keep the board and the knowledge base out of lap");
+    lap("commit", "README.md", "-i", "Say what this folder is.", "-b", "Adds a README naming the toy server and what it is for.");
+    lap("commit", ".lapignore", "-i", "Keep the board and the knowledge base out of lap.", "-b", "Ignores .coboard and .kb so their stores are never recorded as edits.");
     lap("session", "end");
     console.log("lap: seeded S1 (T-1), S2 (T-2), S3 (no ticket)");
 }

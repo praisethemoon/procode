@@ -9,8 +9,8 @@ Three records follow every piece of work, and they point at each other:
 
 - the **board** (coboard MCP: `board_*`) says what and why, and holds the
   summary comment;
-- **lap** records every edit with its reason, in a session tagged with the
-  ticket (`board_sessions` lists them on the ticket);
+- **lap** records every edit with its intent and behavior, in a session
+  tagged with the ticket (`board_sessions` lists them on the ticket);
 - **git** holds the result, one commit per ticket, its message ending in
   `(T-<n>)`.
 
@@ -25,14 +25,17 @@ The lap skill covers lap itself; this is the loop around it.
    One session per ticket. Check `lap session current` first; end a stale
    one only after its edits are committed.
 3. **Work, committing edits as you go.** After each change,
-   `lap status` — then `lap commit <file> -m "<why>"`. When a file has
-   several edits, commit `--edit 1` repeatedly, oldest first, and **look at
-   `lap status` (or `git diff -U0`) before writing each message**, so the
-   message lands on the edit it describes. A new file is one commit.
-4. **A restructure that splits into many fragments** (a function moved, a
-   file reworked): give every fragment the same message, numbered
-   `(1/n) … (n/n)`, saying what the whole change is. lap cannot follow a
-   move; the shared message is what makes the fragments readable.
+   `lap status` — then `lap commit <file> -i "<why>" -b "<what it does>"`.
+   When a file has several edits, commit `--edit 1` repeatedly, oldest
+   first, and **look at `lap status` (or `git diff -U0`) before writing
+   each behavior**, so it lands on the edit it describes. A new file is one
+   commit. `lap commit` prints the new commit's short hash; cite it as
+   `#<hash>` when a later commit depends on it.
+4. **A change that splits into many fragments** (a function moved, a file
+   reworked): give every fragment the **same intent**, saying what the
+   whole change is for, and its **own behavior**, saying what that
+   fragment does. Never number fragments `(1/n) … (n/n)`. lap cannot follow
+   a move; the shared intent is what ties the fragments together.
 5. **Test.** Run the suites the change touches, and the combined build's
    check when a manifest, command or MCP server changed
    (`npm run build --workspace combined && node packages/combined/scripts/check.mjs`).
