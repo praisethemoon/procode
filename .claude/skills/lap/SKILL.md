@@ -113,7 +113,7 @@ a listed range.
 - New files commit whole as one edit — but a whole-file commit is only as
   interpretable as its message. When creating a **large** file, prefer
   building it in meaningful increments: write the skeleton, commit it,
-  then add each section with its own commit and reason. Reserve one-shot
+  then add each section with its own commit. Reserve one-shot
   creation for small files or content with a single clear purpose.
 - Deleting a file is also a commit:
   `rm` it, then `lap commit <file> -i "why it is gone" -b "what no longer exists"`.

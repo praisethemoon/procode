@@ -43,8 +43,8 @@ The lap skill covers lap itself; this is the loop around it.
    dark theme.
 6. **Nothing pending, then end.** `lap status` must show no edits of
    yours before `lap session end`. If you end with fragments pending,
-   start a follow-up session tagged with the same ticket and commit them
-   with one numbered message saying why.
+   start a follow-up session tagged with the same ticket and commit them,
+   each with its intent and behavior.
 7. **git.** Stage by path — never `git add -A` or `.` — including
    `.lap/log.jsonl` and `.coboard/log.jsonl`. One commit:
    `git commit -m "<what changed> (T-<n>)"`. **No `Co-Authored-By` or any
