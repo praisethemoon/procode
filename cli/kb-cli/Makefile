@@ -45,6 +45,10 @@ SRC_TS := $(TS)/lib/src/lib.c \
 # Its own variable, so a CFLAGS given on the command line keeps it.
 INCLUDES := -I$(TS)/lib/include
 OBJ_TS := $(patsubst %.c,obj/%.o,$(SRC_TS))
+# tree-sitter's lib.c includes "unicode/umachine.h" and its siblings from
+# lib/src, as its own build does. Without this gcc and clang fall back to the
+# system's ICU headers: Apple's on macOS, none on a Linux without libicu-dev.
+obj/$(TS)/lib/src/lib.o: INCLUDES += -I$(TS)/lib/src
 
 obj/%.o: %.c
 	@mkdir -p $(dir $@)

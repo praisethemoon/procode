@@ -87,6 +87,11 @@ include_directories(src/third_party/tree-sitter/lib/include)
 # The vendored sources are someone else's code: their warnings are not kb's.
 set_source_files_properties(${KB_TS_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<IF:$<C_COMPILER_ID:MSVC>,/w,-w>")
+# tree-sitter's lib.c includes "unicode/umachine.h" and its siblings from
+# lib/src, as its own build does. Without this gcc and clang fall back to the
+# system's ICU headers: Apple's on macOS, none on a Linux without libicu-dev.
+set_source_files_properties(src/third_party/tree-sitter/lib/src/lib.c PROPERTIES
+    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/tree-sitter/lib/src)
 
 add_executable(kb ${KB_LIB_SOURCES} src/main.c)
 # Embedding runs its matrix products on every core (plat_parallel).
