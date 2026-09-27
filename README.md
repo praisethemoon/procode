@@ -50,7 +50,7 @@ this repository (board, lap and git together); adapt it for yours.
 kb is a local knowledge base of documentation, source and papers, that
 agents and you can both search and cite. It keeps one store per workspace
 in `.kb/`, found by walking up like `.git`, with keyword search, semantic
-search when an embedding model is installed (see [Install](#install)),
+search when an embedding model is installed (see [Build and install](#build-and-install)),
 provenance for every passage, and links between documents. Nothing leaves
 your machine.
 
@@ -89,41 +89,17 @@ For the packages and the extension: Node.js 18+ with npm, and VS Code
 
 Development happens on macOS; the CLIs are also built on Windows with MSVC.
 
-## Build and test
+## Build and install
 
-From the repository root, the CLIs with CMake, then the packages with npm:
+From the repository root, in this order: the extension and its MCP servers
+run the CLIs from `PATH`.
 
-```sh
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build    # both CLIs' suites
-
-npm run setup             # npm install, then build every package
-npm test                  # every package's tests
-```
-
-On Windows, add `--config Release` to the build and `-C Release` to ctest.
-Each CLI also builds alone with `make` in its own directory.
-
-Some package tests drive the real CLIs. They use `$LAP_BIN` and `$KB_BIN`
-when set, else the ones built under `build/` (or by `make`), else the ones
-on `PATH`, and skip when there are none.
-
-Run mutation sweeps only with `HOME` and `TMPDIR` pointing at throwaway
-directories: some tests feed shell syntax to code whose job is never to run
-it.
-
-## Install
-
-In this order: the extension and its MCP servers run the CLIs from `PATH`.
-
-1. **The CLIs**, built with CMake from the repository root.
-
-   On macOS and Linux, into `/usr/local/bin`:
+1. **The CLIs**, with CMake. On macOS and Linux, into `/usr/local/bin`:
 
    ```sh
    cmake -B build -DCMAKE_BUILD_TYPE=Release
    cmake --build build
+   ctest --test-dir build          # both CLIs' suites
    sudo cmake --install build
    ```
 
@@ -136,22 +112,29 @@ In this order: the extension and its MCP servers run the CLIs from `PATH`.
    ```powershell
    cmake -B build
    cmake --build build --config Release
+   ctest --test-dir build -C Release
+   cmake --install build --config Release --prefix C:\tools\procode
    ```
 
-   This gives `build\cli\lap-cli\Release\lap.exe` and
-   `build\cli\kb-cli\Release\kb.exe`. Put them on `PATH`, for example with
-   `cmake --install build --config Release --prefix C:\tools\procode` and
-   then adding `C:\tools\procode\bin` to `PATH`.
+   Then add `C:\tools\procode\bin` to `PATH`. Each CLI also builds alone
+   with `make` in its own directory.
 
-2. **The extension**, one `.vsix` for every platform:
+2. **The packages and the extension**, with npm; one `.vsix` for every
+   platform:
 
    ```sh
+   npm run setup                   # npm install, then build every package
+   npm test                        # every package's tests
    npm run package --workspace combined
    code --install-extension packages/combined/procode-0.1.0.vsix
    ```
 
    Then reload the VS Code window. If the CLIs are not on `PATH`, point the
    settings **Knowledge › Cli Path** and **Board › Lap Path** at them.
+
+   Some package tests drive the real CLIs. They use `$LAP_BIN` and
+   `$KB_BIN` when set, else the ones built under `build/` (or by `make`),
+   else the ones on `PATH`, and skip when there are none.
 
 3. **Agents.** VS Code's agent gets the MCP servers on its own. For Claude
    Code, run **procode: Set Up MCP for Claude Code** in a project: it adds
