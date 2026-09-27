@@ -1,10 +1,13 @@
 /* The History view's filter and pages, over logs built from real records. */
 
 import * as assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 
-import { EMPTY_FILTER, HistoryFilter, PAGE_SIZE, fieldCount, isFiltering, query, rangeStart } from "../history";
+import { EMPTY_FILTER, HistoryFilter, PAGE_SIZE, fieldCount, isFiltering, pageOf, query, rangeStart } from "../history";
 import { parseLog } from "../model";
+
+const sha = (line: string) => createHash("sha256").update(line, "utf8").digest("hex");
 
 const NOW = new Date("2026-09-26T12:00:00Z");
 
@@ -14,13 +17,17 @@ function session(id: string, msg: string, ts: string): string {
 function end(id: string, ts: string): string {
     return JSON.stringify({ type: "session_end", id, ts });
 }
-function commit(id: string, session: string | null, file: string, msg: string, ts: string, op = "edit", user = "claude"): string {
+function commit(
+    id: string, session: string | null, file: string, intent: string, ts: string, op = "edit", user = "claude",
+    behavior = `step ${id.slice(1)}`, forced = false,
+): string {
     return JSON.stringify({
-        type: "commit", id, session, file, op, user, msg, ts,
+        type: "commit", id, session, file, op, user,
         old_start: 1, old_lines: 1, new_start: 1, new_lines: 1, eof_nl: true, old_text: ["a"], new_text: ["b"],
+        intent, behavior, ...(forced ? { forced: true } : {}), ts,
     });
 }
-const log = (...lines: string[]) => parseLog(lines.join("\n") + "\n");
+const log = (...lines: string[]) => parseLog(lines.join("\n") + "\n", sha);
 
 /* S1 (ended, 3 days ago): two commits. S2 (ended, today): a parser fix and a
  * test. L5 outside any session. S3 (active, today): nothing yet. */
@@ -121,5 +128,57 @@ test("Most recent is the last day anything happened, even days ago", () => {
     assert.equal(later.total, 3, "a week later, Most recent still shows the 26th");
     const today = query(LOG, f({ range: "today" }), { grouped: true, page: 0, now: new Date("2026-10-02T12:00:00Z") });
     assert.equal(today.total, 0, "while Today is empty");
-    assert.equal(query(parseLog(""), EMPTY_FILTER, { grouped: true, page: 0, now: NOW }).total, 0);
+    assert.equal(query(parseLog("", sha), EMPTY_FILTER, { grouped: true, page: 0, now: NOW }).total, 0);
+});
+
+/* Two commits for one goal, each with its own behavior; the second forced,
+ * the third a converted one whose behavior was never recorded. */
+const L6 = commit("L6", "S4", "src/graph.ts", "Show the call graph\nso a reader sees who calls what", "2026-09-26T11:00:00Z", "edit", "claude", "Render Graph when the view opens");
+const L7 = commit("L7", "S4", "src/graph.ts", "Show the call graph\nso a reader sees who calls what", "2026-09-26T11:01:00Z", "edit", "claude", "Import Graph for the view (needs #" + sha(L6).slice(0, 7) + ")", true);
+const L8 = commit("L8", "S4", "src/old.ts", "Converted from a message", "2026-09-26T11:02:00Z", "edit", "claude", "The data of this field is not present");
+const REFS = log(session("S4", "T-11: the graph", "2026-09-26T10:59:00Z"), L6, L7, L8);
+const raw = (filter: HistoryFilter) => query(REFS, filter, { grouped: false, page: 0, now: NOW }).commits.map((c) => c.id);
+
+test("a commit row is the intent's first line, and carries the intent, behavior, forced and hash", () => {
+    const [l8, l7, l6] = query(REFS, ALL, { grouped: false, page: 0, now: NOW }).commits;
+    assert.equal(l6.summary, "Show the call graph");
+    assert.equal(l6.intent, "Show the call graph\nso a reader sees who calls what");
+    assert.equal(l6.behavior, "Render Graph when the view opens");
+    assert.equal(l6.forced, false);
+    assert.equal(l7.forced, true);
+    assert.equal(l6.hash, sha(L6));
+    assert.equal(l8.behavior, "The data of this field is not present", "shown as it is");
+    assert.equal("msg" in l6, false);
+});
+
+test("the text matches intent, behavior and hash, as well as id and file", () => {
+    assert.deepEqual(raw(f({ text: "who calls" })), ["L7", "L6"], "the intent, past its first line");
+    assert.deepEqual(raw(f({ text: "render graph" })), ["L6"], "the behavior");
+    assert.deepEqual(raw(f({ text: "not present" })), ["L8"]);
+    assert.deepEqual(raw(f({ text: "old.ts" })), ["L8"]);
+    const h = sha(L8);
+    assert.deepEqual(raw(f({ text: h.slice(0, 7) })), ["L8"], "a hash prefix of 7");
+    assert.deepEqual(raw(f({ text: h.toUpperCase() })), ["L8"], "the whole hash, any case");
+    assert.deepEqual(raw(f({ text: "#" + h.slice(0, 9) })), ["L8"], "with #");
+    assert.deepEqual(raw(f({ text: h.slice(0, 6) })), [], "6 digits is not a hash prefix");
+    const cited = sha(L6).slice(0, 7);
+    assert.deepEqual(raw(f({ text: cited })), ["L7", "L6"], "bare, it is also text: L7 cites it");
+    assert.deepEqual(raw(f({ text: "#" + cited })), ["L6"], "with #, the commit alone");
+    assert.deepEqual(ids(query(REFS, f({ text: "#" + cited }), { grouped: true, page: 0, now: NOW })), ["S4:L6"]);
+});
+
+test("pageOf finds the page a commit is on, or null when the filter hides it", () => {
+    const lines: string[] = [];
+    for (let i = 1; i <= 60; i++) {
+        lines.push(session(`S${i}`, `task ${i}`, `2026-09-20T10:${String(i).padStart(2, "0")}:00Z`));
+        lines.push(commit(`L${i}`, `S${i}`, "a.ts", `edit ${i}`, `2026-09-20T10:${String(i).padStart(2, "0")}:30Z`));
+    }
+    const big = log(...lines);
+    const at = (grouped: boolean) => ({ grouped, now: NOW });
+    assert.equal(pageOf(big, ALL, at(true), "L60"), 0);
+    assert.equal(pageOf(big, ALL, at(true), "L35"), 1, "S35 is the 26th session, newest first");
+    assert.equal(pageOf(big, ALL, at(false), "L10"), 1, "the 51st commit");
+    assert.equal(pageOf(big, f({ text: "edit 5" }), at(false), "L10"), null);
+    assert.equal(pageOf(big, EMPTY_FILTER, at(true), "L1"), 2, "Most recent: every commit is on the 20th, the last day");
+    assert.equal(pageOf(big, ALL, at(true), "L99"), null);
 });

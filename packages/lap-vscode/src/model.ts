@@ -3,6 +3,10 @@
  * Record schema: see cli/lap-cli/SPEC.md. The log is append-only JSONL; a torn
  * final line (a writer mid-append) is tolerated and counted, never fatal.
  *
+ * A commit's hash is the SHA-256 of its record line, never stored in the
+ * record. The reader is handed the hash function, so this module needs no
+ * node crypto and the webview can share its types.
+ *
  * The reader is incremental: the extension feeds only newly appended,
  * newline-terminated text and the model folds it into the same LapLog —
  * a watcher tick costs O(new bytes), never O(log).
@@ -23,7 +27,10 @@ export interface CommitRec {
     eofNl: boolean;
     oldText: string[];
     newText: string[];
-    msg: string;
+    hash: string; /* SHA-256 of the record line, 64 lowercase hex */
+    intent: string; /* why the edit exists; shared by edits for one goal */
+    behavior: string; /* what this edit makes the code do */
+    forced: boolean; /* recorded with --force-message */
     ts: string;
 }
 
@@ -45,9 +52,13 @@ export interface LapLog {
     records: number; /* all record lines folded so far, any kind */
 }
 
+/* The SHA-256 of one record line's exact bytes, as lowercase hex. */
+export type LineHash = (line: string) => string;
+
 export interface LogReader {
     log: LapLog;
     byId: Map<string, SessionRec>;
+    hash: LineHash;
 }
 
 function asStringArray(v: unknown): string[] {
@@ -57,7 +68,7 @@ function asStringArray(v: unknown): string[] {
     return v.filter((x): x is string => typeof x === "string");
 }
 
-export function createReader(): LogReader {
+export function createReader(hash: LineHash): LogReader {
     return {
         log: {
             commits: [],
@@ -68,6 +79,7 @@ export function createReader(): LogReader {
             records: 0,
         },
         byId: new Map(),
+        hash,
     };
 }
 
@@ -104,7 +116,10 @@ function foldLine(r: LogReader, line: string): void {
             eofNl: Boolean(rec["eof_nl"] ?? true),
             oldText: asStringArray(rec["old_text"]),
             newText: asStringArray(rec["new_text"]),
-            msg: String(rec["msg"] ?? ""),
+            hash: r.hash(line),
+            intent: String(rec["intent"] ?? ""),
+            behavior: String(rec["behavior"] ?? ""),
+            forced: rec["forced"] === true,
             ts: String(rec["ts"] ?? ""),
         };
         log.commits.push(c);
@@ -165,14 +180,19 @@ export function readerFeed(r: LogReader, text: string): void {
 }
 
 /* One-shot parse; a torn (unterminated) final line is dropped and counted. */
-export function parseLog(text: string): LapLog {
-    const r = createReader();
+export function parseLog(text: string, hash: LineHash): LapLog {
+    const r = createReader(hash);
     const nl = text.lastIndexOf("\n");
     readerFeed(r, nl < 0 ? "" : text.slice(0, nl + 1));
     if (nl + 1 < text.length && text.slice(nl + 1).trim().length > 0) {
         r.log.parseErrors++;
     }
     return r.log;
+}
+
+/* A hash's short form: its first 7 hex digits. */
+export function shortHash(hash: string): string {
+    return hash.slice(0, 7);
 }
 
 /* First line of a (possibly multiline) message. */
@@ -217,12 +237,20 @@ export function regionLabel(c: CommitRec): string {
 export function renderCommit(c: CommitRec): string {
     const out: string[] = [];
     out.push(
-        `commit ${c.id}` + (c.session ? `  (session ${c.session})` : ""),
+        `commit ${c.id} ${c.hash}` +
+            (c.session ? `  (session ${c.session})` : ""),
     );
     out.push(`date: ${c.ts}`);
     out.push(`file: ${c.file}  (${c.op})`);
-    out.push("message:");
-    for (const line of c.msg.split("\n")) {
+    if (c.forced) {
+        out.push("forced: the message checks were skipped (--force-message)");
+    }
+    out.push("intent:");
+    for (const line of c.intent.split("\n")) {
+        out.push(`  ${line}`);
+    }
+    out.push("behavior:");
+    for (const line of c.behavior.split("\n")) {
         out.push(`  ${line}`);
     }
     out.push("diff:");

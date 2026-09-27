@@ -2,9 +2,16 @@
  * under them.
  *
  * THE BAR. A chevron on the left opens the deeper filters (kind of change,
- * who, the session's state); the input matches ids, messages and file paths;
- * the dropdown at its right end is the time range; the ✕, shown only while
- * anything is set, clears all of it.
+ * who, the session's state); the input matches ids, hashes, intents,
+ * behaviors, session purposes and file paths; the dropdown at its right end
+ * is the time range; the ✕, shown only while anything is set, clears all of
+ * it.
+ *
+ * A COMMIT is its id, short hash and the first line of its intent. Opened —
+ * by its twistie, or by clicking it, which also opens its diff — it shows the
+ * whole intent, then the behavior, and whether the message checks were
+ * skipped. References to other commits in that text (`#<hash>`, `L<n>`) are
+ * links: the host resolves one and answers with the page that shows it.
  *
  * THE HOST DOES THE WORK. This view sends what is set and gets back one page
  * (history.ts runs in the host, where the log is). What is set, the page and
@@ -30,7 +37,9 @@ import {
     fieldCount,
     isFiltering,
 } from "../src/history";
+import { shortHash } from "../src/model";
 import type { ToHost, ToView } from "../src/protocol";
+import { parseRefs } from "../src/refs";
 
 declare function acquireVsCodeApi(): {
     postMessage(m: unknown): void;
@@ -46,6 +55,8 @@ interface Saved {
     page: number;
     /* Sessions opened or closed by hand; the rest follow the default. */
     open: Record<string, boolean>;
+    /* Commits opened to their intent and behavior. */
+    details: Record<string, boolean>;
 }
 
 function restore(): Saved {
@@ -66,6 +77,7 @@ function restore(): Saved {
         filter,
         page: typeof s?.page === "number" ? s.page : 0,
         open: s?.open && typeof s.open === "object" ? s.open : {},
+        details: s?.details && typeof s.details === "object" ? s.details : {},
     };
 }
 
@@ -107,7 +119,7 @@ function FilterBar(props: { filter: HistoryFilter; users: readonly string[]; onC
                         ref={input}
                         className="lh-input"
                         type="text"
-                        placeholder="Filter by id, message or file"
+                        placeholder="Filter by id, hash, text or file"
                         aria-label="Filter the history"
                         value={filter.text}
                         spellCheck={false}
@@ -176,34 +188,113 @@ function FilterBar(props: { filter: HistoryFilter; users: readonly string[]; onC
 
 const OP_ICON: Record<string, string> = { create: "diff-added", delete: "diff-removed" };
 
-function CommitLine(props: { c: CommitRow; depth: number; showSession: boolean }): JSX.Element {
-    const c = props.c;
-    const open = () => send({ type: "open", id: c.id });
+const FORCED = "forced: the message checks were skipped (--force-message)";
+
+/* A commit's text with each reference to another commit a link. */
+function Linked(props: { text: string }): JSX.Element {
     return (
-        <div
-            className="lh-row"
-            style={{ paddingLeft: `calc(${props.depth} * var(--lh-indent) + 20px)` }}
-            role="treeitem"
-            aria-level={props.depth + 1}
-            tabIndex={0}
-            title={`${c.id} · ${c.file} · ${c.region} · ${c.ts}${c.session ? ` · session ${c.session}` : " · no session"}${c.user ? ` · ${c.user}` : ""}\n\n${c.msg}`}
-            onClick={open}
-            onKeyDown={(e) => {
-                if (e.key === "Enter") open();
-            }}
-        >
-            <Codicon name={OP_ICON[c.op] ?? "diff-modified"} className={`lh-icon lh-${c.op}`} />
-            <span className="lh-id">{c.id}</span>
-            <span className="lh-title">{c.summary}</span>
-            <span className="lh-desc">
-                {c.file} · {c.region}
-                {props.showSession && c.session ? ` · ${c.session}` : ""}
-            </span>
-        </div>
+        <span className="lh-text">
+            {parseRefs(props.text).map((p, i) =>
+                p.ref === undefined ? (
+                    p.text
+                ) : (
+                    <a
+                        key={i}
+                        className="lh-ref"
+                        href="#"
+                        title={`Show ${p.ref} in the history`}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            send({ type: "reveal", ref: p.ref! });
+                        }}
+                    >
+                        {p.text}
+                    </a>
+                ),
+            )}
+        </span>
     );
 }
 
-function SessionLine(props: { s: SessionRow; open: boolean; filtering: boolean; onToggle: () => void }): JSX.Element {
+/* What a commit row shows and does, from the view: whether it is opened to
+ * its detail, whether it is the one selected, and how to change either. */
+interface CommitState {
+    readonly details: Record<string, boolean>;
+    readonly selected: string | null;
+    readonly setDetail: (id: string, open: boolean) => void;
+    readonly select: (id: string) => void;
+}
+
+function CommitLine(props: { c: CommitRow; depth: number; showSession: boolean; state: CommitState }): JSX.Element {
+    const { c, state } = props;
+    const detail = state.details[c.id] ?? false;
+    const open = () => {
+        state.select(c.id);
+        state.setDetail(c.id, true);
+        send({ type: "open", id: c.id });
+    };
+    const indent = `${props.depth} * var(--lh-indent)`;
+    return (
+        <>
+            <div
+                className={`lh-row${state.selected === c.id ? " lh-selected" : ""}`}
+                style={{ paddingLeft: `calc(${indent} + 4px)` }}
+                role="treeitem"
+                aria-level={props.depth + 1}
+                aria-expanded={detail}
+                aria-selected={state.selected === c.id}
+                data-commit={c.id}
+                tabIndex={0}
+                title={
+                    `${c.id} ${shortHash(c.hash)} · ${c.file} · ${c.region} · ${c.ts}` +
+                    `${c.session ? ` · session ${c.session}` : " · no session"}${c.user ? ` · ${c.user}` : ""}` +
+                    `\n\nIntent: ${c.intent}\n\nBehavior: ${c.behavior}${c.forced ? `\n\n${FORCED}` : ""}`
+                }
+                onClick={open}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter") open();
+                    else if (e.key === "ArrowRight" || e.key === "ArrowLeft") state.setDetail(c.id, e.key === "ArrowRight");
+                }}
+            >
+                <span
+                    className="lh-twistie"
+                    title={detail ? "Hide the intent and behavior" : "Show the intent and behavior"}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        state.setDetail(c.id, !detail);
+                    }}
+                >
+                    <Codicon name={detail ? "chevron-down" : "chevron-right"} />
+                </span>
+                <Codicon name={OP_ICON[c.op] ?? "diff-modified"} className={`lh-icon lh-${c.op}`} />
+                <span className="lh-id">{c.id}</span>
+                <span className="lh-hash">{shortHash(c.hash)}</span>
+                {c.forced ? <Codicon name="warning" className="lh-icon lh-forced" /> : null}
+                <span className="lh-title">{c.summary}</span>
+                <span className="lh-desc">
+                    {c.file} · {c.region}
+                    {props.showSession && c.session ? ` · ${c.session}` : ""}
+                </span>
+            </div>
+            {detail ? (
+                <div className="lh-detail" style={{ paddingLeft: `calc(${indent} + 42px)` }} role="group" aria-label={`${c.id} intent and behavior`}>
+                    <div className="lh-label">Intent</div>
+                    <Linked text={c.intent} />
+                    <div className="lh-label">Behavior</div>
+                    <Linked text={c.behavior} />
+                    {c.forced ? (
+                        <div className="lh-forced-note">
+                            <Codicon name="warning" className="lh-forced" /> {FORCED}
+                        </div>
+                    ) : null}
+                    <div className="lh-full-hash">{c.hash}</div>
+                </div>
+            ) : null}
+        </>
+    );
+}
+
+function SessionLine(props: { s: SessionRow; open: boolean; filtering: boolean; onToggle: () => void; commits: CommitState }): JSX.Element {
     const { s } = props;
     const shown = s.commits.length;
     const count =
@@ -236,7 +327,7 @@ function SessionLine(props: { s: SessionRow; open: boolean; filtering: boolean; 
                     {s.state === "active" ? " · active" : ""}
                 </span>
             </div>
-            {props.open ? s.commits.map((c) => <CommitLine key={c.id} c={c} depth={1} showSession={false} />) : null}
+            {props.open ? s.commits.map((c) => <CommitLine key={c.id} c={c} depth={1} showSession={false} state={props.commits} />) : null}
         </>
     );
 }
@@ -270,6 +361,10 @@ function History(): JSX.Element {
     const [filter, setFilter] = useState<HistoryFilter>(saved.filter);
     const [page, setPage] = useState(saved.page);
     const [open, setOpen] = useState<Record<string, boolean>>(saved.open);
+    const [details, setDetails] = useState<Record<string, boolean>>(saved.details);
+    const [selected, setSelected] = useState<string | null>(null);
+    /* A commit just revealed, to scroll to once it is drawn. */
+    const [revealed, setRevealed] = useState<string | null>(null);
     const [data, setData] = useState<{ page: HistoryPage | null; hasRepo: boolean; active: string | null } | null>(null);
     const list = useRef<HTMLDivElement>(null);
     const shown = useRef<readonly SessionRow[]>([]);
@@ -283,6 +378,19 @@ function History(): JSX.Element {
             const m = e.data as ToView;
             if (m.type === "page") {
                 setData({ page: m.page, hasRepo: m.hasRepo, active: m.active });
+                if (m.reveal && m.page) {
+                    /* The host chose the filter and page that show the
+                     * commit; the view takes them, opens its session and the
+                     * commit itself, and selects it. */
+                    const id = m.reveal.id;
+                    const home = m.page.sessions.find((s) => s.commits.some((c) => c.id === id));
+                    setFilter(m.reveal.filter);
+                    setPage(m.page.page);
+                    if (home) setOpen((o) => ({ ...o, [home.id ?? "none"]: true }));
+                    setDetails((d) => ({ ...d, [id]: true }));
+                    setSelected(id);
+                    setRevealed(id);
+                }
             } else if (m.type === "collapseAll") {
                 setOpen((o) => {
                     const next = { ...o };
@@ -303,8 +411,18 @@ function History(): JSX.Element {
     }, [filter, page]);
 
     useEffect(() => {
-        vscode.setState({ filter, page, open } satisfies Saved);
-    }, [filter, page, open]);
+        vscode.setState({ filter, page, open, details } satisfies Saved);
+    }, [filter, page, open, details]);
+
+    useEffect(() => {
+        if (revealed === null) return;
+        const row = list.current?.querySelector<HTMLElement>(`[data-commit="${revealed}"]`);
+        if (row) {
+            row.scrollIntoView({ block: "center" });
+            row.focus({ preventScroll: true });
+            setRevealed(null);
+        }
+    }, [revealed, data]);
 
     const change = (f: HistoryFilter) => {
         setFilter(f);
@@ -325,6 +443,18 @@ function History(): JSX.Element {
     const p = data?.page ?? null;
     const filtering = isFiltering(filter);
     const isOpen = (s: SessionRow) => open[s.id ?? "none"] ?? (s.state === "active" || (filtering && !s.matchedSelf));
+    const commits: CommitState = {
+        details,
+        selected,
+        setDetail: (id, on) =>
+            setDetails((d) => {
+                const next = { ...d };
+                if (on) next[id] = true;
+                else delete next[id];
+                return next;
+            }),
+        select: setSelected,
+    };
     return (
         <div className="lh">
             <FilterBar filter={filter} users={p?.users ?? []} onChange={change} />
@@ -341,10 +471,11 @@ function History(): JSX.Element {
                             open={isOpen(s)}
                             filtering={filtering}
                             onToggle={() => setOpen({ ...open, [s.id ?? "none"]: !isOpen(s) })}
+                            commits={commits}
                         />
                     ))
                 ) : (
-                    p.commits.map((c) => <CommitLine key={c.id} c={c} depth={0} showSession={true} />)
+                    p.commits.map((c) => <CommitLine key={c.id} c={c} depth={0} showSession={true} state={commits} />)
                 )}
             </div>
             {p ? <Pager page={p} onPage={goTo} /> : null}

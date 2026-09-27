@@ -1,9 +1,9 @@
 # Lap History — VSCode extension
 
 Visualization for [lap](../../cli/lap-cli/) repositories: a live tree of sessions
-and commits, each with its message, file, and edit range. **View-only by
-design** — agents drive lap through the CLI (see the lap skill); this
-extension just shows what they did, as they do it.
+and commits, each with its intent and behavior, hash, file, and edit range.
+**View-only by design** — agents drive lap through the CLI (see the lap
+skill); this extension just shows what they did, as they do it.
 
 ## What you get
 
@@ -12,21 +12,28 @@ extension just shows what they did, as they do it.
     commit count, ● active marker — expandable into their commits; commits
     recorded with `--no-session` sit in their own group. The toggle button
     switches to a **raw list** of all commits, newest-first.
-  - Every commit shows `L<n>`, the message's first line, the file and edit
-    range; hover for the full message and metadata.
+  - Every commit shows `L<n>`, its short hash, the intent's first line, the
+    file and edit range. Open it (its twistie, or a click) for the whole
+    intent, then the behavior, a mark when the message checks were skipped
+    (`--force-message`), and the full hash. References to other commits in
+    that text — `#<hash prefix>` or `L<n>` — are links that reveal the
+    commit in the tree. The filter matches ids, hashes, intents, behaviors
+    and file paths.
   - Click a commit → the built-in (Monaco) **diff editor** opens directly
     on the file replayed to before vs. after that commit — full syntax
     highlighting, word-level diffs — with the cursor on the changed region,
     and the commit's **description attached inside the diff** as an inline
-    comment thread anchored at those lines (id, op, timestamp, message,
-    session). Real editors render all code; nothing is hand-drawn.
+    comment thread anchored at those lines (id, short hash, timestamp,
+    intent, behavior, session), its references linked the same way. Real
+    editors render all code; nothing is hand-drawn.
 - A **status bar item** showing the active session (click to focus the view).
 - **Live updates**: a watcher on `.lap/log.jsonl` refreshes the tree as the
   agent commits; a torn in-progress log line is tolerated silently.
 
 The log is parsed directly (append-only JSONL, schema in
-[cli/lap-cli/SPEC.md](../../cli/lap-cli/SPEC.md)) — the extension does not spawn the
-CLI and works even where the `lap` binary is not installed.
+[cli/lap-cli/SPEC.md](../../cli/lap-cli/SPEC.md)). The CLI is run only to resolve a
+followed reference (`lap show <ref> --json`); where `lap` is not installed or
+cannot answer, the log's own hashes resolve it the same way.
 
 ## Develop
 

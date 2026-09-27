@@ -3,6 +3,11 @@
  * because the log carries the text of every edit and a long one is megabytes.
  * No vscode import, so the tests run it with plain node.
  *
+ * WHAT THE TEXT MATCHES. A commit's id, hash, intent, behavior and file; a
+ * session's id and purpose. An id asks for that item alone; a hash prefix of
+ * 7 or more hex digits matches the commits whose hash starts with it, and
+ * written with `#` it asks for those commits alone.
+ *
  * WHAT A MATCH SHOWS. A session found by its own id or message shows every
  * commit it has (that pass the other filters); a session found through its
  * commits shows only those commits. The time range, the kinds of change and
@@ -96,8 +101,12 @@ export interface CommitRow {
     readonly file: string;
     readonly op: string;
     readonly region: string;
+    /* The intent's first line. */
     readonly summary: string;
-    readonly msg: string;
+    readonly hash: string;
+    readonly intent: string;
+    readonly behavior: string;
+    readonly forced: boolean;
     readonly session: string | null;
     readonly user: string | null;
 }
@@ -133,24 +142,44 @@ export interface HistoryPage {
 }
 
 const LAP_ID = /^[ls]\d+$/i;
+const HASH = /^#?[0-9a-f]{7,64}$/;
 
-function textOf(q: string): { q: string; exact: boolean } {
+interface Text {
+    readonly q: string;
+    /* An id, or a hash written with `#`: that and nothing else. */
+    readonly exact: boolean;
+    /* The hex digits when the text could be a hash prefix. */
+    readonly hash: string | null;
+}
+
+function textOf(q: string): Text {
     const t = q.trim().toLowerCase();
-    return { q: t, exact: LAP_ID.test(t) };
+    const hash = HASH.test(t) ? t.replace(/^#/, "") : null;
+    return { q: t, exact: LAP_ID.test(t) || (hash !== null && t.startsWith("#")), hash };
 }
 
 /* An id asks for that item and nothing else: L12 is not L120. */
-function idMatches(id: string, t: { q: string; exact: boolean }): boolean {
+function idMatches(id: string, t: Text): boolean {
     return t.exact ? id.toLowerCase() === t.q : id.toLowerCase().includes(t.q);
 }
 
-function commitText(c: CommitRec, t: { q: string; exact: boolean }): boolean {
-    if (t.q === "") return true;
-    if (t.exact) return idMatches(c.id, t);
-    return idMatches(c.id, t) || c.msg.toLowerCase().includes(t.q) || c.file.toLowerCase().includes(t.q);
+function hashMatches(c: CommitRec, t: Text): boolean {
+    return t.hash !== null && c.hash.startsWith(t.hash);
 }
 
-function sessionText(s: SessionRec, t: { q: string; exact: boolean }): boolean {
+function commitText(c: CommitRec, t: Text): boolean {
+    if (t.q === "") return true;
+    if (t.exact) return idMatches(c.id, t) || hashMatches(c, t);
+    return (
+        idMatches(c.id, t) ||
+        hashMatches(c, t) ||
+        c.intent.toLowerCase().includes(t.q) ||
+        c.behavior.toLowerCase().includes(t.q) ||
+        c.file.toLowerCase().includes(t.q)
+    );
+}
+
+function sessionText(s: SessionRec, t: Text): boolean {
     if (t.q === "") return false;
     if (t.exact) return idMatches(s.id, t);
     return idMatches(s.id, t) || s.msg.toLowerCase().includes(t.q);
@@ -173,8 +202,11 @@ export function row(c: CommitRec): CommitRow {
         file: c.file,
         op: c.op,
         region: regionLabel(c),
-        summary: summaryLine(c.msg),
-        msg: c.msg,
+        summary: summaryLine(c.intent),
+        hash: c.hash,
+        intent: c.intent,
+        behavior: c.behavior,
+        forced: c.forced,
         session: c.session,
         user: c.user,
     };
@@ -190,11 +222,34 @@ export function latestOf(log: LapLog): number | null {
     return latest;
 }
 
+interface Matches {
+    readonly sessions: SessionRow[];
+    readonly commits: CommitRow[];
+    readonly users: readonly string[];
+}
+
 export function query(
     log: LapLog,
     filter: HistoryFilter,
     options: { grouped: boolean; page: number; now: Date },
 ): HistoryPage {
+    const m = matching(log, filter, options);
+    return options.grouped
+        ? paged(true, m.sessions, [], options.page, PAGE_SIZE.grouped, m.users)
+        : paged(false, [], m.commits, options.page, PAGE_SIZE.raw, m.users);
+}
+
+/* The page a commit is shown on under this filter, or null when the filter
+ * hides it. */
+export function pageOf(log: LapLog, filter: HistoryFilter, options: { grouped: boolean; now: Date }, id: string): number | null {
+    const m = matching(log, filter, options);
+    const i = options.grouped
+        ? m.sessions.findIndex((s) => s.commits.some((c) => c.id === id))
+        : m.commits.findIndex((c) => c.id === id);
+    return i < 0 ? null : Math.floor(i / (options.grouped ? PAGE_SIZE.grouped : PAGE_SIZE.raw));
+}
+
+function matching(log: LapLog, filter: HistoryFilter, options: { grouped: boolean; now: Date }): Matches {
     const since = rangeStart(filter.range, options.now, latestOf(log));
     const t = textOf(filter.text);
     const inRange = (ts: string) => since === null || time(ts) >= since;
@@ -214,7 +269,7 @@ export function query(
             const state = c.session !== null ? stateById.get(c.session) ?? "none" : "none";
             return wantState(state) && passes(c) && commitText(c, t);
         });
-        return paged(false, [], all.map(row), options.page, PAGE_SIZE.raw, users);
+        return { sessions: [], commits: all.map(row), users };
     }
 
     const rows: SessionRow[] = [];
@@ -255,7 +310,7 @@ export function query(
             });
         }
     }
-    return paged(true, rows, [], options.page, PAGE_SIZE.grouped, users);
+    return { sessions: rows, commits: [], users };
 }
 
 function paged(

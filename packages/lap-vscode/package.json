@@ -1,7 +1,7 @@
 {
   "name": "lap-vscode",
   "displayName": "Lap History",
-  "description": "Visualizes lap fine-grained edit history: sessions, commits and their messages, live as the agent works.",
+  "description": "Visualizes lap fine-grained edit history: sessions, commits with their intent and behavior, live as the agent works.",
   "version": "0.1.0",
   "private": true,
   "publisher": "praisethemoon",
@@ -60,6 +60,10 @@
         "command": "lap.collapseAll",
         "title": "Lap: Collapse All",
         "icon": "$(collapse-all)"
+      },
+      {
+        "command": "lap.revealCommit",
+        "title": "Lap: Reveal Commit"
       }
     ],
     "menus": {
@@ -87,6 +91,10 @@
         },
         {
           "command": "lap.collapseAll",
+          "when": "false"
+        },
+        {
+          "command": "lap.revealCommit",
           "when": "false"
         }
       ]

@@ -191,6 +191,15 @@ body {
     outline: 1px solid var(--bk-color-list-focus-outline, var(--bk-color-focus));
     outline-offset: -1px;
 }
+.lh-row.lh-selected {
+    background: var(--bk-color-list-active);
+    color: var(--bk-color-list-active-foreground);
+}
+.lh-row.lh-selected .lh-desc,
+.lh-row.lh-selected .lh-hash {
+    color: inherit;
+    opacity: 0.8;
+}
 
 .lh-twistie {
     display: inline-flex;
@@ -213,10 +222,20 @@ body {
 .lh-edit {
     color: var(--bk-color-warning);
 }
+.lh-forced {
+    color: var(--bk-color-warning);
+}
 
 .lh-id {
     flex: none;
     font-variant-numeric: tabular-nums;
+}
+/* The short hash beside the id, as `lap log` prints it. */
+.lh-hash {
+    flex: none;
+    font-family: var(--bk-font-family-mono);
+    font-size: 0.9em;
+    color: var(--bk-color-foreground-muted);
 }
 .lh-title {
     flex: 0 1 auto;
@@ -231,6 +250,59 @@ body {
     text-overflow: ellipsis;
     color: var(--bk-color-foreground-muted);
     font-size: 0.92em;
+}
+
+/* A commit opened to its detail: the intent, then the behavior, each under
+ * a small label, wrapped rather than truncated; the full hash last. */
+.lh-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 2px;
+    padding-right: 10px;
+    padding-bottom: 6px;
+    line-height: 1.4;
+    cursor: default;
+    user-select: text;
+}
+.lh-label {
+    margin-top: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--bk-color-foreground-muted);
+}
+.lh-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.lh-ref {
+    color: var(--bk-color-link);
+    text-decoration: none;
+}
+.lh-ref:hover {
+    color: var(--bk-color-link-hover, var(--bk-color-link));
+    text-decoration: underline;
+}
+.lh-ref:focus-visible {
+    outline: 1px solid var(--bk-color-focus);
+    outline-offset: 1px;
+}
+.lh-forced-note {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--bk-color-foreground-muted);
+}
+.lh-full-hash {
+    margin-top: 2px;
+    font-family: var(--bk-font-family-mono);
+    font-size: 10px;
+    color: var(--bk-color-foreground-muted);
+    overflow-wrap: anywhere;
 }
 
 .lh-empty {

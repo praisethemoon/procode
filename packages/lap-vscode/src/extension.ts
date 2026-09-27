@@ -1,14 +1,17 @@
 /* lap-vscode: visualization-only view of a lap repository.
- * Reads .lap/log.jsonl directly (no CLI dependency at runtime) and refreshes
- * live through a file watcher. See cli/lap-cli/SPEC.md for the record schema.
+ * Reads .lap/log.jsonl directly and refreshes live through a file watcher.
+ * See cli/lap-cli/SPEC.md for the record schema. The CLI is asked only to
+ * resolve a reference to a commit (`lap show <ref> --json`); where it cannot
+ * answer, the log's own hashes do.
  */
 
+import { execFile } from "child_process";
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { EMPTY_FILTER, HistoryFilter, query } from "./history";
+import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
     CommitRec,
     LapLog,
@@ -17,14 +20,15 @@ import {
     consumableBytes,
     createReader,
     mdEscape,
-    mdProse,
     readerFeed,
     regionLabel,
     replaySeeded,
+    shortHash,
     stateText,
     summaryLine,
 } from "./model";
 import type { ToHost, ToView } from "./protocol";
+import { Resolved, mdLinked, resolveRef } from "./refs";
 
 const GROUPING_KEY = "lap.groupBySession";
 const STATE_SCHEME = "lap-state";
@@ -45,11 +49,15 @@ function findRepo(): Repo | undefined {
     return undefined;
 }
 
+/* A record's hash: the SHA-256 of its line's exact bytes. */
+function lineHash(line: string): string {
+    return crypto.createHash("sha256").update(line, "utf8").digest("hex");
+}
 
 /* The log, read incrementally as it grows. */
 class LapLogSource {
     private repo: Repo | undefined;
-    private reader: LogReader = createReader();
+    private reader: LogReader = createReader(lineHash);
     private offset = 0;
 
     constructor(private readonly state: vscode.Memento) {
@@ -66,7 +74,7 @@ class LapLogSource {
 
     private reset(repo: Repo | undefined): void {
         this.repo = repo;
-        this.reader = createReader();
+        this.reader = createReader(lineHash);
         this.offset = 0;
     }
 
@@ -136,6 +144,29 @@ class LapLogSource {
     get hasRepo(): boolean {
         return this.repo !== undefined;
     }
+
+    /* The commit a reference names, as `lap show` resolves it. When lap is
+     * not installed, is too old to know hashes, or does not answer, the log
+     * read here resolves it by the same rules. */
+    resolve(ref: string): Promise<Resolved> {
+        const local = () => resolveRef(this.current, ref);
+        const root = this.repo?.root;
+        if (!root) return Promise.resolve(local());
+        return new Promise((done) => {
+            execFile("lap", ["show", ref, "--json"], { cwd: root, timeout: 10_000, maxBuffer: 64 * 1024 * 1024 }, (_err, stdout) => {
+                try {
+                    const r = JSON.parse(String(stdout)) as { ok?: unknown; id?: unknown };
+                    if (r.ok === true && typeof r.id === "string") {
+                        done({ ok: true, id: r.id });
+                        return;
+                    }
+                } catch {
+                    /* no answer: the log decides */
+                }
+                done(local());
+            });
+        });
+    }
 }
 
 /* The History view: a webview, because a native tree cannot hold the filter
@@ -146,6 +177,8 @@ class HistoryView implements vscode.WebviewViewProvider {
     private view: vscode.WebviewView | null = null;
     private filter: HistoryFilter = EMPTY_FILTER;
     private page = 0;
+    /* A commit to reveal once the view, not yet shown, first asks. */
+    private pending: string | null = null;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -160,11 +193,19 @@ class HistoryView implements vscode.WebviewViewProvider {
         view.webview.html = historyHtml(view.webview, media);
         view.webview.onDidReceiveMessage((m: ToHost) => {
             if (m.type === "query") {
+                if (this.pending !== null) {
+                    /* the filter and page were chosen for the commit */
+                    this.push(this.pending);
+                    this.pending = null;
+                    return;
+                }
                 this.filter = m.filter;
                 this.page = m.page;
                 this.push();
             } else if (m.type === "open") {
                 this.onOpen(m.id);
+            } else if (m.type === "reveal") {
+                void this.reveal(m.ref);
             }
         });
         view.onDidDispose(() => {
@@ -172,8 +213,9 @@ class HistoryView implements vscode.WebviewViewProvider {
         });
     }
 
-    /* The page for the view's last query, against the log as it is now. */
-    push(): void {
+    /* The page for the view's last query, against the log as it is now;
+     * with `reveal`, the page was chosen to show that commit. */
+    push(reveal: string | null = null): void {
         if (!this.view) return;
         const log = this.source.current;
         const msg: ToView = this.source.hasRepo
@@ -182,9 +224,43 @@ class HistoryView implements vscode.WebviewViewProvider {
                   page: query(log, this.filter, { grouped: this.source.groupBySession, page: this.page, now: new Date() }),
                   hasRepo: true,
                   active: log.activeSessionId,
+                  reveal: reveal === null ? null : { id: reveal, filter: this.filter },
               }
-            : { type: "page", page: null, hasRepo: false, active: null };
+            : { type: "page", page: null, hasRepo: false, active: null, reveal: null };
         void this.view.webview.postMessage(msg);
+    }
+
+    /* Shows the commit a reference names: on its page under the view's
+     * filter, or under All with nothing else set when the filter hides it. */
+    async reveal(ref: string): Promise<void> {
+        const r = await this.source.resolve(ref);
+        if (!r.ok) {
+            void vscode.window.showWarningMessage(
+                r.error === "ambiguous_ref"
+                    ? `lap: ${ref} names more than one commit (${r.matches.join(", ")})`
+                    : `lap: no commit is named ${ref}`,
+            );
+            return;
+        }
+        const log = this.source.current;
+        const at = { grouped: this.source.groupBySession, now: new Date() };
+        let page = pageOf(log, this.filter, at, r.id);
+        if (page === null) {
+            this.filter = { ...EMPTY_FILTER, range: "all" };
+            page = pageOf(log, this.filter, at, r.id);
+        }
+        if (page === null) {
+            void vscode.window.showWarningMessage(`lap: commit ${r.id} is not in the log yet`);
+            return;
+        }
+        this.page = page;
+        if (this.view) {
+            this.push(r.id);
+            this.view.show?.(true);
+        } else {
+            this.pending = r.id;
+            await vscode.commands.executeCommand("lapHistory.focus");
+        }
     }
 
     collapseAll(): void {
@@ -322,14 +398,25 @@ class CommitComments {
                 vscode.CommentThreadCollapsibleState.Expanded;
             return;
         }
-        /* Layout: "[id]/[local time] [user]:" as the author line, then the
-         * message body, a rule, and the session (muted via italics). A
+        /* Layout: "[id] [short hash] @ [local time] [user]:" as the author
+         * line, then the intent, the behavior, whether the message checks
+         * were skipped, a rule, and the session (muted via italics). A
          * trailing no-break-space paragraph keeps the editor's scrollbar
-         * from overlapping the last text line. */
+         * from overlapping the last text line. References to other commits
+         * are links that reveal them in the History view. */
         /* never appendText here: it turns spaces into &nbsp; and kills
          * word-wrap (see mdProse/mdEscape in model.ts) */
         const body = new vscode.MarkdownString();
-        body.appendMarkdown(mdProse(commit.msg));
+        body.isTrusted = { enabledCommands: ["lap.revealCommit"] };
+        const link = (ref: string) =>
+            `command:lap.revealCommit?${encodeURIComponent(JSON.stringify([ref]))}`;
+        body.appendMarkdown(`**Intent**  \n${mdLinked(commit.intent, link)}`);
+        body.appendMarkdown(`\n\n**Behavior**  \n${mdLinked(commit.behavior, link)}`);
+        if (commit.forced) {
+            body.appendMarkdown(
+                `\n\n*${mdEscape("forced: the message checks were skipped (--force-message)")}*`,
+            );
+        }
         const footer = commit.session
             ? `session ${commit.session}` +
               (session ? `: ${summaryLine(session.msg)}` : "")
@@ -339,7 +426,7 @@ class CommitComments {
         const comment: vscode.Comment = {
             author: {
                 name:
-                    `${commit.id} @ ${localTime(commit.ts)}` +
+                    `${commit.id} ${shortHash(commit.hash)} @ ${localTime(commit.ts)}` +
                     (commit.user ? ` ${commit.user}` : "") +
                     ":",
             },
@@ -370,7 +457,7 @@ async function openCommitDiff(
         "vscode.diff",
         before,
         after,
-        `${commit.id} · ${commit.file}`,
+        `${commit.id} ${shortHash(commit.hash)} · ${commit.file}`,
         {
             preview: true,
             selection: commitRange(commit),
@@ -476,6 +563,9 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand("lap.showCommit", (id: string) => {
             showCommitDiff(id);
         }),
+        vscode.commands.registerCommand("lap.revealCommit", (ref: string) =>
+            history.reveal(ref),
+        ),
     );
 }
 

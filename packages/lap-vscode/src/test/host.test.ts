@@ -1,9 +1,12 @@
 /* The History view's wire, driven through the real extension with a
  * stand-in for the `vscode` module: the view asks with a filter and a page,
  * the host answers with that page of the log, and answers again when the log
- * grows or the grouping changes. */
+ * grows or the grouping changes. A reference followed in the view is resolved
+ * by lap, or by the log where lap cannot answer, and answered with the page
+ * that shows its commit. */
 
 import * as assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -18,9 +21,10 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), "lap-history-"));
 fs.mkdirSync(path.join(root, ".lap"));
 const logPath = path.join(root, ".lap", "log.jsonl");
 const rec = (o: object) => JSON.stringify(o) + "\n";
-const commit = (id: string, session: string, msg: string) =>
-    rec({ type: "commit", id, session, file: "a.ts", op: "edit", user: "claude", msg, ts: new Date().toISOString(),
-        old_start: 1, old_lines: 1, new_start: 1, new_lines: 1, eof_nl: true, old_text: ["a"], new_text: ["b"] });
+const commit = (id: string, session: string, intent: string) =>
+    rec({ type: "commit", id, session, file: "a.ts", op: "edit", user: "claude",
+        old_start: 1, old_lines: 1, new_start: 1, new_lines: 1, eof_nl: true, old_text: ["a"], new_text: ["b"],
+        intent, behavior: `step ${id}`, ts: new Date().toISOString() });
 fs.writeFileSync(
     logPath,
     rec({ type: "session_start", id: "S1", msg: "T-1: parser", ts: new Date().toISOString() }) +
@@ -29,6 +33,7 @@ fs.writeFileSync(
 );
 
 const commands = new Map<string, (...a: unknown[]) => unknown>();
+const warnings: string[] = [];
 const state = new Map<string, unknown>();
 let provider: { resolveWebviewView(view: unknown): void } | null = null;
 let onChange: (() => void) | null = null;
@@ -62,7 +67,7 @@ const fake = {
             return { dispose() {} };
         },
         createStatusBarItem: () => ({ show() {}, hide() {}, dispose() {} }),
-        showWarningMessage: () => undefined,
+        showWarningMessage: (m: string) => void warnings.push(m),
     },
     comments: { createCommentController: () => ({ dispose() {} }) },
     commands: {
@@ -88,7 +93,7 @@ test("the view asks for a page, and is sent it again when the log grows or the g
     } finally {
         Module._load = load;
     }
-    for (const c of ["lap.refresh", "lap.toggleGrouping", "lap.collapseAll", "lap.showCommit"]) {
+    for (const c of ["lap.refresh", "lap.toggleGrouping", "lap.collapseAll", "lap.showCommit", "lap.revealCommit"]) {
         assert.ok(commands.has(c), `${c} is registered`);
     }
 
@@ -132,4 +137,42 @@ test("the view asks for a page, and is sent it again when the log grows or the g
 
     commands.get("lap.collapseAll")!();
     assert.equal(posted.at(-1)!.type, "collapseAll");
+
+    // A reference: lap names the commit. The filter ("test") hides L1, so
+    // the answer is All with nothing else set, on L1's page.
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), "lap-bin-"));
+    const args = path.join(bin, "args");
+    fs.writeFileSync(path.join(bin, "lap"), `#!/bin/sh\nprintf '%s\\n' "$@" > '${args}'\necho '{"ok":true,"id":"L1"}'\n`, { mode: 0o755 });
+    const nolap = fs.mkdtempSync(path.join(os.tmpdir(), "lap-nobin-"));
+    const PATH = process.env.PATH;
+    const revealed = async (ref: string) => {
+        const before = posted.length;
+        fromView!({ type: "reveal", ref });
+        for (let i = 0; i < 100 && posted.length === before && warnings.length === 0; i++) await new Promise((r) => setTimeout(r, 20));
+        const m = posted.at(-1)!;
+        return posted.length > before && m.type === "page" ? m : null;
+    };
+    try {
+        process.env.PATH = bin;
+        const byLap = await revealed("#abcdef0");
+        assert.deepEqual(fs.readFileSync(args, "utf8").split("\n"), ["show", "#abcdef0", "--json", ""]);
+        assert.ok(byLap && byLap.page && byLap.reveal);
+        assert.equal(byLap.reveal.id, "L1");
+        assert.deepEqual(byLap.reveal.filter, { text: "", range: "all", ops: [], users: [], states: [] });
+        assert.deepEqual(byLap.page.commits.map((c) => c.id), ["L3", "L2", "L1"]);
+
+        // No lap: the log's own hashes resolve a prefix.
+        process.env.PATH = nolap;
+        const l3 = createHash("sha256").update(fs.readFileSync(logPath, "utf8").trimEnd().split("\n").at(-1)!).digest("hex");
+        const byLog = await revealed("#" + l3.slice(0, 7).toUpperCase());
+        assert.ok(byLog && byLog.page && byLog.reveal);
+        assert.equal(byLog.reveal.id, "L3");
+        assert.equal(byLog.page.commits[0].hash, l3);
+
+        // A reference to nothing is a warning, and the view stays as it is.
+        assert.equal(await revealed("L99"), null);
+        assert.deepEqual(warnings, ["lap: no commit is named L99"]);
+    } finally {
+        process.env.PATH = PATH;
+    }
 });
