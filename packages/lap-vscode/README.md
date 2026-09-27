@@ -12,9 +12,8 @@ skill); this extension just shows what they did, as they do it.
     commit count, ● active marker — expandable into their commits; commits
     recorded with `--no-session` sit in their own group. The toggle button
     switches to a **raw list** of all commits, newest-first.
-  - Every commit shows `L<n>`, its short hash, the intent's first line, the
-    file and edit range. Open it (its twistie, or a click) for the whole
-    intent, then the behavior, and a mark when the message checks were
+  - Every commit shows `L<n>`, its short hash, the file and edit range.
+    Open it (its twistie, or a click) for the intent, then the behavior, and a mark when the message checks were
     skipped (`--force-message`). References to other commits in that text —
     `#<hash prefix>` or `L<n>` — are links that reveal the commit in the
     tree. The filter matches ids, hashes, intents, behaviors

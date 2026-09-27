@@ -7,11 +7,11 @@
  * is the time range; the ✕, shown only while anything is set, clears all of
  * it.
  *
- * A COMMIT is its id, short hash and the first line of its intent. Opened —
- * by its twistie, or by clicking it, which also opens its diff — it shows the
- * whole intent, then the behavior, and whether the message checks were
- * skipped. References to other commits in that text (`#<hash>`, `L<n>`) are
- * links: the host resolves one and answers with the page that shows it.
+ * A COMMIT is its id, short hash, file and lines. Opened — by its twistie,
+ * or by clicking it, which also opens its diff — it shows the intent, then
+ * the behavior, and whether the message checks were skipped. References to
+ * other commits in that text (`#<hash>`, `L<n>`) are links: the host
+ * resolves one and answers with the page that shows it.
  *
  * THE HOST DOES THE WORK. This view sends what is set and gets back one page
  * (history.ts runs in the host, where the log is). What is set, the page and
@@ -270,7 +270,6 @@ function CommitLine(props: { c: CommitRow; depth: number; showSession: boolean; 
                 <span className="lh-id">{c.id}</span>
                 <span className="lh-hash">{shortHash(c.hash)}</span>
                 {c.forced ? <Codicon name="warning" className="lh-icon lh-forced" /> : null}
-                <span className="lh-title">{c.summary}</span>
                 <span className="lh-desc">
                     {c.file} · {c.region}
                     {props.showSession && c.session ? ` · ${c.session}` : ""}
