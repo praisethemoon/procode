@@ -201,3 +201,19 @@ char *join_lines(Arena *a, Lines l, size_t *out_len) {
         *out_len = sb.len;
     return sb_finish(&sb);
 }
+
+Lines lines_without_cr(Arena *a, Lines l) {
+    Lines out = l;
+    if (l.count == 0)
+        return out;
+    Str *v = (Str *)arena_alloc(a, (size_t)l.count * sizeof(Str));
+    for (int32_t i = 0; i < l.count; i++) {
+        Str s = l.lines[i];
+        bool ended = i + 1 < l.count || l.eof_nl;
+        if (ended && s.len > 0 && s.ptr[s.len - 1] == '\r')
+            s.len--;
+        v[i] = s;
+    }
+    out.lines = v;
+    return out;
+}

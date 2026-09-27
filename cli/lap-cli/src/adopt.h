@@ -1,0 +1,40 @@
+/* Adoption: placing a branch's commits to one file on the parent's version
+ * of that file (SPEC.md, Merging). Pure: no I/O, and nothing allocated
+ * outside the caller's arena.
+ *
+ * Three versions of the file take part. The base is the file as of the
+ * branch's base; the parent is the file as the parent has it now; the
+ * branch's commits, in order, turn the base into the branch's version,
+ * each region given in the branch's coordinates at its point.
+ *
+ * The parent's changes are the diff base -> parent. A branch commit whose
+ * region neither overlaps nor touches one of them moves by the net lines
+ * the parent added or removed above it; every placed commit shifts the
+ * ones after it. Overlapping or touching a parent change is a conflict
+ * (both sides inserting at one point, or one at the edge of the other's
+ * change: either order would be a guess), and so is a commit whose old
+ * text is not the parent's text where it would land. The first conflict
+ * stops the file: no later commit to it is placed.
+ */
+#ifndef LAP_ADOPT_H
+#define LAP_ADOPT_H
+
+#include "rec.h"
+
+typedef struct {
+    int32_t placed;  /* commits placed, counted from the first */
+    int32_t *start;  /* placed commit k: its start in the parent's version
+                        as it stood just before it */
+    bool *eof_nl;    /* placed commit k: the trailing-newline state after
+                        it, in the parent's version */
+    Lines result;    /* the parent's version with the placed commits */
+    const char *why; /* when placed < n: why the next one was not */
+} Placement;
+
+/* Places commits[0..n) (commit records to one file) on parent, given the
+ * file at the branch's base. Lines are compared as lap compares them,
+ * blind to a CRLF line ending's '\r'. */
+void adopt_place(Arena *a, Lines base, Lines parent, const Rec *const *commits,
+                 int32_t n, Placement *out);
+
+#endif /* LAP_ADOPT_H */

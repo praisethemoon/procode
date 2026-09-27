@@ -48,6 +48,11 @@ typedef struct {
 Lines split_lines(Arena *a, const char *data, size_t len);
 /* Inverse of split_lines. */
 char *join_lines(Arena *a, Lines l, size_t *out_len);
+/* l with the '\r' of every CRLF line ending dropped: lap reads CRLF as LF
+ * (SPEC, Edit detection). A last line that no '\n' ends keeps its '\r'.
+ * The line count is unchanged, so regions found on this copy are regions
+ * of l. */
+Lines lines_without_cr(Arena *a, Lines l);
 
 /* Open-addressing string set; arena-backed, grows by rehash. */
 typedef struct {

@@ -1,0 +1,104 @@
+#include "adopt.h"
+
+#include "diff.h"
+
+/* A parent change, in the branch's current coordinates: it replaced lines
+ * [start, start+len) of the branch's version with lines whose count differs
+ * from len by delta. */
+typedef struct {
+    int32_t start;
+    int32_t len;
+    int32_t delta;
+} Change;
+
+/* Lines a[at-1 ..) equal want, blind to CRLF '\r's (a and want both
+ * already stripped). */
+static bool text_at(Lines a, int32_t at, const Str *want, int32_t n) {
+    if (at < 1 || at - 1 + n > a.count)
+        return false;
+    for (int32_t i = 0; i < n; i++) {
+        if (!str_eq(a.lines[at - 1 + i], want[i]))
+            return false;
+    }
+    return true;
+}
+
+static Str *strip_text(Arena *a, const Str *v, int32_t n) {
+    Lines l = {(Str *)v, n, true};
+    return lines_without_cr(a, l).lines;
+}
+
+void adopt_place(Arena *a, Lines base, Lines parent, const Rec *const *commits,
+                 int32_t n, Placement *out) {
+    memset(out, 0, sizeof *out);
+    out->start = (int32_t *)arena_alloc(a, (size_t)(n ? n : 1) *
+                                               sizeof(int32_t));
+    out->eof_nl = (bool *)arena_alloc(a, (size_t)(n ? n : 1) * sizeof(bool));
+
+    Lines branch = base;
+    Lines merged = parent;
+    Regions pr = diff_lines(a, lines_without_cr(a, base),
+                            lines_without_cr(a, parent));
+    Change *ch = (Change *)arena_alloc(
+        a, (size_t)(pr.count ? pr.count : 1) * sizeof(Change));
+    for (int32_t i = 0; i < pr.count; i++) {
+        ch[i].start = pr.v[i].old_start;
+        ch[i].len = pr.v[i].old_lines;
+        ch[i].delta = pr.v[i].new_lines - pr.v[i].old_lines;
+    }
+
+    for (int32_t k = 0; k < n; k++) {
+        const Rec *c = commits[k];
+        bool del = strcmp(c->op, "delete") == 0;
+        int32_t s = c->old_start < 1 ? 1 : c->old_start;
+        int32_t e = s + c->old_lines;
+        int32_t offset = 0;
+        const char *why = NULL;
+        for (int32_t i = 0; i < pr.count && !why; i++) {
+            int32_t ps = ch[i].start, pe = ch[i].start + ch[i].len;
+            if (s <= pe && ps <= e)
+                why = ch[i].len == 0 && c->old_lines == 0 && ps == s
+                          ? "both sides insert at the same point"
+                          : "it overlaps or touches a change the parent "
+                            "made";
+            else if (pe < s)
+                offset += ch[i].delta;
+        }
+        int32_t at = s + offset;
+        Lines mnocr = lines_without_cr(a, merged);
+        if (!why &&
+            !text_at(mnocr, at, strip_text(a, c->old_text, c->old_n),
+                     c->old_n))
+            why = "the text it replaces is not the parent's there";
+        if (!why && del && at - 1 + c->old_lines != merged.count)
+            why = "it deletes a file the parent changed";
+        if (why) {
+            out->why = why;
+            break;
+        }
+
+        /* the newline at the end: the commit's, if it changed it; else
+         * whatever the parent's version has */
+        bool eof = c->eof_nl != branch.eof_nl ? c->eof_nl : merged.eof_nl;
+        if (del) {
+            merged.lines = NULL;
+            merged.count = 0;
+            merged.eof_nl = true;
+            branch = merged;
+            eof = true;
+        } else {
+            merged = lines_replace(a, merged, at, c->old_lines, c->new_text,
+                                   c->new_n, eof);
+            branch = lines_replace(a, branch, s, c->old_lines, c->new_text,
+                                   c->new_n, c->eof_nl);
+        }
+        for (int32_t i = 0; i < pr.count; i++) {
+            if (ch[i].start >= e)
+                ch[i].start += c->new_n - c->old_lines;
+        }
+        out->start[k] = at;
+        out->eof_nl[k] = eof;
+        out->placed = k + 1;
+    }
+    out->result = merged;
+}

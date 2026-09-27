@@ -42,6 +42,7 @@ set(LAP_LIB_SOURCES
     src/hist.c
     src/branches.c
     src/cmd_branch.c
+    src/adopt.c
     src/tty.c
 )
 

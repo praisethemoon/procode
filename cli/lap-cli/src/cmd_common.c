@@ -353,26 +353,6 @@ static bool shadow_from_log(Arena *a, Repo *r, const char *rel, Lines *out) {
     return true;
 }
 
-/* l with the '\r' of every CRLF line ending dropped: lap reads CRLF as LF
- * (SPEC, Edit detection). A last line that no '\n' ends keeps its '\r'.
- * The line count is unchanged, so regions found on this copy are regions
- * of l. */
-static Lines without_cr(Arena *a, Lines l) {
-    Lines out = l;
-    if (l.count == 0)
-        return out;
-    Str *v = (Str *)arena_alloc(a, (size_t)l.count * sizeof(Str));
-    for (int32_t i = 0; i < l.count; i++) {
-        Str s = l.lines[i];
-        bool ended = i + 1 < l.count || l.eof_nl;
-        if (ended && s.len > 0 && s.ptr[s.len - 1] == '\r')
-            s.len--;
-        v[i] = s;
-    }
-    out.lines = v;
-    return out;
-}
-
 bool file_diff_load(Arena *a, Repo *r, const char *rel, FileDiff *out,
                     char *err, size_t errsz) {
     memset(out, 0, sizeof(*out));
@@ -400,12 +380,13 @@ bool file_diff_load(Arena *a, Repo *r, const char *rel, FileDiff *out,
     }
     /* The working file is recorded as LF. The shadow stays byte for byte
      * what the log replays to, so only the comparison ignores its CRs. */
-    out->work = without_cr(a, split_lines(a, wdata ? wdata : "", wlen));
+    out->work = lines_without_cr(a, split_lines(a, wdata ? wdata : "", wlen));
     out->shadow = split_lines(a, sdata ? sdata : "", slen);
     if (!out->shadow_exists)
         out->shadow_exists = shadow_from_log(a, r, rel, &out->shadow);
     if (out->work_exists && out->shadow_exists)
-        out->regions = diff_lines(a, without_cr(a, out->shadow), out->work);
+        out->regions =
+            diff_lines(a, lines_without_cr(a, out->shadow), out->work);
     return true;
 }
 
