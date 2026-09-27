@@ -155,6 +155,8 @@ int32_t hist_locate(const Hist *h, uint64_t off) {
 
 const char *hist_label(const Hist *h, int32_t i) {
     const char *lineage = h->v[i].lineage;
+    if (h->v[i].label)
+        return h->v[i].label;
     if (h->parent[0] && strcmp(lineage, h->lineage) == 0)
         return h->name;
     return lineage;
@@ -568,8 +570,33 @@ bool hist_open_folder(Arena *a, const char *lapdir, Hist *h, char *err,
     return hist_open_lineage(a, lapdir, lineage, h, err, errsz);
 }
 
-bool hist_open_lineage(Arena *a, const char *lapdir, const char *lineage,
-                       Hist *h, char *err, size_t errsz) {
+/* Branches nest at most this deep: a longer chain of branch records is a
+ * loop, not a history. */
+#define HIST_MAX_DEPTH 32
+
+/* hist_open_view, depth branch records into the chain. */
+static bool open_view(Arena *a, const char *lapdir, const char *lineage,
+                      int32_t upto, int32_t depth, Hist *h, char *err,
+                      size_t errsz) {
+    if (strcmp(lineage, LAP_MAIN_LINEAGE) == 0) {
+        if (!hist_open(a, lapdir, lineage, h, err, errsz))
+            return false;
+        if (upto > 0 && (h->legacy || h->n < upto)) {
+            char name[64];
+            hist_chunk_name(lineage, upto, name);
+            snprintf(err, errsz, "%s is missing from %s", name, h->dir);
+            return false;
+        }
+        if (upto > 0) {
+            h->n = upto;
+            h->size = h->v[upto - 1].start + h->v[upto - 1].size;
+        }
+        return true;
+    }
+    if (depth >= HIST_MAX_DEPTH) {
+        snprintf(err, errsz, "branch records in %s form a loop", lapdir);
+        return false;
+    }
     Rec br;
     if (!hist_first_record(a, lapdir, lineage, &br, err, errsz))
         return false;
@@ -580,22 +607,33 @@ bool hist_open_lineage(Arena *a, const char *lapdir, const char *lineage,
         return false;
     }
     Hist par, own;
-    if (!hist_open(a, lapdir, br.parent, &par, err, errsz) ||
-        !hist_open(a, lapdir, lineage, &own, err, errsz))
-        return false;
-    if (par.legacy || par.n < br.base_chunk) {
-        char name[64];
-        hist_chunk_name(br.parent, br.base_chunk, name);
-        snprintf(err, errsz,
-                 "branch %s starts after %s, which is missing from %s",
-                 br.name, name, par.dir);
+    if (!open_view(a, lapdir, br.parent, br.base_chunk, depth + 1, &par, err,
+                   errsz)) {
+        if (depth > 0)
+            return false; /* the outermost branch says it, once */
+        char why[512];
+        snprintf(why, sizeof why, "%s", err);
+        snprintf(err, errsz, "branch %s starts after its base, but %s",
+                 br.name, why);
         return false;
     }
+    if (!hist_open(a, lapdir, lineage, &own, err, errsz))
+        return false;
+    if (upto > 0 && own.n < upto) {
+        char name[64];
+        hist_chunk_name(lineage, upto, name);
+        snprintf(err, errsz, "%s is missing from %s", name, own.dir);
+        return false;
+    }
+    if (upto > 0)
+        own.n = upto;
+    for (int32_t i = 0; i < own.n; i++)
+        own.v[i].label = br.name;
     *h = own;
-    h->cap = br.base_chunk + own.n;
+    h->cap = par.n + own.n;
     h->v = (HistChunk *)arena_alloc(a, (size_t)h->cap * sizeof(HistChunk));
-    memcpy(h->v, par.v, (size_t)br.base_chunk * sizeof(HistChunk));
-    memcpy(h->v + br.base_chunk, own.v, (size_t)own.n * sizeof(HistChunk));
+    memcpy(h->v, par.v, (size_t)par.n * sizeof(HistChunk));
+    memcpy(h->v + par.n, own.v, (size_t)own.n * sizeof(HistChunk));
     h->n = h->cap;
     uint64_t start = 0;
     for (int32_t i = 0; i < h->n; i++) {
@@ -608,6 +646,16 @@ bool hist_open_lineage(Arena *a, const char *lapdir, const char *lineage,
     h->base_chunk = br.base_chunk;
     snprintf(h->name, sizeof h->name, "%s", br.name);
     return true;
+}
+
+bool hist_open_view(Arena *a, const char *lapdir, const char *lineage,
+                    int32_t upto, Hist *h, char *err, size_t errsz) {
+    return open_view(a, lapdir, lineage, upto, 0, h, err, errsz);
+}
+
+bool hist_open_lineage(Arena *a, const char *lapdir, const char *lineage,
+                       Hist *h, char *err, size_t errsz) {
+    return open_view(a, lapdir, lineage, 0, 0, h, err, errsz);
 }
 
 typedef struct {

@@ -274,8 +274,14 @@ and a `git merge` of the branch's code brings its chunks as new files.
   a folder names commits by hash and sessions as `<branch>/S<n>`
   (§Naming sessions).
 - A branch starts with no session open, whatever its parent had open.
-- A branch's parent is a `main` folder: a branch of a branch is refused
-  (`nested_branch`).
+- **A branch of a branch** starts from a branch folder the same way: its
+  record's parent is that branch's lineage, and its base chunk one of
+  that branch's own chunks. A branch record holds one hop, so a nested
+  branch's history is found by following branch records one at a time up
+  to `main`: main's chunks to the first branch's base chunk, that branch's
+  own chunks to the next one's base chunk, and so on, then its own. A
+  chain that leads back to itself (more than 32 hops) is a broken
+  history. Every branch a history spans is labelled by its name.
 
 ### Starting one
 
@@ -334,10 +340,18 @@ your own pending work, `git merge` the branch's code, then, in the parent
 folder, `lap merge <branch> [--dry-run]`.
 
 1. **Finding it.** The branch is named by its name or id, found in the
-   registry or among the branch chunks in `.lap/log/` (`git merge` brings
-   them); neither → `branch_not_found`. Run in a branch folder →
-   `merge_in_branch`. The branch record's base must be in this folder's
-   history, else `unrelated_history`.
+   registry — this folder's, or the registry of one of its branches, for
+   a branch of a branch — or among the branch chunks in `.lap/log/`
+   (`git merge` brings them); none → `branch_not_found`. A branch folder
+   merges the branches started from it, as main does. **The chain** is
+   the branch and each branch it started from, up to the first whose
+   history this folder already holds: the branch alone when it merges
+   into the branch it started from; the branches between as well when a
+   branch of a branch merges straight into main — git's merge of it
+   brings their code up to its base, so lap adopts their history up to
+   it too. A branch whose history this folder already holds (its own, or
+   one it started from) → `merge_in_branch`. The outer branch record's
+   base must be in this folder's history, else `unrelated_history`.
 2. **Its chunks: the ones here first.** lap reads the branch's history
    from this folder's copies of its chunks, as they are: `git merge`
    brought them (or an earlier merge wrote them). Adoption runs as far as
@@ -346,7 +360,9 @@ folder, `lap merge <branch> [--dry-run]`.
    `git merge` and `lap merge` adopt the rest. lap never rewrites a copy
    git brought, so the next `git merge` finds that file unchanged on this
    side and never conflicts on `.lap/log/`. Nothing in the branch folder is
-   sealed or written.
+   sealed or written. A chain is read as one history: this folder's up to
+   the outer branch's base chunk, then each branch's own chunks up to the
+   next one's base chunk, each branch's chunks found as below.
 
    The registered folder (reachable: it exists and its `.lap/lineage`
    names the branch) fills in only what is not here:
@@ -368,7 +384,12 @@ folder, `lap merge <branch> [--dry-run]`.
    folder is gone. Only complete lines are taken: a line the branch is
    still writing waits for the next merge.
 3. **Placing, file by file.** A merge takes the branch's records after the
-   last merge's `head` (after the branch record, the first time). For each
+   last merge's `head` (after the branch record, the first time); for a
+   chain, after the latest head this folder took in of any of its
+   branches — a branch the chain passes through that was merged here past
+   the chain's base is taken in whole. The chain's commits are placed as
+   one run, in history order, so a conflict in an outer branch's part
+   stops the file for the branches after it too. For each
    file those commits touch, the three versions are the branch's version at
    that head (for the first merge, the file at the base), the parent's
    version now, and the commits. The parent's changes are the diff between
@@ -395,7 +416,10 @@ folder, `lap merge <branch> [--dry-run]`.
 4. **Appending**, under the lock, in the branch's order:
    - a branch `session_start` not adopted before, as a new session with
      the next `S` id, the same purpose and meta (so `--meta ticket=T-12`
-     still finds the work) and `from`;
+     still finds the work) and `from`. Adopted before counts both ways
+     work can arrive: straight from its branch, or by way of a branch that
+     had adopted it (its own `from` names one adopted here); its commits
+     then belong to that session, and its end is not appended twice;
    - each placed commit, with the next `L` id, its region at the placed
      start, its session's adopted id, and the same text, intent, behavior,
      `forced` and `user` — the message checks are not run again;
@@ -411,7 +435,12 @@ folder, `lap merge <branch> [--dry-run]`.
    not adopted in each, and `already`: the hashes of the commits already
    done here (left out when there are none), so the history says they were
    seen, not lost. A later merge of the branch starts after `head` and
-   keeps every stopped file stopped.
+   keeps every stopped file stopped. A chain writes one merge record per
+   branch with anything new, outer first, each with its own counts and
+   stops: a branch the chain passed through advances to the base of the
+   next, so its own later merge adopts only what came after — and a file
+   stopped in an outer branch's part is stopped in the inner branches'
+   records too.
 
 **What is left.** The working tree holds what `git merge` made; the shadow
 holds this history plus what was adopted. The difference — conflict
@@ -433,7 +462,9 @@ once it leaves its folder — in a ticket comment, say. **`<branch>/S<n>`**
 
 - Every command that takes a session (`lap rr <session>`, `lap log
   --session`, `lap search --session`) accepts it, reading that branch as
-  `--branch` does. A bare `S<n>` still means this folder's own.
+  `--branch` does — from any folder it descends from, so a branch of a
+  branch is named the same way from main. A bare `S<n>` still means this
+  folder's own.
 - Once `lap merge` adopted that session into this folder, the name leads
   to the adopted session here, found by its `from` link: `lap rr
   feat/S4` in the parent reviews the adopted one, labelled `S9 (adopted
@@ -486,6 +517,15 @@ finding its history nowhere.
   stays — an unmerged or stopped branch whose folder is gone is shown as
   `missing` until `lap branch forget` drops it or `lap branch move` points
   it at the folder's new place.
+- **Branches of branches.** A branch folder has its own registry, of the
+  branches started from it. Readers here (`branch list`, `merge`,
+  `--branch`, `<branch>/S<n>`) also read the registry of each listed
+  branch whose folder is still that branch, and so on down; nothing is
+  ever copied between registries. `lap branch list` shows a nested branch
+  indented under the branch it started from, with `via` (that branch's
+  id) in `--json`, and judges its state against that branch's history,
+  where its merges are recorded. It is tended (`forget`, `move`) in that
+  branch's folder.
 
 ### Not in this version
 
@@ -495,8 +535,6 @@ finding its history nowhere.
   user move code.
 - Adopting across unrelated histories, or merging two branches with each
   other without their common parent.
-- A branch of a branch (`nested_branch`): every branch starts from a
-  `main` folder.
 - Retrying a stopped file (`lap merge --resume <file>`) once the parent has
   resolved the conflict: a stopped file stays stopped for its branch.
 
@@ -755,24 +793,26 @@ birth and compares the result byte-for-byte with the shadow store and
 every snapshot. Verification never uses the caches it is checking.
 
 ### `lap branch start [name] --from <folder>`
-Makes the current folder a branch of `<folder>` (§Branches → Starting one).
-Prints the name, the id, the parent and the base's short hash; `--json`
-returns `id`, `name`, `parent`, `base`, `base_chunk`. Errors:
-`missing_from`, `bad_name`, `same_folder`, `already_branch`, `no_parent`,
-`nested_branch`, `unrelated_history`, `not_clean`, `name_taken`,
-`parent_read_only`.
+Makes the current folder a branch of `<folder>` (§Branches → Starting one),
+which may itself be a branch folder. Prints the name, the id, the parent
+and the base's short hash; `--json` returns `id`, `name`, `parent`,
+`base`, `base_chunk`. Errors: `missing_from`, `bad_name`, `same_folder`,
+`already_branch`, `no_parent`, `unrelated_history`, `not_clean`,
+`name_taken`, `parent_read_only`.
 
 ### `lap branch list`, `lap branch forget <branch>`, `lap branch move <branch> <path>`
 `list` shows, in a branch folder, its own name, id, parent and base, then
-each branch this folder started (§Registry): its name, state and last
-known path (`(gone)` when its folder is not there), its commits since its
-base and since the last merge, the files a merge stopped, and for a
-`missing` one the two fixes. `--json`: `{"ok":true,"self":{id, name,
-parent, base} | null,"branches":[{id, name, state, present, path, base,
-started, since_base, since_merge, merged, stopped, stops}]}`, the counts
+each branch this folder started (§Registry), and under each the branches
+started from it, indented: its name, state and last known path (`(gone)`
+when its folder is not there), its commits since its base and since the
+last merge, the files a merge stopped, and for a `missing` one the two
+fixes. `--json`: `{"ok":true,"self":{id, name, parent, base} |
+null,"branches":[{id, name, state, present, path, base, started,
+since_base, since_merge, merged, stopped, stops, via}]}`, the counts
 `null` when the branch's history is nowhere to be read, `merged` the last
-merged head or `null`, `stopped` the stopped files and `stops` the same
-with the first commit not adopted in each (`[{file, at}]`).
+merged head or `null`, `stopped` the stopped files, `stops` the same with
+the first commit not adopted in each (`[{file, at}]`), and `via` the id of
+the branch a nested one started from (`null` for this folder's own).
 
 `forget` drops an entry; `move` points it at a folder that holds that
 branch (else `not_that_branch`). Both are writers; an entry not in the

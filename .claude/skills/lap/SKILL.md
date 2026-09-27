@@ -171,6 +171,12 @@ lap branch start parser --from ../proj         # its own line of history
   file where the branch's work conflicts with the parent's stops, and what
   is left shows in `lap status` — commit it as usual, citing the branch
   commits (`#<hash>`) it stands for.
+- **Branches of branches.** A branch folder can start branches too
+  (`lap branch start sub --from ../proj-parser`), and merge them back the
+  same way, in its own folder. A branch of a branch can also go straight
+  into main: `git merge` it there, then `lap merge sub`, which adopts the
+  work of the branch between up to where `sub` started, too. `lap branch
+  list` in main shows `sub` under `parser`.
 - Ids repeat across folders (both go on from the base). In text that
   leaves the folder — a ticket comment, another branch's commit — cite
   commits by hash and sessions as `<branch>/S<n>`. lap prints a branch's

@@ -68,8 +68,10 @@ export interface LapLog {
     parseErrors: number;
     records: number; /* all record lines folded so far, any kind */
     merges: MergeRec[];
-    /* A branch folder's history: where its own part starts (the branch
-     * record's index) and its name; null in a main folder's. */
+    /* A branch folder's history: where its own part starts (its branch
+     * record's index, the last branch record for a branch of a branch,
+     * whose history holds the branches it started from) and its name;
+     * null in a main folder's. */
     branchAt: number | null;
     branchName: string | null;
 }
@@ -183,7 +185,7 @@ function foldLine(r: LogReader, line: string): void {
         if (typeof rec["from"] !== "string") {
             log.activeSessionId = null; /* matches the CLI: any end closes */
         }
-    } else if (type === "branch" && log.branchAt === null) {
+    } else if (type === "branch") { /* the last one: a branch of a branch */
         log.branchAt = recIndex;
         log.branchName = String(rec["name"] ?? rec["id"] ?? "");
         log.activeSessionId = null; /* a branch starts with none open */

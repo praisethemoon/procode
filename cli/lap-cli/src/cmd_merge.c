@@ -41,6 +41,38 @@ static int32_t find_hash(const RecLog *log, const char *hash) {
     return -1;
 }
 
+/* A branch of the chain one merge adopts: the branch named, and the
+ * branches it started from that this folder has not taken in yet — outer
+ * (the one started from this folder's history) first. */
+typedef struct {
+    const char *id, *name;
+    int32_t cut;        /* its own chunks up to this one (0: all) */
+    OwnChunk *own;      /* its own chunks, as read */
+    int32_t nown;
+    int32_t first, last; /* its branch record and last record in the stream */
+    const char *head;    /* its head at its last merge here, or NULL */
+    int32_t adopted, left;
+    const char **stop_file, **stop_at;
+    size_t nstop, scap, scap2;
+    const char **already;
+    size_t nalready, acap;
+} Lin;
+
+/* Branches nest at most this deep: a longer chain is a loop. */
+#define MERGE_MAX_CHAIN 32
+
+/* True when lineage's records are part of the history this folder reads:
+ * its own, or one it started from. */
+static bool in_view(const Hist *h, const char *lineage) {
+    if (strcmp(h->lineage, lineage) == 0)
+        return true;
+    for (int32_t i = 0; i < h->n; i++) {
+        if (strcmp(h->v[i].lineage, lineage) == 0)
+            return true;
+    }
+    return false;
+}
+
 /* A file's lines as of record `upto` of log; *exists false when it was
  * never created, or deleted. */
 static Lines file_at(Arena *a, const RecLog *log, const char *file,
@@ -141,17 +173,10 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         return LAP_EXIT_ERR;
     }
     int32_t rc = LAP_EXIT_ERR;
-    if (repo.hist.parent[0]) {
-        err_out(json, "merge_in_branch",
-                "this folder is branch %s; lap merge runs in the folder a "
-                "branch started from",
-                repo.hist.name);
-        goto done;
-    }
 
     /* The branch, and where its history is. */
     Branches reg;
-    branches_load(a, repo.lapdir, &reg);
+    branches_load_deep(a, repo.lapdir, &reg);
     const char *id = branch_find(a, &repo, &reg, key);
     const BranchEntry *ent = id ? branches_find(&reg, id) : NULL;
     bool reachable = ent && branch_folder_is(a, ent->path, id);
@@ -163,69 +188,115 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 key, repo.hist.dir);
         goto done;
     }
-    /* The branch's own chunks, this folder's copies first. A git checkout's
-     * history comes here through git merge, never from its folder unless
-     * the user asks: taken earlier, it would run ahead of the code, and the
-     * next git merge would conflict on the copies. */
+    /* The chain: the branch, then each branch it started from, until one
+     * whose history this folder already reads. Merged into the branch it
+     * started from, a branch is its own chain; a branch of a branch merged
+     * straight into main brings the branches between, as git's merge of it
+     * brings their code. A git checkout's history comes here through git
+     * merge, never from its folder unless the user asks: taken earlier, it
+     * would run ahead of the code, and the next git merge would conflict on
+     * the copies. */
     bool git = reachable && folder_is_git(ent->path);
-    OwnChunk *own;
-    int32_t nown;
-    if (!own_chunks(a, repo.lapdir, reachable ? ent->path : NULL, id,
-                    reachable && (!git || copy), &own, &nown, err,
-                    sizeof err)) {
-        err_out(json, "log_unreadable", "%s", err);
-        goto done;
+    bool fill = reachable && (!git || copy);
+    char flap[LAP_PATH_MAX];
+    snprintf(flap, sizeof flap, "%s/%s", reachable ? ent->path : ".",
+             LAP_DIR);
+    Lin *lin = (Lin *)arena_alloc0(a, MERGE_MAX_CHAIN * sizeof(Lin));
+    int32_t nlin = 0;
+    const char *anchor = id;
+    int32_t anchor_cut = 0;
+    while (!in_view(&repo.hist, anchor)) {
+        Rec fr;
+        bool found =
+            hist_first_record(a, repo.lapdir, anchor, &fr, err, sizeof err) ||
+            (fill && hist_first_record(a, flap, anchor, &fr, err, sizeof err));
+        if (!found && git && !copy) {
+            err_out(json, "git_merge_first",
+                    "branch %s's history has not come through git yet: no "
+                    "chunk of %s is in %s. Run git merge on its git branch "
+                    "first, then lap merge",
+                    key, anchor, repo.hist.dir);
+            goto done;
+        }
+        if (!found) {
+            err_out(json, "branch_not_found",
+                    "branch %s is registered but its history is nowhere to be "
+                    "read: no chunk of %s is in %s, nor in its folder %s",
+                    key, anchor, repo.hist.dir,
+                    ent ? ent->path : "(unknown)");
+            goto done;
+        }
+        if (fr.type != REC_BRANCH || strcmp(fr.id, anchor) != 0 ||
+            nlin == MERGE_MAX_CHAIN) {
+            err_out(json, "log_broken",
+                    "branch %s's history does not open with its branch "
+                    "record, or its branches form a loop",
+                    anchor);
+            goto done;
+        }
+        lin[nlin].id = anchor;
+        lin[nlin].name = fr.name;
+        lin[nlin].cut = anchor_cut;
+        nlin++;
+        anchor = fr.parent;
+        anchor_cut = fr.base_chunk;
     }
-    if (nown == 0 && git && !copy) {
-        err_out(json, "git_merge_first",
-                "branch %s's history has not come through git yet: no chunk "
-                "of it is in %s. Run git merge on its git branch first, then "
-                "lap merge",
-                key, repo.hist.dir);
-        goto done;
-    }
-    if (nown == 0) {
-        err_out(json, "branch_not_found",
-                "branch %s is registered but its history is nowhere to be "
-                "read: no chunk of it is in %s, nor in its folder %s",
-                key, repo.hist.dir, ent ? ent->path : "(unknown)");
-        goto done;
-    }
-
-    /* Its history as one stream: its parent's chunks up to its base chunk,
-     * as its branch record (its first line) names them, then its own. */
-    Rec first;
-    const char *nl = memchr(own[0].data, '\n', own[0].len);
-    if (!nl ||
-        !rec_decode(a, own[0].data, (size_t)(nl - own[0].data), &first, err,
-                    sizeof err) ||
-        first.type != REC_BRANCH || strcmp(first.id, id) != 0) {
-        err_out(json, "log_broken",
-                "branch %s's history does not open with its branch record",
+    if (nlin == 0) {
+        err_out(json, "merge_in_branch",
+                "%s is this folder's own history, or one it started from: "
+                "lap merge adopts a branch started from here (or from one of "
+                "its branches)",
                 key);
         goto done;
     }
-    Hist ph;
-    char *pdata;
-    if (!hist_open(a, repo.lapdir, first.parent, &ph, err, sizeof err)) {
-        err_out(json, "log_unreadable", "%s", err);
-        goto done;
+    for (int32_t k = 0; k < nlin / 2; k++) { /* outer first */
+        Lin t = lin[k];
+        lin[k] = lin[nlin - 1 - k];
+        lin[nlin - 1 - k] = t;
     }
-    if (first.base_chunk < 1 || first.base_chunk > ph.n) {
+
+    /* One stream: this folder's history up to the outer branch's base
+     * chunk, then each branch's own chunks up to the next one's base,
+     * this folder's copies first (own_chunks). */
+    Hist ah;
+    char *adata;
+    size_t alen;
+    if (!hist_open_view(a, repo.lapdir, anchor, anchor_cut, &ah, err,
+                        sizeof err)) {
         err_out(json, "unrelated_history",
-                "branch %s did not start from this folder's history", key);
+                "branch %s did not start from this folder's history: %s", key,
+                err);
         goto done;
     }
-    const HistChunk *bc = &ph.v[first.base_chunk - 1];
-    if (!hist_read(a, &ph, 0, (size_t)(bc->start + bc->size), &pdata)) {
-        err_out(json, "log_unreadable", "cannot read %s", ph.dir);
+    if (!hist_read_all(a, &ah, &adata, &alen)) {
+        err_out(json, "log_unreadable", "cannot read %s", ah.dir);
         goto done;
     }
     StrBuf all;
     sb_init(&all, a);
-    sb_putn(&all, pdata, (size_t)(bc->start + bc->size));
-    for (int32_t k = 0; k < nown; k++)
-        sb_putn(&all, own[k].data, own[k].len);
+    sb_putn(&all, adata, alen);
+    for (int32_t k = 0; k < nlin; k++) {
+        Lin *l = &lin[k];
+        if (!own_chunks(a, repo.lapdir, reachable ? ent->path : NULL, l->id,
+                        fill, &l->own, &l->nown, err, sizeof err)) {
+            err_out(json, "log_unreadable", "%s", err);
+            goto done;
+        }
+        if (l->cut > 0 && l->nown > l->cut)
+            l->nown = l->cut;
+        if (l->nown == 0 || l->nown < l->cut) {
+            err_out(json, git && !copy ? "git_merge_first" : "log_unreadable",
+                    "branch %s's history is not all here: %s lacks chunks of "
+                    "%s%s",
+                    key, repo.hist.dir, l->name,
+                    git && !copy ? " (run git merge on its git branch first, "
+                                   "then lap merge)"
+                                 : "");
+            goto done;
+        }
+        for (int32_t j = 0; j < l->nown; j++)
+            sb_putn(&all, l->own[j].data, l->own[j].len);
+    }
     size_t blen = all.len;
     char *bdata = sb_finish(&all);
 
@@ -241,44 +312,79 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 blog.chain_err);
         goto done;
     }
-    int32_t bi = -1;
+    /* Which branch of the chain each record belongs to (-1: this folder's
+     * own part), and where each branch's records lie. */
+    int32_t *lof = (int32_t *)arena_alloc(
+        a, (size_t)(blog.count ? blog.count : 1) * sizeof(int32_t));
+    for (int32_t k = 0; k < nlin; k++)
+        lin[k].first = lin[k].last = -1;
+    int32_t cur = -1;
     for (int32_t i = 0; i < blog.count; i++) {
-        if (blog.v[i].type == REC_BRANCH && strcmp(blog.v[i].id, id) == 0) {
-            bi = i;
-            break;
+        for (int32_t k = 0; blog.v[i].type == REC_BRANCH && k < nlin; k++) {
+            if (strcmp(blog.v[i].id, lin[k].id) == 0) {
+                cur = k;
+                lin[k].first = i;
+            }
+        }
+        lof[i] = cur;
+        if (cur >= 0)
+            lin[cur].last = i;
+    }
+    for (int32_t k = 0; k < nlin; k++) {
+        if (lin[k].first < 0) {
+            err_out(json, "log_broken",
+                    "branch %s's history does not hold %s's branch record",
+                    key, lin[k].name);
+            goto done;
         }
     }
-    const Rec *brec = bi >= 0 ? &blog.v[bi] : NULL;
-    if (!brec || find_hash(&plog, brec->base) < 0) {
+    int32_t bi = lin[0].first;
+    const Rec *brec = &blog.v[lin[nlin - 1].first];
+    if (find_hash(&plog, blog.v[bi].base) < 0) {
         err_out(json, "unrelated_history",
                 "branch %s did not start from this folder's history", key);
         goto done;
     }
 
-    /* What earlier merges of it adopted, and the sessions they carried. */
-    const char *last_head = NULL;
-    StrSet stopped_before;
+    /* What earlier merges took in of each branch, and the sessions they
+     * carried: a session adopted before, straight from its branch or by way
+     * of a branch that had adopted it, is not adopted again. */
+    StrSet stopped_before, ended;
     strset_init(&stopped_before, a);
+    strset_init(&ended, a); /* branch session_end hashes adopted here */
     Map adopted_sessions = {0}; /* branch session_start hash -> our id */
     for (int32_t i = 0; i < plog.count; i++) {
         const Rec *p = &plog.v[i];
-        if (p->type == REC_MERGE && strcmp(p->branch, id) == 0) {
-            last_head = p->head;
-            for (int32_t k = 0; k < p->stopped_n; k++)
-                strset_add(&stopped_before, p->stopped_file[k]);
+        if (p->type == REC_MERGE) {
+            for (int32_t k = 0; k < nlin; k++) {
+                if (strcmp(p->branch, lin[k].id) != 0)
+                    continue;
+                lin[k].head = p->head;
+                for (int32_t s = 0; s < p->stopped_n; s++)
+                    strset_add(&stopped_before, p->stopped_file[s]);
+            }
         } else if (p->type == REC_SESSION_START && p->from) {
             map_put(a, &adopted_sessions, p->from, p->id);
+        } else if (p->type == REC_SESSION_END && p->from) {
+            strset_add(&ended, p->from);
         }
     }
-    int32_t upto = bi; /* the branch's version of every file so far adopted */
-    if (last_head) {
-        upto = find_hash(&blog, last_head);
-        if (upto < bi) {
+    int32_t upto = bi; /* the stream's last record already taken in here */
+    for (int32_t k = 0; k < nlin; k++) {
+        if (!lin[k].head)
+            continue;
+        int32_t h = find_hash(&blog, lin[k].head);
+        if (h >= lin[k].first) {
+            if (h > upto)
+                upto = h;
+        } else if (k == nlin - 1) {
             err_out(json, "log_broken",
                     "branch %s's history no longer holds %.7s, where the "
                     "last merge stopped",
-                    key, last_head);
+                    key, lin[k].head);
             goto done;
+        } else if (lin[k].last > upto) {
+            upto = lin[k].last; /* taken in past what this stream holds */
         }
     }
     int32_t start = upto + 1;
@@ -329,6 +435,8 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         }
         if (strset_has(&stopped_before, files[f])) {
             left += (int32_t)n; /* stopped once, stopped for good */
+            for (size_t k = 0; k < n; k++)
+                lin[lof[idx[k]]].left++;
             continue;
         }
         bool base_has, parent_has;
@@ -340,17 +448,35 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                     &p);
         int32_t last = -1; /* the last commit placed, not already done */
         for (int32_t k = 0; k < p.placed; k++) {
+            Lin *l = &lin[lof[idx[k]]];
             if (p.already[k]) { /* seen, and nothing to adopt */
                 ARENA_GROW(a, already, nalready, acap, const char *);
                 already[nalready++] = mine[k]->hash;
+                ARENA_GROW(a, l->already, l->nalready, l->acap, const char *);
+                l->already[l->nalready++] = mine[k]->hash;
                 continue;
             }
             at[idx[k]] = p.start[k];
             eof[idx[k]] = p.eof_nl[k];
             adopted++;
+            l->adopted++;
             last = k;
         }
         left += (int32_t)n - p.placed;
+        /* A stopped file stops for every branch of the chain with commits
+         * to it left: each branch's merge record names its first one. */
+        for (int32_t k = p.placed; k < (int32_t)n; k++) {
+            Lin *l = &lin[lof[idx[k]]];
+            l->left++;
+            if (l->nstop > 0 && l->stop_file[l->nstop - 1] == files[f])
+                continue;
+            size_t s2 = l->nstop;
+            ARENA_GROW(a, l->stop_file, l->nstop, l->scap, const char *);
+            ARENA_GROW(a, l->stop_at, s2, l->scap2, const char *);
+            l->stop_file[l->nstop] = files[f];
+            l->stop_at[l->nstop] = mine[k]->hash;
+            l->nstop++;
+        }
         if (last >= 0) {
             changed[f] = true;
             results[f] = p.result;
@@ -371,16 +497,19 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     /* Chunks read from the branch folder are kept here, so the history
      * stays readable once that folder is gone — written only now, with
      * every check passed. */
-    for (int32_t k = 0; !dry && k < nown; k++) {
-        if (!own[k].write)
-            continue;
-        char dst[LAP_PATH_MAX];
-        snprintf(dst, sizeof dst, "%s/%s", repo.hist.dir, own[k].name);
-        if (!plat_mkdirs(repo.hist.dir) ||
-            !plat_write_file_atomic(dst, own[k].data, own[k].len)) {
-            err_out(json, "io_error", "cannot copy %s into %s", own[k].name,
-                    repo.hist.dir);
-            goto done;
+    for (int32_t k = 0; !dry && k < nlin; k++) {
+        for (int32_t j = 0; j < lin[k].nown; j++) {
+            const OwnChunk *c = &lin[k].own[j];
+            if (!c->write)
+                continue;
+            char dst[LAP_PATH_MAX];
+            snprintf(dst, sizeof dst, "%s/%s", repo.hist.dir, c->name);
+            if (!plat_mkdirs(repo.hist.dir) ||
+                !plat_write_file_atomic(dst, c->data, c->len)) {
+                err_out(json, "io_error", "cannot copy %s into %s", c->name,
+                        repo.hist.dir);
+                goto done;
+            }
         }
     }
 
@@ -396,8 +525,13 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             rec.ts = b->ts;
             rec.user = b->user;
             if (b->type == REC_SESSION_START) {
-                if (map_get(&adopted_sessions, b->hash))
+                const char *prior = map_get(&adopted_sessions, b->hash);
+                if (!prior && b->from) /* adopted here by another route */
+                    prior = map_get(&adopted_sessions, b->from);
+                if (prior) {
+                    map_put(a, &adopted_sessions, b->hash, prior);
                     continue;
+                }
                 rec.type = REC_SESSION_START;
                 rec.id = arena_printf(a, "S%lld", (long long)repo.next_session++);
                 rec.msg = b->msg;
@@ -408,8 +542,9 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             } else if (b->type == REC_SESSION_END) {
                 const char *sh = map_get(&starts, b->id);
                 const char *ours = sh ? map_get(&adopted_sessions, sh) : NULL;
-                if (!ours)
-                    continue;
+                if (!ours || strset_has(&ended, b->hash) ||
+                    (b->from && strset_has(&ended, b->from)))
+                    continue; /* not adopted, or already ended here */
                 rec.type = REC_SESSION_END;
                 rec.id = ours;
                 rec.user = NULL;
@@ -449,23 +584,30 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                     sb_puts(&ids, rec.id);
             }
         }
-        Rec m;
-        memset(&m, 0, sizeof m);
-        m.type = REC_MERGE;
-        m.branch = id;
-        m.name = brec->name;
-        m.head = blog.v[blog.count - 1].hash;
-        m.adopted = adopted;
-        m.left = left;
-        m.stopped_file = stop_file;
-        m.stopped_at = stop_at;
-        m.stopped_n = (int32_t)nstop;
-        m.already = already;
-        m.already_n = (int32_t)nalready;
-        m.user = repo_user(&repo);
-        if (!repo_append(&repo, &m, err, sizeof err)) {
-            err_out(json, "io_error", "%s", err);
-            goto done;
+        /* One merge record per branch of the chain with anything new: a
+         * branch it started from advances to the base of the next. */
+        for (int32_t k = 0; k < nlin; k++) {
+            const Lin *l = &lin[k];
+            if (l->last <= upto)
+                continue;
+            Rec m;
+            memset(&m, 0, sizeof m);
+            m.type = REC_MERGE;
+            m.branch = l->id;
+            m.name = l->name;
+            m.head = blog.v[l->last].hash;
+            m.adopted = l->adopted;
+            m.left = l->left;
+            m.stopped_file = l->stop_file;
+            m.stopped_at = l->stop_at;
+            m.stopped_n = (int32_t)l->nstop;
+            m.already = l->already;
+            m.already_n = (int32_t)l->nalready;
+            m.user = repo_user(&repo);
+            if (!repo_append(&repo, &m, err, sizeof err)) {
+                err_out(json, "io_error", "%s", err);
+                goto done;
+            }
         }
         for (size_t f = 0; f < nfiles; f++) {
             if (!changed[f])

@@ -122,3 +122,46 @@ test("a branch's files come from its folder, or from its chunks in the parent", 
     fs.writeFileSync(path.join(lap, "log", "0123456789ab.000001.jsonl"), commit("L9", null));
     assert.deepEqual(lineageFiles(lap, "0123456789ab"), []);
 });
+
+/* main, branch busy from it, and branch sub from busy after busy's first
+ * chunk: sub's history is main to busy's base, busy to sub's base, then
+ * sub's own. */
+const NESTED_SUB =
+    rec({ type: "branch", id: "ba9876543210", name: "sub", parent: "0123456789ab", base: "c", base_chunk: 1, ts, prev: "c" }) +
+    rec({ type: "session_start", id: "S3", msg: "the nested branch's work", meta: {}, ts }) +
+    commit("L4", "S3");
+
+test("a branch of a branch reads its history through the branch between, and shows only its own part", () => {
+    const lap = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "lap-branches-")), ".lap");
+    fs.mkdirSync(path.join(lap, "log"), { recursive: true });
+    const lines = BRANCH_LOG.split("\n").filter(Boolean).map((l) => l + "\n");
+    fs.writeFileSync(path.join(lap, "log", "main.000001.jsonl"), lines.slice(0, 3).join(""));
+    fs.writeFileSync(path.join(lap, "log", "main.000002.jsonl"), "after busy's base\n");
+    fs.writeFileSync(path.join(lap, "log", "0123456789ab.000001.jsonl"), lines.slice(3).join(""));
+    fs.writeFileSync(path.join(lap, "log", "0123456789ab.000002.jsonl"), "after sub's base\n");
+    fs.writeFileSync(path.join(lap, "log", "ba9876543210.000001.jsonl"), NESTED_SUB);
+    const files = lineageFiles(lap, "ba9876543210");
+    assert.deepEqual(files.map((f) => path.basename(f.path)), ["main.000001.jsonl", "0123456789ab.000001.jsonl", "ba9876543210.000001.jsonl"]);
+    const text = readStream(files, 0, files.reduce((n, f) => n + f.size, 0)).toString();
+    assert.equal(text, BRANCH_LOG + NESTED_SUB);
+    const log = parseLog(text, hash);
+    assert.equal(log.branchAt, 7, "its own part starts at its own branch record, not busy's");
+    assert.equal(log.branchName, "sub");
+    assert.deepEqual(ownPart(log).commits.map((c) => c.id), ["L4"]);
+    // busy's base chunk gone: no history rather than a wrong one
+    fs.rmSync(path.join(lap, "log", "0123456789ab.000001.jsonl"));
+    assert.deepEqual(lineageFiles(lap, "ba9876543210"), []);
+});
+
+test("branch list rows say which branch a nested one started from", () => {
+    const rows = parseBranchList({
+        ok: true,
+        self: null,
+        branches: [
+            { id: "0123456789ab", name: "busy", state: "active", present: true, path: "/w/busy", since_base: 1, since_merge: 1, stopped: [], via: null },
+            { id: "ba9876543210", name: "sub", state: "active", present: true, path: "/w/sub", since_base: 1, since_merge: 1, stopped: [], via: "0123456789ab" },
+        ],
+    });
+    assert.deepEqual(rows.map((r) => `${r.name}:${r.via}`), ["busy:null", "sub:0123456789ab"]);
+    assert.equal(parseBranchList(LIST)[0].via, null, "an older lap without via: this folder's own");
+});

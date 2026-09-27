@@ -1289,7 +1289,6 @@ expect_grep "missing_from" "$LAP" branch start --json
 expect_grep "same_folder" "$LAP" branch start --from . --json
 expect_grep "bad_name" "$LAP" branch start main --from ../bp --json
 expect_grep "name_taken" "$LAP" branch start feat --from ../bp --json
-expect_grep "nested_branch" "$LAP" branch start --from ../bw --json
 expect_grep "no_parent" "$LAP" branch start --from "$WORK/nothing-here" --json
 printf 'changed\n' > f.txt
 expect_grep "not_clean" "$LAP" branch start --from ../bp --json
@@ -1652,6 +1651,109 @@ expect_grep "would adopt 1 of 1" "$LAP" merge b --dry-run --copy-from-folder
 expect_grep "adopted 1 of 1" "$LAP" merge b --copy-from-folder
 [ -e ".lap/log/$ID13.000001.jsonl" ] || fail "--copy-from-folder did not copy the chunk"
 [ -e "$BW/.lap/log/$ID13.000002.jsonl" ] && fail "lap merge sealed the branch's chunk"
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
+# main ($NP), lap branch b in the worktree $N1 (git branch b) with one commit
+# (line 10 of f.txt), and lap branch b2 started from it in the worktree $N2
+# (git branch b2, from b's git head).
+nest_trio() {
+    merge_pair "$1"; NP="$WORK/$1-p"; N1="$WORK/$1-w"; N2="$WORK/$1-w2"
+    cd "$N1" && "$LAP" session start "b work" --branch b >/dev/null 2>&1
+    sed 's/^line 10$/B1 early/' f.txt > f.new && mv f.new f.txt &&
+        "$LAP" commit f.txt --branch b -i "b1 work before b2" \
+            -b "B1 edits line 10 before b2 starts" >/dev/null 2>&1 ||
+        fail "b1 early"
+    git add -A && git commit -qm "b1 early" >/dev/null
+    git worktree add -q "$N2" -b b2
+    cd "$N2" && "$LAP" branch start b2 --from "../$1-w" >/dev/null 2>&1 ||
+        fail "nested start"
+    cd "$N1" && git add -A && git commit -qm "b1 sealed for b2" >/dev/null
+}
+# edit_commit <folder> <branch> <file> <sed> <behavior>
+edit_commit() {
+    cd "$1" && sed "$4" "$3" > "$3.new" && mv "$3.new" "$3" &&
+        "$LAP" commit "$3" --branch "$2" -i "nested branch work" -b "$5" \
+            >/dev/null 2>&1 || fail "commit: $5"
+}
+once() { # the parent's history holds a behavior exactly once
+    n=$("$LAP" log --json | grep -o "$1" | wc -l | tr -d ' ')
+    [ "$n" = 1 ] || fail "\"$1\" is in the history $n times, not once"
+}
+
+t "a branch of a branch starts from its parent branch and reads its history"
+nest_trio n1
+cd "$N2" || exit 1
+expect_grep "B1 edits line 10" "$LAP" log --json
+expect_grep '"branch":"b"' "$LAP" log --json
+expect_grep "this folder is branch b2 (.*) of b," "$LAP" branch list
+cd "$N1" && expect_grep "^b2 *active" "$LAP" branch list
+cd "$NP" && expect_grep "^  b2 .*(from b)" "$LAP" branch list
+expect_grep "\"name\":\"b2\".*\"via\":\"[0-9a-f]*\"" "$LAP" branch list --json
+cd "$N2" && expect_grep "0 mismatch" "$LAP" verify --deep
+
+t "a branch of a branch merges into its parent branch, and that into main: each commit once"
+cd "$N2" && "$LAP" session start "b2 work" --branch b2 >/dev/null 2>&1
+edit_commit "$N2" b2 f.txt 's/^line 40$/B2 work/' "B2 edits line 40"
+git add -A && git commit -qm "b2 work" >/dev/null
+cd "$N1" && git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into b"
+expect_grep "adopted 1 of 1" "$LAP" merge b2
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+git add -A && git commit -qm "b took in b2" >/dev/null
+cd "$NP" && git add -A && git commit -qm "main" >/dev/null
+git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge b into main"
+expect_grep "adopted 2 of 2" "$LAP" merge b
+expect_grep "clean" "$LAP" status
+once "B1 edits line 10 before b2 starts"
+once "B2 edits line 40"
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
+t "a branch of a branch merges straight into main, bringing its parent branch's work to its base"
+nest_trio n2
+cd "$N2" && S2REF=$("$LAP" session start "b2 work" --branch b2 2>/dev/null |
+    sed -n 's/^session \([^ ]*\) started.*/\1/p')
+edit_commit "$N2" b2 f.txt 's/^line 40$/B2 work/' "B2 edits line 40"
+git add -A && git commit -qm "b2 work" >/dev/null
+edit_commit "$N1" b f.txt 's/^line 50$/B1 later/' "B1 edits line 50 after b2 started"
+git add -A && git commit -qm "b1 later" >/dev/null
+cd "$NP" && git add -A && git commit -qm "main" >/dev/null
+git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into main"
+expect_grep '"adopted":2,"left":0' "$LAP" merge b2 --dry-run --json
+expect_grep "adopted 2 of 2" "$LAP" merge b2
+expect_grep "clean" "$LAP" status
+[ "$(grep -c '"type":"merge"' .lap/log/main.*.jsonl | awk -F: '{s+=$NF} END {print s}')" = 2 ] ||
+    fail "a merge record for each of b and b2 was expected"
+expect_grep "adopted from b2/" "$LAP" rr "$S2REF"
+git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge b into main"
+expect_grep "adopted 1 of 1" "$LAP" merge b
+expect_grep "clean" "$LAP" status
+once "B1 edits line 10 before b2 starts"
+once "B2 edits line 40"
+once "B1 edits line 50 after b2 started"
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
+t "a conflict in the parent branch's part stops that file for the nested branch too"
+nest_trio n3
+cd "$N2" && "$LAP" session start "b2 work" --branch b2 >/dev/null 2>&1
+edit_commit "$N2" b2 f.txt 's/^line 40$/B2 work/' "B2 edits line 40"
+edit_commit "$N2" b2 g.txt 's/^g2$/B2 g/' "B2 edits g2"
+git add -A && git commit -qm "b2 work" >/dev/null
+cd "$NP" && "$LAP" session start "main work" --branch main >/dev/null 2>&1
+edit_commit "$NP" main f.txt 's/^line 10$/MAIN 10/' "main edits line 10 too"
+cd "$NP" && git add -A && git commit -qm "main" >/dev/null
+git merge -q --no-edit b2 >/dev/null 2>&1 # conflicts on f.txt line 10
+[ "$(git diff --name-only --diff-filter=U)" = "f.txt" ] ||
+    fail "git should conflict on f.txt alone"
+git show :2:f.txt | sed 's/^line 40$/B2 work/' > f.txt
+git add f.txt && git commit -qm "merged b2, keeping main's line 10" >/dev/null
+expect_grep '"adopted":1,"left":2' "$LAP" merge b2 --json
+grep '"type":"merge"' .lap/log/main.*.jsonl | grep -q '"name":"b",.*"stopped":\[{"file":"f.txt"' ||
+    fail "b's merge record does not stop f.txt"
+grep '"type":"merge"' .lap/log/main.*.jsonl | grep -q '"name":"b2",.*"stopped":\[{"file":"f.txt"' ||
+    fail "b2's merge record does not stop f.txt"
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 

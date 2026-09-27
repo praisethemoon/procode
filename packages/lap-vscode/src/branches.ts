@@ -24,6 +24,9 @@ export interface BranchRow {
     /* files a merge stopped, with the first commit not adopted when this
      * folder's log says it */
     readonly stopped: readonly { readonly file: string; readonly at: string | null }[];
+    /* the branch it started from, for a branch of one of this folder's
+     * branches; null for this folder's own */
+    readonly via: string | null;
 }
 
 export interface BranchView {
@@ -66,6 +69,7 @@ export function parseBranchList(out: unknown, log: LapLog | null = null): Branch
             stopped: (Array.isArray(b["stopped"]) ? (b["stopped"] as unknown[]) : [])
                 .filter((f): f is string => typeof f === "string")
                 .map((file) => ({ file, at: at(file) })),
+            via: typeof b["via"] === "string" ? (b["via"] as string) : null,
         });
     }
     return rows;

@@ -45,6 +45,26 @@ test("mergeSessions: after a merge, an adopted session is listed once, as the ad
     assert.equal(main[1].adoptedFrom, undefined, "the input is left as it was");
 });
 
+test("mergeSessions: a branch of a branch lists its parent branch's sessions once, as that branch's, and its own under both names", () => {
+    const main = [s("S1", "h1", "2026-09-27T10:00:00Z")];
+    const busy = s("S2", "h2", "2026-09-27T11:00:00Z");
+    const out = mergeSessions(main, [
+        { name: "busy", stops: [], sessions: [busy] },
+        // sub's history holds main's S1 and busy's S2 up to its base
+        { name: "sub", via: "busy", stops: [], sessions: [busy, s("S3", "h3", "2026-09-27T12:00:00Z")] },
+    ]);
+    assert.deepEqual(out.map((x) => `${x.via ?? "-"}/${x.branch ?? "main"}/${x.id}`), ["-/main/S1", "-/busy/S2", "busy/sub/S3"]);
+});
+
+test("mergeSessions: a nested branch's session its parent branch adopted is shown once, as the adopted one", () => {
+    const main = [s("S1", "h1", "2026-09-27T10:00:00Z")];
+    const out = mergeSessions(main, [
+        { name: "busy", stops: [], sessions: [s("S4", "h4", "2026-09-27T12:00:00Z", { from: "h3" })] },
+        { name: "sub", via: "busy", stops: [], sessions: [s("S3", "h3", "2026-09-27T12:00:00Z")] },
+    ]);
+    assert.deepEqual(out.map((x) => `${x.branch ?? "main"}/${x.id}`), ["main/S1", "busy/S4"]);
+});
+
 test("mergeSessions: sessions come out oldest first, and with no branches, as they were", () => {
     const main = [s("S1", "h1", "2026-09-27T10:00:00Z")];
     assert.deepEqual(mergeSessions(main, []), main);

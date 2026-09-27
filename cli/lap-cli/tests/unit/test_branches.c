@@ -22,9 +22,10 @@ void test_branches(void) {
 
     t_begin("branches: entries survive a save and a load");
     branches_add(a, &b, (BranchEntry){"0123456789ab", "feat \"one\"",
-                                      "/w/feat", "abc", "2026-09-27T00:00:00Z"});
+                                      "/w/feat", "abc", "2026-09-27T00:00:00Z",
+                                      NULL});
     branches_add(a, &b, (BranchEntry){"ba9876543210", "other", "/w/other",
-                                      "def", "2026-09-27T00:00:01Z"});
+                                      "def", "2026-09-27T00:00:01Z", NULL});
     ASSERT_TRUE(branches_save(a, T_REGDIR, &b));
     Branches back;
     branches_load(a, T_REGDIR, &back);
@@ -106,7 +107,7 @@ void test_branches(void) {
     char *bl = arena_printf(a, "%s\n%s\n%s\n", l1, l2, l3);
     plat_write_file_atomic(p2, bl, strlen(bl));
     BranchEntry ent = {id, "feat", "/nonexistent-lap-branch-folder",
-                       init.hash, "t1"};
+                       init.hash, "t1", NULL};
     RecLog plog;
     memset(&plog, 0, sizeof plog);
     BranchStatus st;
@@ -149,7 +150,7 @@ void test_branches(void) {
     t_begin("branches_status: a branch with no chunk anywhere is unreadable "
             "and missing");
     BranchEntry ghost = {"ba9876543210", "ghost", "/nonexistent-lap-ghost",
-                         "b", "t"};
+                         "b", "t", NULL};
     branches_status(a, T_REGDIR, &plog, &ghost, &st);
     ASSERT_TRUE(!st.readable);
     ASSERT_EQ_I(st.since_base, -1);
@@ -172,7 +173,7 @@ void test_branches(void) {
     Branches one;
     memset(&one, 0, sizeof one);
     branches_add(a, &one, (BranchEntry){"0123456789ab", "feat", "/w/feat",
-                                        "abc", "t"});
+                                        "abc", "t", NULL});
     ASSERT_TRUE(branches_save(a, T_REGDIR, &one));
     ASSERT_TRUE(!branch_check(a, &r, NULL, true));
     ASSERT_TRUE(branch_check(a, &r, "main", true));
@@ -194,6 +195,45 @@ void test_branches(void) {
     ASSERT_EQ_S(session_ref(a, "main", "S4"), "S4");
     ASSERT_EQ_S(session_ref(a, NULL, "S4"), "S4");
     ASSERT_TRUE(session_ref(a, "feat", NULL) == NULL);
+
+    t_begin("branches_load_deep: a branch's registry joins, its entries "
+            "marked with the branch that listed them");
+    remove(path);
+    plat_mkdirs(".deep_unit_b1/.lap");
+    hist_write_lineage(".deep_unit_b1/.lap", "0123456789ab");
+    Branches top, sub, deep;
+    memset(&top, 0, sizeof top);
+    memset(&sub, 0, sizeof sub);
+    char b1path[LAP_PATH_MAX];
+    ASSERT_TRUE(plat_getcwd(b1path, sizeof b1path));
+    snprintf(b1path + strlen(b1path), sizeof b1path - strlen(b1path),
+             "/.deep_unit_b1");
+    branches_add(a, &top, (BranchEntry){"0123456789ab", "b1", b1path, "x",
+                                        "t", NULL});
+    branches_add(a, &sub, (BranchEntry){"ba9876543210", "b2", "/w/b2", "y",
+                                        "t", NULL});
+    branches_add(a, &sub, (BranchEntry){"0123456789ab", "b1", b1path, "x",
+                                        "t", NULL}); /* already listed */
+    ASSERT_TRUE(branches_save(a, T_REGDIR, &top));
+    ASSERT_TRUE(branches_save(a, ".deep_unit_b1/.lap", &sub));
+    branches_load_deep(a, T_REGDIR, &deep);
+    ASSERT_EQ_I(deep.n, 2);
+    ASSERT_TRUE(deep.v[0].via == NULL);
+    ASSERT_EQ_S(deep.v[1].name, "b2");
+    ASSERT_EQ_S(deep.v[1].via, "0123456789ab");
+    branches_load(a, T_REGDIR, &deep);
+    ASSERT_EQ_I(deep.n, 1);
+
+    t_begin("branches_load_deep: a folder that is no longer that branch is "
+            "not followed");
+    hist_write_lineage(".deep_unit_b1/.lap", "ba9876543210");
+    branches_load_deep(a, T_REGDIR, &deep);
+    ASSERT_EQ_I(deep.n, 1);
+    char subpath[LAP_PATH_MAX];
+    snprintf(subpath, sizeof subpath, ".deep_unit_b1/.lap/%s",
+             LAP_BRANCHES_NAME);
+    remove(subpath);
+    remove(path);
 
     t_begin("own_chunks: this folder's copy wins, and the branch folder is "
             "not read unless it may fill in");

@@ -391,8 +391,12 @@ function SessionsSection(props: { ticket: string; sessions: Sessions | null; com
                                             {x.active ? " · active" : x.ended ? "" : " · open"}
                                         </span>
                                         {x.branch ? (
-                                            <span className="cb-label" title={`Recorded in branch ${x.branch}; not merged yet`}>
-                                                <Icon name="git-branch" /> {x.branch}
+                                            <span
+                                                className="cb-label"
+                                                title={`Recorded in branch ${x.branch}${x.via ? `, started from branch ${x.via}` : ""}; not merged yet`}
+                                            >
+                                                <Icon name="git-branch" /> {x.via ? `${x.via} › ` : ""}
+                                                {x.branch}
                                             </span>
                                         ) : x.adoptedFrom ? (
                                             <span className="cb-label" title={`Adopted from branch ${x.adoptedFrom} by lap merge`}>

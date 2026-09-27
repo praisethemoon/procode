@@ -496,7 +496,7 @@ bool repo_view_branch(Arena *a, Repo *r, const char *name, bool json) {
         ok = hist_open(a, r->lapdir, LAP_MAIN_LINEAGE, &view, err, sizeof err);
     } else {
         Branches reg;
-        branches_load(a, r->lapdir, &reg);
+        branches_load_deep(a, r->lapdir, &reg);
         const char *id = branch_find(a, r, &reg, name);
         const BranchEntry *e = id ? branches_find(&reg, id) : NULL;
         if (!id) {

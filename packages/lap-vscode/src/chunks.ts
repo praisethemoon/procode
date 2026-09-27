@@ -75,6 +75,32 @@ export function historyFiles(lapDir: string): Chunk[] {
  * parent's chunks up to the base chunk its branch record names, then its
  * own. Empty when its first chunk is not here or does not open with its
  * branch record. */
+/* The chunk names of lineage's history as the folder holds them, cut after
+ * its own chunk `upto` (all of it for 0): main's chunks, or for a branch
+ * its parent's history to its base chunk, then its own. A branch of a
+ * branch is followed one branch record at a time up to main, as lap does;
+ * null when a chunk is missing or the records loop. */
+function viewNames(dir: string, names: string[], lineage: string, upto: number, depth: number): string[] | null {
+    const own = lineageChunks(names, lineage);
+    if (upto > 0 && own.length < upto) return null;
+    const mine = upto > 0 ? own.slice(0, upto) : own;
+    if (lineage === "main") return mine;
+    if (own.length === 0 || depth >= 32) return null;
+    let base = 0;
+    let parent = "main";
+    try {
+        const first = fs.readFileSync(path.join(dir, own[0]), "utf8").split("\n", 1)[0];
+        const rec = JSON.parse(first) as Record<string, unknown>;
+        if (rec["type"] !== "branch" || rec["id"] !== lineage) return null;
+        base = Number(rec["base_chunk"] ?? 0);
+        parent = String(rec["parent"] ?? "main");
+    } catch {
+        return null;
+    }
+    const theirs = viewNames(dir, names, parent, base, depth + 1);
+    return theirs === null ? null : [...theirs, ...mine];
+}
+
 export function lineageFiles(lapDir: string, lineage: string): Chunk[] {
     const dir = path.join(lapDir, "log");
     let names: string[] = [];
@@ -83,23 +109,10 @@ export function lineageFiles(lapDir: string, lineage: string): Chunk[] {
     } catch {
         return [];
     }
-    const own = lineageChunks(names, lineage);
-    if (own.length === 0) return [];
-    let base = 0;
-    let parent = "main";
-    try {
-        const first = fs.readFileSync(path.join(dir, own[0]), "utf8").split("\n", 1)[0];
-        const rec = JSON.parse(first) as Record<string, unknown>;
-        if (rec["type"] !== "branch" || rec["id"] !== lineage) return [];
-        base = Number(rec["base_chunk"] ?? 0);
-        parent = String(rec["parent"] ?? "main");
-    } catch {
-        return [];
-    }
-    const theirs = lineageChunks(names, parent);
-    if (theirs.length < base) return [];
+    const view = viewNames(dir, names, lineage, 0, 0);
+    if (view === null || view.length === 0) return [];
     const out: Chunk[] = [];
-    for (const n of [...theirs.slice(0, base), ...own]) {
+    for (const n of view) {
         try {
             out.push({ path: path.join(dir, n), size: fs.statSync(path.join(dir, n)).size });
         } catch {

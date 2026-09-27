@@ -26,6 +26,7 @@ typedef struct {
     char name[64];  /* "main.000003.jsonl" */
     uint64_t start; /* offset of its first byte in the history */
     uint64_t size;
+    const char *label; /* in a view, its branch's name; NULL for main */
 } HistChunk;
 
 typedef struct {
@@ -77,10 +78,18 @@ bool hist_write_lineage(const char *lapdir, const char *lineage);
 bool hist_open_folder(Arena *a, const char *lapdir, Hist *h, char *err,
                       size_t errsz);
 /* The history of branch `lineage` as this folder holds it: its parent's
- * chunks up to its base chunk, then its own. How a parent reads a branch
- * whose chunks it has (after a git merge, or copied by lap merge). */
+ * history up to its base chunk, then its own. How a parent reads a branch
+ * whose chunks it has (after a git merge, or copied by lap merge). A
+ * branch of a branch is read the same way, one branch record at a time up
+ * to main: main's chunks to the first branch's base, that branch's to the
+ * next one's base, and so on. */
 bool hist_open_lineage(Arena *a, const char *lapdir, const char *lineage,
                        Hist *h, char *err, size_t errsz);
+/* hist_open_lineage (hist_open for main), cut after the lineage's own
+ * chunk `upto`; all of it for upto < 1. A branch's parent part is its
+ * parent's view to the base chunk. */
+bool hist_open_view(Arena *a, const char *lapdir, const char *lineage,
+                    int32_t upto, Hist *h, char *err, size_t errsz);
 /* The branch lineages whose first chunk is in lapdir/log, as ids. */
 int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out);
 
@@ -93,8 +102,9 @@ bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
 void hist_chunk_path(const Hist *h, int32_t i, char *out, size_t outsz);
 /* The chunk holding offset off (the last chunk for off == size), or -1. */
 int32_t hist_locate(const Hist *h, uint64_t off);
-/* The branch chunk i belongs to, as people name it: "main", the branch's
- * name for the lineage this history is a branch's, else the lineage id. */
+/* The branch chunk i belongs to, as people name it: "main", a branch's name
+ * for every branch a view spans (this one and those it started from), else
+ * the lineage id. */
 const char *hist_label(const Hist *h, int32_t i);
 /* True for every chunk but the open one (the last). */
 bool hist_is_sealed(const Hist *h, int32_t i);

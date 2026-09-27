@@ -365,10 +365,13 @@ const BRANCH_ICON: Record<BranchState, string> = {
     missing: "question",
 };
 
-/* One branch this folder started: its state and counts; opened, what a
- * merge stopped, the fix when its folder is gone, and its own sessions. */
+/* One branch this folder started, or a branch of one of them one level
+ * deeper: its state and counts; opened, what a merge stopped, the fix when
+ * its folder is gone, its own sessions, then the branches started from it. */
 function BranchLine(props: {
     v: BranchView;
+    all: readonly BranchView[];
+    depth: number;
     open: Record<string, boolean>;
     setOpen: (key: string, on: boolean) => void;
     commits: CommitState;
@@ -381,14 +384,16 @@ function BranchLine(props: {
             ? ""
             : ` · ${r.sinceBase} commit${r.sinceBase === 1 ? "" : "s"}${r.sinceMerge !== null && r.sinceMerge !== r.sinceBase ? `, ${r.sinceMerge} since the last merge` : ""}`;
     const scoped: CommitState = { ...props.commits, scope: r.id };
-    const pad = (depth: number) => ({ paddingLeft: `calc(${depth} * var(--lh-indent) + 42px)` });
+    const d = props.depth;
+    const pad = (depth: number) => ({ paddingLeft: `calc(${depth + d - 1} * var(--lh-indent) + 42px)` });
+    const children = props.all.filter((c) => c.row.via === r.id);
     return (
         <>
             <div
                 className="lh-row"
-                style={{ paddingLeft: "calc(1 * var(--lh-indent) + 4px)" }}
+                style={{ paddingLeft: `calc(${d} * var(--lh-indent) + 4px)` }}
                 role="treeitem"
-                aria-level={2}
+                aria-level={d + 1}
                 aria-expanded={isOpen}
                 tabIndex={0}
                 title={`branch ${r.name} (${r.id}) · ${r.state}\n${r.path}${r.present ? "" : " (gone)"}`}
@@ -460,10 +465,15 @@ function BranchLine(props: {
                               filtering={false}
                               onToggle={() => props.setOpen(k, !on)}
                               commits={scoped}
-                              depth={2}
+                              depth={d + 1}
                           />
                       );
                   })
+                : null}
+            {isOpen
+                ? children.map((c) => (
+                      <BranchLine key={c.row.id} v={c} all={props.all} depth={d + 1} open={props.open} setOpen={props.setOpen} commits={props.commits} />
+                  ))
                 : null}
         </>
     );
@@ -497,7 +507,11 @@ function BranchGroup(props: {
                 <span className="lh-title">Branches</span>
                 <span className="lh-desc">{props.views.length}</span>
             </div>
-            {isOpen ? props.views.map((v) => <BranchLine key={v.row.id} v={v} open={props.open} setOpen={props.setOpen} commits={props.commits} />) : null}
+            {isOpen
+                ? props.views
+                      .filter((v) => !v.row.via || !props.views.some((p) => p.row.id === v.row.via))
+                      .map((v) => <BranchLine key={v.row.id} v={v} all={props.views} depth={1} open={props.open} setOpen={props.setOpen} commits={props.commits} />)
+                : null}
         </>
     );
 }

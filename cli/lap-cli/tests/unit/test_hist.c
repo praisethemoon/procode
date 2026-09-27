@@ -13,7 +13,8 @@ static void clear_chunks(void) {
     static const char *const names[] = {
         "main.000001.jsonl", "main.000002.jsonl", "main.000003.jsonl",
         "main.000004.jsonl", "main.000005.jsonl", "main.000006.jsonl",
-        "0123456789ab.000001.jsonl", "notes.txt", NULL};
+        "0123456789ab.000001.jsonl", "0123456789ab.000002.jsonl",
+        "ba9876543210.000001.jsonl", "notes.txt", NULL};
     char path[256];
     for (int32_t i = 0; names[i]; i++) {
         snprintf(path, sizeof path, "%s/%s/%s", T_LAPDIR, LAP_LOG_DIR,
@@ -429,6 +430,77 @@ static void test_branch_history(Arena *a) {
     clear_chunks();
 }
 
+/* A branch record line for id, started from parent after its chunk bc. */
+static char *branch_line(Arena *a, const char *id, const char *name,
+                         const char *parent, int32_t bc) {
+    Rec br;
+    memset(&br, 0, sizeof br);
+    br.type = REC_BRANCH;
+    br.id = id;
+    br.name = name;
+    br.parent = parent;
+    br.base = "ab";
+    br.base_chunk = bc;
+    br.ts = "2026-09-27T00:00:00Z";
+    br.prev = "ab";
+    size_t len;
+    return rec_encode(a, &br, &len);
+}
+
+static void test_nested_history(Arena *a) {
+    char err[256];
+    Hist h;
+    const char *one = "0123456789ab", *two = "ba9876543210";
+
+    t_begin("hist: a branch of a branch reads main to the first branch's "
+            "base, that branch to its own base, then its own, all named");
+    clear_chunks();
+    put_file("main.000001.jsonl", "p1\n");
+    put_file("main.000002.jsonl", "p-after\n");
+    char *l1 = branch_line(a, one, "one", "main", 1);
+    char *l2 = branch_line(a, two, "two", one, 1);
+    put_file("0123456789ab.000001.jsonl", arena_printf(a, "%s\nb1\n", l1));
+    put_file("0123456789ab.000002.jsonl", "b1-after\n");
+    put_file("ba9876543210.000001.jsonl", arena_printf(a, "%s\nc1\n", l2));
+    ASSERT_TRUE(hist_open_lineage(a, T_LAPDIR, two, &h, err, sizeof err));
+    ASSERT_EQ_I(h.n, 3);
+    ASSERT_EQ_S(h.v[0].name, "main.000001.jsonl");
+    ASSERT_EQ_S(h.v[1].name, "0123456789ab.000001.jsonl");
+    ASSERT_EQ_S(h.v[2].name, "ba9876543210.000001.jsonl");
+    ASSERT_EQ_S(h.parent, one);
+    ASSERT_EQ_S(hist_label(&h, 0), "main");
+    ASSERT_EQ_S(hist_label(&h, 1), "one");
+    ASSERT_EQ_S(hist_label(&h, 2), "two");
+    char *data;
+    size_t len;
+    ASSERT_TRUE(hist_read_all(a, &h, &data, &len));
+    ASSERT_EQ_S(data, arena_printf(a, "p1\n%s\nb1\n%s\nc1\n", l1, l2));
+
+    t_begin("hist: a view is cut after one of its own chunks");
+    ASSERT_TRUE(hist_open_view(a, T_LAPDIR, one, 1, &h, err, sizeof err));
+    ASSERT_EQ_I(h.n, 2);
+    ASSERT_TRUE(hist_open_view(a, T_LAPDIR, one, 0, &h, err, sizeof err));
+    ASSERT_EQ_I(h.n, 3);
+    ASSERT_TRUE(hist_open_view(a, T_LAPDIR, "main", 1, &h, err, sizeof err));
+    ASSERT_EQ_I(h.n, 1);
+    ASSERT_EQ_I((int32_t)h.size, 3);
+    ASSERT_TRUE(!hist_open_view(a, T_LAPDIR, one, 3, &h, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "0123456789ab.000003.jsonl") != NULL);
+
+    t_begin("hist: a missing base in the middle of the chain is refused, "
+            "naming the branch");
+    put_file("0123456789ab.000001.jsonl", "");
+    ASSERT_TRUE(!hist_open_lineage(a, T_LAPDIR, two, &h, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "two") != NULL);
+
+    t_begin("hist: branch records that lead back to themselves are a loop");
+    put_file("ba9876543210.000001.jsonl",
+             arena_printf(a, "%s\n", branch_line(a, two, "two", two, 1)));
+    ASSERT_TRUE(!hist_open_lineage(a, T_LAPDIR, two, &h, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "loop") != NULL);
+    clear_chunks();
+}
+
 void test_hist(void) {
     Arena *a = arena_new(0);
     test_names();
@@ -437,5 +509,6 @@ void test_hist(void) {
     test_listing(a);
     test_legacy(a);
     test_branch_history(a);
+    test_nested_history(a);
     arena_free(a);
 }

@@ -183,15 +183,6 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
         err_out(json, "no_parent", "%s", err);
         return LAP_EXIT_ERR;
     }
-    if (pr.hist.parent[0]) {
-        err_out(json, "nested_branch",
-                "%s is itself branch %s; branches start from a main folder "
-                "in this version",
-                there, pr.hist.name);
-        repo_close(&pr);
-        return LAP_EXIT_ERR;
-    }
-
     /* 1. This folder's history, if it has one, must be where the parent's
      * was: its main chunks (or single-file log) a prefix of the parent's. */
     Hist hh;
@@ -270,7 +261,7 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
      * parent that cannot take it leaves this folder untouched. */
     BranchEntry e = {arena_strdup(a, id), arena_strdup(a, bname),
                      arena_strdup(a, here), arena_strdup(a, pr.last_hash),
-                     arena_strdup(a, ts)};
+                     arena_strdup(a, ts), NULL};
     branches_add(a, &reg, e);
     if (!branches_save(a, pr.lapdir, &reg)) {
         err_out(json, "parent_read_only",
@@ -317,7 +308,7 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
     rec.type = REC_BRANCH;
     rec.id = id;
     rec.name = bname;
-    rec.parent = LAP_MAIN_LINEAGE;
+    rec.parent = pr.hist.lineage; /* main, or the branch it starts from */
     rec.base = pr.last_hash;
     rec.base_chunk = base_chunk;
     rec.user = repo_user(&pr);
@@ -390,8 +381,8 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
         err_out(json, "log_unreadable", "%s", err);
         return LAP_EXIT_ERR;
     }
-    Branches reg;
-    branches_load(a, repo.lapdir, &reg);
+    Branches reg; /* with the branches started from these branches */
+    branches_load_deep(a, repo.lapdir, &reg);
     StrBuf sb;
     sb_init(&sb, a);
     const Hist *h = &repo.hist;
@@ -407,13 +398,35 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
         }
         sb_puts(&sb, ",\"branches\":[");
     } else if (h->parent[0]) {
+        const char *pname = h->parent; /* the branch it started from, named */
+        for (int32_t i = 0; i < h->n; i++) {
+            if (strcmp(h->v[i].lineage, h->parent) == 0)
+                pname = hist_label(h, i);
+        }
         sb_printf(&sb, "this folder is branch %s (%s) of %s, from %.7s\n",
-                  h->name, h->lineage, h->parent, h->base);
+                  h->name, h->lineage, pname, h->base);
     }
     for (int32_t i = 0; i < reg.n; i++) {
         const BranchEntry *e = &reg.v[i];
+        /* A branch's merges are recorded in the folder that started it:
+         * this one, or for a nested branch the branch that listed it. */
+        const BranchEntry *via = e->via ? branches_find(&reg, e->via) : NULL;
+        Repo vr;
+        RecLog vlog;
+        char verr[256];
+        bool vopen = via && repo_open_at(a, &vr, via->path, false, verr,
+                                         sizeof verr);
         BranchStatus st;
-        branches_status(a, repo.lapdir, &log, e, &st);
+        if (vopen && repo_log_load(a, &vr, &vlog, verr, sizeof verr))
+            branches_status(a, vr.lapdir, &vlog, e, &st);
+        else
+            branches_status(a, repo.lapdir, &log, e, &st);
+        if (vopen)
+            repo_close(&vr);
+        int32_t depth = 0; /* how many branches it is below this folder */
+        for (const BranchEntry *p = via; p && depth < 32;
+             p = p->via ? branches_find(&reg, p->via) : NULL)
+            depth++;
         if (json) {
             sb_puts(&sb, i ? ",{\"id\":" : "{\"id\":");
             json_escape_c(&sb, e->id);
@@ -446,23 +459,34 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
                 json_escape_c(&sb, st.stopped[k]);
                 sb_printf(&sb, ",\"at\":\"%s\"}", st.stopped_at[k]);
             }
-            sb_puts(&sb, "]}");
+            if (e->via)
+                sb_printf(&sb, "],\"via\":\"%s\"}", e->via);
+            else
+                sb_puts(&sb, "],\"via\":null}");
             continue;
         }
-        sb_printf(&sb, "%-16s %-14s %s%s\n", e->name, st.state, e->path,
-                  st.present ? "" : " (gone)");
+        int in = depth * 2; /* nested under the branch it started from */
+        sb_printf(&sb, "%*s%-16s %-14s %s%s", in, "", e->name, st.state,
+                  e->path, st.present ? "" : " (gone)");
+        if (via)
+            sb_printf(&sb, "  (from %s)", via->name);
+        sb_putc(&sb, '\n');
         if (st.readable)
-            sb_printf(&sb, "  %d commit%s since its base, %d since the last "
-                           "merge\n",
-                      st.since_base, st.since_base == 1 ? "" : "s",
+            sb_printf(&sb, "%*s  %d commit%s since its base, %d since the "
+                           "last merge\n",
+                      in, "", st.since_base, st.since_base == 1 ? "" : "s",
                       st.since_merge);
         for (int32_t k = 0; k < st.nstopped; k++)
-            sb_printf(&sb, "  stopped: %s\n", st.stopped[k]);
-        if (strcmp(st.state, "missing") == 0)
+            sb_printf(&sb, "%*s  stopped: %s\n", in, "", st.stopped[k]);
+        if (strcmp(st.state, "missing") == 0 && !via)
             sb_printf(&sb, "  its folder is gone: lap branch move %s <path> "
                            "if it moved, lap branch forget %s if it is no "
                            "more\n",
                       e->name, e->name);
+        else if (strcmp(st.state, "missing") == 0)
+            sb_printf(&sb, "%*s  its folder is gone: tend it from %s's "
+                           "folder (lap branch move or forget there)\n",
+                      in, "", via->name);
     }
     if (json) {
         sb_puts(&sb, "]}");

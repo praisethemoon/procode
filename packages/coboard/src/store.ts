@@ -81,7 +81,8 @@ export function findBoard(from: string): string | null {
  * 1. `override` — COBOARD_DIR, or the Board view's setting: a folder whose
  *    `.coboard/` is the board, or that `.coboard/` itself;
  * 2. in a lap branch folder, its parent folder, which `lap branch start`
- *    wrote to `.lap/parent`, when that folder has a board;
+ *    wrote to `.lap/parent` — for a branch of a branch, followed up to
+ *    the top (main's folder) — when that folder has a board;
  * 3. the first `.coboard/` at or above `from`.
  *
  * `via` says which, so a view can tell the reader whose board it shows. */
@@ -93,7 +94,14 @@ export function locateBoard(
         const dir = path.resolve(override.trim());
         return { root: path.basename(dir) === BOARD_DIR ? path.dirname(dir) : dir, via: "override" };
     }
-    const parent = lapParent(from);
+    let parent = lapParent(from);
+    for (let hops = 0; parent && hops < 32; hops++) {
+        const up = lapParent(parent); /* a branch of a branch: go on up */
+        if (!up || path.resolve(up) === path.resolve(parent)) {
+            break;
+        }
+        parent = up;
+    }
     if (parent && isDir(path.join(parent, BOARD_DIR))) {
         return { root: parent, via: "lap-parent" };
     }

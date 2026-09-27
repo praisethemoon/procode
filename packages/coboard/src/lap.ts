@@ -27,8 +27,10 @@ export interface LapSession {
      * the hash of the branch's own session_start it came from. */
     readonly hash?: string;
     readonly from?: string;
-    /* A session still only in a branch folder: that branch's name. */
+    /* A session still only in a branch folder: that branch's name, and for
+     * a branch of a branch, the name of the branch it started from. */
     readonly branch?: string;
+    readonly via?: string;
     /* An adopted session: the branch it came from, and the files that
      * branch's merge stopped, with the first commit to each not adopted. */
     readonly adoptedFrom?: string;
@@ -100,14 +102,18 @@ export async function ticketSessions(root: string, ticket: string): Promise<LapR
     const branches: BranchSessions[] = [];
     try {
         const list = await run(root, ["branch", "list"]);
-        for (const b of (list["branches"] as Record<string, unknown>[]) ?? []) {
+        const rows = (list["branches"] as Record<string, unknown>[]) ?? [];
+        const names = new Map(rows.map((b) => [String(b["id"] ?? ""), String(b["name"] ?? "")]));
+        for (const b of rows) {
             const name = String(b["name"] ?? "");
             const stops = Array.isArray(b["stops"]) ? (b["stops"] as { file: string; at: string }[]) : [];
+            const via = typeof b["via"] === "string" ? names.get(b["via"]) : undefined;
+            const more = via ? { via } : {};
             try {
                 const p = await run(root, ["session", "list", "--meta", `ticket=${ticket}`, "--branch", name]);
-                branches.push({ name, stops, sessions: (p["sessions"] as LapSession[]) ?? [] });
+                branches.push({ name, stops, sessions: (p["sessions"] as LapSession[]) ?? [], ...more });
             } catch {
-                branches.push({ name, stops, sessions: [] }); /* its history is nowhere to be read */
+                branches.push({ name, stops, sessions: [], ...more }); /* its history is nowhere to be read */
             }
         }
     } catch {
@@ -118,6 +124,8 @@ export async function ticketSessions(root: string, ticket: string): Promise<LapR
 
 export interface BranchSessions {
     readonly name: string;
+    /* for a branch of a branch: the name of the branch it started from */
+    readonly via?: string;
     readonly stops: readonly { readonly file: string; readonly at: string }[];
     readonly sessions: readonly LapSession[];
 }
@@ -130,18 +138,24 @@ export interface BranchSessions {
  * says so. Oldest first. */
 export function mergeSessions(main: readonly LapSession[], branches: readonly BranchSessions[]): LapSession[] {
     const out = main.map((s) => ({ ...s }));
+    /* sessions already shown: a branch of a branch's history holds the
+     * branch it started from up to its base, listed first */
     const ours = new Set(main.map((s) => s.hash).filter(Boolean));
     const adopted = new Map(out.filter((s) => s.from).map((s) => [s.from!, s]));
+    /* sessions some branch adopted: shown as that branch's */
+    const taken = new Set(branches.flatMap((b) => b.sessions.map((s) => s.from)).filter(Boolean));
     const rest: LapSession[] = [];
     for (const b of branches) {
         for (const s of b.sessions) {
             if (s.hash && ours.has(s.hash)) continue;
+            if (s.hash) ours.add(s.hash);
             const a = s.hash ? adopted.get(s.hash) : undefined;
             if (a) {
                 Object.assign(a, { adoptedFrom: b.name, stops: b.stops });
                 continue;
             }
-            rest.push({ ...s, branch: b.name });
+            if (s.hash && taken.has(s.hash)) continue;
+            rest.push({ ...s, branch: b.name, ...(b.via ? { via: b.via } : {}) });
         }
     }
     return [...out, ...rest].sort((x, y) => x.started.localeCompare(y.started));

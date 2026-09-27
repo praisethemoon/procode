@@ -41,8 +41,31 @@ void branches_load(Arena *a, const char *lapdir, Branches *out) {
         e.path = jobj_str(o, "path");
         e.base = jobj_str(o, "base");
         e.started = jobj_str(o, "started");
+        e.via = NULL;
         if (e.id && e.name && e.path && e.base && e.started)
             branches_add(a, out, e);
+    }
+}
+
+void branches_load_deep(Arena *a, const char *lapdir, Branches *out) {
+    branches_load(a, lapdir, out);
+    for (int32_t i = 0; i < out->n; i++) { /* grows as registries join */
+        char lap[LAP_PATH_MAX], lineage[HIST_LINEAGE_MAX], err[128];
+        snprintf(lap, sizeof lap, "%s/%s", out->v[i].path, LAP_DIR);
+        if (!plat_is_dir(lap) ||
+            !hist_folder_lineage(a, lap, lineage, err, sizeof err) ||
+            strcmp(lineage, out->v[i].id) != 0)
+            continue; /* gone, or no longer that branch */
+        Branches sub;
+        branches_load(a, lap, &sub);
+        const char *via = out->v[i].id;
+        for (int32_t j = 0; j < sub.n; j++) {
+            if (branches_find(out, sub.v[j].id))
+                continue;
+            BranchEntry e = sub.v[j];
+            e.via = via;
+            branches_add(a, out, e);
+        }
     }
 }
 

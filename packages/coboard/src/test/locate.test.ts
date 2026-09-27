@@ -54,6 +54,20 @@ test("locateBoard: an override first, then a lap branch's parent, then the board
     assert.deepEqual(locateBoard(tmp(), ""), { root: null, via: "found" });
 });
 
+test("locateBoard: a branch of a branch goes on up to main's board, past the branch between", () => {
+    const { parent, branch } = project();
+    const nested = path.join(path.dirname(branch), "proj-feat-sub");
+    fs.mkdirSync(path.join(nested, ".coboard"), { recursive: true });
+    fs.copyFileSync(path.join(branch, ".coboard", "log.jsonl"), path.join(nested, ".coboard", "log.jsonl"));
+    fs.mkdirSync(path.join(nested, ".lap"), { recursive: true });
+    fs.writeFileSync(path.join(nested, ".lap", "lineage"), "ba9876543210\n");
+    fs.writeFileSync(path.join(nested, ".lap", "parent"), branch + "\n");
+    assert.deepEqual(locateBoard(nested, ""), { root: parent, via: "lap-parent" });
+    // parents that name each other are not followed for ever
+    fs.writeFileSync(path.join(branch, ".lap", "parent"), nested + "\n");
+    assert.equal(locateBoard(nested, "").via, "lap-parent");
+});
+
 test("mcp: in a branch folder, the tools read and write the parent's board", async () => {
     const { parent, branch } = project();
     const saved = process.env["COBOARD_DIR"];

@@ -17,6 +17,8 @@ typedef struct {
     const char *path;    /* the branch folder, absolute, '/' separators */
     const char *base;    /* the parent's head the branch started from */
     const char *started; /* ISO-8601 UTC */
+    const char *via;     /* not saved: found in this branch's registry by
+                            branches_load_deep; NULL for this folder's own */
 } BranchEntry;
 
 typedef struct {
@@ -29,6 +31,11 @@ typedef struct {
  * not the registry's shape, reads as no branches: hints never fail a
  * command. Entries missing a field are skipped. */
 void branches_load(Arena *a, const char *lapdir, Branches *out);
+/* branches_load, then the registry of every listed branch whose folder is
+ * still that branch, and theirs in turn: the branches started from this
+ * folder or from any of its branches, each nested one with via set. Read
+ * only: saving it would copy other folders' entries here. */
+void branches_load_deep(Arena *a, const char *lapdir, Branches *out);
 /* Writes lapdir/branches.json atomically. */
 bool branches_save(Arena *a, const char *lapdir, const Branches *b);
 /* The entry whose id or name is key, or NULL. */
