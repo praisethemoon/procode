@@ -1842,6 +1842,27 @@ expect_grep "chain ok: $((FULL22 + 1)) records" "$LAP" verify
 # a crash after publishing, before the old file went
 legacy22 published && mkdir .lap/log && cp .lap/log.jsonl .lap/log/main.000001.jsonl
 expect_grep "chain ok: $FULL22 records" "$LAP" verify
+# a run under a large limit finished, with leftover higher chunks of an
+# earlier run under a small one: the chunks hold the old file and more
+legacy22 limits && mkdir .lap/log && python3 - <<'PY'
+def split(data, limit):
+    lines = data.split(b"\n")[:-1]
+    out, cur = [], b""
+    for l in lines:
+        l += b"\n"
+        if cur and len(cur) + len(l) > limit:
+            out.append(cur); cur = b""
+        cur += l
+    return out + ([cur] if cur else [])
+old = open(".lap/log.jsonl", "rb").read()
+big, small = split(old, 4000), split(old, 1000)
+chunks = big + small[len(big):len(big) + 2]
+for i, c in enumerate(chunks, 1):
+    open(".lap/log/main.%06d.jsonl" % i, "wb").write(c)
+PY
+"$LAP" session start "after two runs" >/dev/null 2>&1 || fail "the writer refused the leftovers"
+[ -e .lap/log.jsonl ] && fail "the conversion over leftovers did not finish"
+expect_grep "chain ok: $((FULL22 + 1)) records" "$LAP" verify
 # live: readers loop while a conversion into many small chunks runs
 legacy22 live
 ( i=0; bad=0; during=0; while [ $i -lt 40 ]; do

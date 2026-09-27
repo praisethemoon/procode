@@ -411,6 +411,46 @@ static void test_legacy(Arena *a) {
     ASSERT_TRUE(!legacy_exists());
     ASSERT_EQ_S(read_history(a), "aaaa\nbbbb\ncccc\n");
 
+    /* three chained records, and a fourth appended after them */
+    Rec q[4];
+    char *ql[4];
+    for (int32_t i = 0; i < 4; i++) {
+        memset(&q[i], 0, sizeof q[i]);
+        q[i].type = REC_SESSION_START;
+        q[i].id = arena_printf(a, "S%d", i + 1);
+        q[i].msg = "limits";
+        q[i].ts = "2026-09-27T00:00:01Z";
+        q[i].prev = i ? q[i - 1].hash : LAP_HASH_ZERO;
+        size_t n;
+        ql[i] = rec_encode(a, &q[i], &n);
+    }
+    const char *old3 = arena_printf(a, "%s\n%s\n%s\n", ql[0], ql[1], ql[2]);
+
+    t_begin("hist: chunks holding the old file and records appended since "
+            "are the finished conversion");
+    clear_chunks();
+    put_file("main.000001.jsonl", old3);
+    put_file("main.000002.jsonl", arena_printf(a, "%s\n", ql[3]));
+    put_legacy(old3);
+    ASSERT_TRUE(hist_convert_legacy(a, T_LAPDIR, 100000, &converted, err,
+                                    sizeof err));
+    ASSERT_TRUE(!converted);
+    ASSERT_TRUE(!legacy_exists());
+    ASSERT_EQ_S(read_history(a), arena_printf(a, "%s%s\n", old3, ql[3]));
+
+    t_begin("hist: leftovers of a run under another chunk limit past the "
+            "old file are converted again, keeping the chain whole");
+    clear_chunks();
+    put_file("main.000001.jsonl", old3);
+    put_file("main.000002.jsonl", arena_printf(a, "%s\n", ql[1]));
+    put_file("main.000003.jsonl", arena_printf(a, "%s\n", ql[2]));
+    put_legacy(old3);
+    ASSERT_TRUE(hist_convert_legacy(a, T_LAPDIR, 100000, &converted, err,
+                                    sizeof err));
+    ASSERT_TRUE(converted);
+    ASSERT_TRUE(!legacy_exists());
+    ASSERT_EQ_S(read_history(a), old3);
+
     t_begin("hist: an old file and chunks that differ are refused, both kept");
     clear_chunks();
     put_file("main.000001.jsonl", "aaaa\nXXXX\n");

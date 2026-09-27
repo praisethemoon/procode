@@ -302,7 +302,10 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   file unless the chunks hold all of it, and reads it whole when it opens
   it, since a conversion may remove it meanwhile. A writer finding both
   finishes a split whose chunks are a prefix of the old file, removes an
-  old file that is a prefix of the chunks, and refuses anything else,
+  old file that is a prefix of the chunks when what follows it continues
+  its chain (records appended since), splits it again when what follows
+  breaks the chain and repeats its records (leftover chunks of a run under
+  another chunk limit), and refuses anything else,
   keeping both.
 
 ## Branches

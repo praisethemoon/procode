@@ -504,6 +504,31 @@ static void move_other_lineages(Arena *a, const char *from, const char *to) {
     }
 }
 
+/* Whether the chunks' bytes past the old file (have, from old_len on) are
+ * leftovers of a conversion run under another chunk limit rather than
+ * records appended since: they break the chain there, and every one of
+ * them is a record the old file already holds. Bytes that do not parse
+ * are not judged here. */
+static bool stale_extension(Arena *a, const char *have, size_t have_len,
+                            size_t old_len) {
+    RecLog all;
+    char err[128];
+    if (have_len == old_len ||
+        !rec_log_parse(a, have, have_len, NULL, NULL, &all, err, sizeof err) ||
+        all.chain_ok)
+        return false;
+    StrSet held;
+    strset_init(&held, a);
+    int32_t i = 0;
+    for (; i < all.count && (size_t)(all.v[i].raw - have) < old_len; i++)
+        strset_add(&held, all.v[i].hash);
+    for (; i < all.count; i++) {
+        if (!strset_has(&held, all.v[i].hash))
+            return false;
+    }
+    return true;
+}
+
 bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
                          bool *converted, char *err, size_t errsz) {
     *converted = false;
@@ -531,7 +556,9 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
             snprintf(err, errsz, "cannot read the history in %s", h.dir);
             return false;
         }
-        if (have_len >= old_len && memcmp(have, old, old_len) == 0) {
+        bool starts_with_old =
+            have_len >= old_len && memcmp(have, old, old_len) == 0;
+        if (starts_with_old && !stale_extension(a, have, have_len, old_len)) {
             /* the conversion finished; only the removal did not */
             if (!plat_remove_file(legacy)) {
                 snprintf(err, errsz, "cannot remove %s", legacy);
@@ -539,15 +566,17 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
             }
             return true;
         }
-        if (have_len > old_len || memcmp(have, old, have_len) != 0) {
+        if (!starts_with_old &&
+            (have_len > old_len || memcmp(have, old, have_len) != 0)) {
             snprintf(err, errsz,
                      "both %s and %s hold history, and they differ: keep "
                      "the one that is right and move the other away",
                      legacy, h.dir);
             return false;
         }
-        /* chunks that are a prefix of the old file: an interrupted
-         * conversion, written again below */
+        /* chunks that are a prefix of the old file, or the whole of it
+         * with stale leftovers after: an interrupted conversion, written
+         * again below */
     }
 
     /* The chunks are built in a folder of their own and published as log/
