@@ -73,6 +73,18 @@ static bool in_view(const Hist *h, const char *lineage) {
     return false;
 }
 
+/* Adds an adopted commit's id (and, for JSON, its original's hash) to the
+ * report's list. */
+static void report_id(StrBuf *ids, bool json, const char *id,
+                      const char *from) {
+    if (ids->len)
+        sb_puts(ids, json ? "," : ", ");
+    if (json)
+        sb_printf(ids, "{\"id\":\"%s\",\"from\":\"%s\"}", id, from);
+    else
+        sb_puts(ids, id);
+}
+
 /* A file's lines as of record `upto` of log; *exists false when it was
  * never created, or deleted. */
 static Lines file_at(Arena *a, const RecLog *log, const char *file,
@@ -396,6 +408,33 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             map_put(a, &starts, blog.v[i].id, blog.v[i].hash);
     }
 
+    /* A run of this merge that stopped part-way (a crash, a full disk) left
+     * some records adopted and no merge record: they are found by their
+     * from links. When nothing else was recorded since, the run is redone
+     * against this folder's history from before them, and what it appended
+     * is not appended again, so the result is the uninterrupted merge's.
+     * Otherwise its commits come out already done. */
+    StrSet newer;
+    strset_init(&newer, a);
+    for (int32_t i = start; i < blog.count; i++)
+        strset_add(&newer, blog.v[i].hash);
+    Map done_from = {0}; /* branch record hash -> its copy already here */
+    int32_t p0 = plog.count;
+    for (int32_t i = 0; i < plog.count; i++) {
+        const Rec *p = &plog.v[i];
+        if (p->from && strset_has(&newer, p->from)) {
+            map_put(a, &done_from, p->from, p->id);
+            if (i < p0)
+                p0 = i;
+        }
+    }
+    bool redo = done_from.n > 0;
+    for (int32_t i = p0; redo && i < plog.count; i++) {
+        if (!plog.v[i].from || !strset_has(&newer, plog.v[i].from))
+            redo = false;
+    }
+    int32_t parent_at = redo ? p0 - 1 : plog.count - 1;
+
     /* Placement, file by file. */
     int32_t *at = (int32_t *)arena_alloc0(
         a, (size_t)(blog.count ? blog.count : 1) * sizeof(int32_t));
@@ -443,7 +482,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         }
         bool base_has, parent_has;
         Lines base = file_at(a, &blog, files[f], upto, &base_has);
-        Lines parent = file_at(a, &plog, files[f], plog.count - 1,
+        Lines parent = file_at(a, &plog, files[f], parent_at,
                                &parent_has);
         Placement p;
         adopt_place(a, base, parent, (const Rec *const *)mine, (int32_t)n,
@@ -516,6 +555,10 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     }
 
     /* Appending, in the branch's order. */
+    /* For tests: stop with an I/O error after this many records, as a crash
+     * or a full disk would. */
+    const char *fail_env = getenv("LAP_TEST_MERGE_FAIL_AFTER");
+    int32_t fail_after = fail_env ? atoi(fail_env) : -1, appended = 0;
     StrBuf ids;
     sb_init(&ids, a);
     if (!dry && start < blog.count) {
@@ -551,6 +594,11 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 rec.id = ours;
                 rec.user = NULL;
             } else if (b->type == REC_COMMIT && at[i] > 0) {
+                const char *had = map_get(&done_from, b->hash);
+                if (had) { /* appended by an interrupted run of this merge */
+                    report_id(&ids, json, had, b->hash);
+                    continue;
+                }
                 const char *sh = b->session ? map_get(&starts, b->session)
                                             : NULL;
                 rec.type = REC_COMMIT;
@@ -572,19 +620,17 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             } else {
                 continue;
             }
+            if (fail_after >= 0 && appended++ == fail_after) {
+                err_out(json, "io_error", "stopped after %d records "
+                        "(LAP_TEST_MERGE_FAIL_AFTER)", fail_after);
+                goto done;
+            }
             if (!repo_append(&repo, &rec, err, sizeof err)) {
                 err_out(json, "io_error", "%s", err);
                 goto done;
             }
-            if (rec.type == REC_COMMIT) {
-                if (ids.len)
-                    sb_puts(&ids, json ? "," : ", ");
-                if (json)
-                    sb_printf(&ids, "{\"id\":\"%s\",\"from\":\"%s\"}", rec.id,
-                              b->hash);
-                else
-                    sb_puts(&ids, rec.id);
-            }
+            if (rec.type == REC_COMMIT)
+                report_id(&ids, json, rec.id, b->hash);
         }
         /* One merge record per branch of the chain with anything new: a
          * branch it started from advances to the base of the next. */
@@ -606,6 +652,11 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             m.already = l->already;
             m.already_n = (int32_t)l->nalready;
             m.user = repo_user(&repo);
+            if (fail_after >= 0 && appended++ == fail_after) {
+                err_out(json, "io_error", "stopped after %d records "
+                        "(LAP_TEST_MERGE_FAIL_AFTER)", fail_after);
+                goto done;
+            }
             if (!repo_append(&repo, &m, err, sizeof err)) {
                 err_out(json, "io_error", "%s", err);
                 goto done;

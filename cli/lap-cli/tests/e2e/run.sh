@@ -1624,6 +1624,30 @@ expect_grep "unrelated_history" "$LAP" merge x --json
 [ "$(both15)" = "$SUM15" ] || fail "a merge refused as unrelated_history changed a .lap"
 cd "$WORK"
 
+t "a merge stopped after any record is redone exactly by running it again"
+merge_pair m16; BP="$WORK/m16-p"; BW="$WORK/m16-w"
+cd "$BW" && "$LAP" session start "three edits" --branch b >/dev/null 2>&1
+in_branch f.txt 's/^line 2$/TWO/' "edits line 2"
+in_branch f.txt 's/^line 5$/FIVE/' "edits line 5"
+in_branch f.txt 's/^line 9$/NINE/' "edits line 9"
+cd "$BW" && "$LAP" session end --branch b >/dev/null 2>&1
+git_merge_b || fail "git merge m16"
+# its session, three commits, its end and the merge record: six records
+cp -R "$BP" "$WORK/m16-ref" && cd "$WORK/m16-ref" &&
+    expect_grep "adopted 3 of 3" "$LAP" merge b
+logof() { sed 's/"ts":"[^"]*"//' .lap/log/main.*.jsonl; }
+REF16=$(logof)
+for n in 0 1 2 3 4 5; do
+    cp -R "$BP" "$WORK/m16-c$n" && cd "$WORK/m16-c$n" || exit 1
+    LAP_TEST_MERGE_FAIL_AFTER=$n "$LAP" merge b >/dev/null 2>&1 &&
+        fail "the merge cut after $n records did not stop"
+    expect_grep "adopted 3 of 3" "$LAP" merge b
+    [ "$(logof)" = "$REF16" ] || fail "cut after $n records, the rerun's history differs"
+    expect_grep "clean" "$LAP" status
+    expect_grep "0 mismatch" "$LAP" verify --deep
+done
+cd "$WORK"
+
 t "lap merge adopts only what git merge brought, so .lap/log never conflicts"
 merge_pair m12; BP="$WORK/m12-p"; BW="$WORK/m12-w"
 cd "$BW" && "$LAP" session start "staged work" --branch b >/dev/null 2>&1

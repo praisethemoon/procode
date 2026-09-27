@@ -862,6 +862,14 @@ segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git`
   the log tail; the next **writer** detects the mismatch and heals —
   rebuilding counters, the active session, *and the entire shadow tree*
   from a full replay. Readers that hit the mismatch heal in memory only.
+- **An interrupted `lap merge`** (a crash, a full disk) leaves some adopted
+  records and no merge record; everything else heals as above. Running the
+  same merge again finds those records by their `from` links: when they
+  are the last thing recorded here, it places the branch's commits against
+  this folder's history from before them and appends only what they lack,
+  so the result is the uninterrupted merge's, ids included. When other
+  work was recorded since, their commits come out already done (§Merging,
+  rule 3) and the rest is adopted.
 - The log itself has no size cap and its tail is hashed through a bounded
   tail-window read, so growth never makes the repo unreadable. (User files
   keep the 64 MB cap.)
