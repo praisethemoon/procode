@@ -3,5 +3,5 @@
 export * from "./model";
 export * from "./query";
 export * from "./lap";
-export { Board, BoardError, BOARD_DIR, LOG_FILE, findBoard, lapParent, locateBoard } from "./store";
+export { Board, BoardError, BOARD_DIR, LOG_FILE, findBoard, lapParent, locateBoard, staleParentMessage } from "./store";
 export type { CreateInput, Fields, Placement } from "./store";

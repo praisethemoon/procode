@@ -47,7 +47,7 @@ export const LOG_FILE = "log.jsonl";
 
 export class BoardError extends Error {
     constructor(
-        readonly code: "not_found" | "invalid" | "in_use" | "no_board" | "locked" | "unwritable",
+        readonly code: "not_found" | "invalid" | "in_use" | "no_board" | "locked" | "unwritable" | "stale_parent",
         message: string,
     ) {
         super(message);
@@ -82,14 +82,17 @@ export function findBoard(from: string): string | null {
  *    `.coboard/` is the board, or that `.coboard/` itself;
  * 2. in a lap branch folder, its parent folder, which `lap branch start`
  *    wrote to `.lap/parent` — for a branch of a branch, followed up to
- *    the top (main's folder) — when that folder has a board;
+ *    the top (main's folder). Never the branch's own `.coboard/`, a copy
+ *    as of its git base: a parent with no board yet gets the first one
+ *    (`home`), and a parent folder that is gone is `stale-parent` (with
+ *    `stale`, the path recorded), which readers and writers refuse;
  * 3. the first `.coboard/` at or above `from`.
  *
  * `via` says which, so a view can tell the reader whose board it shows. */
 export function locateBoard(
     from: string,
     override: string | undefined = process.env["COBOARD_DIR"],
-): { root: string | null; via: "override" | "lap-parent" | "found" } {
+): { root: string | null; via: "override" | "lap-parent" | "found" | "stale-parent"; home?: string; stale?: string } {
     if (override && override.trim()) {
         const dir = path.resolve(override.trim());
         return { root: path.basename(dir) === BOARD_DIR ? path.dirname(dir) : dir, via: "override" };
@@ -105,7 +108,24 @@ export function locateBoard(
     if (parent && isDir(path.join(parent, BOARD_DIR))) {
         return { root: parent, via: "lap-parent" };
     }
+    if (parent && isDir(parent)) {
+        return { root: null, via: "lap-parent", home: parent };
+    }
+    if (parent) {
+        return { root: null, via: "stale-parent", stale: parent };
+    }
     return { root: findBoard(from), via: "found" };
+}
+
+/* Why a lap branch folder whose recorded parent is gone has no board: its
+ * own `.coboard/` is a stale copy, never used. */
+export function staleParentMessage(stale: string): string {
+    return (
+        `this folder is a lap branch of ${stale}, which is gone, so its board cannot be found ` +
+        "(the .coboard/ here is a copy as of the branch's git base and is not used). " +
+        "Point COBOARD_DIR (or the Board Folder setting) at the parent's folder, " +
+        "or write the parent's new path into .lap/parent here"
+    );
 }
 
 /* The parent folder a lap branch folder at or above `from` recorded in

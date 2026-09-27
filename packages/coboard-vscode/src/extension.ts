@@ -17,6 +17,7 @@ import {
     Item,
     commitDiff,
     locateBoard,
+    staleParentMessage,
     search,
     sessionCommits,
     sessionReview,
@@ -41,7 +42,9 @@ function folder(): string | null {
 
 /* How this window found its board, for the view to say when it is not the
  * folder's own: set in Board Folder, or a lap branch folder's parent's. */
-let boardVia: "override" | "lap-parent" | "found" = "found";
+let boardVia: "override" | "lap-parent" | "found" | "stale-parent" = "found";
+/* A lap branch folder whose parent is gone: why there is no board. */
+let staleBoard: string | null = null;
 
 function currentBoard(): Board | null {
     const root = folder();
@@ -50,8 +53,13 @@ function currentBoard(): Board | null {
     }
     const setting = vscode.workspace.getConfiguration("coboard").get<string>("boardFolder", "");
     const at = locateBoard(root, setting || process.env["COBOARD_DIR"]);
-    const found = at.root ?? root;
     boardVia = at.via;
+    /* never the branch's own copy of the board, which is stale */
+    staleBoard = at.via === "stale-parent" ? staleParentMessage(at.stale!) : null;
+    if (staleBoard) {
+        return null;
+    }
+    const found = at.root ?? at.home ?? root;
     if (!board || board.root !== found) {
         board = new Board(found);
     }
@@ -61,6 +69,9 @@ function currentBoard(): Board | null {
 /* The tree's description: whose board it is, when it is not this folder's. */
 function boardNote(): string {
     const b = currentBoard();
+    if (staleBoard) {
+        return "no board: this lap branch's parent folder is gone";
+    }
     if (!b || boardVia === "found") {
         return "";
     }
@@ -70,6 +81,9 @@ function boardNote(): string {
 
 function requireBoard(): Board {
     const b = currentBoard();
+    if (staleBoard) {
+        throw new BoardError("stale_parent", staleBoard);
+    }
     if (!b) {
         throw new BoardError("no_board", "Open a folder to use its board.");
     }

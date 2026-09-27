@@ -48,10 +48,63 @@ test("locateBoard: an override first, then a lap branch's parent, then the board
     assert.deepEqual(locateBoard(branch, path.join(other, ".coboard")), { root: other, via: "override" });
     assert.deepEqual(locateBoard(path.join(branch, "src"), ""), { root: parent, via: "lap-parent" });
     assert.deepEqual(locateBoard(parent, ""), { root: parent, via: "found" });
-    // a parent without a board is not followed: the branch's own board is used
-    fs.writeFileSync(path.join(branch, ".lap", "parent"), path.join(other, "nothing-here") + "\n");
-    assert.deepEqual(locateBoard(branch, ""), { root: branch, via: "found" });
+    // the branch's own copy is never the board: a parent with none yet is
+    // where the first one goes, and a parent that is gone is stale
+    const bare = tmp();
+    fs.writeFileSync(path.join(branch, ".lap", "parent"), bare + "\n");
+    assert.deepEqual(locateBoard(branch, ""), { root: null, via: "lap-parent", home: bare });
+    const gone = path.join(other, "nothing-here");
+    fs.writeFileSync(path.join(branch, ".lap", "parent"), gone + "\n");
+    assert.deepEqual(locateBoard(branch, ""), { root: null, via: "stale-parent", stale: gone });
     assert.deepEqual(locateBoard(tmp(), ""), { root: null, via: "found" });
+});
+
+test("mcp: a branch folder whose parent is gone refuses reads and writes, naming the stale path; COBOARD_DIR still works", async () => {
+    const { parent, branch } = project();
+    const gone = path.join(path.dirname(parent), "moved-away");
+    fs.writeFileSync(path.join(branch, ".lap", "parent"), gone + "\n");
+    const saved = process.env["COBOARD_DIR"];
+    delete process.env["COBOARD_DIR"];
+    try {
+        for (const [name, args] of [
+            ["board_list", {}],
+            ["board_get", { id: "E-1" }],
+            ["board_create", { kind: "ticket", title: "Lost", epic: "E-1" }],
+            ["board_update", { id: "E-1", title: "Renamed" }],
+        ] as const) {
+            const r = await call(branch, name, args);
+            assert.equal(r.error, true, `${name} answered from the stale copy: ${r.text}`);
+            assert.match(r.text, /stale_parent/);
+            assert.ok(r.text.includes(gone), `${name} does not name the stale path`);
+            assert.match(r.text, /COBOARD_DIR/);
+        }
+        assert.equal(new Board(branch).all().length, 1, "the branch's copy is untouched");
+        process.env["COBOARD_DIR"] = parent;
+        const listed = await call(branch, "board_list", {});
+        assert.equal(listed.error, false, listed.text);
+        assert.match(listed.text, /The parent's epic/);
+        const created = await call(branch, "board_create", { kind: "ticket", title: "Through the override", epic: "E-1" });
+        assert.equal(created.error, false, created.text);
+        assert.ok(new Board(parent).all().some((i) => i.title === "Through the override"));
+    } finally {
+        if (saved === undefined) delete process.env["COBOARD_DIR"];
+        else process.env["COBOARD_DIR"] = saved;
+    }
+});
+
+test("mcp: a branch whose parent has no board yet creates the first one there", async () => {
+    const { parent, branch } = project();
+    fs.rmSync(path.join(parent, ".coboard"), { recursive: true });
+    const saved = process.env["COBOARD_DIR"];
+    delete process.env["COBOARD_DIR"];
+    try {
+        const created = await call(branch, "board_create", { kind: "epic", title: "First in the parent" });
+        assert.equal(created.error, false, created.text);
+        assert.deepEqual(new Board(parent).all().map((i) => i.title), ["First in the parent"]);
+    } finally {
+        if (saved === undefined) delete process.env["COBOARD_DIR"];
+        else process.env["COBOARD_DIR"] = saved;
+    }
 });
 
 test("locateBoard: a branch of a branch goes on up to main's board, past the branch between", () => {

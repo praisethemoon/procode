@@ -17,7 +17,7 @@ import * as readline from "node:readline";
 import { ticketSessions, sessionCommits, sessionCommand } from "./lap";
 import { ARCHIVED_MODES, ArchivedMode, PRIORITIES, SIZES, TICKET_STATUSES } from "./model";
 import { search, view } from "./query";
-import { Board, BoardError, CreateInput, Fields, locateBoard } from "./store";
+import { Board, BoardError, CreateInput, Fields, locateBoard, staleParentMessage } from "./store";
 
 const VERSION = "0.1.0";
 
@@ -71,18 +71,31 @@ function schema(properties: Json, required: string[] = []): Json {
     return { type: "object", properties, required, additionalProperties: false };
 }
 
+/* Where the board is, refusing a lap branch whose parent is gone: its own
+ * copy of the board would be read, and written, as if it were the board. */
+function located(ctx: Ctx): ReturnType<typeof locateBoard> {
+    const at = locateBoard(ctx.cwd);
+    if (at.via === "stale-parent") {
+        throw new BoardError("stale_parent", staleParentMessage(at.stale!));
+    }
+    return at;
+}
+
 /* The board to read: the project's (locateBoard), or an empty one. */
 function readBoard(ctx: Ctx): Board | null {
-    const root = locateBoard(ctx.cwd).root;
+    const root = located(ctx).root;
     return root ? new Board(root) : null;
 }
 
-/* The board to write: the project's (locateBoard), else a new one at the
- * git root. */
+/* The board to write: the project's (locateBoard), else a new one in a lap
+ * branch's parent, else at the git root. */
 function writeBoard(ctx: Ctx): Board {
-    const root = locateBoard(ctx.cwd).root;
-    if (root) {
-        return new Board(root);
+    const at = located(ctx);
+    if (at.root) {
+        return new Board(at.root);
+    }
+    if (at.home) {
+        return new Board(at.home);
     }
     let dir = path.resolve(ctx.cwd);
     for (;;) {
@@ -141,7 +154,7 @@ export const TOOLS: readonly Tool[] = [
             const v = view(items(ctx), id, { archived: (args["archived"] as ArchivedMode | undefined) ?? "exclude" });
             if (!v) throw new BoardError("not_found", `no ${id.trim().toUpperCase()} on this board`);
             if (v.kind !== "ticket") return v;
-            const root = locateBoard(ctx.cwd).root!;
+            const root = located(ctx).root!;
             const sessions = await ticketSessions(root, v.ticket.id);
             /* no sessions because lap failed is not "no work": say so */
             return { ...v, sessions: sessions.value, ...(sessions.ok ? {} : { lapError: sessions.error }) };
