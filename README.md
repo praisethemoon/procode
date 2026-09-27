@@ -1,31 +1,69 @@
 # progressive code
 
-procode, is a set of tools for working alongside AI coding agents:
+procode is a set of (very opinionated) tools for working alongside AI coding
+agents. It includes CLIs and MCP servers the agent uses, and a VS Code
+extension, **procode**, for you to follow along.
 
-- **lap** records every edit an agent makes, one commit per edit, each
-  with its intent (why) and its behavior (what it makes the code do).
-- **kb** is a local knowledge base that agents and people both search and
-  cite.
-- **coboard** is a board of epics, milestones and tickets that developers
-  and agents work from together.
-- **Artifacts** are pages an agent publishes for people to read in the
-  editor: reports, comparisons, findings.
-- You can install each separately, if you do not want the entire bulk.
+These tools can generally be used with any agent, but only Claude Code is
+tested.
 
-Each ships as a CLI or an MCP server for agents, plus a VS Code view for
-people. The four views come as one extension, **procode**.
+## Lap
 
-## Parts
+Lap is an edit recorder. Like git, lap records changes, but its goal is to
+capture not only the change, but also the intent behind it and the behavior
+it gives the code. Every edit an agent makes is its own commit, grouped into
+sessions, so you can come back later and see what happened and why.
 
-| part | path | what it is |
-|---|---|---|
-| **lap** | [cli/lap-cli/](cli/lap-cli/) | The edit recorder. It sits below git and never touches it. C11, no dependencies. [SPEC](cli/lap-cli/SPEC.md) |
-| **kb** | [cli/kb-cli/](cli/kb-cli/) | The knowledge base: one store per workspace in `.kb/`, keyword and semantic search, provenance and links. C11. [Contract](specs/index-api.md) |
-| **coboard** | [packages/coboard/](packages/coboard/) | The board: an append-only `.coboard/log.jsonl` (commit it) and an MCP server. |
-| **artifacts** | [packages/artifacts/](packages/artifacts/) | The `.artifact/` store and its MCP server. [Format](specs/artifacts.md) |
-| **kb-js**, **kb-mcp** | [packages/kb-js/](packages/kb-js/), [packages/kb-mcp/](packages/kb-mcp/) | A typed client for the kb CLI, and kb as MCP tools. |
-| **procode** | [packages/combined/](packages/combined/) | The VS Code extension: Lap History, Knowledge, the Board and Artifacts, with the coboard, kb and artifacts MCP servers inside. It is built from `packages/*-vscode`. |
-| **skills** | [.claude/skills/](.claude/skills/) | How agents work here: `lap`, `tickets` (board, lap and git together) and `artifacts`. The lap skill is also in [cli/lap-cli/skill/](cli/lap-cli/skill/) for other projects. |
+`lap` is available as a CLI and as an agent skill that teaches the agent
+how to use it. To install the skill, copy
+[cli/lap-cli/skill/lap/](cli/lap-cli/skill/lap/) into your project's
+`.claude/skills/lap/` (or `~/.claude/skills/lap/` for every project).
+
+The extension's **Lap History** view renders the sessions and their changes
+inside VS Code.
+
+![lap-vscode](assets/lap-vscode.webp)
+
+More in [lap's README](cli/lap-cli/README.md) and its [SPEC](cli/lap-cli/SPEC.md).
+
+## Coboard
+
+Coboard is a very simple board of epics, milestones and tickets. It is meant
+to be a more robust alternative to Claude's plan: you can always keep track
+of the progress, comment on the tickets, and have better visibility. Agents
+work it through its MCP server; you work it in the extension's **Board**
+view.
+
+Coboard works perfectly fine without lap. But if lap is available, a ticket
+also shows the sessions (groups of changes) made under it, for a smoother
+review.
+
+![coboard-vscode](assets/coboard-vscode.webp)
+
+The [tickets skill](.claude/skills/tickets/SKILL.md) is the loop used in
+this repository (board, lap and git together); adapt it for yours.
+
+## KB (Knowledge Base)
+
+kb is a local knowledge base of documentation, source and papers, that
+agents and you can both search and cite. It keeps one store per workspace
+in `.kb/`, found by walking up like `.git`, with keyword search, semantic
+search when an embedding model is installed (see [Install](#install)),
+provenance for every passage, and links between documents. Nothing leaves
+your machine.
+
+Agents use it through the `kb` MCP server: research filed once is searched
+from disk the next time, instead of fetched again. You browse and search it
+in the extension's **Knowledge** view. The contract is in
+[specs/index-api.md](specs/index-api.md).
+
+## Artifacts
+
+Artifacts are pages an agent publishes for you to read in the editor:
+reports, comparisons, findings, anything with a table or a chart. They are
+stored in `.artifact/` and published through the `artifacts` MCP server,
+and the extension's **Artifacts** view opens them in your VS Code theme.
+The format is in [specs/artifacts.md](specs/artifacts.md).
 
 ## Requirements
 
@@ -33,9 +71,7 @@ For the CLIs, a C11 compiler and CMake 3.16+:
 
 - **macOS:** clang from the Xcode Command Line Tools
   (`xcode-select --install`), and CMake (`brew install cmake`).
-- **Linux:** gcc or clang, make and CMake, e.g.
-  `sudo apt install build-essential cmake` on Debian and Ubuntu, or
-  `sudo dnf install gcc make cmake` on Fedora.
+- **Linux:** gcc or clang, make and CMake
 - **Windows:** Visual Studio 2022 (or its Build Tools) with the
   *Desktop development with C++* workload, which includes MSVC and CMake.
 
@@ -173,6 +209,18 @@ specs/      the kb contract and the artifact format
 lap's other limits (it cannot restore files, it takes changes git makes
 for yours, renames are two commits) are in
 [its README](cli/lap-cli/README.md#limitations).
+
+## Parts
+
+| part | path | what it is |
+|---|---|---|
+| **lap** | [cli/lap-cli/](cli/lap-cli/) | The edit recorder. It sits below git and never touches it. C11, no dependencies. [SPEC](cli/lap-cli/SPEC.md) |
+| **kb** | [cli/kb-cli/](cli/kb-cli/) | The knowledge base: one store per workspace in `.kb/`, keyword and semantic search, provenance and links. C11. [Contract](specs/index-api.md) |
+| **coboard** | [packages/coboard/](packages/coboard/) | The board: an append-only `.coboard/log.jsonl` (commit it) and an MCP server. |
+| **artifacts** | [packages/artifacts/](packages/artifacts/) | The `.artifact/` store and its MCP server. [Format](specs/artifacts.md) |
+| **kb-js**, **kb-mcp** | [packages/kb-js/](packages/kb-js/), [packages/kb-mcp/](packages/kb-mcp/) | A typed client for the kb CLI, and kb as MCP tools. |
+| **procode** | [packages/combined/](packages/combined/) | The VS Code extension: Lap History, Knowledge, the Board and Artifacts, with the coboard, kb and artifacts MCP servers inside. It is built from `packages/*-vscode`. |
+| **skills** | [.claude/skills/](.claude/skills/) | How agents work here: `lap`, `tickets` (board, lap and git together) and `artifacts`. The lap skill is also in [cli/lap-cli/skill/](cli/lap-cli/skill/) for other projects. |
 
 ## License
 
