@@ -86,8 +86,9 @@ static WalkAction on_log_entry(const char *rel, bool is_dir,
     return WALK_CONT;
 }
 
-bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
-               char *err, size_t errsz) {
+/* hist_open without the old single-file log: the lineage's chunks only. */
+static bool list_chunks(Arena *a, const char *lapdir, const char *lineage,
+                        Hist *h, char *err, size_t errsz) {
     memset(h, 0, sizeof *h);
     snprintf(h->dir, sizeof h->dir, "%s/%s", lapdir, LAP_LOG_DIR);
     snprintf(h->lineage, sizeof h->lineage, "%s", lineage);
@@ -110,22 +111,60 @@ bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
         start += h->v[i].size;
     }
     h->size = start;
-    if (h->n == 0 && strcmp(lineage, LAP_MAIN_LINEAGE) == 0) {
-        char legacy[LAP_PATH_MAX];
-        snprintf(legacy, sizeof legacy, "%s/%s", lapdir, LAP_LOG_NAME);
-        uint64_t size;
-        if (plat_file_size(legacy, &size)) {
-            h->legacy = true;
-            h->v = (HistChunk *)arena_alloc0(a, sizeof(HistChunk));
-            h->cap = 1;
-            h->n = 1;
-            snprintf(h->v[0].lineage, sizeof h->v[0].lineage, "%s", lineage);
-            h->v[0].n = 1;
-            snprintf(h->v[0].name, sizeof h->v[0].name, "%s", LAP_LOG_NAME);
-            h->v[0].size = size;
-            h->size = size;
+    return true;
+}
+
+bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
+               char *err, size_t errsz) {
+    if (!list_chunks(a, lapdir, lineage, h, err, errsz))
+        return false;
+    if (strcmp(lineage, LAP_MAIN_LINEAGE) != 0)
+        return true;
+    char legacy[LAP_PATH_MAX];
+    snprintf(legacy, sizeof legacy, "%s/%s", lapdir, LAP_LOG_NAME);
+    uint64_t size;
+    if (!plat_file_size(legacy, &size))
+        return true;
+    /* Both shapes: a conversion between publishing its chunks and removing
+     * the old file (they hold all of it), or an older lap's interrupted
+     * one (they do not). The old file is read unless the chunks hold all
+     * of it — never a history cut short. */
+    if (h->n > 0) {
+        char *old, *have;
+        size_t old_len;
+        if (!plat_read_file_max(a, legacy, &old, &old_len, (size_t)-1)) {
+            snprintf(err, errsz, "cannot read %s", legacy);
+            return false;
         }
+        while (old_len > 0 && old[old_len - 1] != '\n')
+            old_len--;
+        if (h->size >= old_len &&
+            hist_read(a, h, 0, old_len, &have) &&
+            memcmp(have, old, old_len) == 0)
+            return true;
+        memset(h, 0, sizeof *h);
+        snprintf(h->dir, sizeof h->dir, "%s/%s", lapdir, LAP_LOG_DIR);
+        snprintf(h->lineage, sizeof h->lineage, "%s", lineage);
+        h->limit = hist_chunk_limit();
     }
+    char *mem;
+    size_t mlen;
+    if (!plat_read_file_max(a, legacy, &mem, &mlen, (size_t)-1)) {
+        /* gone since: a conversion finished in between; its chunks hold
+         * all of it */
+        return list_chunks(a, lapdir, lineage, h, err, errsz);
+    }
+    size = mlen;
+    h->mem = mem;
+    h->legacy = true;
+    h->v = (HistChunk *)arena_alloc0(a, sizeof(HistChunk));
+    h->cap = 1;
+    h->n = 1;
+    snprintf(h->v[0].lineage, sizeof h->v[0].lineage, "%s", lineage);
+    h->v[0].n = 1;
+    snprintf(h->v[0].name, sizeof h->v[0].name, "%s", LAP_LOG_NAME);
+    h->v[0].size = size;
+    h->size = size;
     return true;
 }
 
@@ -192,6 +231,12 @@ bool hist_read(Arena *a, const Hist *h, uint64_t off, size_t len, char **out) {
     if (off + len > h->size)
         return false;
     char *buf = (char *)arena_alloc(a, len + 1);
+    if (h->mem) { /* the old single file, read when opened */
+        memcpy(buf, h->mem + off, len);
+        buf[len] = '\0';
+        *out = buf;
+        return true;
+    }
     size_t got = 0;
     int32_t i = hist_locate(h, off);
     while (got < len && i >= 0 && i < h->n) {
@@ -274,6 +319,22 @@ static bool file_tail_hash(Arena *a, const char *path, char out[65],
 }
 
 bool hist_tail_hash(Arena *a, const Hist *h, char out[65]) {
+    if (h->mem) { /* the old single file, read when opened */
+        size_t end = (size_t)h->size;
+        while (end > 0 && h->mem[end - 1] != '\n')
+            end--; /* a torn tail */
+        size_t line_end = end > 0 ? end - 1 : 0;
+        while (line_end > 0 && h->mem[line_end - 1] == '\n')
+            line_end--;
+        size_t start = line_end;
+        while (start > 0 && h->mem[start - 1] != '\n')
+            start--;
+        if (line_end > start)
+            sha256_hex(h->mem + start, line_end - start, out);
+        else
+            snprintf(out, 65, "%s", LAP_HASH_ZERO);
+        return true;
+    }
     for (int32_t i = h->n - 1; i >= 0; i--) {
         if (h->v[i].size == 0)
             continue;
@@ -393,6 +454,56 @@ bool hist_append(Arena *a, Hist *h, const char *line, size_t len, char *err,
     return true;
 }
 
+/* The names of the files directly in a folder. */
+typedef struct {
+    Arena *a;
+    const char **v;
+    int32_t n, cap;
+} Names;
+
+static WalkAction on_name(const char *rel, bool is_dir, const PlatStat *st,
+                          void *ud) {
+    (void)st;
+    Names *ns = (Names *)ud;
+    if (is_dir)
+        return WALK_SKIP_DIR;
+    ARENA_GROW(ns->a, ns->v, ns->n, ns->cap, const char *);
+    ns->v[ns->n++] = arena_strdup(ns->a, rel);
+    return WALK_CONT;
+}
+
+/* Removes a folder of files and the folder, if it is there. */
+static void clear_dir(Arena *a, const char *dir) {
+    if (!plat_is_dir(dir))
+        return;
+    Names ns = {a, NULL, 0, 0};
+    plat_walk(a, dir, on_name, &ns);
+    for (int32_t i = 0; i < ns.n; i++) {
+        char path[LAP_PATH_MAX];
+        snprintf(path, sizeof path, "%s/%s", dir, ns.v[i]);
+        plat_remove_file(path);
+    }
+    plat_rmdir(dir);
+}
+
+/* Moves the chunks of lineages other than main from one folder to
+ * another. */
+static void move_other_lineages(Arena *a, const char *from, const char *to) {
+    Names ns = {a, NULL, 0, 0};
+    plat_walk(a, from, on_name, &ns);
+    for (int32_t i = 0; i < ns.n; i++) {
+        char lineage[HIST_LINEAGE_MAX];
+        int32_t k;
+        if (!hist_parse_name(ns.v[i], lineage, &k) ||
+            strcmp(lineage, LAP_MAIN_LINEAGE) == 0)
+            continue;
+        char src[LAP_PATH_MAX], dst[LAP_PATH_MAX];
+        snprintf(src, sizeof src, "%s/%s", from, ns.v[i]);
+        snprintf(dst, sizeof dst, "%s/%s", to, ns.v[i]);
+        plat_rename(src, dst);
+    }
+}
+
 bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
                          bool *converted, char *err, size_t errsz) {
     *converted = false;
@@ -410,10 +521,10 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
     while (old_len > 0 && old[old_len - 1] != '\n')
         old_len--;
 
-    Hist h;
-    if (!hist_open(a, lapdir, LAP_MAIN_LINEAGE, &h, err, errsz))
+    Hist h; /* the chunks as they are, not hist_open's choice between shapes */
+    if (!list_chunks(a, lapdir, LAP_MAIN_LINEAGE, &h, err, errsz))
         return false;
-    if (!h.legacy && h.n > 0) {
+    if (h.n > 0) {
         char *have;
         size_t have_len;
         if (!hist_read_all(a, &h, &have, &have_len)) {
@@ -439,10 +550,18 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
          * conversion, written again below */
     }
 
-    char dir[LAP_PATH_MAX];
+    /* The chunks are built in a folder of their own and published as log/
+     * with one rename, so a reader finds the old file or every chunk,
+     * never some. Fixed names: conversion runs under the lock, and
+     * leftovers of an interrupted run are cleared first. */
+    char dir[LAP_PATH_MAX], tmp[LAP_PATH_MAX], aside[LAP_PATH_MAX];
     snprintf(dir, sizeof dir, "%s/%s", lapdir, LAP_LOG_DIR);
-    if (!plat_mkdirs(dir)) {
-        snprintf(err, errsz, "cannot create %s", dir);
+    snprintf(tmp, sizeof tmp, "%s/log.converting", lapdir);
+    snprintf(aside, sizeof aside, "%s/log.replaced", lapdir);
+    clear_dir(a, tmp);
+    clear_dir(a, aside);
+    if (!plat_mkdirs(tmp)) {
+        snprintf(err, errsz, "cannot create %s", tmp);
         return false;
     }
     int32_t n = 0;
@@ -456,7 +575,7 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
         if (full || pos >= old_len) {
             char name[64], path[LAP_PATH_MAX];
             hist_chunk_name(LAP_MAIN_LINEAGE, ++n, name);
-            snprintf(path, sizeof path, "%s/%s", dir, name);
+            snprintf(path, sizeof path, "%s/%s", tmp, name);
             if (!plat_write_file_atomic(path, old + start, pos - start)) {
                 snprintf(err, errsz, "cannot write %s", path);
                 return false;
@@ -467,13 +586,21 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
         }
         pos = next;
     }
-    /* higher chunks an interrupted run with another limit may have left */
-    for (int32_t k = n + 1; k <= h.n; k++) {
-        char name[64], path[LAP_PATH_MAX];
-        hist_chunk_name(LAP_MAIN_LINEAGE, k, name);
-        snprintf(path, sizeof path, "%s/%s", dir, name);
-        plat_remove_file(path);
+    /* an existing log/ (an older lap's partial conversion) goes aside
+     * whole, its other lineages' chunks carried over; meanwhile readers
+     * see only the old file, which is complete */
+    if (plat_is_dir(dir)) {
+        move_other_lineages(a, dir, tmp);
+        if (!plat_rename(dir, aside)) {
+            snprintf(err, errsz, "cannot move %s aside", dir);
+            return false;
+        }
     }
+    if (!plat_rename(tmp, dir)) {
+        snprintf(err, errsz, "cannot publish %s as %s", tmp, dir);
+        return false;
+    }
+    clear_dir(a, aside);
     if (!plat_remove_file(legacy)) {
         snprintf(err, errsz, "cannot remove %s", legacy);
         return false;

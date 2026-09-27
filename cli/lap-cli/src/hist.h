@@ -38,6 +38,9 @@ typedef struct {
     uint64_t size; /* bytes in the whole history */
     uint64_t limit; /* the chunk limit appends seal at; hist_chunk_limit() */
     bool legacy; /* read from the single-file log.jsonl of before chunks */
+    /* that file's bytes, read once when opened: a conversion may remove it
+     * before this reader is done (readers take no lock) */
+    const char *mem;
     /* A branch folder's history: its parent's chunks 1..base_chunk, then
      * its own. parent is "" in a main folder. */
     char parent[HIST_LINEAGE_MAX];
@@ -144,9 +147,10 @@ bool hist_seal(Arena *a, Hist *h, char *err, size_t errsz);
 
 /* Splits lapdir/log.jsonl into main chunks at the limit, record by record,
  * then removes it; records and hashes are unchanged. A torn final line is
- * dropped, as a writer would. Chunks are written first and the old file
- * removed last, so a crash leaves either the old file or complete chunks:
- * when both are found, chunks that are a prefix of the old file are
+ * dropped, as a writer would. Chunks are built in .lap/log.converting and
+ * published as log/ with one rename, the old file removed last, so a crash
+ * leaves either the old file or complete chunks: when a writer finds both,
+ * chunks that are a prefix of the old file are
  * written again, an old file that is a prefix of the chunks is a leftover
  * and removed, and anything else is refused. *converted reports a split. */
 bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,

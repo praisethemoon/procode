@@ -255,6 +255,25 @@ bool plat_mkdir(const char *path) {
 #endif
 }
 
+bool plat_rename(const char *from, const char *to) {
+#ifdef _WIN32
+    char wf[LAP_PATH_MAX], wt[LAP_PATH_MAX];
+    return MoveFileExA(winpath(wf, sizeof wf, from),
+                       winpath(wt, sizeof wt, to), 0) != 0;
+#else
+    return rename(from, to) == 0;
+#endif
+}
+
+bool plat_rmdir(const char *path) {
+#ifdef _WIN32
+    char wb[LAP_PATH_MAX];
+    return RemoveDirectoryA(winpath(wb, sizeof wb, path)) != 0;
+#else
+    return rmdir(path) == 0;
+#endif
+}
+
 bool plat_realpath(const char *path, char *out, size_t outsz) {
 #ifdef _WIN32
     char wb[LAP_PATH_MAX];

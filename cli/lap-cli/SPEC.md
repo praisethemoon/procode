@@ -243,8 +243,12 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   `main.000001.jsonl`, … at the limit, then removes it (a torn final line
   is dropped, as any writer drops one). Records and hashes are unchanged,
   so `verify` passes before and after, and git sees one deleted file and
-  some new ones, once. Chunks are written before the old file is removed,
-  so a crash leaves one or the other complete; finding both, the writer
+  some new ones, once. The chunks are written into `.lap/log.converting/`
+  and published as `log/` with one rename (an existing `log/` moved aside
+  first); only then is the old file removed. So a reader finds the old file
+  or all the chunks, never some — and a reader finding both reads the old
+  file unless the chunks hold all of it, and reads it whole when it opens
+  it, since a conversion may remove it meanwhile. A writer finding both
   finishes a split whose chunks are a prefix of the old file, removes an
   old file that is a prefix of the chunks, and refuses anything else,
   keeping both.

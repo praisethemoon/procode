@@ -15,6 +15,10 @@ bool plat_same_file(const char *a, const char *b);
 /* An existing path's canonical absolute form: symlinks resolved, '/'
  * separators. False when it does not exist. */
 bool plat_realpath(const char *path, char *out, size_t outsz);
+/* Renames a file or a directory, atomically, onto a name that is free. */
+bool plat_rename(const char *from, const char *to);
+/* Removes an empty directory. */
+bool plat_rmdir(const char *path);
 bool plat_mkdir(const char *path);       /* ok if already exists */
 bool plat_mkdirs(const char *path);      /* mkdir -p */
 bool plat_remove_file(const char *path);

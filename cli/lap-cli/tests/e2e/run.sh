@@ -1710,6 +1710,48 @@ expect_ok "$LAP" commit f.txt --branch main -i "work on main after the leak" -b 
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "readers never see a half-converted history"
+mkdir -p "$WORK/v22" && cd "$WORK/v22" && "$LAP" init >/dev/null 2>&1
+"$LAP" commit .lapignore --no-session -i "seed the fixture" -b "records .lapignore" >/dev/null 2>&1
+i=1
+while [ $i -le 150 ]; do
+    printf 'line %d\n' $i >> f.txt
+    "$LAP" commit f.txt --no-session -i "grow a history to convert" -b "appends line $i to f.txt" >/dev/null 2>&1
+    i=$((i + 1))
+done
+FULL22=$("$LAP" verify | sed -n 's/^chain ok: \([0-9]*\) records.*/\1/p')
+[ -n "$FULL22" ] || fail "no record count"
+cat .lap/log/main.*.jsonl > .lap/log.jsonl && rm -rf .lap/log # a log from before chunks
+legacy22() { # a copy of the old-format folder
+    rm -rf "$WORK/v22-$1" && cp -R "$WORK/v22" "$WORK/v22-$1" && cd "$WORK/v22-$1" || exit 1
+}
+# an older lap's conversion that stopped after two chunks
+legacy22 partial && mkdir .lap/log && head -c 700 .lap/log.jsonl | sed '$d' > .lap/log/main.000001.jsonl
+expect_grep "chain ok: $FULL22 records" "$LAP" verify
+# a crash before this lap published its working folder
+legacy22 working && mkdir .lap/log.converting && head -n 3 .lap/log.jsonl > .lap/log.converting/main.000001.jsonl
+expect_grep "chain ok: $FULL22 records" "$LAP" verify
+"$LAP" session start "after the crash" >/dev/null 2>&1
+[ -d .lap/log.converting ] && fail "the working folder of a crashed conversion was left"
+[ -e .lap/log.jsonl ] && fail "the conversion did not finish"
+expect_grep "chain ok: $((FULL22 + 1)) records" "$LAP" verify
+# a crash after publishing, before the old file went
+legacy22 published && mkdir .lap/log && cp .lap/log.jsonl .lap/log/main.000001.jsonl
+expect_grep "chain ok: $FULL22 records" "$LAP" verify
+# live: readers loop while a conversion into many small chunks runs
+legacy22 live
+( i=0; bad=0; during=0; while [ $i -lt 40 ]; do
+    [ -e .lap/log.jsonl ] && during=$((during + 1)) # still converting
+    "$LAP" verify >/dev/null 2>&1 || bad=$((bad + 1)); i=$((i + 1))
+  done; echo "$bad" > "$WORK/v22-live-bad"; echo "$during" > "$WORK/v22-live-during" ) &
+LAP_TEST_CHUNK_BYTES=120 "$LAP" session start "convert under readers" >/dev/null 2>&1 ||
+    fail "the conversion under readers failed"
+wait
+[ "$(cat "$WORK/v22-live-bad")" = 0 ] || fail "$(cat "$WORK/v22-live-bad") of 40 reads during the conversion failed"
+[ "$(cat "$WORK/v22-live-during")" -gt 0 ] || fail "no read overlapped the conversion: the loop proved nothing"
+expect_grep "chain ok: $((FULL22 + 1)) records" "$LAP" verify
+cd "$WORK"
+
 t "a damaged history is named by readers, and no writer builds on it"
 mkdir -p "$WORK/d21" && cd "$WORK/d21" && "$LAP" init >/dev/null 2>&1
 "$LAP" commit .lapignore --no-session -i "seed the fixture" -b "records .lapignore" >/dev/null 2>&1

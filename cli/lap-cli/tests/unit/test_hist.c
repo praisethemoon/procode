@@ -346,7 +346,28 @@ static void test_legacy(Arena *a) {
                                      sizeof err));
     ASSERT_TRUE(strstr(err, "differ") != NULL);
     ASSERT_TRUE(legacy_exists());
-    ASSERT_EQ_S(read_history(a), "aaaa\nXXXX\n");
+    /* readers take the old file: the chunks do not hold all of it */
+    ASSERT_EQ_S(read_history(a), "aaaa\nbbbb\ncccc\n");
+
+    t_begin("hist: readers finding both shapes read the old file unless the "
+            "chunks hold all of it");
+    clear_chunks();
+    put_file("main.000001.jsonl", "aaaa\n"); /* an interrupted conversion */
+    put_legacy("aaaa\nbbbb\n");
+    ASSERT_EQ_S(read_history(a), "aaaa\nbbbb\n");
+    put_file("main.000002.jsonl", "bbbb\ncccc\n"); /* all of it, and more */
+    ASSERT_EQ_S(read_history(a), "aaaa\nbbbb\ncccc\n");
+
+    t_begin("hist: conversion publishes log/ whole and leaves no working "
+            "folder behind");
+    clear_chunks();
+    put_legacy("aaaa\nbbbb\ncccc\n");
+    ASSERT_TRUE(hist_convert_legacy(a, T_LAPDIR, 6, &converted, err,
+                                    sizeof err));
+    ASSERT_TRUE(converted && !legacy_exists());
+    ASSERT_TRUE(!plat_is_dir(T_LAPDIR "/log.converting"));
+    ASSERT_TRUE(!plat_is_dir(T_LAPDIR "/log.replaced"));
+    ASSERT_EQ_S(read_history(a), "aaaa\nbbbb\ncccc\n");
     clear_chunks();
 }
 
