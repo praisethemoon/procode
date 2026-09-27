@@ -194,7 +194,7 @@ export const TOOLS: readonly Tool[] = [
     },
     {
         name: "board_sessions",
-        description: `The lap sessions linked to a ticket, each with its commits: the work done for it. Link a session with: ${sessionCommand("T-<n>")}`,
+        description: `The lap sessions linked to a ticket, each with its commits: the work done for it. A commit gives its intent (why the edit exists; edits serving one goal share it), its behavior (what the edit makes the code do), its hash, and forced: true when its author bypassed lap's message checks. Link a session with: ${sessionCommand("T-<n>")}`,
         inputSchema: schema({ ticket: str }, ["ticket"]),
         call: async (args, ctx) => {
             const board = readBoard(ctx);

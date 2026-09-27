@@ -5,10 +5,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import type { LapMessage } from "coboard/lap";
 import type { Counts } from "coboard/model";
 import { TICKET_STATUSES } from "coboard/model";
-import { linkTarget, linkifyIds } from "../src/linkify";
-import { open } from "./rpc";
+import { shortHash } from "../src/commits";
+import { commitRefs, linkTarget, linkifyIds } from "../src/linkify";
+import { open, send } from "./rpc";
 
 /* A link that opens an item. Shown as the bare id in monospace, or as
  * whatever children it is given (a title) in the body font. */
@@ -24,6 +26,72 @@ export function IdLink(props: { id: string; children?: ReactNode }): JSX.Element
         >
             {props.children ?? props.id}
         </a>
+    );
+}
+
+/* A lap commit's intent or behavior as plain text, with the commits it names
+ * ("#1a2b3c4", "L1029") as links that open that commit's diff. A link inside
+ * a clickable row opens its own commit, not the row's. */
+export function CommitText(props: { text: string }): JSX.Element {
+    return (
+        <>
+            {commitRefs(props.text).map((p, i) =>
+                typeof p === "string" ? (
+                    p
+                ) : (
+                    <a
+                        key={i}
+                        className="cb-id cb-ref"
+                        href={`#${p.ref}`}
+                        title={`Show the diff of ${p.text}`}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            send({ type: "showEdit", commit: p.ref });
+                        }}
+                    >
+                        {p.text}
+                    </a>
+                ),
+            )}
+        </>
+    );
+}
+
+/* Marks a commit recorded with --force-message, past lap's message checks. */
+export function ForcedTag(): JSX.Element {
+    return (
+        <span className="cb-label cb-forced" title="Committed with --force-message: lap's message checks were bypassed">
+            forced
+        </span>
+    );
+}
+
+/* One lap commit under its group's intent: what it makes the code do, a mark
+ * when it was forced, where it is when given, and its short hash and id.
+ * Opens the commit's diff. */
+export function CommitLine(props: { commit: LapMessage & { id: string; hash: string }; lines?: string; onOpen: () => void }): JSX.Element {
+    const c = props.commit;
+    return (
+        <li
+            className="cb-step"
+            role="button"
+            tabIndex={0}
+            title={`Show the diff of ${c.id} (#${shortHash(c.hash)})\n\n${c.behavior}`}
+            onClick={props.onOpen}
+            onKeyDown={(e) => {
+                if (e.key === "Enter") props.onOpen();
+            }}
+        >
+            <Icon name="diff" />
+            <span className="cb-step-behavior">
+                <CommitText text={c.behavior} />
+            </span>
+            {c.forced ? <ForcedTag /> : null}
+            {props.lines ? <span className="cb-step-lines">{props.lines}</span> : null}
+            <code className="cb-step-hash">{shortHash(c.hash)}</code>
+            <code className="cb-step-id">{c.id}</code>
+        </li>
     );
 }
 

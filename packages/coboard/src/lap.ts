@@ -23,13 +23,24 @@ export interface LapSession {
     readonly user?: string;
 }
 
-export interface LapCommit {
+/* What every commit says of itself: why the edit exists (edits serving one
+ * goal share it), what it makes the code do, and whether its author bypassed
+ * lap's message checks to record it. */
+export interface LapMessage {
+    readonly intent: string;
+    readonly behavior: string;
+    readonly forced?: true;
+}
+
+export interface LapCommit extends LapMessage {
     readonly id: string;
+    /* 64 lowercase hex digits; its first 7 are the short hash. */
+    readonly hash: string;
     readonly ts: string;
     readonly user: string;
+    readonly session: string | null;
     readonly file: string;
     readonly op: string;
-    readonly msg: string;
 }
 
 export interface LapResult<T> {
@@ -84,16 +95,17 @@ export async function sessionCommits(root: string, session: string): Promise<Lap
 }
 
 /* A session as a review (`lap rr`): the purpose, every edit in the order it
- * was made with its reason, and each file's net change over the session. */
-export interface LapReviewStep {
+ * was made with its intent and behavior, and each file's net change over the
+ * session. */
+export interface LapReviewStep extends LapMessage {
     readonly id: string;
+    readonly hash: string;
     readonly ts: string;
     readonly user: string;
     readonly file: string;
     readonly op: string;
     readonly new_start: number;
     readonly new_lines: number;
-    readonly msg: string;
 }
 
 export interface LapReviewFile {
@@ -138,9 +150,12 @@ export async function sessionReview(root: string, session: string): Promise<LapR
 /* One edit as the file before and after it: what a diff view needs. */
 export interface LapDiff {
     readonly id: string;
+    readonly hash: string;
     readonly file: string;
     readonly op: string;
-    readonly msg: string;
+    readonly intent: string;
+    readonly behavior: string;
+    readonly forced: boolean;
     readonly ts: string;
     readonly user: string;
     readonly session: string | null;
@@ -156,7 +171,9 @@ export interface LapDiff {
 }
 
 /* lap gives the file after a commit and the lines the commit replaced; the
- * file before it is the one with those lines put back. */
+ * file before it is the one with those lines put back. `commit` is anything
+ * `lap show` takes: an id ("L42"), or a hash or a prefix of at least 7 of its
+ * hex digits, with or without "#". */
 export async function commitDiff(root: string, commit: string): Promise<LapDiff> {
     const p = await run(root, ["show", commit, "--full-file"]);
     const op = String(p["op"]);
@@ -181,9 +198,12 @@ export async function commitDiff(root: string, commit: string): Promise<LapDiff>
     }
     return {
         id: String(p["id"]),
+        hash: String(p["hash"] ?? ""),
         file: String(p["file"]),
         op,
-        msg: String(p["msg"] ?? ""),
+        intent: String(p["intent"] ?? ""),
+        behavior: String(p["behavior"] ?? ""),
+        forced: p["forced"] === true,
         ts: String(p["ts"] ?? ""),
         user: String(p["user"] ?? ""),
         session: typeof p["session"] === "string" ? p["session"] : null,

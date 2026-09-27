@@ -20,7 +20,13 @@ const commands = new Map<string, (...a: unknown[]) => unknown>();
 const posted: unknown[] = [];
 const prompts: string[] = [];
 const executed: unknown[][] = [];
-const threads: { uri: { path: string }; range: { startLine: number; endLine: number }; comments: { author: { name: string }; body: { value: string } }[]; canReply: boolean; label: string }[] = [];
+const threads: {
+    uri: { path: string };
+    range: { startLine: number; endLine: number };
+    comments: { author: { name: string }; body: { value: string; isTrusted?: unknown } }[];
+    canReply: boolean;
+    label: string;
+}[] = [];
 let content: { provideTextDocumentContent(uri: { toString(): string }): string } | null = null;
 const LAP = path.resolve(__dirname, "../../../../cli/lap-cli/bin/lap");
 let sidebar: { resolveWebviewView(view: unknown): void } | null = null;
@@ -195,10 +201,11 @@ test("clicking a lap edit on a ticket opens it as a diff at the edited line", { 
     lap("init");
     lap("session", "start", "T-1: work", "--meta", "ticket=T-1");
     fs.writeFileSync(path.join(root, "x.c"), "a\nb\nc\n");
-    lap("commit", "x.c", "-m", "first");
+    lap("commit", "x.c", "-i", "Seed the sample source file", "-b", "Three one-letter rows now exist");
     fs.writeFileSync(path.join(root, "x.c"), "a\nB\nc\n");
-    lap("commit", "x.c", "-m", "capital b");
+    lap("commit", "x.c", "-i", "Shout the middle row (follows L1)", "-b", "The second row reads in upper case now");
     lap("session", "end");
+    const hash = (JSON.parse(String(lap("show", "L2", "--json"))) as { hash: string }).hash;
 
     onMessage!({ type: "showEdit", commit: "L2", sessionMsg: "T-1: work" });
     await new Promise((r) => setTimeout(r, 300));
@@ -212,18 +219,25 @@ test("clicking a lap edit on a ticket opens it as a diff at the edited line", { 
     assert.equal(content!.provideTextDocumentContent(left as never), "a\nb\nc\n");
     assert.equal(content!.provideTextDocumentContent(right as never), "a\nB\nc\n");
 
-    // The reason for the edit sits on the changed line, as in Lap History.
+    // The intent and behavior sit on the changed line, as in Lap History,
+    // under the id and short hash; the commit the intent names is a link.
     assert.equal(threads.length, 1);
     const t = threads[0];
     assert.equal(t.uri.path, "/L2/after/x.c");
     assert.deepEqual([t.range.startLine, t.range.endLine], [1, 1]);
     assert.equal(t.label, "x.c · line 2");
     assert.equal(t.canReply, false);
-    assert.match(t.comments[0].author.name, /^L2 @ .+ t:$/);
-    assert.match(t.comments[0].body.value, /^capital b\n\n---\n\n\*session S1: T\\-1: work\*/);
+    assert.equal(t.comments[0].author.name.startsWith(`L2 · ${hash.slice(0, 7)} @ `), true);
+    assert.match(t.comments[0].author.name, / t:$/);
+    assert.match(
+        t.comments[0].body.value,
+        /^\*\*Intent\*\*: Shout the middle row \\\(follows \[L1\]\(command:coboard\.showEdit\?%5B%22L1%22%5D\)\\\)\n\n\*\*Behavior\*\*: The second row reads in upper case now\n\n---\n\n\*session S1: T\\-1: work\*/,
+    );
+    assert.deepEqual(t.comments[0].body.isTrusted, { enabledCommands: ["coboard.showEdit"] });
 
-    // Opening the same edit again reuses its thread.
-    onMessage!({ type: "showEdit", commit: "L2", sessionMsg: "T-1: work" });
+    // Opening the same edit again, by a prefix of its hash, reuses its thread.
+    onMessage!({ type: "showEdit", commit: "#" + hash.slice(0, 9) });
     await new Promise((r) => setTimeout(r, 300));
     assert.equal(threads.length, 1);
+    assert.equal(executed.filter((c) => c[0] === "vscode.diff").length, 2);
 });

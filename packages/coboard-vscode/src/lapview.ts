@@ -1,8 +1,16 @@
-/* How a lap edit's reason is written next to its diff — the same text and
- * layout Lap History uses (packages/lap-vscode), so an edit reads the same
- * from either extension. Pure: no vscode import, so it is testable. */
+/* How a lap edit's intent and behavior are written next to its diff — the
+ * same text and layout Lap History uses (packages/lap-vscode), so an edit
+ * reads the same from either extension. Pure: no vscode import, so it is
+ * testable. */
 
 import type { LapDiff } from "coboard";
+
+import { shortHash } from "./commits";
+import { commitRefs } from "./linkify";
+
+/* The command a commit named in a comment's text runs: it opens that commit
+ * the same way, so the comment's Markdown must trust it. */
+export const SHOW_EDIT = "coboard.showEdit";
 
 export function summaryLine(msg: string): string {
     const nl = msg.indexOf("\n");
@@ -18,6 +26,21 @@ export function mdEscape(text: string): string {
 /* Multiline prose as escaped Markdown with hard line breaks. */
 export function mdProse(text: string): string {
     return text.split("\n").map(mdEscape).join("  \n");
+}
+
+/* A commit's text as mdProse, with every commit it names ("#1a2b3c4",
+ * "L1029") a link that opens that commit. */
+export function mdCommitText(text: string): string {
+    return text
+        .split("\n")
+        .map((line) =>
+            commitRefs(line)
+                .map((p) =>
+                    typeof p === "string" ? mdEscape(p) : `[${mdEscape(p.text)}](command:${SHOW_EDIT}?${encodeURIComponent(JSON.stringify([p.ref]))})`,
+                )
+                .join(""),
+        )
+        .join("  \n");
 }
 
 /* "line 4", "lines 4-7", "line 3 (deleted)", "lines 1-2 (insertion)". */
@@ -49,13 +72,16 @@ export function localTime(iso: string): string {
     return `${date}:${time}`;
 }
 
-/* The comment's author line and Markdown body. */
+/* The comment's author line (the id and short hash) and Markdown body: the
+ * intent, the behavior, a mark when the message checks were bypassed, and
+ * the session. */
 export function commentText(d: LapDiff, sessionMsg: string | null): { author: string; body: string } {
     const footer = d.session
         ? `session ${d.session}` + (sessionMsg ? `: ${summaryLine(sessionMsg)}` : "")
         : "committed outside any session (--no-session)";
+    const forced = d.forced ? `\n\n**forced**: *${mdEscape("committed with --force-message, past lap's message checks")}*` : "";
     return {
-        author: `${d.id} @ ${localTime(d.ts)}` + (d.user ? ` ${d.user}` : "") + ":",
-        body: `${mdProse(d.msg)}\n\n---\n\n*${mdEscape(footer)}*\n\n&nbsp;`,
+        author: `${d.id} · ${shortHash(d.hash)} @ ${localTime(d.ts)}` + (d.user ? ` ${d.user}` : "") + ":",
+        body: `**Intent**: ${mdCommitText(d.intent)}\n\n**Behavior**: ${mdCommitText(d.behavior)}${forced}\n\n---\n\n*${mdEscape(footer)}*\n\n&nbsp;`,
     };
 }

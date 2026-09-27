@@ -295,12 +295,17 @@ test("lap: a session tagged with a ticket is found through the board", { skip: !
     await call(dir, "board_create", { kind: "ticket", title: "t", epic: "E-1" });
     lap("session", "start", "T-1: do it", "--meta", "ticket=T-1");
     fs.writeFileSync(path.join(dir, "a.txt"), "hello\n");
-    lap("commit", "a.txt", "-m", "the first line");
+    lap("commit", "a.txt", "-i", "Start the greeting file for the demo", "-b", "The file now opens with a single salutation");
     lap("session", "end");
     lap("session", "start", "unrelated", "--meta", "ticket=T-9");
     const s = JSON.parse((await call(dir, "board_sessions", { ticket: "T-1" })).text);
     assert.deepEqual(s.sessions.map((x: { id: string }) => x.id), ["S1"]);
-    assert.equal(s.sessions[0].commits[0].msg, "the first line");
+    const first = s.sessions[0].commits[0];
+    assert.deepEqual(
+        [first.intent, first.behavior, first.forced],
+        ["Start the greeting file for the demo", "The file now opens with a single salutation", undefined],
+    );
+    assert.match(first.hash, /^[0-9a-f]{64}$/);
     const got = JSON.parse((await call(dir, "board_get", { id: "T-1" })).text);
     assert.equal(got.sessions[0].id, "S1");
 
@@ -308,13 +313,18 @@ test("lap: a session tagged with a ticket is found through the board", { skip: !
     lap("session", "end");
     lap("session", "start", "T-1: more", "--meta", "ticket=T-1");
     fs.writeFileSync(path.join(dir, "a.txt"), "hello\nkeep\nold one\nold two\ntail\n");
-    lap("commit", "a.txt", "-m", "grow it");
+    lap("commit", "a.txt", "-i", "Give the greeting file a body to trim", "-b", "Four placeholder rows follow the salutation");
     fs.writeFileSync(path.join(dir, "a.txt"), "hello\nkeep\nnew\ntail\n");
-    lap("commit", "a.txt", "-m", "replace two lines with one");
+    lap("commit", "a.txt", "-i", "Trim the placeholder rows down", "-b", "A pair of stale rows collapses into one fresh row", "--force-message");
     const edit = await commitDiff(dir, "L3");
     assert.equal(edit.before, "hello\nkeep\nold one\nold two\ntail\n");
     assert.equal(edit.after, "hello\nkeep\nnew\ntail\n");
     assert.equal(edit.line, 3);
+    assert.deepEqual([edit.intent, edit.behavior, edit.forced], ["Trim the placeholder rows down", "A pair of stale rows collapses into one fresh row", true]);
+    // A hash prefix names the same commit, with or without "#", in any case.
+    const byHash = await commitDiff(dir, "#" + edit.hash.slice(0, 7).toUpperCase());
+    assert.equal(byHash.id, "L3");
+    assert.equal((await commitDiff(dir, "L2")).forced, false);
     const created = await commitDiff(dir, "L1");
     assert.deepEqual([created.op, created.before, created.after], ["create", "", "hello\n"]);
 });

@@ -1,9 +1,9 @@
 /* A lap session's trajectory as a timeline: what the review page draws under
  * "How it got there". Pure.
  *
- * NODES. Consecutive steps on the same file with the same message (once the
- * "(i/n) " prefix of a restructure is set aside) are one node, as they are on
- * a ticket's commit list: one change, drawn once, that opens into its parts.
+ * NODES. Consecutive steps on the same file with the same intent are one
+ * node, as they are on a ticket's commit list: the intent drawn once, with a
+ * line per step for its behavior.
  *
  * WHERE THE WORK MOVES. A marker goes on the rail when a node is in another
  * area than the one before it: `packages/<name>` or `cli/<name>`, otherwise
@@ -15,8 +15,6 @@
  * apart than a few minutes, and a gap also ends a node.
  */
 
-import { baseMessage } from "./commits";
-
 /* What the timeline needs of a step; the review's steps have more. */
 export interface TimelineStep {
     readonly id: string;
@@ -25,7 +23,7 @@ export interface TimelineStep {
     readonly op: string;
     readonly new_start: number;
     readonly new_lines: number;
-    readonly msg: string;
+    readonly intent: string;
 }
 
 export type TimelineItem<S extends TimelineStep = TimelineStep> =
@@ -35,8 +33,7 @@ export type TimelineItem<S extends TimelineStep = TimelineStep> =
           /* "create" when the node starts by creating its file, "delete" when
            * it ends by deleting it, otherwise "edit". */
           readonly op: string;
-          /* The message without its "(i/n) " prefix. */
-          readonly msg: string;
+          readonly intent: string;
           /* Oldest first. */
           readonly steps: readonly S[];
       }
@@ -59,7 +56,7 @@ function time(ts: string): number | null {
 
 export function timeline<S extends TimelineStep>(oldestFirst: readonly S[], gapMs = GAP_MS): TimelineItem<S>[] {
     const out: TimelineItem<S>[] = [];
-    let node: { kind: "node"; file: string; op: string; msg: string; steps: S[] } | null = null;
+    let node: { kind: "node"; file: string; op: string; intent: string; steps: S[] } | null = null;
     let area: string | null = null;
     let last: number | null = null;
     for (const s of oldestFirst) {
@@ -70,8 +67,7 @@ export function timeline<S extends TimelineStep>(oldestFirst: readonly S[], gapM
             out.push({ kind: "gap", ms: gap });
             node = null;
         }
-        const msg = baseMessage(s.msg);
-        if (node && node.file === s.file && node.msg === msg) {
+        if (node && node.file === s.file && node.intent === s.intent) {
             node.steps.push(s);
             if (s.op === "delete") node.op = "delete";
             continue;
@@ -79,7 +75,7 @@ export function timeline<S extends TimelineStep>(oldestFirst: readonly S[], gapM
         const here = areaOf(s.file);
         if (area !== null && here !== area) out.push({ kind: "move", area: here });
         area = here;
-        node = { kind: "node", file: s.file, op: s.op === "create" || s.op === "delete" ? s.op : "edit", msg, steps: [s] };
+        node = { kind: "node", file: s.file, op: s.op === "create" || s.op === "delete" ? s.op : "edit", intent: s.intent, steps: [s] };
         out.push(node);
     }
     return out;

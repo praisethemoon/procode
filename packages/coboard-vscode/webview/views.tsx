@@ -10,7 +10,7 @@ import type { EpicView, MilestoneView, Summary, TicketView } from "coboard/query
 import { CommitGroup, groupCommits, splitPath } from "../src/commits";
 import { ViewMode, columns, moves } from "../src/kanban";
 import type { Choices, Fields, Sessions } from "../src/protocol";
-import { Description, IdLink, InlineText, Markdown, Pick, Progress, QuickAdd, StatusBadge } from "./parts";
+import { CommitLine, CommitText, Description, IdLink, InlineText, Markdown, Pick, Progress, QuickAdd, StatusBadge } from "./parts";
 import { send } from "./rpc";
 
 const opts = (xs: readonly string[]) => xs.map((x) => ({ value: x, label: x }));
@@ -316,55 +316,32 @@ export function Milestone(props: { v: MilestoneView; choices: Choices; mode: Vie
 
 /* ---------------------------------------------------------------- ticket */
 
-/* One lap edit or a group of them: the file's name with its folder muted, an
- * op tag only when the edit made or removed the file, the lap id(s), and the
- * reason underneath, clamped, with the whole of it on hover. */
+/* A group of lap edits: the file's name with its folder muted, an op tag only
+ * when the group made or removed the file, the intent the edits share
+ * (clamped, with the whole of it on hover), and under it a line per edit with
+ * its behavior, each opening that edit's diff. */
 function EditRow(props: { g: CommitGroup; sessionMsg: string }): JSX.Element {
-    const [open, setOpen] = useState(false);
     const { g } = props;
     const { name, dir } = splitPath(g.file);
-    const many = g.commits.length > 1;
-    const first = g.commits[0];
-    const last = g.commits[g.commits.length - 1];
     const show = (id: string) => send({ type: "showEdit", commit: id, sessionMsg: props.sessionMsg });
     return (
         <li className="cb-edit">
-            <div
-                className="cb-edit-row"
-                role="button"
-                tabIndex={0}
-                title={many ? `${g.commits.length} edits: show them` : `Show the diff of ${first.id}`}
-                onClick={() => (many ? setOpen(!open) : show(first.id))}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter") (many ? setOpen(!open) : show(first.id));
-                }}
-            >
-                <Icon name={many ? (open ? "chevron-down" : "chevron-right") : "diff"} />
-                <div className="cb-edit-body">
-                    <div className="cb-edit-head">
-                        <span className="cb-edit-name">{name}</span>
-                        {dir ? <span className="cb-edit-dir">{dir}</span> : null}
-                        {g.op !== "edit" ? <span className="cb-label">{g.op}</span> : null}
-                        {many ? <span className="cb-edit-count">{g.commits.length} edits</span> : null}
-                        <code className="cb-edit-id">{many ? `${first.id}–${last.id}` : first.id}</code>
-                    </div>
-                    <div className="cb-edit-msg" title={g.msg}>
-                        {g.msg}
-                    </div>
+            <div className="cb-edit-group">
+                <div className="cb-edit-head">
+                    <span className="cb-edit-name">{name}</span>
+                    {dir ? <span className="cb-edit-dir">{dir}</span> : null}
+                    {g.op !== "edit" ? <span className="cb-label">{g.op}</span> : null}
+                    {g.commits.length > 1 ? <span className="cb-edit-count">{g.commits.length} edits</span> : null}
+                </div>
+                <div className="cb-edit-intent" title={g.intent}>
+                    <CommitText text={g.intent} />
                 </div>
             </div>
-            {many && open ? (
-                <ol className="cb-edit-parts">
-                    {g.commits.map((c, i) => (
-                        <li key={c.id} className="cb-commit" title={`Show the diff of ${c.id}`} onClick={() => show(c.id)}>
-                            <Icon name="diff" /> <code>{c.id}</code>{" "}
-                            <span className="cb-muted">
-                                part {i + 1} of {g.commits.length}
-                            </span>
-                        </li>
-                    ))}
-                </ol>
-            ) : null}
+            <ol className="cb-steps">
+                {g.commits.map((c) => (
+                    <CommitLine key={c.id} commit={c} onOpen={() => show(c.id)} />
+                ))}
+            </ol>
         </li>
     );
 }

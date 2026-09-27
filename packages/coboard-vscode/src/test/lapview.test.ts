@@ -1,7 +1,9 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { commentText, mdProse, regionLabel, regionLines } from "../lapview";
+import type { LapDiff } from "coboard";
+
+import { SHOW_EDIT, commentText, mdCommitText, mdProse, regionLabel, regionLines } from "../lapview";
 
 const at = { oldStart: 4, oldLines: 2, newStart: 4, newLines: 4 };
 
@@ -14,14 +16,43 @@ test("the region reads like lap's own", () => {
     assert.deepEqual(regionLines({ newStart: 3, newLines: 0 }), { start: 2, end: 2 });
 });
 
-test("the reason is escaped Markdown that still wraps, with the session below it", () => {
+const H = "1a2b3c4d".padEnd(64, "0");
+const diff = (extra: Partial<LapDiff> = {}): LapDiff => ({
+    id: "L3", hash: H, file: "f", op: "edit", intent: "why", behavior: "what", forced: false,
+    ts: "2026-09-25T20:00:00Z", user: "claude", session: "S1", before: "", after: "", line: 4, ...at, ...extra,
+});
+
+test("the intent and behavior are escaped Markdown that still wraps, under the id and short hash, with the session below", () => {
     assert.equal(mdProse("a *b*\nc"), "a \\*b\\*  \nc");
-    const c = commentText(
-        { id: "L3", file: "f", op: "edit", msg: "why", ts: "2026-09-25T20:00:00Z", user: "claude", session: "S1", before: "", after: "", line: 4, ...at },
-        "T-1: work",
+    const c = commentText(diff({ intent: "Tidy the *loop*", behavior: "The loop ends early\non an empty list" }), "T-1: work");
+    assert.match(c.author, /^L3 · 1a2b3c4 @ .+ claude:$/);
+    assert.equal(
+        c.body,
+        "**Intent**: Tidy the \\*loop\\*\n\n**Behavior**: The loop ends early  \non an empty list\n\n---\n\n*session S1: T\\-1: work*\n\n&nbsp;",
     );
-    assert.match(c.author, /^L3 @ .+ claude:$/);
-    assert.equal(c.body, "why\n\n---\n\n*session S1: T\\-1: work*\n\n&nbsp;");
-    const loose = commentText({ id: "L1", file: "f", op: "edit", msg: "m", ts: "", user: "", session: null, before: "", after: "", line: 1, ...at }, null);
+    const loose = commentText(diff({ id: "L1", ts: "", user: "", session: null }), null);
+    assert.match(loose.author, /^L1 · 1a2b3c4 @ :$/);
     assert.match(loose.body, /committed outside any session \\\(\\-\\-no\\-session\\\)/);
+});
+
+test("a behavior is shown as written, whatever it says", () => {
+    const c = commentText(diff({ behavior: "The data of this field is not present" }), null);
+    assert.match(c.body, /\*\*Behavior\*\*: The data of this field is not present\n/);
+});
+
+test("a forced commit is marked", () => {
+    assert.doesNotMatch(commentText(diff(), null).body, /forced/);
+    assert.match(commentText(diff({ forced: true }), null).body, /\n\n\*\*forced\*\*: \*committed with \\-\\-force\\-message, past lap's message checks\*\n\n---/);
+});
+
+test("commits named in the text, by hash or by id, link to themselves", () => {
+    const link = (ref: string) => `(command:${SHOW_EDIT}?${encodeURIComponent(JSON.stringify([ref]))})`;
+    assert.equal(
+        mdCommitText("Undoes #1A2B3C4D and L1029."),
+        `Undoes [\\#1A2B3C4D]${link("1a2b3c4d")} and [L1029]${link("L1029")}\\.`,
+    );
+    assert.equal(mdCommitText("see L2\nand #abcdef0"), `see [L2]${link("L2")}  \nand [\\#abcdef0]${link("abcdef0")}`);
+    const c = commentText(diff({ intent: "Follows L2", behavior: "Reverts #abcdef01" }), null);
+    assert.ok(c.body.includes(`**Intent**: Follows [L2]${link("L2")}`));
+    assert.ok(c.body.includes(`**Behavior**: Reverts [\\#abcdef01]${link("abcdef01")}`));
 });
