@@ -295,6 +295,39 @@ body {
     font-size: 11px;
     color: var(--bk-color-foreground-muted);
 }
+.lh-muted {
+    color: var(--bk-color-foreground-muted);
+}
+
+/* Branches: the state's icon, colored as the state reads. */
+.lh-branch-merged {
+    color: var(--bk-color-success);
+}
+.lh-branch-partly-merged {
+    color: var(--bk-color-warning);
+}
+.lh-branch-missing {
+    color: var(--bk-color-danger);
+}
+/* The fixes for a missing branch: small secondary buttons, as VS Code draws
+ * them. */
+.lh-button {
+    font: inherit;
+    font-size: 11px;
+    padding: 1px 8px;
+    border: 1px solid var(--bk-color-border);
+    border-radius: 2px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--bk-color-foreground));
+    cursor: pointer;
+}
+.lh-button:hover {
+    background: var(--vscode-button-secondaryHoverBackground, var(--bk-color-background-secondary));
+}
+.lh-button:focus-visible {
+    outline: 1px solid var(--bk-color-focus);
+    outline-offset: 1px;
+}
 
 .lh-empty {
     padding: 12px 14px;

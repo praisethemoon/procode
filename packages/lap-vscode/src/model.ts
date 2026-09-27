@@ -32,15 +32,31 @@ export interface CommitRec {
     intent: string; /* why the edit exists; shared by edits for one goal */
     behavior: string; /* what this edit makes the code do */
     forced: boolean; /* recorded with --force-message */
+    /* adopted by lap merge: the hash of the branch commit it came from */
+    from: string | null;
     ts: string;
 }
 
 export interface SessionRec {
     id: string;
+    recIndex: number; /* index of its session_start line in the log */
+    /* adopted by lap merge: the hash of the branch's session_start */
+    from: string | null;
     msg: string;
     ts: string;
     endTs: string | null;
     commits: CommitRec[];
+}
+
+/* What one lap merge adopted of a branch. */
+export interface MergeRec {
+    branch: string; /* the branch's id */
+    name: string;
+    head: string; /* the branch's last record adopted */
+    adopted: number;
+    left: number;
+    stopped: { file: string; at: string }[];
+    ts: string;
 }
 
 export interface LapLog {
@@ -51,6 +67,11 @@ export interface LapLog {
     activeSessionId: string | null;
     parseErrors: number;
     records: number; /* all record lines folded so far, any kind */
+    merges: MergeRec[];
+    /* A branch folder's history: where its own part starts (the branch
+     * record's index) and its name; null in a main folder's. */
+    branchAt: number | null;
+    branchName: string | null;
 }
 
 /* The SHA-256 of one record line's exact bytes, as lowercase hex. */
@@ -78,6 +99,9 @@ export function createReader(hash: LineHash): LogReader {
             activeSessionId: null,
             parseErrors: 0,
             records: 0,
+            merges: [],
+            branchAt: null,
+            branchName: null,
         },
         byId: new Map(),
         hash,
@@ -121,6 +145,7 @@ function foldLine(r: LogReader, line: string): void {
             intent: String(rec["intent"] ?? ""),
             behavior: String(rec["behavior"] ?? ""),
             forced: rec["forced"] === true,
+            from: typeof rec["from"] === "string" ? (rec["from"] as string) : null,
             ts: String(rec["ts"] ?? ""),
         };
         log.commits.push(c);
@@ -137,6 +162,8 @@ function foldLine(r: LogReader, line: string): void {
     } else if (type === "session_start") {
         const s: SessionRec = {
             id: String(rec["id"] ?? "?"),
+            recIndex,
+            from: typeof rec["from"] === "string" ? (rec["from"] as string) : null,
             msg: String(rec["msg"] ?? ""),
             ts: String(rec["ts"] ?? ""),
             endTs: null,
@@ -144,13 +171,33 @@ function foldLine(r: LogReader, line: string): void {
         };
         log.sessions.push(s);
         r.byId.set(s.id, s);
-        log.activeSessionId = s.id;
+        if (s.from === null) {
+            /* matches the CLI: an adopted session is history, not open */
+            log.activeSessionId = s.id;
+        }
     } else if (type === "session_end") {
         const s = r.byId.get(String(rec["id"] ?? ""));
         if (s) {
             s.endTs = String(rec["ts"] ?? "");
         }
-        log.activeSessionId = null; /* matches the CLI: any end closes */
+        if (typeof rec["from"] !== "string") {
+            log.activeSessionId = null; /* matches the CLI: any end closes */
+        }
+    } else if (type === "branch" && log.branchAt === null) {
+        log.branchAt = recIndex;
+        log.branchName = String(rec["name"] ?? rec["id"] ?? "");
+        log.activeSessionId = null; /* a branch starts with none open */
+    } else if (type === "merge") {
+        const stopped = Array.isArray(rec["stopped"]) ? (rec["stopped"] as Record<string, unknown>[]) : [];
+        log.merges.push({
+            branch: String(rec["branch"] ?? ""),
+            name: String(rec["name"] ?? ""),
+            head: String(rec["head"] ?? ""),
+            adopted: Number(rec["adopted"] ?? 0),
+            left: Number(rec["left"] ?? 0),
+            stopped: stopped.map((s) => ({ file: String(s["file"] ?? ""), at: String(s["at"] ?? "") })),
+            ts: String(rec["ts"] ?? ""),
+        });
     } else {
         /* "init", "snapshot"-style future kinds: counted, not visualized */
     }

@@ -71,6 +71,56 @@ export function historyFiles(lapDir: string): Chunk[] {
     return out;
 }
 
+/* The files of branch `lineage`'s history as lapDir holds them: its
+ * parent's chunks up to the base chunk its branch record names, then its
+ * own. Empty when its first chunk is not here or does not open with its
+ * branch record. */
+export function lineageFiles(lapDir: string, lineage: string): Chunk[] {
+    const dir = path.join(lapDir, "log");
+    let names: string[] = [];
+    try {
+        names = fs.readdirSync(dir);
+    } catch {
+        return [];
+    }
+    const own = lineageChunks(names, lineage);
+    if (own.length === 0) return [];
+    let base = 0;
+    let parent = "main";
+    try {
+        const first = fs.readFileSync(path.join(dir, own[0]), "utf8").split("\n", 1)[0];
+        const rec = JSON.parse(first) as Record<string, unknown>;
+        if (rec["type"] !== "branch" || rec["id"] !== lineage) return [];
+        base = Number(rec["base_chunk"] ?? 0);
+        parent = String(rec["parent"] ?? "main");
+    } catch {
+        return [];
+    }
+    const theirs = lineageChunks(names, parent);
+    if (theirs.length < base) return [];
+    const out: Chunk[] = [];
+    for (const n of [...theirs.slice(0, base), ...own]) {
+        try {
+            out.push({ path: path.join(dir, n), size: fs.statSync(path.join(dir, n)).size });
+        } catch {
+            break;
+        }
+    }
+    return out;
+}
+
+/* The files of this folder's own history: a branch folder's lineage (named
+ * in .lap/lineage), else main's. */
+export function folderFiles(lapDir: string): Chunk[] {
+    let lineage = "";
+    try {
+        lineage = fs.readFileSync(path.join(lapDir, "lineage"), "utf8").trim();
+    } catch {
+        /* a main folder */
+    }
+    return lineage ? lineageFiles(lapDir, lineage) : historyFiles(lapDir);
+}
+
 /* Reads [from, to) of the history's stream. A chunk that turns out shorter
  * than listed ends the read early; the caller sees how much it got. */
 export function readStream(files: Chunk[], from: number, to: number): Buffer {

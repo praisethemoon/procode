@@ -107,6 +107,8 @@ export interface CommitRow {
     readonly intent: string;
     readonly behavior: string;
     readonly forced: boolean;
+    /* adopted by lap merge: the original's hash */
+    readonly from: string | null;
     readonly session: string | null;
     readonly user: string | null;
 }
@@ -207,6 +209,7 @@ export function row(c: CommitRec): CommitRow {
         intent: c.intent,
         behavior: c.behavior,
         forced: c.forced,
+        from: c.from,
         session: c.session,
         user: c.user,
     };

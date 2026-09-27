@@ -1,0 +1,124 @@
+/* Branches in Lap History: the rows built from `lap branch list --json`, a
+ * branch log cut to its own part, what lap merge writes read by the model
+ * (from links, adopted sessions that never become active, merge records),
+ * and a branch's files found in its folder or in its parent's chunks. */
+
+import * as assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { test } from "node:test";
+
+import { branchView, ownPart, parseBranchList } from "../branches";
+import { folderFiles, lineageFiles, readStream } from "../chunks";
+import { row } from "../history";
+import { parseLog } from "../model";
+
+const hash = (line: string) => createHash("sha256").update(line, "utf8").digest("hex");
+const rec = (o: object) => JSON.stringify(o) + "\n";
+const ts = "2026-09-27T10:00:00Z";
+const commit = (id: string, session: string | null, extra: object = {}) =>
+    rec({ type: "commit", id, session, file: "a.ts", op: "edit", user: "claude",
+        old_start: 1, old_lines: 1, new_start: 1, new_lines: 1, eof_nl: true, old_text: ["a"], new_text: ["b"],
+        intent: `intent of ${id}`, behavior: `behavior of ${id}`, ...extra, ts });
+
+const LIST = {
+    ok: true,
+    self: null,
+    branches: [
+        { id: "0123456789ab", name: "busy", state: "active", present: true, path: "/w/busy", base: "b", started: ts, since_base: 3, since_merge: 3, merged: null, stopped: [] },
+        { id: "1123456789ab", name: "done", state: "merged", present: false, path: "/w/done", base: "b", started: ts, since_base: 2, since_merge: 0, merged: "h", stopped: [] },
+        { id: "2123456789ab", name: "half", state: "partly merged", present: true, path: "/w/half", base: "b", started: ts, since_base: 4, since_merge: 1, merged: "h", stopped: ["src/x.ts"] },
+        { id: "3123456789ab", name: "lost", state: "missing", present: false, path: "/w/lost", base: "b", started: ts, since_base: null, since_merge: null, merged: null, stopped: [] },
+    ],
+};
+
+test("branch list JSON becomes rows, with a stopped file's commit from the merge record", () => {
+    const log = parseLog(
+        rec({ type: "init", version: 1, ts }) +
+            rec({ type: "merge", branch: "2123456789ab", name: "half", head: "h", adopted: 3, left: 1, stopped: [{ file: "src/x.ts", at: "abcdef0123" }], user: "u", ts }),
+        hash,
+    );
+    const rows = parseBranchList(LIST, log);
+    assert.deepEqual(rows.map((r) => `${r.name}:${r.state}`), ["busy:active", "done:merged", "half:partly merged", "lost:missing"]);
+    assert.equal(rows[0].sinceBase, 3);
+    assert.equal(rows[3].sinceBase, null, "an unreadable branch has no counts");
+    assert.deepEqual(rows[2].stopped, [{ file: "src/x.ts", at: "abcdef0123" }]);
+    assert.deepEqual(parseBranchList(LIST)[2].stopped, [{ file: "src/x.ts", at: null }], "no log: the file without its commit");
+    assert.equal(rows[1].present, false);
+});
+
+test("anything that is not branch list's shape reads as no branches", () => {
+    assert.deepEqual(parseBranchList(null), []);
+    assert.deepEqual(parseBranchList({ ok: false, error: "unknown_command" }), []);
+    assert.deepEqual(parseBranchList({ ok: true, branches: [{ name: "no id" }, 7] }), []);
+    assert.equal(parseBranchList({ ok: true, branches: [{ id: "x", name: "y", state: "odd" }] })[0].state, "active");
+});
+
+/* A branch folder's log: the parent's part, the branch record, its own. */
+const BRANCH_LOG =
+    rec({ type: "init", version: 1, ts }) +
+    rec({ type: "session_start", id: "S1", msg: "the parent's work", meta: {}, ts }) +
+    commit("L1", "S1") +
+    rec({ type: "branch", id: "0123456789ab", name: "busy", parent: "main", base: "b", base_chunk: 1, ts, prev: "b" }) +
+    rec({ type: "session_start", id: "S2", msg: "the branch's work", meta: {}, ts }) +
+    commit("L2", "S2") +
+    commit("L3", null);
+
+test("a branch log is cut to its own part, and its view lists only its sessions", () => {
+    const log = parseLog(BRANCH_LOG, hash);
+    assert.equal(log.branchAt, 3);
+    assert.equal(log.branchName, "busy");
+    const own = ownPart(log);
+    assert.deepEqual(own.commits.map((c) => c.id), ["L2", "L3"]);
+    assert.deepEqual(own.sessions.map((s) => s.id), ["S2"]);
+    assert.deepEqual(own.noSession.map((c) => c.id), ["L3"]);
+    const v = branchView(parseBranchList(LIST)[0], log, new Date(ts));
+    assert.ok(v.sessions.some((s) => s.id === "S2" && s.commits.map((c) => c.id).join() === "L2"));
+    assert.ok(!v.sessions.some((s) => s.id === "S1"), "the parent's sessions are not the branch's");
+    assert.deepEqual(branchView(parseBranchList(LIST)[3], null, new Date(ts)).sessions, []);
+    assert.equal(ownPart(parseLog(rec({ type: "init", version: 1, ts }) + commit("L1", null), hash)).commits.length, 1, "a main log is its own");
+});
+
+test("the model reads from links, keeps adopted sessions out of the active one, and collects merges", () => {
+    const log = parseLog(
+        rec({ type: "session_start", id: "S1", msg: "mine", meta: {}, ts }) +
+            rec({ type: "session_start", id: "S2", msg: "theirs", meta: { ticket: "T-7" }, from: "aa", ts }) +
+            commit("L1", "S2", { from: "cc" }) +
+            rec({ type: "session_end", id: "S2", from: "bb", ts }) +
+            rec({ type: "merge", branch: "0123456789ab", name: "busy", head: "cc", adopted: 1, left: 0, stopped: [], user: "u", ts }),
+        hash,
+    );
+    assert.equal(log.activeSessionId, "S1", "an adopted start and end leave the folder's own session active");
+    assert.equal(log.sessions[1].from, "aa");
+    assert.equal(log.sessions[1].endTs, ts);
+    assert.equal(log.commits[0].from, "cc");
+    assert.equal(row(log.commits[0]).from, "cc");
+    assert.equal(log.merges.length, 1);
+    assert.equal(log.merges[0].head, "cc");
+    const plain = parseLog(commit("L1", null), hash);
+    assert.equal(plain.commits[0].from, null);
+    assert.equal(parseLog(BRANCH_LOG.split("\n").slice(0, 4).join("\n") + "\n", hash).activeSessionId, null, "a branch starts with no session open");
+});
+
+test("a branch's files come from its folder, or from its chunks in the parent", () => {
+    const lap = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "lap-branches-")), ".lap");
+    fs.mkdirSync(path.join(lap, "log"), { recursive: true });
+    const lines = BRANCH_LOG.split("\n").filter(Boolean).map((l) => l + "\n");
+    fs.writeFileSync(path.join(lap, "log", "main.000001.jsonl"), lines.slice(0, 3).join(""));
+    fs.writeFileSync(path.join(lap, "log", "main.000002.jsonl"), "after the base\n");
+    fs.writeFileSync(path.join(lap, "log", "0123456789ab.000001.jsonl"), lines.slice(3).join(""));
+    const files = lineageFiles(lap, "0123456789ab");
+    assert.deepEqual(files.map((f) => path.basename(f.path)), ["main.000001.jsonl", "0123456789ab.000001.jsonl"]);
+    const size = files.reduce((n, f) => n + f.size, 0);
+    assert.equal(readStream(files, 0, size).toString(), BRANCH_LOG);
+    assert.deepEqual(lineageFiles(lap, "ffffffffffff"), []);
+    // as the branch folder itself: .lap/lineage names it
+    assert.deepEqual(folderFiles(lap).map((f) => path.basename(f.path)), ["main.000001.jsonl", "main.000002.jsonl"]);
+    fs.writeFileSync(path.join(lap, "lineage"), "0123456789ab\n");
+    assert.deepEqual(folderFiles(lap).map((f) => path.basename(f.path)), ["main.000001.jsonl", "0123456789ab.000001.jsonl"]);
+    // a first chunk that is not the branch's record is refused
+    fs.writeFileSync(path.join(lap, "log", "0123456789ab.000001.jsonl"), commit("L9", null));
+    assert.deepEqual(lineageFiles(lap, "0123456789ab"), []);
+});

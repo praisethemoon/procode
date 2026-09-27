@@ -1,6 +1,7 @@
 /* The messages between the History webview and the extension host. Types
  * only, so both sides compile against the same shapes. */
 
+import type { BranchView } from "./branches";
 import type { HistoryFilter, HistoryPage } from "./history";
 
 export type ToView =
@@ -14,6 +15,9 @@ export type ToView =
           readonly hasRepo: boolean;
           readonly active: string | null;
           readonly reveal: { readonly id: string; readonly filter: HistoryFilter } | null;
+          /* The branches this folder started (lap branch list), each with its
+           * own sessions; empty where there are none or lap cannot say. */
+          readonly branches: readonly BranchView[];
       }
     | { readonly type: "collapseAll" };
 
@@ -21,4 +25,8 @@ export type ToHost =
     | { readonly type: "query"; readonly filter: HistoryFilter; readonly page: number }
     | { readonly type: "open"; readonly id: string }
     /* A reference in a commit's text (`#<hex>` or `L<n>`) was followed. */
-    | { readonly type: "reveal"; readonly ref: string };
+    | { readonly type: "reveal"; readonly ref: string }
+    /* An adopted commit's original, by hash: shown as lap shows it. */
+    | { readonly type: "original"; readonly hash: string }
+    /* The fix for a missing branch: point it at its folder, or drop it. */
+    | { readonly type: "branchFix"; readonly action: "move" | "forget"; readonly name: string };

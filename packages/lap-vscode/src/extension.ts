@@ -12,7 +12,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { hasHistory, historyFiles, readStream } from "./chunks";
+import { BranchRow, BranchView, branchView, parseBranchList } from "./branches";
+import { folderFiles, hasHistory, lineageFiles, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
     CommitRec,
@@ -23,6 +24,7 @@ import {
     createReader,
     localTime,
     mdEscape,
+    parseLog,
     readerFeed,
     regionLabel,
     replaySeeded,
@@ -100,7 +102,7 @@ class LapLogSource {
         }
         if (this.repo) {
             try {
-                const files = historyFiles(this.repo.lapDir);
+                const files = folderFiles(this.repo.lapDir);
                 const size = files.reduce((n, f) => n + f.size, 0);
                 if (size < this.offset) {
                     this.reset(this.repo); /* truncated: reparse */
@@ -158,6 +160,78 @@ class LapLogSource {
     }
 }
 
+/* The branches this folder started: what `lap branch list --json` says, each
+ * with its own sessions, read from its folder while that is there and from
+ * its chunks here after. lap runs asynchronously, so the view shows what was
+ * last known and gets a fresh page when lap answers. A branch's log is read
+ * again only when its files grew. Registered folders are watched, so work in
+ * them shows here as it happens. */
+class BranchSource {
+    views: BranchView[] = [];
+    private cache = new Map<string, { size: number; log: LapLog | null }>();
+    private watchers: vscode.FileSystemWatcher[] = [];
+    private watched = "";
+    private timer: NodeJS.Timeout | undefined;
+
+    constructor(
+        private readonly source: LapLogSource,
+        private readonly onChange: () => void,
+    ) {}
+
+    refresh(): void {
+        const root = this.source.repoRoot;
+        if (!root) {
+            this.views = [];
+            return;
+        }
+        execFile("lap", ["branch", "list", "--json"], { cwd: root, timeout: 10_000, maxBuffer: 16 * 1024 * 1024 }, (_err, stdout) => {
+            let out: unknown = null;
+            try {
+                out = JSON.parse(String(stdout));
+            } catch {
+                /* no lap, or one from before branches: no branches */
+            }
+            const rows = parseBranchList(out, this.source.current);
+            this.views = rows.map((r) => branchView(r, this.read(root, r), new Date()));
+            this.watch(rows);
+            this.onChange();
+        });
+    }
+
+    private read(root: string, r: BranchRow): LapLog | null {
+        const files = r.present ? folderFiles(path.join(r.path, ".lap")) : lineageFiles(path.join(root, ".lap"), r.id);
+        const size = files.reduce((n, f) => n + f.size, 0);
+        const was = this.cache.get(r.id);
+        if (was && was.size === size) return was.log;
+        const log = files.length ? parseLog(readStream(files, 0, size).toString("utf8"), lineHash) : null;
+        this.cache.set(r.id, { size, log });
+        return log;
+    }
+
+    private watch(rows: readonly BranchRow[]): void {
+        const paths = rows.filter((r) => r.present).map((r) => r.path);
+        if (paths.join("\n") === this.watched) return;
+        this.dispose();
+        this.watched = paths.join("\n");
+        for (const p of paths) {
+            const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(p), ".lap/log/*.jsonl"));
+            const later = () => {
+                if (this.timer) clearTimeout(this.timer);
+                this.timer = setTimeout(() => this.refresh(), 300);
+            };
+            w.onDidChange(later);
+            w.onDidCreate(later);
+            this.watchers.push(w);
+        }
+    }
+
+    dispose(): void {
+        for (const w of this.watchers) w.dispose();
+        this.watchers = [];
+        this.watched = "";
+    }
+}
+
 /* The History view: a webview, because a native tree cannot hold the filter
  * bar. The view says what is set; the host runs the query over the log
  * (history.ts) and sends back one page, so the log's edit text never
@@ -173,6 +247,7 @@ class HistoryView implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly source: LapLogSource,
         private readonly onOpen: (id: string) => void,
+        private readonly branches: { readonly views: readonly BranchView[]; refresh(): void },
     ) {}
 
     resolveWebviewView(view: vscode.WebviewView): void {
@@ -195,6 +270,10 @@ class HistoryView implements vscode.WebviewViewProvider {
                 this.onOpen(m.id);
             } else if (m.type === "reveal") {
                 void this.reveal(m.ref);
+            } else if (m.type === "original") {
+                this.original(m.hash);
+            } else if (m.type === "branchFix") {
+                void this.fixBranch(m.action, m.name);
             }
         });
         view.onDidDispose(() => {
@@ -214,9 +293,56 @@ class HistoryView implements vscode.WebviewViewProvider {
                   hasRepo: true,
                   active: log.activeSessionId,
                   reveal: reveal === null ? null : { id: reveal, filter: this.filter },
+                  branches: this.branches.views,
               }
-            : { type: "page", page: null, hasRepo: false, active: null, reveal: null };
+            : { type: "page", page: null, hasRepo: false, active: null, reveal: null, branches: [] };
         void this.view.webview.postMessage(msg);
+    }
+
+    /* An adopted commit's original, as `lap show` prints it (lap finds a
+     * hash in the branches whose chunks are here). */
+    private original(hash: string): void {
+        const root = this.source.repoRoot;
+        if (!root) return;
+        execFile("lap", ["show", hash, "--color=never"], { cwd: root, timeout: 10_000, maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => {
+            if (err && !stdout) {
+                void vscode.window.showWarningMessage(`lap: the original ${hash.slice(0, 7)} could not be shown: ${err.message}`);
+                return;
+            }
+            void vscode.workspace
+                .openTextDocument({ content: String(stdout), language: "plaintext" })
+                .then((doc) => vscode.window.showTextDocument(doc, { preview: true }));
+        });
+    }
+
+    /* A missing branch's two fixes: point it at the folder it moved to, or
+     * drop it from the registry. */
+    private async fixBranch(action: "move" | "forget", name: string): Promise<void> {
+        const root = this.source.repoRoot;
+        if (!root) return;
+        let args: string[];
+        if (action === "forget") {
+            const ok = await vscode.window.showWarningMessage(
+                `Forget branch ${name}? Its folder is gone; what was not merged stays only in its chunks, if git carried them.`,
+                { modal: true },
+                "Forget",
+            );
+            if (ok !== "Forget") return;
+            args = ["branch", "forget", name, "--json"];
+        } else {
+            const picked = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, openLabel: `Branch ${name} is here` });
+            if (!picked || picked.length === 0) return;
+            args = ["branch", "move", name, picked[0].fsPath, "--json"];
+        }
+        execFile("lap", args, { cwd: root, timeout: 10_000 }, (_err, stdout) => {
+            try {
+                const r = JSON.parse(String(stdout)) as { ok?: boolean; message?: string };
+                if (r.ok !== true) void vscode.window.showErrorMessage(`lap: ${r.message ?? "the registry was not changed"}`);
+            } catch {
+                void vscode.window.showErrorMessage("lap: the registry was not changed (is lap installed?)");
+            }
+            this.branches.refresh();
+        });
     }
 
     /* Shows the commit a reference names: on its page under the view's
@@ -462,8 +588,15 @@ export function activate(context: vscode.ExtensionContext): void {
         void openCommitDiff(commit, session, comments);
     };
 
-    const history = new HistoryView(context.extensionUri, tree, showCommitDiff);
+    /* the History view is made after the branches it shows, which push to
+     * it when lap answers */
+    let pushPage = (): void => {};
+    const branches = new BranchSource(tree, () => pushPage());
+    context.subscriptions.push(branches);
+    const history = new HistoryView(context.extensionUri, tree, showCommitDiff, branches);
+    pushPage = () => history.push();
     context.subscriptions.push(vscode.window.registerWebviewViewProvider("lapHistory", history));
+    branches.refresh();
 
     const status = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left,
@@ -503,6 +636,7 @@ export function activate(context: vscode.ExtensionContext): void {
             tree.refresh();
             history.push();
             updateStatus();
+            branches.refresh();
         }, 200);
     };
 
