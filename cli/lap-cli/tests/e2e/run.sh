@@ -2265,6 +2265,15 @@ else
 fi
 cd "$WORK"
 
+t "a branch start that cannot write .lap/parent succeeds and says so"
+mkdir -p "$WORK/nopar/.lap/parent" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/nopar/"
+cd "$WORK/nopar" || exit 1
+OUT=$("$LAP" branch start nopar --from ../bp --json 2>"$WORK/nopar.err")
+printf '%s' "$OUT" | grep -q '"ok":true' || fail "the start failed: $OUT"
+printf '%s' "$OUT" | grep -q '"parent_file":false' || fail "JSON does not say the parent file is missing: $OUT"
+grep -q "could not write .*\.lap/parent.*COBOARD_DIR" "$WORK/nopar.err" || fail "no warning about .lap/parent"
+cd "$WORK"
+
 t "two branch starts in one folder at once: one succeeds, the other is already_branch"
 for try in 1 2 3; do
     mkdir -p "$WORK/two$try" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/two$try/"

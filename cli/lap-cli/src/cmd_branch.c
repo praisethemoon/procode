@@ -382,7 +382,10 @@ static int32_t start_locked(Arena *a, bool json, const char *name,
     snprintf(parent_file, sizeof parent_file, "%s/%s", here_lap,
              LAP_PARENT_NAME);
     char *parent_line = arena_printf(a, "%s\n", there);
-    plat_write_file_atomic(parent_file, parent_line, strlen(parent_line));
+    /* lap never reads it, so the start stands without it; but the board
+     * would take this folder for a plain one and use its own copy */
+    bool parent_ok =
+        plat_write_file_atomic(parent_file, parent_line, strlen(parent_line));
     char short_base[8];
     snprintf(short_base, sizeof short_base, "%.7s", pr.last_hash);
     repo_close(&pr);
@@ -408,13 +411,20 @@ static int32_t start_locked(Arena *a, bool json, const char *name,
         json_escape_c(&sb, bname);
         sb_puts(&sb, ",\"parent\":");
         json_escape_c(&sb, there);
-        sb_printf(&sb, ",\"base\":\"%s\",\"base_chunk\":%d}", rec.base,
+        sb_printf(&sb, ",\"base\":\"%s\",\"base_chunk\":%d", rec.base,
                   base_chunk);
+        sb_printf(&sb, ",\"parent_file\":%s}", parent_ok ? "true" : "false");
         puts(sb_finish(&sb));
     } else {
         printf("branch %s (%s) started from %s at %s\n", bname, id, there,
                short_base);
     }
+    if (!parent_ok)
+        fprintf(stderr,
+                "lap: warning: could not write %s: the board will not find "
+                "%s's board from here until it holds that folder's path "
+                "(or set COBOARD_DIR)\n",
+                parent_file, there);
     return LAP_EXIT_OK;
 }
 

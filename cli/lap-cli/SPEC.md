@@ -935,7 +935,9 @@ every snapshot. Verification never uses the caches it is checking.
 Makes the current folder a branch of `<folder>` (§Branches → Starting one),
 which may itself be a branch folder. Prints the name, the id, the parent
 and the base's short hash; `--json` returns `id`, `name`, `parent`,
-`base`, `base_chunk`. Errors: `missing_from`, `bad_name`, `same_folder`,
+`base`, `base_chunk` and `parent_file`: false when `.lap/parent` (the hint
+the board follows to the parent's board) could not be written, which the
+text output also warns of — the start itself stands, lap never reads it. Errors: `missing_from`, `bad_name`, `same_folder`,
 `already_branch`, `no_parent`, `unrelated_history`, `not_clean`,
 `name_taken`, `parent_read_only`. `same_folder` is the folder itself under
 any spelling — another case, a symlink, a `..` path — told by the
