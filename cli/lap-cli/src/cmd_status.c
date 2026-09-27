@@ -1,46 +1,105 @@
 #include "cmd.h"
+#include "statcache.h"
+
+/* A path status looks at: from the working-tree walk (with the stat the walk
+ * took), or tracked by the index but not seen by the walk (deleted, or
+ * ignored). head is the index entry of its last commit; -1 when untracked
+ * or when there is no index to ask. */
+typedef struct {
+    const char *path;
+    PlatStat st;
+    bool walked;
+    int64_t head;
+} Seen;
 
 typedef struct {
-    char **paths;
+    Seen *v;
     size_t n, cap;
-} PathList;
+} SeenList;
 
 typedef struct {
     Arena *a;
     Repo *repo;
     const Ignore *ig;
-    PathList files;
+    SeenList files;
 } StatusWalk;
 
-static void path_push(Arena *a, PathList *pl, const char *p) {
-    ARENA_GROW(a, pl->paths, pl->n, pl->cap, char *);
-    pl->paths[pl->n++] = arena_strdup(a, p);
+static void seen_push(Arena *a, SeenList *l, const char *p, const PlatStat *st,
+                      int64_t head) {
+    ARENA_GROW(a, l->v, l->n, l->cap, Seen);
+    Seen *s = &l->v[l->n++];
+    s->path = arena_strdup(a, p);
+    s->walked = st != NULL;
+    if (st)
+        s->st = *st;
+    s->head = head;
 }
 
-static WalkAction on_entry(const char *rel, bool is_dir, void *ud) {
+static WalkAction on_entry(const char *rel, bool is_dir, const PlatStat *st,
+                           void *ud) {
     StatusWalk *sw = (StatusWalk *)ud;
     if (ignore_match(sw->ig, rel, is_dir))
         return is_dir ? WALK_SKIP_DIR : WALK_CONT;
     if (!is_dir)
-        path_push(sw->a, &sw->files, rel);
+        seen_push(sw->a, &sw->files, rel, st, -1);
     return WALK_CONT;
 }
 
-static WalkAction on_shadow_entry(const char *rel, bool is_dir, void *ud) {
+/* Without an index, deleted files are found by walking the shadow store. */
+static WalkAction on_shadow_entry(const char *rel, bool is_dir,
+                                  const PlatStat *st, void *ud) {
+    (void)st;
     StatusWalk *sw = (StatusWalk *)ud;
     if (!is_dir) {
         /* shadow file with no working counterpart => deleted */
         char wpath[LAP_PATH_MAX];
         snprintf(wpath, sizeof wpath, "%s/%s", sw->repo->root, rel);
         if (!plat_is_file(wpath))
-            path_push(sw->a, &sw->files, rel);
+            seen_push(sw->a, &sw->files, rel, NULL, -1);
     }
     return WALK_CONT;
 }
 
 /* qsort comparator: must return int per the C standard API */
-static int cmp_paths(const void *pa, const void *pb) {
-    return strcmp(*(const char *const *)pa, *(const char *const *)pb);
+static int cmp_seen(const void *pa, const void *pb) {
+    return strcmp(((const Seen *)pa)->path, ((const Seen *)pb)->path);
+}
+
+typedef struct {
+    const char *path;
+    int64_t head;
+} Tracked;
+
+static int cmp_tracked(const void *pa, const void *pb) {
+    return strcmp(((const Tracked *)pa)->path, ((const Tracked *)pb)->path);
+}
+
+/* With an index, every file whose last commit is not a delete is tracked.
+ * One merge of the sorted walk against the sorted tracked files gives each
+ * walked file its head and adds the tracked files the walk did not see —
+ * the deleted ones, found without walking the shadow store. */
+static void join_tracked(Arena *a, const Idx *ix, SeenList *files) {
+    Tracked *t = (Tracked *)arena_alloc(
+        a, (size_t)(ix->npaths ? ix->npaths : 1) * sizeof(Tracked));
+    size_t nt = 0;
+    for (int32_t f = 0; f < ix->npaths; f++) {
+        int64_t head = ix->heads[f].head;
+        if (head >= 0 && ix->v[head].op != IDX_OP_DELETE)
+            t[nt++] = (Tracked){ix->paths[f], head};
+    }
+    qsort(t, nt, sizeof *t, cmp_tracked);
+    size_t walked = files->n, i = 0, j = 0;
+    while (j < nt) {
+        int c = i < walked ? strcmp(files->v[i].path, t[j].path) : 1;
+        if (c < 0) {
+            i++;
+        } else if (c == 0) {
+            files->v[i++].head = t[j++].head;
+        } else {
+            seen_push(a, files, t[j].path, NULL, t[j].head);
+            j++;
+        }
+    }
 }
 
 int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
@@ -55,19 +114,35 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         return LAP_EXIT_ERR;
     }
 
+    /* taken before any file is looked at: the racy rule's reference */
+    int64_t start = plat_now_sec();
     StatusWalk sw;
     memset(&sw, 0, sizeof sw);
     sw.a = a;
     sw.repo = &repo;
     sw.ig = ignore_load(a, repo.root);
     plat_walk(a, repo.root, on_entry, &sw);
-    char shadow_root[LAP_PATH_MAX];
-    snprintf(shadow_root, sizeof shadow_root, "%s/%s", repo.lapdir,
-             LAP_SHADOW_NAME);
-    plat_walk(a, shadow_root, on_shadow_entry, &sw);
-
     if (sw.files.n > 1)
-        qsort(sw.files.paths, sw.files.n, sizeof(char *), cmp_paths);
+        qsort(sw.files.v, sw.files.n, sizeof(Seen), cmp_seen);
+    Idx *ix = idx_ready(a, &repo);
+    if (ix) {
+        join_tracked(a, ix, &sw.files);
+    } else {
+        char shadow_root[LAP_PATH_MAX];
+        snprintf(shadow_root, sizeof shadow_root, "%s/%s", repo.lapdir,
+                 LAP_SHADOW_NAME);
+        plat_walk(a, shadow_root, on_shadow_entry, &sw);
+    }
+    if (sw.files.n > 1)
+        qsort(sw.files.v, sw.files.n, sizeof(Seen), cmp_seen);
+
+    /* The stat cache needs the index's heads to key its entries on. */
+    StatCache cached, fresh;
+    statcache_init(&cached, a);
+    statcache_init(&fresh, a);
+    if (ix)
+        statcache_load(&cached, &repo);
+    size_t verified = 0; /* entries fresh gained by reading a file */
 
     StrBuf sb;
     sb_init(&sb, a);
@@ -103,10 +178,20 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
 
     const char *prev = NULL;
     for (size_t i = 0; i < sw.files.n; i++) {
-        const char *rel = sw.files.paths[i];
+        const Seen *f = &sw.files.v[i];
+        const char *rel = f->path;
         if (prev && strcmp(prev, rel) == 0)
             continue; /* dedupe overlap between walks */
         prev = rel;
+
+        bool cacheable = f->walked && f->head >= 0;
+        if (cacheable) {
+            const StatEntry *e = statcache_get(&cached, rel);
+            if (e && statcache_matches(e, f->head, &f->st)) {
+                statcache_add(&fresh, rel, f->head, &f->st);
+                continue; /* clean, known without reading it */
+            }
+        }
 
         FileDiff fd;
         if (!file_diff_load(a, &repo, rel, &fd, err, sizeof err))
@@ -125,7 +210,14 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         } else if (fd.regions.count > 0) {
             state = "modified";
         } else {
-            continue; /* clean */
+            /* clean: the stat the walk took before this read is safe to
+             * cache once it is older than the run's first second */
+            if (cacheable && fd.work_exists && fd.shadow_exists &&
+                statcache_settled(&f->st, start)) {
+                statcache_add(&fresh, rel, f->head, &f->st);
+                verified++;
+            }
+            continue;
         }
         dirty++;
 
@@ -179,6 +271,20 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
             } else {
                 sb_puts(&sb, "  (unsupported, ignored)\n");
             }
+        }
+    }
+
+    /* status is a reader, and this is the one cache a reader writes: only
+     * when it changed, only under a lock that happens to be free, and
+     * atomically. A writer holding the lock just means no refresh. */
+    if (ix && (verified > 0 || fresh.n != cached.n)) {
+        char lockpath[LAP_PATH_MAX];
+        snprintf(lockpath, sizeof lockpath, "%s/%s", repo.lapdir,
+                 LAP_LOCK_NAME);
+        PlatLock *lock = plat_trylock(a, lockpath);
+        if (lock) {
+            statcache_save(&fresh, &repo);
+            plat_unlock(lock);
         }
     }
 

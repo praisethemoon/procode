@@ -59,14 +59,29 @@ void plat_timestamp(char out[32]);
  * Symbolic links are skipped entirely.
  */
 typedef enum { WALK_CONT, WALK_SKIP_DIR } WalkAction;
-typedef WalkAction (*WalkFn)(const char *rel, bool is_dir, void *ud);
+/* A file's size and modification time: what a stat cache compares.
+ * mtime_nsec is 0 where the platform keeps whole seconds only. */
+typedef struct {
+    uint64_t size;
+    int64_t mtime_sec;
+    int32_t mtime_nsec;
+} PlatStat;
+/* st is the entry's own stat, taken by the walk anyway: a caller that keeps
+ * it needs no second stat of the file. */
+typedef WalkAction (*WalkFn)(const char *rel, bool is_dir, const PlatStat *st,
+                             void *ud);
 bool plat_walk(Arena *a, const char *root, WalkFn fn, void *ud);
+/* Seconds since the epoch, now. */
+int64_t plat_now_sec(void);
 
 /* Exclusive advisory lock via a lock file. Returns a handle or NULL on
  * failure (waits for a competing holder, with a bounded retry on Windows).
  */
 typedef struct PlatLock PlatLock;
 PlatLock *plat_lock(Arena *a, const char *path);
+/* The same lock, only if it is free right now: NULL when another process
+ * holds it, never waiting. */
+PlatLock *plat_trylock(Arena *a, const char *path);
 void plat_unlock(PlatLock *l);
 
 #endif /* LAP_PLATFORM_H */

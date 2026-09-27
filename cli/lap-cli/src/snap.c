@@ -115,7 +115,9 @@ typedef struct {
     size_t n, cap;
 } RelList;
 
-static WalkAction collect_files(const char *rel, bool is_dir, void *ud) {
+static WalkAction collect_files(const char *rel, bool is_dir,
+                                const PlatStat *st, void *ud) {
+    (void)st;
     RelList *rl = (RelList *)ud;
     if (!is_dir && !plat_is_tmp_name(rel)) {
         ARENA_GROW(rl->a, rl->rels, rl->n, rl->cap, char *);

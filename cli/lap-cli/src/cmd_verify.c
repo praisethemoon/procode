@@ -15,7 +15,9 @@ typedef struct {
     bool json;
 } DeepCheck;
 
-static WalkAction on_shadow_file(const char *rel, bool is_dir, void *ud) {
+static WalkAction on_shadow_file(const char *rel, bool is_dir,
+                                 const PlatStat *st, void *ud) {
+    (void)st;
     DeepCheck *dc = (DeepCheck *)ud;
     if (is_dir || plat_is_tmp_name(rel))
         return WALK_CONT;
@@ -68,7 +70,9 @@ static void snap_flag_mismatch(SnapCheck *sc, const char *what) {
     }
 }
 
-static WalkAction on_snapshot_file(const char *rel, bool is_dir, void *ud) {
+static WalkAction on_snapshot_file(const char *rel, bool is_dir,
+                                   const PlatStat *st, void *ud) {
+    (void)st;
     SnapCheck *sc = (SnapCheck *)ud;
     size_t n = strlen(rel);
     if (is_dir || plat_is_tmp_name(rel) || n < 7 ||

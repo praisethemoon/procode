@@ -44,6 +44,7 @@ intent and what it does; git keeps its normal human-scale history.
     paths           cache: path table; file_id = line number
     heads           cache: per-file chain tail + snapshot byte budget
     snapshots/      cache: periodic full-content snapshots, per file
+    statcache       cache: stat of every file status last found clean
     lock            exclusive lock file taken by writing commands
 ```
 
@@ -55,7 +56,8 @@ intent and what it does; git keeps its normal human-scale history.
   or stale cache is rebuilt. Caches are native-endian and single-machine:
   transport a repo as its log (plus working tree) and rebuild on arrival.
 - Writing commands hold the lock for their whole run and keep every cache
-  in step; readers never lock and never write. A reader that finds a cache
+  in step; readers never lock and never write — with one exception, the
+  stat cache below, which `status` refreshes. A reader that finds a cache
   missing or stale falls back to the log — correct, just slower — and heals
   counters in memory only. This holds **per file**: deleting any single
   cache must change speed only, never output. In particular a missing
@@ -87,6 +89,24 @@ intent and what it does; git keeps its normal human-scale history.
   birth. The results are identical either way — snapshots change speed,
   never outcome — so any reader may ignore snapshot containers it does not
   understand.
+- **Stat cache** (`.lap/statcache`): for each tracked file `status` last
+  found equal to its committed state, the file's size and mtime (with
+  nanoseconds where the platform keeps them) and the index entry of the
+  file's last commit. `status` reads a file only when its size, mtime or
+  last commit differs from its entry; with an index, it also finds deleted
+  files from the index rather than by walking the shadow store.
+  - **The reader exception.** `status` is a reader, and this is the one
+    cache a reader writes: only when its entries changed, only under the
+    writer lock taken with a non-blocking try (a held lock means no
+    refresh, never a wait), and atomically (a temp file renamed over).
+    Only files this run read and found clean are added.
+  - **Racy entries.** A file is entered only when its mtime is older than
+    the second the run started, so an edit that lands within the same
+    timestamp tick as a check — same size, same mtime — is never taken
+    for clean.
+  - Like every cache, deleting it changes speed only. It trusts size and
+    mtime, as git's index does: content changed with both put back is not
+    seen until the entry goes.
 - `lap verify --deep` audits the layer: every shadow and every snapshot
   must equal a from-birth replay of the truth.
 - History is **linear by construction**: there are no branches, refs, or

@@ -47,6 +47,33 @@ bool plat_is_file(const char *path) {
 #endif
 }
 
+#ifdef _WIN32
+/* FILETIME counts 100 ns ticks from 1601; the stat cache wants the epoch. */
+static void filetime_to(PlatStat *out, FILETIME ft, DWORD hi, DWORD lo) {
+    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+    t -= 116444736000000000ULL;
+    out->mtime_sec = (int64_t)(t / 10000000ULL);
+    out->mtime_nsec = (int32_t)((t % 10000000ULL) * 100);
+    out->size = ((uint64_t)hi << 32) | lo;
+}
+#elif defined(__APPLE__)
+#define ST_MTIME_NSEC(st) ((st).st_mtimespec.tv_nsec)
+#else
+#define ST_MTIME_NSEC(st) ((st).st_mtim.tv_nsec)
+#endif
+
+#ifndef _WIN32
+static void stat_to(PlatStat *out, const struct stat *st) {
+    out->size = (uint64_t)st->st_size;
+    out->mtime_sec = (int64_t)st->st_mtime;
+    out->mtime_nsec = (int32_t)ST_MTIME_NSEC(*st);
+}
+#endif
+
+int64_t plat_now_sec(void) {
+    return (int64_t)time(NULL);
+}
+
 bool plat_is_dir(const char *path) {
 #ifdef _WIN32
     char wb[LAP_PATH_MAX];
@@ -365,6 +392,7 @@ void plat_timestamp(char out[32]) {
 typedef struct {
     char *name;
     bool is_dir;
+    PlatStat st;
 } Entry;
 
 typedef struct {
@@ -404,6 +432,8 @@ static bool walk_dir(Arena *a, const char *root, const char *rel, WalkFn fn,
         el.v[el.n].name = arena_strdup(a, name);
         el.v[el.n].is_dir =
             (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        filetime_to(&el.v[el.n].st, fd.ftLastWriteTime, fd.nFileSizeHigh,
+                    fd.nFileSizeLow);
         el.n++;
     } while (FindNextFileA(h, &fd));
     FindClose(h);
@@ -428,6 +458,7 @@ static bool walk_dir(Arena *a, const char *root, const char *rel, WalkFn fn,
         ARENA_GROW(a, el.v, el.n, el.cap, Entry);
         el.v[el.n].name = arena_strdup(a, name);
         el.v[el.n].is_dir = S_ISDIR(st.st_mode);
+        stat_to(&el.v[el.n].st, &st);
         el.n++;
     }
     closedir(d);
@@ -443,13 +474,13 @@ static bool walk_dir(Arena *a, const char *root, const char *rel, WalkFn fn,
         else
             snprintf(childrel, sizeof childrel, "%s", el.v[i].name);
         if (el.v[i].is_dir) {
-            WalkAction act = fn(childrel, true, ud);
+            WalkAction act = fn(childrel, true, &el.v[i].st, ud);
             if (act == WALK_SKIP_DIR)
                 continue;
             if (!walk_dir(a, root, childrel, fn, ud))
                 return false;
         } else {
-            fn(childrel, false, ud);
+            fn(childrel, false, &el.v[i].st, ud);
         }
     }
     return true;
@@ -490,6 +521,29 @@ PlatLock *plat_lock(Arena *a, const char *path) {
     if (fd < 0)
         return NULL;
     if (flock(fd, LOCK_EX) != 0) {
+        close(fd);
+        return NULL;
+    }
+    l->fd = fd;
+    return l;
+#endif
+}
+
+PlatLock *plat_trylock(Arena *a, const char *path) {
+    PlatLock *l = (PlatLock *)arena_alloc0(a, sizeof(PlatLock));
+#ifdef _WIN32
+    char wb[LAP_PATH_MAX];
+    HANDLE h = CreateFileA(winpath(wb, sizeof wb, path), GENERIC_WRITE, 0,
+                           NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE)
+        return NULL;
+    l->h = h;
+    return l;
+#else
+    int fd = open(path, O_CREAT | O_WRONLY, 0666);
+    if (fd < 0)
+        return NULL;
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
         close(fd);
         return NULL;
     }

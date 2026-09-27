@@ -525,7 +525,7 @@ CACHEBAK=$(mktemp -d "${TMPDIR:-/tmp}/lap-cachebak.XXXXXX")
 # an unchecked mktemp would leave CACHEBAK empty and aim the loop's
 # rm -rf "$CACHEBAK/lap" at /lap
 [ -n "$CACHEBAK" ] && [ -d "$CACHEBAK" ] || { echo "mktemp failed for the cache backup" >&2; exit 1; }
-for cache in index paths heads state.json snapshots shadow; do
+for cache in index paths heads state.json snapshots shadow statcache; do
     rm -rf "$CACHEBAK/lap" && cp -R .lap "$CACHEBAK/lap"
     rm -rf ".lap/$cache"
     OUT=$("$LAP" search --file coord.txt --line 6 2>&1)
@@ -583,9 +583,78 @@ printf 'junk\n' > .lap/shadow/coord.txt.tmp.987654
 expect_grep "0 mismatch" "$LAP" verify --deep
 rm -f .lap/shadow/coord.txt.tmp.987654
 
+t "status keeps a stat cache and trusts it only for settled, unchanged files"
+mkdir -p "$WORK/stat" && cd "$WORK/stat" || exit 1
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "stat cache fixture" >/dev/null 2>&1
+printf 'one\ntwo\n' > kept.txt
+printf 'alpha\nbeta\n' > same.txt
+printf 'fresh\n' > racy.txt
+for f in kept.txt same.txt racy.txt .lapignore; do
+    "$LAP" commit "$f" -i "seed the stat cache fixture" -b "records $f as it was written" >/dev/null 2>&1
+done
+# settled: modified long before any status run; racy.txt is dated in the
+# future, so it is never older than a run and must never be cached
+touch -t 202001010000 kept.txt same.txt .lapignore
+touch -t 209901010000 racy.txt
+expect_grep "clean" "$LAP" status
+[ -f .lap/statcache ] || fail "status wrote no stat cache"
+grep -q ' kept.txt$' .lap/statcache || fail "a settled clean file has no entry"
+grep -q ' racy.txt$' .lap/statcache && fail "a file not older than the run was cached"
+# served from the cache, not read: new bytes, same size, the old mtime put
+# back, and status still calls it clean — until the cache is gone
+printf 'ONE\nTWO\n' > kept.txt && touch -t 202001010000 kept.txt
+expect_grep "clean" "$LAP" status
+rm .lap/statcache
+expect_grep "modified  kept.txt" "$LAP" status
+printf 'one\ntwo\n' > kept.txt && touch -t 202001010000 kept.txt
+"$LAP" status >/dev/null 2>&1
+# an edit that keeps the size is found: the mtime moved
+printf 'ALPHA\nbeta\n' > same.txt
+expect_grep "modified  same.txt" "$LAP" status
+printf 'alpha\nbeta\n' > same.txt && touch -t 202001010000 same.txt
+# a racy file's edit is found even with its size and mtime unchanged
+printf 'FRESH\n' > racy.txt && touch -t 209901010000 racy.txt
+expect_grep "modified  racy.txt" "$LAP" status
+printf 'fresh\n' > racy.txt && touch -t 209901010000 racy.txt
+# a commit moves the file's head, so its old entry no longer applies
+printf 'one\ntwo\nthree\n' > kept.txt
+"$LAP" commit kept.txt -i "seed the stat cache fixture" -b "appends a third line to kept.txt" >/dev/null 2>&1
+touch -t 202001010000 kept.txt
+expect_grep "clean" "$LAP" status
+printf 'one\ntwo\nTHREE\n' > kept.txt && touch -t 202001010000 kept.txt
+rm .lap/statcache
+expect_grep "modified  kept.txt" "$LAP" status
+printf 'one\ntwo\nthree\n' > kept.txt && touch -t 202001010000 kept.txt
+# a deleted tracked file is found through the index, with no shadow walk
+rm same.txt
+expect_grep "deleted   same.txt" "$LAP" status
+rm .lap/index
+expect_grep "deleted   same.txt" "$LAP" status
+"$LAP" rebuild >/dev/null 2>&1
+printf 'alpha\nbeta\n' > same.txt && touch -t 202001010000 same.txt
+
+t "status refreshes the stat cache only when the lock is free"
+if command -v python3 >/dev/null 2>&1; then
+    rm -f .lap/statcache
+    # hold the writer lock while status runs: output unchanged, no cache
+    python3 -c '
+import fcntl, subprocess, sys
+f = open(".lap/lock", "w")
+fcntl.flock(f, fcntl.LOCK_EX)
+sys.exit(subprocess.run([sys.argv[1], "status"], capture_output=True).returncode)
+' "$LAP" || fail "status failed while a writer held the lock"
+    [ -f .lap/statcache ] && fail "status wrote the stat cache under a held lock"
+    expect_grep "clean" "$LAP" status
+    [ -f .lap/statcache ] || fail "status wrote no stat cache once the lock was free"
+else
+    echo "skip: python3 not found, the held-lock case did not run"
+fi
+cd "$WORK" && rm -rf stat
+
 t "the cache contract: rm every cache, readers still work, rebuild restores"
 rm -rf .lap/shadow .lap/snapshots .lap/state.json \
-       .lap/index .lap/paths .lap/heads
+       .lap/index .lap/paths .lap/heads .lap/statcache
 expect_ok "$LAP" log -n 1
 expect_ok "$LAP" rebuild
 expect_grep "chain ok" "$LAP" verify
