@@ -44,7 +44,10 @@ static int cmp_paths(const void *pa, const void *pb) {
 }
 
 int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
+    static const char *const bool_flags[] = {"--json", NULL};
     bool json = has_flag(argc, argv, NULL, "--json");
+    if (!flags_known(argc, argv, NULL, bool_flags))
+        return LAP_EXIT_ERR;
     Repo repo;
     char err[512];
     if (!repo_open(a, &repo, false, err, sizeof err)) {

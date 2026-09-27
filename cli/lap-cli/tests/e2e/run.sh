@@ -60,14 +60,14 @@ expect_grep "chain ok" "$LAP" verify
 # ------------------------------------------------------- session gating
 t "commit without a session is rejected"
 printf 'alpha\nbeta\ngamma\n' > notes.txt
-expect_fail "$LAP" commit notes.txt -m "should be rejected"
-expect_grep "no_session" "$LAP" commit notes.txt -m "x" --json
+expect_fail "$LAP" commit notes.txt -i "should be rejected" -b "applies test step 63"
+expect_grep "no_session" "$LAP" commit notes.txt -i "x in this test" -b "applies test step 64" --json
 
 t "commit with --no-session works without a session"
 printf 'standalone\n' > solo.txt
-expect_ok "$LAP" commit solo.txt -m "standalone note, deliberately outside sessions" --no-session
+expect_ok "$LAP" commit solo.txt -i "standalone note, deliberately outside sessions" -b "applies test step 68" --no-session
 expect_grep '"session":null' "$LAP" log --json
-expect_ok "$LAP" commit .lapignore -m "starter ignore list from lap init" --no-session
+expect_ok "$LAP" commit .lapignore -i "starter ignore list from lap init" -b "applies test step 70" --no-session
 
 t "session start/current/end lifecycle"
 expect_ok "$LAP" session start "capture the notes file"
@@ -84,40 +84,40 @@ expect_ok "$LAP" session start "real work"
 
 # --------------------------------------------------------- create commit
 t "new file commits whole content as one edit"
-expect_ok "$LAP" commit notes.txt -m "seed notes: alpha/beta/gamma baseline"
+expect_ok "$LAP" commit notes.txt -i "seed notes: alpha/beta/gamma baseline" -b "applies test step 87"
 expect_grep "create" "$LAP" log
-expect_grep "no changes" "$LAP" commit notes.txt -m "nothing changed"
+expect_grep "no changes" "$LAP" commit notes.txt -i "nothing changed in this test" -b "applies test step 89"
 
 # ------------------------------------------------- single edit commit
 t "single-region change commits without a selector"
 printf 'alpha\nBETA\ngamma\n' > notes.txt
-expect_ok "$LAP" commit notes.txt -m "shout beta: it is the important one"
+expect_ok "$LAP" commit notes.txt -i "shout beta: it is the important one" -b "applies test step 94"
 expect_grep "clean" "$LAP" status
 
 # -------------------------------------------------- multi edit workflow
 t "two separated edits are rejected and listed"
 printf 'ALPHA\nBETA\nGAMMA\n' > notes.txt
-expect_fail "$LAP" commit notes.txt -m "two edits at once"
-expect_grep "2 separate edits" "$LAP" commit notes.txt -m "two edits"
-expect_grep "multiple_edits" "$LAP" commit notes.txt -m "x" --json
+expect_fail "$LAP" commit notes.txt -i "two edits at once" -b "applies test step 100"
+expect_grep "2 separate edits" "$LAP" commit notes.txt -i "two edits in this test" -b "applies test step 101"
+expect_grep "multiple_edits" "$LAP" commit notes.txt -i "x in this test" -b "applies test step 102" --json
 
 t "--edit selects one region; the rest stays pending"
-expect_ok "$LAP" commit notes.txt -m "uppercase alpha" --edit 1
+expect_ok "$LAP" commit notes.txt -i "uppercase alpha in this test" -b "applies test step 105" --edit 1
 expect_grep "1 edit" "$LAP" status
-expect_ok "$LAP" commit notes.txt -m "uppercase gamma" --edit 1
+expect_ok "$LAP" commit notes.txt -i "uppercase gamma in this test" -b "applies test step 107" --edit 1
 expect_grep "clean" "$LAP" status
 
 t "--lines must match a detected region exactly"
 printf 'ALPHA\nbeta2\nGAMMA\ndelta\n' > notes.txt
-expect_fail "$LAP" commit notes.txt -m "bad range" --lines 1-4
-expect_ok "$LAP" commit notes.txt -m "lower beta again" --lines 2-2
-expect_ok "$LAP" commit notes.txt -m "append delta" --lines 4-4
+expect_fail "$LAP" commit notes.txt -i "bad range in this test" -b "applies test step 112" --lines 1-4
+expect_ok "$LAP" commit notes.txt -i "lower beta again" -b "applies test step 113" --lines 2-2
+expect_ok "$LAP" commit notes.txt -i "append delta in this test" -b "applies test step 114" --lines 4-4
 expect_grep "clean" "$LAP" status
 
 t "--edit out of range is a clean error"
 printf 'ALPHA\nbeta3\nGAMMA\ndelta\n' > notes.txt
-expect_fail "$LAP" commit notes.txt -m "x" --edit 7
-expect_ok "$LAP" commit notes.txt -m "beta version 3"
+expect_fail "$LAP" commit notes.txt -i "x in this test" -b "applies test step 119" --edit 7
+expect_ok "$LAP" commit notes.txt -i "beta version 3" -b "applies test step 120"
 
 # ------------------------------------------------------------- status
 t "status reports states and numbered edits"
@@ -128,8 +128,8 @@ expect_grep "modified  notes.txt" "$LAP" status
 expect_grep "\[2\]" "$LAP" status
 expect_grep '"state":"new"' "$LAP" status --json
 rm fresh.txt
-expect_ok "$LAP" commit notes.txt -m "beta version 4" --edit 1
-expect_ok "$LAP" commit notes.txt -m "uppercase delta" --edit 1
+expect_ok "$LAP" commit notes.txt -i "beta version 4" -b "applies test step 131" --edit 1
+expect_ok "$LAP" commit notes.txt -i "uppercase delta in this test" -b "applies test step 132" --edit 1
 
 # --------------------------------------------------------------- log
 t "log filters by file and session"
@@ -157,7 +157,7 @@ expect_grep '"pending":false' "$LAP" search --file notes.txt --line 2 --json
 t "search --line flags pending edits"
 printf 'ALPHA\nbeta4\nGAMMA\nDELTA\nnew tail\n' > notes.txt
 expect_grep "pending" "$LAP" search --file notes.txt --line 5
-expect_ok "$LAP" commit notes.txt -m "tail marker for search tests"
+expect_ok "$LAP" commit notes.txt -i "tail marker for search tests" -b "applies test step 160"
 
 t "search --text finds added content"
 expect_grep "tail marker" "$LAP" search --text "new tail"
@@ -174,7 +174,7 @@ expect_grep "no matching commits" "$LAP" search --msg baseline --session S1
 t "deleting a file is a commit"
 rm notes.txt
 expect_grep "deleted   notes.txt" "$LAP" status
-expect_ok "$LAP" commit notes.txt -m "notes.txt retired after the tests"
+expect_ok "$LAP" commit notes.txt -i "notes.txt retired after the tests" -b "applies test step 177"
 expect_grep "clean" "$LAP" status
 expect_grep "delete" "$LAP" log -n 1
 
@@ -183,28 +183,28 @@ t ".lapignore hides files and blocks commits"
 printf '*.log\n' >> .lapignore
 printf 'noise\n' > debug.log
 expect_not_grep "debug.log" "$LAP" status
-expect_fail "$LAP" commit debug.log -m "should be refused"
-expect_ok "$LAP" commit .lapignore -m "ignore build noise: *.log"
+expect_fail "$LAP" commit debug.log -i "should be refused" -b "applies test step 186"
+expect_ok "$LAP" commit .lapignore -i "ignore build noise: *.log" -b "applies test step 187"
 
 # ------------------------------------------------------ subdirectories
 t "files in subdirectories work from repo root and from inside"
 mkdir -p src/deep
 printf 'content\n' > src/deep/mod.c
-expect_ok "$LAP" commit src/deep/mod.c -m "deep module placeholder"
+expect_ok "$LAP" commit src/deep/mod.c -i "deep module placeholder" -b "applies test step 193"
 ( cd src/deep && "$LAP" status >/dev/null 2>&1 ) || fail "status from subdir"
-( cd src/deep && "$LAP" commit mod.c -m "no change expected" ) \
+( cd src/deep && "$LAP" commit mod.c -i "no change expected" -b "applies test step 195" ) \
     >/dev/null 2>&1 && fail "expected no-changes failure from subdir"
 
 t "paths outside the repository are rejected"
-expect_fail "$LAP" commit /etc/hosts -m "outside"
+expect_fail "$LAP" commit /etc/hosts -i "outside in this test" -b "applies test step 199"
 
 # ------------------------------------------- trailing-newline handling
 t "trailing-newline-only change is one committable edit"
 printf 'x\ny' > tail.txt
-expect_ok "$LAP" commit tail.txt -m "tail file without trailing newline"
+expect_ok "$LAP" commit tail.txt -i "tail file without trailing newline" -b "applies test step 204"
 printf 'x\ny\n' > tail.txt
 expect_grep "1 edit" "$LAP" status
-expect_ok "$LAP" commit tail.txt -m "add trailing newline for POSIX tools"
+expect_ok "$LAP" commit tail.txt -i "add trailing newline for POSIX tools" -b "applies test step 207"
 expect_grep "clean" "$LAP" status
 
 # ------------------------------------------------------------- verify
@@ -218,7 +218,7 @@ rm .lap/state.json
 expect_grep "clean" "$LAP" status
 [ -f .lap/state.json ] && fail "a read-only command must not write state"
 printf 'healed\n' > heal0.txt
-expect_ok "$LAP" commit heal0.txt -m "the first writer after state loss persists the healed state"
+expect_ok "$LAP" commit heal0.txt -i "the first writer after state loss persists the healed state" -b "applies test step 221"
 NEXT_AFTER=$(sed 's/.*"next_commit":\([0-9]*\).*/\1/' .lap/state.json)
 [ "$((NEXT_BEFORE + 1))" = "$NEXT_AFTER" ] || \
     fail "healed next_commit $NEXT_AFTER != $NEXT_BEFORE + 1"
@@ -235,50 +235,203 @@ expect_grep "chain ok" "$LAP" verify
 # ------------------------------------------- blank lines are not anchors
 t "edits separated only by blank lines are ONE edit"
 printf 'aaa\n\nbbb\nxxx\nccc\n\nddd\n' > blanky.txt
-expect_ok "$LAP" commit blanky.txt -m "blanky baseline: two blocks split by a real anchor line xxx"
+expect_ok "$LAP" commit blanky.txt -i "blanky baseline: two blocks split by a real anchor line xxx" -b "applies test step 238"
 printf 'AAA\n\nBBB\nxxx\nccc\n\nddd\n' > blanky.txt
 expect_grep "1 edit" "$LAP" status
-expect_ok "$LAP" commit blanky.txt -m "rewrite the first block: blank gap must not split it"
+expect_ok "$LAP" commit blanky.txt -i "rewrite the first block: blank gap must not split it" -b "applies test step 241"
 printf 'AAA\n\nBBB\nxxx\nCCC\n\nDDD\n' > blanky.txt
 expect_grep "1 edit" "$LAP" status
-expect_ok "$LAP" commit blanky.txt -m "rewrite the second block in one commit too"
+expect_ok "$LAP" commit blanky.txt -i "rewrite the second block in one commit too" -b "applies test step 244"
 expect_grep "clean" "$LAP" status
 expect_grep "0 mismatch" "$LAP" verify --deep
 
 t "edits across a non-blank line still split"
 printf 'ZZZ\n\nBBB\nxxx\nCCC\n\nQQQ\n' > blanky.txt
 expect_grep "2 edits" "$LAP" status
-expect_ok "$LAP" commit blanky.txt -m "first block again" --edit 1
-expect_ok "$LAP" commit blanky.txt -m "last block again" --edit 1
+expect_ok "$LAP" commit blanky.txt -i "first block again" -b "applies test step 251" --edit 1
+expect_ok "$LAP" commit blanky.txt -i "last block again" -b "applies test step 252" --edit 1
 
 # ------------------------------------------------- message via -F / stdin
-t "message from a file with -F"
-printf 'summary from file\n\nlong rationale line two\n' > msg.tmp
+t "message from a file with -F: Intent: and Behavior: sections"
+printf 'Intent:\nsummary from file\n\nlong rationale line two\n\nBehavior:\nwrites the fmsg fixture file\n' > msg.tmp
 printf 'file-msg-test\n' > fmsg.txt
 expect_ok "$LAP" commit fmsg.txt -F msg.tmp
 expect_grep "summary from file" "$LAP" log -n 1
-# --msg matches the FULL message (the hit word is on line 3), while the
+# --msg matches the FULL intent (the hit word is on line 3), while the
 # result row displays the summary line
 expect_grep "summary from file" "$LAP" search --msg "rationale"
 expect_grep "long rationale line two" "$LAP" search --msg "rationale" --json
+# and the behavior too
+expect_grep "summary from file" "$LAP" search --msg "fmsg fixture"
+expect_grep "writes the fmsg fixture file" "$LAP" show L$(( $("$LAP" log -n 1 --json | sed 's/.*"id":"L\([0-9]*\)".*/\1/') ))
 
-t "message from stdin with -F -"
+t "message from stdin with -F -, sections in either order"
 printf 'stdin-msg-test\n' > smsg.txt
-printf 'piped summary\npiped detail' | "$LAP" commit smsg.txt -F - \
+printf 'Behavior:\npiped behavior text here\nIntent:\npiped summary\npiped detail' | "$LAP" commit smsg.txt -F - \
     >/dev/null 2>&1 || fail "stdin commit failed"
 expect_grep "piped summary" "$LAP" log -n 1
 
-t "-m and -F together are rejected; empty -F is rejected"
+t "bad -F files are refused with bad_message_file"
 printf 'x\n' > conflict.txt
-expect_fail "$LAP" commit conflict.txt -m "a" -F msg.tmp
+printf 'preamble\nIntent:\na b c\nBehavior:\nd e f\n' > pre.tmp
+expect_grep "bad_message_file" "$LAP" commit conflict.txt -F pre.tmp --json
+printf 'Intent:\na b c\n' > half.tmp
+expect_grep "bad_message_file" "$LAP" commit conflict.txt -F half.tmp --json
+printf 'Intent:\na b c\nIntent:\nx y z\nBehavior:\nd e f\n' > twice.tmp
+expect_grep "bad_message_file" "$LAP" commit conflict.txt -F twice.tmp --json
+printf 'Intent:\n\nBehavior:\nd e f\n' > hollow.tmp
+expect_grep "bad_message_file" "$LAP" commit conflict.txt -F hollow.tmp --json
 : > empty.tmp
-expect_fail "$LAP" commit conflict.txt -F empty.tmp
-expect_ok "$LAP" commit conflict.txt -m "conflict.txt landed with -m as usual"
+expect_grep "bad_message_file" "$LAP" commit conflict.txt -F empty.tmp --json
+expect_grep "bad_message_file" "$LAP" commit conflict.txt -F no-such.tmp --json
 
-t "commit confirmation echoes the message summary"
+t "-i/-b and -F together are rejected; each field is required"
+expect_fail "$LAP" commit conflict.txt -i "a b c" -b "d e f" -F msg.tmp
+expect_grep "missing_intent" "$LAP" commit conflict.txt -b "records the conflict file" --json
+expect_grep "missing_behavior" "$LAP" commit conflict.txt -i "land the conflict file" --json
+expect_grep "missing_intent" "$LAP" commit conflict.txt -i "   " -b "records the conflict file" --json
+expect_ok "$LAP" commit conflict.txt --intent "conflict.txt landed with long flags" --behavior "creates conflict.txt holding one x line"
+
+t "commit confirmation echoes the id, short hash and intent summary"
 printf 'echo-check\n' > echocheck.txt
-expect_grep "message summary appears in output" \
-    "$LAP" commit echocheck.txt -m "message summary appears in output"
+expect_grep '^\[L[0-9]* [0-9a-f]\{7\}\] .*"message summary appears in output"' \
+    "$LAP" commit echocheck.txt -i "message summary appears in output" -b "creates the echo-check fixture"
+expect_grep '"hash":"[0-9a-f]\{64\}"' "$LAP" log -n 1 --json
+
+# ------------------------------------------------------- message checks
+t "the message checks refuse weak messages before anything is written"
+BEFORE=$(wc -c < .lap/log.jsonl)
+printf 'check-a\n' > checks.txt
+expect_grep "message_too_short" "$LAP" commit checks.txt -i "fix it" -b "adds the check-a line" --json
+expect_grep "message_too_short" "$LAP" commit checks.txt -i "cover the message checks" -b "adds it" --json
+expect_grep "behavior_repeats_intent" "$LAP" commit checks.txt -i "cover the message checks" -b "cover the message checks" --json
+expect_grep "behavior_restates_code" "$LAP" commit checks.txt -i "cover the message checks" -b "check a check" --json
+[ "$(wc -c < .lap/log.jsonl)" = "$BEFORE" ] || fail "a refused commit wrote to the log"
+expect_ok "$LAP" commit checks.txt -i "cover the message checks" -b "creates the file the checks run against"
+printf 'check-a\ncheck-b\n' > checks.txt
+expect_grep "behavior_repeats_previous" "$LAP" commit checks.txt -i "cover the message checks" -b "creates the file the checks run against" --json
+
+t "--force-message skips the repetition checks, never the length, and is recorded"
+expect_grep "message_too_short" "$LAP" commit checks.txt -i "fix it" -b "b" --force-message --json
+expect_ok "$LAP" commit checks.txt -i "cover the message checks" -b "creates the file the checks run against" --force-message
+expect_grep '"forced":true' "$LAP" log -n 1 --json
+expect_grep "forced" "$LAP" show "$("$LAP" log -n 1 --json | sed 's/.*"id":"\([^"]*\)".*/\1/')"
+grep -q '"forced":true' .lap/log.jsonl || fail "forced is not in the log"
+printf 'check-a\ncheck-b\ncheck-c\n' > checks.txt
+expect_ok "$LAP" commit checks.txt -i "cover the message checks" -b "appends a third line to exercise a plain commit"
+tail -1 .lap/log.jsonl | grep -q '"forced"' && fail "forced written on an unforced commit"
+
+t "--no-session commits skip the previous-behavior check"
+printf 'ns1\n' > ns.txt
+expect_ok "$LAP" commit ns.txt -i "outside any session" -b "creates the ns fixture file" --no-session
+printf 'ns1\nns2\n' > ns.txt
+expect_ok "$LAP" commit ns.txt -i "outside any session" -b "creates the ns fixture file" --no-session
+
+# --------------------------------------------------- commit references
+t "a commit is found by id, full hash, prefix, with # and in upper case"
+HID=$("$LAP" log -n 1 --json | sed 's/.*"id":"\([^"]*\)".*/\1/')
+FULL=$("$LAP" log -n 1 --json | sed 's/.*"hash":"\([0-9a-f]*\)".*/\1/')
+SHORT=$(printf '%s' "$FULL" | cut -c1-7)
+UP=$(printf '%s' "$SHORT" | tr 'a-f' 'A-F')
+expect_grep "commit $HID $FULL" "$LAP" show "$HID"
+expect_grep "commit $HID " "$LAP" show "$FULL"
+expect_grep "commit $HID " "$LAP" show "$SHORT"
+expect_grep "commit $HID " "$LAP" show "#$SHORT"
+expect_grep "commit $HID " "$LAP" show "$UP"
+expect_grep "\"id\":\"$HID\"" "$LAP" show "$SHORT" --json
+expect_grep "$HID  *$SHORT" "$LAP" log -n 1
+
+t "bad references: unknown_ref, too short, not hex"
+expect_grep "unknown_ref" "$LAP" show 0000000 --json
+expect_grep "unknown_ref" "$LAP" show L99999 --json
+expect_grep "unknown_ref" "$LAP" show abc12 --json
+expect_grep "unknown_ref" "$LAP" show zzzzzzz --json
+
+t "a hash prefix shared by two commits is ambiguous_ref, listing both"
+# Seven hex digits almost never collide by chance, so the fixture forges a
+# pair: a birthday search over commit records that differ only in a nonce
+# finds two whose hashes share their first 7 digits in ~20k tries. They
+# are appended to a throwaway repository's log with an arbitrary prev: the
+# chain is broken, which readers tolerate, and lookup never consults it.
+if command -v python3 >/dev/null 2>&1; then
+    mkdir -p "$WORK/amb" && cd "$WORK/amb" || exit 1
+    "$LAP" init >/dev/null 2>&1
+    python3 - .lap/log.jsonl <<'PY' || fail "could not forge a collision"
+import hashlib, sys
+def rec(cid, nonce):
+    return ('{"type":"commit","id":"%s","session":null,"file":"f.txt",'
+            '"op":"create","old_start":1,"old_lines":0,"new_start":1,'
+            '"new_lines":0,"eof_nl":true,"old_text":[],"new_text":[],'
+            '"intent":"forge a hash prefix collision",'
+            '"behavior":"nonce %d of the search","ts":"2026-01-01T00:00:00Z",'
+            '"prev":"%s"}' % (cid, nonce, "0" * 64))
+pfx = lambda l: hashlib.sha256(l.encode()).hexdigest()[:7]
+one, two = {}, {}
+n = 0
+while True:
+    a, b = rec("L1", n), rec("L2", n)
+    one[pfx(a)] = a
+    two[pfx(b)] = b
+    hit = pfx(a) if pfx(a) in two else (pfx(b) if pfx(b) in one else None)
+    if hit:
+        with open(sys.argv[1], "a") as f:
+            f.write(one[hit] + "\n" + two[hit] + "\n")
+        break
+    n += 1
+PY
+    PFX=$(python3 -c "
+import hashlib
+l=open('.lap/log.jsonl','rb').read().split(b'\\n')
+print(hashlib.sha256(l[-2]).hexdigest()[:7])")
+    expect_grep "ambiguous_ref" "$LAP" show "$PFX" --json
+    expect_grep "L1 $PFX, L2 $PFX" "$LAP" show "$PFX"
+    cd "$WORK" && rm -rf amb
+else
+    echo "skip: python3 not found, the ambiguous_ref fixture did not run"
+fi
+
+t "unknown flags are refused, naming the flag, before anything runs"
+BEFORE=$(wc -c < .lap/log.jsonl)
+printf 'uf\n' > uf.txt
+expect_grep "unknown_flag" "$LAP" commit uf.txt -m "old spelling" --json
+expect_grep "unknown flag -m" "$LAP" commit uf.txt -m "old spelling"
+expect_grep "unknown flag -x" "$LAP" commit uf.txt -x "text" -i "a b c" -b "d e f"
+expect_grep "unknown_flag" "$LAP" session start "x y z" -m "old" --json
+expect_grep "unknown_flag" "$LAP" log --since 2020 --json
+expect_grep "unknown_flag" "$LAP" show L1 --bogus --json
+expect_grep "unknown_flag" "$LAP" status --verbose --json
+expect_grep "unknown_flag" "$LAP" verify --quick --json
+expect_grep "unknown_flag" "$LAP" rebuild --force --json
+expect_grep "unknown_flag" "$LAP" init --bare --json
+expect_grep "unknown_flag" "$LAP" search --msg x --regex --json
+expect_grep "unknown_flag" "$LAP" rr --session S1 --json
+expect_grep "unknown_flag" "$LAP" rr --from L1 --to L2 --json
+[ "$(wc -c < .lap/log.jsonl)" = "$BEFORE" ] || fail "a refused command wrote to the log"
+# colour flags belong to lap and are accepted by every command
+expect_ok "$LAP" log -n 1 --color=never
+expect_ok "$LAP" status --no-color
+rm -f uf.txt
+
+t "session start takes its purpose from -F, not both"
+"$LAP" session end >/dev/null 2>&1
+printf 'purpose from a file\n\nwith detail\n' > purpose.tmp
+expect_grep "purpose from a file" "$LAP" session start -F purpose.tmp
+"$LAP" session end >/dev/null 2>&1
+expect_fail "$LAP" session start "an argument" -F purpose.tmp
+printf 'piped purpose\n' | "$LAP" session start -F - >/dev/null 2>&1 \
+    || fail "session start -F - failed"
+expect_grep "piped purpose" "$LAP" session current
+"$LAP" session end >/dev/null 2>&1
+expect_ok "$LAP" session start "real work, resumed"
+
+t "a log holding a msg-only commit is refused"
+mkdir -p "$WORK/oldlog" && cd "$WORK/oldlog" || exit 1
+"$LAP" init >/dev/null 2>&1
+printf '{"type":"commit","id":"L1","session":null,"file":"f.txt","op":"create","old_start":1,"old_lines":0,"new_start":1,"new_lines":0,"eof_nl":true,"old_text":[],"new_text":[],"msg":"an old message","ts":"2026-01-01T00:00:00Z","prev":"%s"}\n' \
+    "$(python3 -c "import hashlib;print(hashlib.sha256(open('.lap/log.jsonl','rb').read().rstrip(b'\\n')).hexdigest())" 2>/dev/null || echo 0)" >> .lap/log.jsonl
+expect_fail "$LAP" log
+expect_grep "no intent and behavior" "$LAP" log
+cd "$WORK" && rm -rf oldlog
 
 # -------------------------------------------------- crash-safety repairs
 t "torn log tail: readers tolerate it, the next writer repairs it"
@@ -286,7 +439,7 @@ printf '{"type":"commit","id":"L9' >> .lap/log.jsonl
 expect_ok "$LAP" log
 expect_grep "torn trailing record" "$LAP" verify
 printf 'torn-recovery\n' > torn.txt
-expect_ok "$LAP" commit torn.txt -m "commit after a crash-torn append: the writer truncates the torn bytes first"
+expect_ok "$LAP" commit torn.txt -i "commit after a crash-torn append: the writer truncates the torn bytes first" -b "applies test step 289"
 expect_grep "chain ok" "$LAP" verify
 expect_grep "0 mismatch" "$LAP" verify --deep
 
@@ -298,47 +451,48 @@ expect_grep "missing shadow" "$LAP" verify --deep
 t "a writing command heals lost state.json and rebuilds shadows"
 rm .lap/state.json
 printf 'heal-me\n' > healfile.txt
-expect_ok "$LAP" commit healfile.txt -m "this write triggers a full heal first"
+expect_ok "$LAP" commit healfile.txt -i "this write triggers a full heal first" -b "applies test step 301"
 expect_grep "chain ok" "$LAP" verify
 expect_grep "0 mismatch" "$LAP" verify --deep
 
 # ------------------------------------ partial-commit coordinate integrity
 t "partial commit stores committed-file coordinates; blame stays correct"
 printf 'p1\np2\np3\np4\np5\n' > coord.txt
-expect_ok "$LAP" commit coord.txt -m "coord baseline"
+expect_ok "$LAP" commit coord.txt -i "coord baseline in this test" -b "applies test step 308"
 printf 'TOP\nTOPB\np1\np2\np3\nP4\np5\n' > coord.txt
-CID=$("$LAP" commit coord.txt -m "uppercase p4 (committed before the top insertion)" --edit 2 --json | sed 's/.*"id":"\([^"]*\)".*/\1/')
+CID=$("$LAP" commit coord.txt -i "uppercase p4 (committed before the top insertion)" -b "applies test step 310" --edit 2 --json | sed 's/.*"id":"\([^"]*\)".*/\1/')
 [ -n "$CID" ] || fail "could not extract the partial commit id"
 expect_grep "last touched by $CID" "$LAP" search --file coord.txt --line 6
-expect_ok "$LAP" commit coord.txt -m "top insertion, committed second"
+expect_ok "$LAP" commit coord.txt -i "top insertion, committed second" -b "applies test step 313"
 expect_grep "last touched by $CID" "$LAP" search --file coord.txt --line 6
 
 t "blame on an uncommitted new file reports pending"
 printf 'n1\nn2\n' > newpend.txt
 expect_grep "pending" "$LAP" search --file newpend.txt --line 1
 expect_grep '"pending":true' "$LAP" search --file newpend.txt --line 2 --json
-expect_ok "$LAP" commit newpend.txt -m "newpend baseline"
+expect_ok "$LAP" commit newpend.txt -i "newpend baseline in this test" -b "applies test step 320"
 
 # ----------------------------------------------------- argument hygiene
 t "a message that looks like a flag is a message, not a flag"
 printf 'f1\n' > flagmsg.txt
-expect_ok "$LAP" commit flagmsg.txt -m "--no-session"
+expect_ok "$LAP" commit flagmsg.txt -i "--no-session --json --edit" -b "--lines --force-message --bogus"
+expect_grep "no-session --json --edit" "$LAP" log -n 1
 expect_grep '"session":"S' "$LAP" log -n 1 --json
 
 t "-- ends flags: files named like flags are committable"
 printf 'd1\n' > ./-dash.txt
-expect_ok "$LAP" commit -m "dash-named file survives the parser" -- -dash.txt
+expect_ok "$LAP" commit -i "dash-named file survives the parser" -b "applies test step 330" -- -dash.txt
 expect_grep "dash-named" "$LAP" log -n 1
 
 t "paths with quotes stay valid JSON in blame output"
 printf 'q1\n' > 'q"uote.txt'
 expect_grep 'q\\"uote.txt' "$LAP" search --file 'q"uote.txt' --line 1 --json
-expect_ok "$LAP" commit 'q"uote.txt' -m "quoted-name file landed"
+expect_ok "$LAP" commit 'q"uote.txt' -i "quoted-name file landed" -b "applies test step 336"
 
 # ------------------------------------------------------------- user field
 t "commits record the user (LAP_USER wins the resolution)"
 printf 'u1\n' > userfile.txt
-LAP_USER="e2e-test-bot" "$LAP" commit userfile.txt -m "user field: recorded from LAP_USER"
+LAP_USER="e2e-test-bot" "$LAP" commit userfile.txt -i "user field: recorded from LAP_USER" -b "applies test step 341"
 expect_grep '"user":"e2e-test-bot"' "$LAP" log -n 1 --json
 UID_SHOW=$("$LAP" log -n 1 --json | sed 's/.*"id":"\([^"]*\)".*/\1/')
 expect_grep "user: e2e-test-bot" "$LAP" show "$UID_SHOW"
@@ -392,7 +546,7 @@ expect_ok "$LAP" rebuild
 t "a stale sidecar cannot outlive the index it belongs to"
 cp .lap/heads .lap/heads.old && cp .lap/paths .lap/paths.old
 printf 'stale probe\n' > stale.txt
-expect_ok "$LAP" commit stale.txt -m "commit that grows the path table"
+expect_ok "$LAP" commit stale.txt -i "commit that grows the path table" -b "applies test step 395"
 cp .lap/heads.old .lap/heads && cp .lap/paths.old .lap/paths   # rewind sidecars
 OUT=$("$LAP" search --file stale.txt --line 1 2>&1)
 rm -f .lap/heads.old .lap/paths.old
@@ -402,9 +556,10 @@ EXPECT=$("$LAP" search --file stale.txt --line 1 2>&1)
 
 t "commit ids are verified, not just parsed"
 expect_fail "$LAP" show L1x
-expect_grep "no commit named L1x" "$LAP" show L1x
+expect_grep "unknown_ref" "$LAP" show L1x --json
 rm -f .lap/index
-expect_grep "no commit named L1x" "$LAP" show L1x
+expect_grep "unknown_ref" "$LAP" show L1x --json
+expect_grep "unknown_ref" "$LAP" show L1000000 --json
 expect_ok "$LAP" rebuild
 
 t "session filters mean the same thing with and without the index"
@@ -448,11 +603,11 @@ expect_ok "$LAP" rebuild --verify
 # ----------------------------------------------------------- snapshots
 t "hot files earn snapshots; replay stays exact; verify audits them"
 printf 'snap base\n' > snapfile.txt
-expect_ok "$LAP" commit snapfile.txt -m "snapshot probe baseline"
+expect_ok "$LAP" commit snapfile.txt -i "snapshot probe baseline" -b "applies test step 451"
 i=0
 while [ $i -lt 20 ]; do
     printf 'snap base edited %s\n' "$i" > snapfile.txt
-    "$LAP" commit snapfile.txt -m "snapshot probe edit $i" >/dev/null \
+    "$LAP" commit snapfile.txt -i "snapshot probe edit $i" -b "applies test step 455 round $i" >/dev/null \
         || fail "snapshot probe commit $i"
     i=$((i + 1))
 done
@@ -523,15 +678,15 @@ mkdir -p "$WORK/rr" && cd "$WORK/rr"
 "$LAP" init >/dev/null 2>&1
 "$LAP" session start "add retry handling" >/dev/null 2>&1
 printf 'int fetch(void) {\n    return send();\n}\n' > fetch.c
-"$LAP" commit fetch.c -m "the fetcher as it was" >/dev/null 2>&1
+"$LAP" commit fetch.c -i "the fetcher as it was" -b "creates fetch.c returning send() directly" >/dev/null 2>&1
 printf 'int fetch(void) {\n    int s = send();\n    return s;\n}\n' > fetch.c
-"$LAP" commit fetch.c -m "hold the status so we can branch on it" >/dev/null 2>&1
+"$LAP" commit fetch.c -i "retry on 429: staging returns it under load" -b "hold the status so we can branch on it" >/dev/null 2>&1
 printf 'int fetch(void) {\n    int s = send();\n    if (s == 429) return retry();\n    return s;\n}\n' > fetch.c
-"$LAP" commit fetch.c -m "retry on 429: staging returns it under load" >/dev/null 2>&1
+"$LAP" commit fetch.c -i "retry on 429: staging returns it under load" -b "calls retry() when send() answered 429" >/dev/null 2>&1
 printf 'tmp\n' > scratch.txt
-"$LAP" commit scratch.txt -m "scratch for the experiment" >/dev/null 2>&1
+"$LAP" commit scratch.txt -i "scratch for the experiment" -b "applies test step 532" >/dev/null 2>&1
 rm scratch.txt
-"$LAP" commit scratch.txt -m "experiment done" >/dev/null 2>&1
+"$LAP" commit scratch.txt -i "experiment done in this test" -b "applies test step 534" >/dev/null 2>&1
 "$LAP" session end >/dev/null 2>&1
 
 expect_grep "add retry handling" "$LAP" rr S1
@@ -549,10 +704,24 @@ t "rr collapses many commits to one file into one hunk"
 HUNKS=$("$LAP" rr S1 | grep -c '@@')
 [ "$HUNKS" = "1" ] || fail "expected 1 net hunk, got $HUNKS"
 
-t "rr accepts an inclusive commit range"
+t "rr groups consecutive commits under their shared intent"
+[ "$("$LAP" rr S1 --no-diff | grep -c 'retry on 429')" = "1" ] \
+    || fail "a shared intent was printed more than once"
+expect_grep "L2 .*hold the status" "$LAP" rr S1
+expect_grep "L3 .*calls retry()" "$LAP" rr S1
+[ "$("$LAP" rr S1 --json | grep -o '"intent":' | wc -l | tr -d ' ')" = "5" ] \
+    || fail "the JSON trajectory is not one entry per commit"
+
+t "rr accepts an inclusive commit range, by id or by hash"
 expect_grep "L2..L3" "$LAP" rr L2 L3
 expect_not_grep "the fetcher as it was" "$LAP" rr L2 L3
 expect_grep "hold the status" "$LAP" rr L2 L3
+H2=$("$LAP" show L2 --json | sed 's/.*"hash":"\([0-9a-f]\{7\}\).*/\1/')
+H3=$("$LAP" show L3 --json | sed 's/.*"hash":"\([0-9a-f]*\)".*/\1/')
+expect_grep "calls retry()" "$LAP" rr "#$H2" "$H3"
+expect_not_grep "the fetcher as it was" "$LAP" rr "#$H2" "$H3"
+expect_grep "unknown_ref" "$LAP" rr L2 L99 --json
+expect_grep "empty_range" "$LAP" rr L3 L2 --json
 
 t "rr with no target reviews the most recent session"
 expect_grep "add retry handling" "$LAP" rr
@@ -580,9 +749,9 @@ mkdir -p "$WORK/color" && cd "$WORK/color"
 "$LAP" init >/dev/null 2>&1
 "$LAP" session start "paint the terminal" >/dev/null 2>&1
 printf 'alpha\nbeta\n' > tint.txt
-"$LAP" commit tint.txt -m "seed the file the colour tests read" >/dev/null 2>&1
+"$LAP" commit tint.txt -i "seed the file the colour tests read" -b "applies test step 583" >/dev/null 2>&1
 printf 'alpha\nBETA\n' > tint.txt
-"$LAP" commit tint.txt -m "shout beta so there is a diff to colour" >/dev/null 2>&1
+"$LAP" commit tint.txt -i "shout beta so there is a diff to colour" -b "applies test step 585" >/dev/null 2>&1
 printf 'alpha\nBETA\ngamma\n' > tint.txt
 
 ESC=$(printf '\033')
@@ -662,15 +831,15 @@ t "the colour flag reads the same before or after the command"
 
 t "a value that looks like a flag is data, not a flag"
 # these used to abort before the command ran, committing nothing
-expect_ok "$LAP" commit tint.txt -m "--color=true was replaced by --color=auto"
+expect_ok "$LAP" commit tint.txt -i "--color=true was replaced by --color=auto" -b "applies test step 665"
 printf 'alpha\nBETA\ngamma\ndelta\n' > tint.txt
-expect_ok "$LAP" commit tint.txt -m "--no-color is also spelled --color=never"
+expect_ok "$LAP" commit tint.txt -i "--no-color is also spelled --color=never" -b "applies test step 667"
 expect_ok "$LAP" search --text "--color=1"
 has_esc "$("$LAP" log -n 1 2>&1)" && fail "a message switched colour on"
 
 t "a path after -- is a path, not a colour flag"
 printf 'x\n' > './--color=always'
-has_esc "$("$LAP" commit -m "a file whose name looks like a flag" \
+has_esc "$("$LAP" commit -i "a file whose name looks like a flag" -b "applies test step 673" \
     -- --color=always 2>&1)" && fail "a filename switched colour on"
 rm -f './--color=always'
 cd "$WORK"
@@ -683,7 +852,7 @@ mkdir -p "$WORK/ctl" && cd "$WORK/ctl"
 "$LAP" init >/dev/null 2>&1
 "$LAP" session start "a purpose" >/dev/null 2>&1
 printf 'line\033[31mone\n' > esc.c
-"$LAP" commit esc.c -m "$(printf 'why \033[2J here')" >/dev/null 2>&1
+"$LAP" commit esc.c -i "$(printf 'why \033[2J here')" -b "applies test step 686" >/dev/null 2>&1
 
 t "recorded data cannot drive the reader's terminal"
 for c in "log" "status" "show L1" "show L1 --full-file" \
@@ -704,13 +873,13 @@ mkdir -p "$WORK/ctl/a_very_deeply_nested_directory/with_another_level"
 printf 'x\n' > a_very_deeply_nested_directory/with_another_level/deep.txt
 printf 'y\n' > s.txt
 "$LAP" commit a_very_deeply_nested_directory/with_another_level/deep.txt \
-    -m "a deeply nested file" >/dev/null 2>&1
-"$LAP" commit s.txt -m "a short one" >/dev/null 2>&1
+    -i "a deeply nested file" -b "applies test step 707" >/dev/null 2>&1
+"$LAP" commit s.txt -i "a short one" -b "applies test step 708" >/dev/null 2>&1
 SHORTW=$("$LAP" rr --no-diff | grep ' s.txt' | head -1 | awk '{print length}')
 [ -n "$SHORTW" ] || fail "could not measure the short row"
-# the path is 58 columns: uncapped it pads this row past 80, capped to 40
-# it lands near 63
-[ "$SHORTW" -lt 70 ] || fail "a short row was padded to $SHORTW columns"
+# the path is 58 columns: uncapped it pads this row past 100, capped to 40
+# it lands near 83
+[ "$SHORTW" -lt 90 ] || fail "a short row was padded to $SHORTW columns"
 cd "$WORK"
 
 # ------------------------------------------------------------ summary

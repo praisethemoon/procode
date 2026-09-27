@@ -26,16 +26,17 @@ static bool json_mode;
  * Colour is resolved before a command is chosen, so this scan cannot know
  * which table applies and uses all of them. Being over-broad is the safe
  * direction: the worst case is skipping a token that happened to look like
- * --color=, never misreading one. A message is DATA — `lap commit -m
+ * --color=, never misreading one. A message is DATA — `lap commit -i
  * "--color=always"` must neither switch colour on nor be rejected as a bad
  * mode, and before this set existed it did both.
  *
  * Keep in step with the value_flags tables in cmd_*.c; drifting only ever
  * costs a missed flag, never a wrong command. */
 static const char *const VALUE_FLAGS[] = {
-    "-m",     "-F",    "--edit",  "--lines", "--session", "--file",
-    "-n",     "--text", "--msg",  "--since", "--until",   "--limit",
-    NULL};
+    "-i",       "--intent", "-b",      "--behavior", "-F",
+    "--edit",   "--lines",  "--session", "--file",   "-n",
+    "--text",   "--msg",    "--since", "--until",    "--limit",
+    "--meta",   NULL};
 
 static bool takes_value(const char *arg) {
     for (int32_t i = 0; VALUE_FLAGS[i]; i++) {

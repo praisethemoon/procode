@@ -20,12 +20,15 @@ static bool show_replay(Arena *a, Repo *repo, Idx *ix, const Rec *rec,
 }
 
 int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
+    static const char *const bool_flags[] = {"--json", "--full-file", NULL};
     bool json = has_flag(argc, argv, NULL, "--json");
+    if (!flags_known(argc, argv, NULL, bool_flags))
+        return LAP_EXIT_ERR;
     bool full_file = has_flag(argc, argv, NULL, "--full-file");
     const char *id = positional_arg(argc, argv, NULL, 0);
     if (!id) {
-        err_out(json, "usage", "usage: lap show <commit-id> [--full-file] "
-                               "[--json]");
+        err_out(json, "usage", "usage: lap show <commit> [--full-file] "
+                               "[--json]  (an id, a hash or a hash prefix)");
         return LAP_EXIT_ERR;
     }
 
@@ -41,7 +44,7 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
     const Rec *rec = NULL;
     int64_t entry = -1;
     Idx *ix = idx_ready(a, &repo);
-    if (ix && id[0] == 'L') {
+    if (ix && ref_is_id(id)) {
         entry = idx_find_commit(ix, strtoll(id + 1, NULL, 10));
         /* the index's id is a derived ordinal: confirm the record really is
          * the one asked for before trusting the shortcut */
@@ -55,18 +58,14 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
             err_out(json, "log_unreadable", "%s", err);
             return LAP_EXIT_ERR;
         }
-        for (int32_t i = 0; i < log.count; i++) {
-            if (log.v[i].type == REC_COMMIT &&
-                strcmp(log.v[i].id, id) == 0) {
-                rec = &log.v[i];
-                entry = i;
-                break;
-            }
+        const char *code;
+        int32_t at = ref_find(&log, id, &code, err, sizeof err);
+        if (at < 0) {
+            err_out(json, code, "%s", err);
+            return LAP_EXIT_ERR;
         }
-    }
-    if (!rec) {
-        err_out(json, "unknown_commit", "no commit named %s", id);
-        return LAP_EXIT_ERR;
+        rec = &log.v[at];
+        entry = at;
     }
 
     Lines content;
@@ -111,6 +110,8 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
     } else {
         sb_puts(&sb, "commit ");
         sb_field(&sb, S_ID, rec->id, 0);
+        sb_putc(&sb, ' ');
+        sb_field(&sb, S_MUTED, rec->hash, 0);
         if (rec->session) {
             sb_puts(&sb, "  (session ");
             sb_field(&sb, S_SESSION, rec->session, 0);
@@ -123,18 +124,14 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
             sb_printf(&sb, "user: %s\n", rec->user);
         sb_puts(&sb, "file: ");
         sb_text(&sb, rec->file, strlen(rec->file));
-        sb_printf(&sb, "  (%s)\nmessage:\n", rec->op);
-        const char *m = rec->msg;
-        while (*m) {
-            const char *nl = strchr(m, '\n');
-            size_t len = nl ? (size_t)(nl - m) : strlen(m);
-            sb_puts(&sb, "  ");
-            sb_text(&sb, m, len);
-            sb_putc(&sb, '\n');
-            if (!nl)
-                break;
-            m = nl + 1;
-        }
+        sb_printf(&sb, "  (%s)\n", rec->op);
+        if (rec->forced)
+            sb_puts(&sb, "forced: the message checks were skipped "
+                         "(--force-message)\n");
+        sb_puts(&sb, "intent:\n");
+        sb_indented(&sb, "  ", rec->intent);
+        sb_puts(&sb, "behavior:\n");
+        sb_indented(&sb, "  ", rec->behavior);
         sb_puts(&sb, "diff:\n");
         render_commit_diff(&sb, rec);
         if (have_content) {

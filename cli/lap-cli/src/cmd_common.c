@@ -36,6 +36,33 @@ const char *flag_value(int32_t argc, char **argv,
     return NULL;
 }
 
+bool flags_known(int32_t argc, char **argv, const char *const *value_flags,
+                 const char *const *bool_flags) {
+    for (int32_t i = 0; i < argc; i++) {
+        const char *w = argv[i];
+        if (strcmp(w, "--") == 0)
+            return true;
+        if (is_value_flag(value_flags, w)) {
+            i++;
+            continue;
+        }
+        if (w[0] != '-' || is_value_flag(bool_flags, w) ||
+            strcmp(w, "--no-color") == 0 ||
+            strncmp(w, "--color=", sizeof "--color=" - 1) == 0)
+            continue;
+        err_out(tty_json(), "unknown_flag", "unknown flag %s", w);
+        return false;
+    }
+    return true;
+}
+
+const char *flag_value2(int32_t argc, char **argv,
+                        const char *const *value_flags, const char *flag,
+                        const char *alias) {
+    const char *v = flag_value(argc, argv, value_flags, flag);
+    return v ? v : flag_value(argc, argv, value_flags, alias);
+}
+
 const char *positional_arg(int32_t argc, char **argv,
                            const char *const *value_flags, int32_t index) {
     int32_t seen = 0;
@@ -59,9 +86,27 @@ const char *positional_arg(int32_t argc, char **argv,
     return NULL;
 }
 
+void short_hash(const Rec *rec, char out[SHORT_HASH_LEN + 1]) {
+    memcpy(out, rec->hash, SHORT_HASH_LEN);
+    out[SHORT_HASH_LEN] = '\0';
+}
+
+void sb_indented(StrBuf *sb, const char *indent, const char *text) {
+    while (*text) {
+        const char *nl = strchr(text, '\n');
+        size_t len = nl ? (size_t)(nl - text) : strlen(text);
+        sb_puts(sb, indent);
+        sb_text(sb, text, len);
+        sb_putc(sb, '\n');
+        if (!nl)
+            break;
+        text = nl + 1;
+    }
+}
+
 void json_commit(StrBuf *sb, const Rec *rec, const char *note) {
-    sb_printf(sb, "\"id\":\"%s\",\"ts\":\"%s\",\"user\":", rec->id,
-              rec->ts);
+    sb_printf(sb, "\"id\":\"%s\",\"hash\":\"%s\",\"ts\":\"%s\",\"user\":",
+              rec->id, rec->hash, rec->ts);
     if (rec->user)
         json_escape_c(sb, rec->user);
     else
@@ -75,10 +120,14 @@ void json_commit(StrBuf *sb, const Rec *rec, const char *note) {
     json_escape_c(sb, rec->file);
     sb_printf(sb,
               ",\"op\":\"%s\",\"old_start\":%d,\"old_lines\":%d,"
-              "\"new_start\":%d,\"new_lines\":%d,\"msg\":",
+              "\"new_start\":%d,\"new_lines\":%d,\"intent\":",
               rec->op, rec->old_start, rec->old_lines, rec->new_start,
               rec->new_lines);
-    json_escape_c(sb, rec->msg);
+    json_escape_c(sb, rec->intent);
+    sb_puts(sb, ",\"behavior\":");
+    json_escape_c(sb, rec->behavior);
+    if (rec->forced)
+        sb_puts(sb, ",\"forced\":true");
     if (note) {
         sb_puts(sb, ",\"match\":");
         json_escape_c(sb, note);
@@ -87,9 +136,14 @@ void json_commit(StrBuf *sb, const Rec *rec, const char *note) {
 
 void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
                         const char *note) {
-    const char *nl = strchr(rec->msg, '\n');
-    int32_t mlen = nl ? (int32_t)(nl - rec->msg) : (int32_t)strlen(rec->msg);
+    const char *nl = strchr(rec->intent, '\n');
+    int32_t mlen =
+        nl ? (int32_t)(nl - rec->intent) : (int32_t)strlen(rec->intent);
+    char sh[SHORT_HASH_LEN + 1];
+    short_hash(rec, sh);
     sb_field(sb, S_ID, rec->id, 6);
+    sb_putc(sb, ' ');
+    sb_field(sb, S_MUTED, sh, 0);
     sb_putc(sb, ' ');
     sb_field(sb, S_MUTED, rec->ts, 0);
     sb_puts(sb, "  ");
@@ -115,8 +169,71 @@ void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
         sb_putc(sb, '\n');
     }
     sb_puts(sb, "       ");
-    sb_text(sb, rec->msg, (size_t)mlen);
+    sb_text(sb, rec->intent, (size_t)mlen);
     sb_putc(sb, '\n');
+}
+
+bool ref_is_id(const char *ref) {
+    if (ref[0] != 'L' || !ref[1])
+        return false;
+    for (const char *p = ref + 1; *p; p++) {
+        if (*p < '0' || *p > '9')
+            return false;
+    }
+    return true;
+}
+
+int32_t ref_find(const RecLog *log, const char *ref, const char **code,
+                 char *err, size_t errsz) {
+    *code = "unknown_ref";
+    if (ref_is_id(ref)) {
+        for (int32_t i = 0; i < log->count; i++) {
+            if (log->v[i].type == REC_COMMIT &&
+                strcmp(log->v[i].id, ref) == 0)
+                return i;
+        }
+        snprintf(err, errsz, "no commit named %s", ref);
+        return -1;
+    }
+    const char *h = ref[0] == '#' ? ref + 1 : ref;
+    size_t n = strlen(h);
+    char want[65];
+    bool hex = n >= SHORT_HASH_LEN && n <= 64;
+    for (size_t k = 0; hex && k < n; k++) {
+        char c = h[k];
+        if (c >= 'A' && c <= 'F')
+            c = (char)(c - 'A' + 'a');
+        hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+        want[k] = c;
+    }
+    if (!hex) {
+        snprintf(err, errsz,
+                 "%s is not a commit: give an id (L42) or at least %d hex "
+                 "digits of a hash",
+                 ref, SHORT_HASH_LEN);
+        return -1;
+    }
+    int32_t found = -1, matches = 0;
+    char list[256] = "";
+    for (int32_t i = 0; i < log->count; i++) {
+        const Rec *rec = &log->v[i];
+        if (rec->type != REC_COMMIT || memcmp(rec->hash, want, n) != 0)
+            continue;
+        if (matches++ == 0)
+            found = i;
+        size_t used = strlen(list);
+        snprintf(list + used, sizeof list - used, "%s%s %.*s",
+                 used ? ", " : "", rec->id, (int)SHORT_HASH_LEN, rec->hash);
+    }
+    if (matches == 1)
+        return found;
+    if (matches > 1) {
+        *code = "ambiguous_ref";
+        snprintf(err, errsz, "%s matches %d commits: %s", ref, matches, list);
+        return -1;
+    }
+    snprintf(err, errsz, "no commit has a hash starting %.*s", (int)n, want);
+    return -1;
 }
 
 void caches_sync_warn(Arena *a, const Repo *r) {
@@ -152,48 +269,25 @@ void err_out(bool json_mode, const char *code, const char *fmt, ...) {
     }
 }
 
-int32_t message_arg(Arena *a, int32_t argc, char **argv,
-                    const char *const *value_flags, const char **out,
-                    char *err, size_t errsz) {
-    const char *m = flag_value(argc, argv, value_flags, "-m");
-    const char *f = flag_value(argc, argv, value_flags, "-F");
-    *out = NULL;
-    if (m && f) {
-        snprintf(err, errsz, "-m and -F are mutually exclusive");
-        return -1;
-    }
+bool read_text_arg(Arena *a, const char *path, char **out, char *err,
+                   size_t errsz) {
     char *text = NULL;
     size_t len = 0;
-    if (m) {
-        text = arena_strdup(a, m);
-        len = strlen(text);
-    } else if (f) {
-        if (strcmp(f, "-") == 0) {
-            StrBuf sb;
-            sb_init(&sb, a);
-            char buf[4096];
-            size_t got;
-            while ((got = fread(buf, 1, sizeof buf, stdin)) > 0)
-                sb_putn(&sb, buf, got);
-            len = sb.len;
-            text = sb_finish(&sb);
-        } else if (!plat_read_file(a, f, &text, &len)) {
-            snprintf(err, errsz, "cannot read message file %s", f);
-            return -1;
-        }
-    } else {
-        return 0;
+    if (strcmp(path, "-") == 0) {
+        StrBuf sb;
+        sb_init(&sb, a);
+        char buf[4096];
+        size_t got;
+        while ((got = fread(buf, 1, sizeof buf, stdin)) > 0)
+            sb_putn(&sb, buf, got);
+        text = sb_finish(&sb);
+    } else if (!plat_read_file(a, path, &text, &len)) {
+        snprintf(err, errsz, "cannot read %s", path);
+        return false;
     }
-    while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r' ||
-                       text[len - 1] == ' ' || text[len - 1] == '\t'))
-        len--;
-    text[len] = '\0';
-    if (len == 0) {
-        snprintf(err, errsz, "message is empty");
-        return -1;
-    }
+    msg_trim(text);
     *out = text;
-    return 1;
+    return true;
 }
 
 void region_describe(const Region *r, char *out, size_t outsz) {

@@ -29,7 +29,10 @@ typedef struct {
     const char *file;    /* commit only; repo-relative */
     const char *ts;      /* ISO-8601 UTC */
     const char *op;      /* commit only: "edit" | "create" | "delete" */
-    const char *msg;     /* commit + session_start */
+    const char *msg;      /* session_start: the session's purpose */
+    const char *intent;   /* commit: why the edit exists */
+    const char *behavior; /* commit: what this edit makes the code do */
+    bool forced;          /* commit: written under --force-message */
     /* session_start only: a flat object, e.g. {"ticket":"T-12","n":1}, so a
      * session can be found by what it was for. Keys are identifiers; each
      * value is held as its JSON text ("\"T-12\"", "1", "true") so it is

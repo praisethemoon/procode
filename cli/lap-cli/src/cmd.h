@@ -5,6 +5,7 @@
 #include "diff.h"
 #include "ignore.h"
 #include "json.h"
+#include "msg.h"
 #include "snap.h"
 #include "tty.h"
 
@@ -21,42 +22,64 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv);
 
 /* ---- shared helpers (cmd_common.c) ----
  *
- * All three scanners understand the same grammar: flags listed in
+ * All the scanners understand the same grammar: flags listed in
  * value_flags (NULL-terminated, may be NULL) consume the next argument as
- * their value — so a message that *looks* like a flag ("-m --no-session")
+ * their value — so a message that *looks* like a flag ("-i --no-session")
  * is never misread as one — and a literal "--" ends flag parsing entirely
  * (everything after it is positional, allowing file names that start with
  * '-').
  */
+
+/* Refuses, with unknown_flag, the first word before "--" that starts with
+ * '-' and is none of the command's flags nor lap's colour flags. Every
+ * command calls it first: a skipped flag would let its value pass for an
+ * argument. */
+bool flags_known(int32_t argc, char **argv, const char *const *value_flags,
+                 const char *const *bool_flags);
 bool has_flag(int32_t argc, char **argv, const char *const *value_flags,
               const char *flag);
 const char *flag_value(int32_t argc, char **argv,
                        const char *const *value_flags, const char *flag);
 const char *positional_arg(int32_t argc, char **argv,
                            const char *const *value_flags, int32_t index);
+/* The value of whichever of two spellings is given ("-i" / "--intent"). */
+const char *flag_value2(int32_t argc, char **argv,
+                        const char *const *value_flags, const char *flag,
+                        const char *alias);
 
 void err_out(bool json_mode, const char *code, const char *fmt, ...);
 
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);
 
-/* The one JSON shape for a commit, shared by log/search/show: emits the
- * field list WITHOUT enclosing braces so callers can add their own. */
+/* The one JSON shape for a commit, shared by log/search/show/rr: emits
+ * the field list WITHOUT enclosing braces so callers can add their own. */
 void json_commit(StrBuf *sb, const Rec *rec, const char *note);
 
-/* Human one-liner + message summary, shared by log and search. */
+/* Human one-liner + intent summary, shared by log and search. */
 void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
                         const char *note);
 
-/* Resolves a message from -m "text" or -F <file> (-F - reads stdin).
- * Trailing whitespace/newlines are trimmed. Returns:
- *   1  message present -> *out set
- *   0  neither flag given -> *out NULL (caller emits its usage error)
- *  -1  error (both flags, unreadable file, empty message) -> err filled
- */
-int32_t message_arg(Arena *a, int32_t argc, char **argv,
-                    const char *const *value_flags, const char **out,
-                    char *err, size_t errsz);
+/* The first 7 hex digits of a commit's hash. */
+#define SHORT_HASH_LEN 7
+void short_hash(const Rec *rec, char out[SHORT_HASH_LEN + 1]);
+
+/* Every line of text, each indented by `indent`. */
+void sb_indented(StrBuf *sb, const char *indent, const char *text);
+
+/* Reads -F's argument: the named file, or stdin for "-", trailing
+ * whitespace trimmed. False with a reason in err. */
+bool read_text_arg(Arena *a, const char *path, char **out, char *err,
+                   size_t errsz);
+
+/* Where a commit reference (SPEC §References) points in a loaded log: an
+ * id ("L42"), or a hash or hash prefix of at least 7 hex digits, with or
+ * without '#', in any case. Returns the record's index, or -1 with
+ * *code = "unknown_ref" / "ambiguous_ref" and a sentence in err. */
+int32_t ref_find(const RecLog *log, const char *ref, const char **code,
+                 char *err, size_t errsz);
+/* True when ref is spelled as a commit id rather than a hash. */
+bool ref_is_id(const char *ref);
 
 
 /* Renders one region for humans, e.g. "lines 10-14" / "lines 40-42 (deleted)"

@@ -4,7 +4,7 @@
  *   --file F --line N     which commit last touched current line N (blame)
  *   --text STR            commits whose added/removed lines contain STR
  *   --added / --removed   narrow --text to one side
- *   --msg STR             commits whose message contains STR
+ *   --msg STR             commits whose intent or behavior contains STR
  *   --session S / --since TS / --until TS / --limit N
  * Criteria AND together. Blame walks the file's index chain when one is
  * available. For listings the index pays off only when it can PREFILTER on
@@ -22,7 +22,8 @@ typedef struct {
 static bool rec_matches(const Rec *rec, const Match *m, char *note,
                         size_t notesz) {
     note[0] = '\0';
-    if (m->msg && str_find(str_c(rec->msg), str_c(m->msg)) < 0)
+    if (m->msg && str_find(str_c(rec->intent), str_c(m->msg)) < 0 &&
+        str_find(str_c(rec->behavior), str_c(m->msg)) < 0)
         return false;
     if (!m->text)
         return true;
@@ -107,24 +108,16 @@ static int64_t blame_chain(const Idx *ix, const char *rel, int32_t line) {
     return -1;
 }
 
-static void print_message(StrBuf *sb, const char *msg) {
-    while (*msg) {
-        const char *nl = strchr(msg, '\n');
-        size_t len = nl ? (size_t)(nl - msg) : strlen(msg);
-        sb_puts(sb, "  ");
-        sb_text(sb, msg, len);
-        sb_putc(sb, '\n');
-        if (!nl)
-            break;
-        msg = nl + 1;
-    }
-}
 
 int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
     static const char *const value_flags[] = {
         "--file", "--line", "--text", "--msg", "--session",
         "--since", "--until", "--limit", NULL};
+    static const char *const bool_flags[] = {"--json", "--added",
+                                             "--removed", NULL};
     bool json = has_flag(argc, argv, value_flags, "--json");
+    if (!flags_known(argc, argv, value_flags, bool_flags))
+        return LAP_EXIT_ERR;
     const char *f_file = flag_value(argc, argv, value_flags, "--file");
     const char *f_line = flag_value(argc, argv, value_flags, "--line");
     const char *f_session = flag_value(argc, argv, value_flags, "--session");
@@ -246,6 +239,10 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             sb_text(&sb, rel, strlen(rel));
             sb_puts(&sb, " was last touched by ");
             sb_field(&sb, S_ID, rec->id, 0);
+            char sh[SHORT_HASH_LEN + 1];
+            short_hash(rec, sh);
+            sb_putc(&sb, ' ');
+            sb_field(&sb, S_MUTED, sh, 0);
             sb_puts(&sb, " (");
             sb_field(&sb, S_MUTED, rec->ts, 0);
             sb_puts(&sb, ")\n");
@@ -254,8 +251,10 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
                 sb_field(&sb, S_SESSION, rec->session, 0);
                 sb_putc(&sb, '\n');
             }
-            sb_puts(&sb, "message:\n");
-            print_message(&sb, rec->msg);
+            sb_puts(&sb, "intent:\n");
+            sb_indented(&sb, "  ", rec->intent);
+            sb_puts(&sb, "behavior:\n");
+            sb_indented(&sb, "  ", rec->behavior);
             fputs(sb_finish(&sb), stdout);
         }
         return LAP_EXIT_OK;

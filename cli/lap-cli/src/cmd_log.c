@@ -64,7 +64,10 @@ static bool log_via_scan(Arena *a, Repo *repo, const LogQuery *q, StrBuf *sb,
 int32_t cmd_log(Arena *a, int32_t argc, char **argv) {
     static const char *const value_flags[] = {"--session", "--file", "-n",
                                               NULL};
+    static const char *const bool_flags[] = {"--json", NULL};
     bool json = has_flag(argc, argv, value_flags, "--json");
+    if (!flags_known(argc, argv, value_flags, bool_flags))
+        return LAP_EXIT_ERR;
     const char *filt_session = flag_value(argc, argv, value_flags,
                                           "--session");
     const char *filt_file = flag_value(argc, argv, value_flags, "--file");

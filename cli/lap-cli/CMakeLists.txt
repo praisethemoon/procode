@@ -23,6 +23,7 @@ set(LAP_LIB_SOURCES
     src/ignore.c
     src/diff.c
     src/rec.c
+    src/msg.c
     src/repo.c
     src/cmd_common.c
     src/cmd_init.c

@@ -111,7 +111,10 @@ static WalkAction on_snapshot_file(const char *rel, bool is_dir, void *ud) {
 }
 
 int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
+    static const char *const bool_flags[] = {"--json", "--deep", NULL};
     bool json = has_flag(argc, argv, NULL, "--json");
+    if (!flags_known(argc, argv, NULL, bool_flags))
+        return LAP_EXIT_ERR;
     bool deep = has_flag(argc, argv, NULL, "--deep");
 
     Repo repo;

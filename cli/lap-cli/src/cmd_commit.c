@@ -66,42 +66,115 @@ static void print_multi_edit_error(Arena *a, bool json, const char *rel,
         }
         fprintf(stderr,
                 "a commit is one edit; pick one:\n"
-                "  lap commit %s -m \"...\" --edit <n>\n"
-                "  lap commit %s -m \"...\" --lines <start>-<end>\n",
+                "  lap commit %s -i \"...\" -b \"...\" --edit <n>\n"
+                "  lap commit %s -i \"...\" -b \"...\" --lines <start>-<end>\n",
                 rel, rel);
     }
 }
 
+/* The behavior of the session's most recent commit, which the next one must
+ * not repeat; NULL when the session has none yet. */
+static const char *session_last_behavior(Arena *a, Repo *repo,
+                                         const char *session) {
+    uint32_t want = rec_session_no(session);
+    Idx *ix = idx_ready(a, repo);
+    if (ix) {
+        for (int64_t e = (int64_t)ix->h.count - 1; e >= 0; e--) {
+            const IdxEntry *en = &ix->v[e];
+            if (en->kind == IDX_SESSION_START && en->session == want)
+                return NULL;
+            if (en->kind != IDX_COMMIT || en->session != want)
+                continue;
+            Rec rec;
+            if (idx_fetch(a, repo, ix, e, &rec))
+                return rec.behavior;
+            break; /* the index could not answer: scan */
+        }
+    }
+    RecLog log;
+    char err[256];
+    if (!rec_log_load(a, repo->logpath, &log, err, sizeof err))
+        return NULL;
+    for (int32_t i = log.count - 1; i >= 0; i--) {
+        const Rec *rec = &log.v[i];
+        if (rec->type == REC_SESSION_START && rec_session_no(rec->id) == want)
+            return NULL;
+        if (rec->type == REC_COMMIT && rec_session_no(rec->session) == want)
+            return rec->behavior;
+    }
+    return NULL;
+}
+
+/* Intent and behavior from -i/-b, or from the sections of a -F file. */
+static bool message_args(Arena *a, int32_t argc, char **argv,
+                         const char *const *value_flags, bool json,
+                         const char **intent, const char **behavior) {
+    const char *i = flag_value2(argc, argv, value_flags, "-i", "--intent");
+    const char *b = flag_value2(argc, argv, value_flags, "-b", "--behavior");
+    const char *f = flag_value(argc, argv, value_flags, "-F");
+    char err[512];
+    if (f) {
+        if (i || b) {
+            err_out(json, "usage",
+                    "give the message with -i and -b, or with -F, not both");
+            return false;
+        }
+        char *text;
+        if (!read_text_arg(a, f, &text, err, sizeof err) ||
+            !msg_parse_file(a, text, intent, behavior, err, sizeof err)) {
+            err_out(json, "bad_message_file", "%s", err);
+            return false;
+        }
+        return true;
+    }
+    char *ti = i ? arena_strdup(a, i) : NULL;
+    char *tb = b ? arena_strdup(a, b) : NULL;
+    if (ti)
+        msg_trim(ti);
+    if (tb)
+        msg_trim(tb);
+    if (!ti || !ti[0]) {
+        err_out(json, "missing_intent",
+                "a commit needs an intent: -i \"why this edit exists\" (or "
+                "-F <file> with Intent: and Behavior: sections)");
+        return false;
+    }
+    if (!tb || !tb[0]) {
+        err_out(json, "missing_behavior",
+                "a commit needs a behavior: -b \"what this edit makes the "
+                "code do\"");
+        return false;
+    }
+    *intent = ti;
+    *behavior = tb;
+    return true;
+}
+
 int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"-m", "-F", "--edit", "--lines",
-                                              NULL};
+    static const char *const value_flags[] = {
+        "-i", "--intent", "-b", "--behavior", "-F", "--edit", "--lines",
+        NULL};
+    static const char *const bool_flags[] = {"--json", "--no-session",
+                                             "--force-message", NULL};
     bool json = has_flag(argc, argv, value_flags, "--json");
+    if (!flags_known(argc, argv, value_flags, bool_flags))
+        return LAP_EXIT_ERR;
+    bool force = has_flag(argc, argv, value_flags, "--force-message");
     const char *file_arg = positional_arg(argc, argv, value_flags, 0);
     const char *edit_arg = flag_value(argc, argv, value_flags, "--edit");
     const char *lines_arg = flag_value(argc, argv, value_flags, "--lines");
     bool no_session = has_flag(argc, argv, value_flags, "--no-session");
 
     if (!file_arg) {
-        err_out(json, "usage", "usage: lap commit <file> -m \"message\" | "
-                               "-F <file|-> [--edit <n> | --lines <a>-<b>] "
-                               "[--no-session] [--json]");
+        err_out(json, "usage",
+                "usage: lap commit <file> (-i \"intent\" -b \"behavior\" | "
+                "-F <file|->) [--edit <n> | --lines <a>-<b>] "
+                "[--force-message] [--no-session] [--json]");
         return LAP_EXIT_ERR;
     }
-    const char *msg = NULL;
-    char merr[512];
-    int32_t mrc = message_arg(a, argc, argv, value_flags, &msg, merr,
-                              sizeof merr);
-    if (mrc < 0) {
-        err_out(json, "bad_message", "%s", merr);
+    const char *intent = NULL, *behavior = NULL;
+    if (!message_args(a, argc, argv, value_flags, json, &intent, &behavior))
         return LAP_EXIT_ERR;
-    }
-    if (mrc == 0) {
-        err_out(json, "message_required",
-                "a commit message is required: lap commit %s -m \"why this "
-                "edit exists\" (or -F <file>, -F - for stdin)",
-                file_arg);
-        return LAP_EXIT_ERR;
-    }
     if (edit_arg && lines_arg) {
         err_out(json, "usage", "--edit and --lines are mutually exclusive");
         return LAP_EXIT_ERR;
@@ -154,7 +227,9 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     memset(&rec, 0, sizeof rec);
     rec.type = REC_COMMIT;
     rec.file = rel;
-    rec.msg = msg;
+    rec.intent = intent;
+    rec.behavior = behavior;
+    rec.forced = force;
     rec.user = repo_user(&repo);
     rec.session = no_session ? NULL
                   : (repo.active_session[0]
@@ -252,6 +327,22 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         rec.eof_nl = touches_end ? fd.work.eof_nl : fd.shadow.eof_nl;
     }
 
+    MsgInput check = {intent, behavior, NULL, NULL, 0, force};
+    if (rec.session)
+        check.prev_behavior = session_last_behavior(a, &repo, rec.session);
+    bool pure_delete = rec.new_n == 0;
+    check.code = pure_delete ? rec.old_text : rec.new_text;
+    check.code_n = pure_delete ? rec.old_n : rec.new_n;
+    char why[256];
+    const char *refused = msg_check(a, &check, why, sizeof why);
+    if (refused) {
+        err_out(json, refused, "%s%s", why,
+                strcmp(refused, "message_too_short") == 0
+                    ? ""
+                    : " (--force-message if this is honestly the same)");
+        goto done;
+    }
+
     char idbuf[32];
     snprintf(idbuf, sizeof idbuf, "L%lld", (long long)repo.next_commit);
     rec.id = idbuf;
@@ -304,7 +395,8 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     if (json) {
         StrBuf sb;
         sb_init(&sb, a);
-        sb_printf(&sb, "{\"ok\":true,\"id\":\"%s\",\"file\":", rec.id);
+        sb_printf(&sb, "{\"ok\":true,\"id\":\"%s\",\"hash\":\"%s\",\"file\":",
+                  rec.id, rec.hash);
         json_escape_c(&sb, rel);
         sb_printf(&sb,
                   ",\"op\":\"%s\",\"session\":%s%s%s,\"old_start\":%d,"
@@ -321,12 +413,14 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         shown.new_lines = rec.new_lines;
         char desc[128];
         region_describe(&shown, desc, sizeof desc);
-        const char *nl = strchr(msg, '\n');
-        int32_t mlen = nl ? (int32_t)(nl - msg) : (int32_t)strlen(msg);
-        printf("[%s%s%s] %s%s%s %s: %s%s%s  \"%.*s\"\n", sgr(S_ID), rec.id,
-               sgr_off(), sgr(S_SESSION),
+        const char *nl = strchr(intent, '\n');
+        int32_t mlen = nl ? (int32_t)(nl - intent) : (int32_t)strlen(intent);
+        char sh[SHORT_HASH_LEN + 1];
+        short_hash(&rec, sh);
+        printf("[%s%s %s%s] %s%s%s %s: %s%s%s  \"%.*s\"\n", sgr(S_ID), rec.id,
+               sh, sgr_off(), sgr(S_SESSION),
                rec.session ? rec.session : "(no session)", sgr_off(), rel,
-               sgr(S_MUTED), desc, sgr_off(), mlen, msg);
+               sgr(S_MUTED), desc, sgr_off(), mlen, intent);
     }
     rc = LAP_EXIT_OK;
 

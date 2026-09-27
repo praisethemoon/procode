@@ -1,7 +1,10 @@
 #include "cmd.h"
 
 int32_t cmd_init(Arena *a, int32_t argc, char **argv) {
+    static const char *const bool_flags[] = {"--json", NULL};
     bool json = has_flag(argc, argv, NULL, "--json");
+    if (!flags_known(argc, argv, NULL, bool_flags))
+        return LAP_EXIT_ERR;
     char cwd[LAP_PATH_MAX];
     if (!plat_getcwd(cwd, sizeof cwd)) {
         err_out(json, "internal", "cannot get working directory");

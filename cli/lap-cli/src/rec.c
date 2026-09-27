@@ -54,8 +54,12 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
         sb_printf(&sb, ",\"eof_nl\":%s", rec->eof_nl ? "true" : "false");
         put_text_array(&sb, "old_text", rec->old_text, rec->old_n);
         put_text_array(&sb, "new_text", rec->new_text, rec->new_n);
-        sb_puts(&sb, ",\"msg\":");
-        json_escape_c(&sb, rec->msg);
+        sb_puts(&sb, ",\"intent\":");
+        json_escape_c(&sb, rec->intent);
+        sb_puts(&sb, ",\"behavior\":");
+        json_escape_c(&sb, rec->behavior);
+        if (rec->forced)
+            sb_puts(&sb, ",\"forced\":true");
         break;
     case REC_SESSION_START:
         sb_printf(&sb, ",\"id\":\"%s\"", rec->id);
@@ -124,14 +128,22 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
         out->session = jobj_str(v, "session"); /* NULL for json null */
         out->file = jobj_str(v, "file");
         out->op = jobj_str(v, "op");
-        out->msg = jobj_str(v, "msg");
+        out->intent = jobj_str(v, "intent");
+        out->behavior = jobj_str(v, "behavior");
+        out->forced = jobj_bool(v, "forced", false);
         out->old_start = (int32_t)jobj_int(v, "old_start", 0);
         out->old_lines = (int32_t)jobj_int(v, "old_lines", 0);
         out->new_start = (int32_t)jobj_int(v, "new_start", 0);
         out->new_lines = (int32_t)jobj_int(v, "new_lines", 0);
         out->eof_nl = jobj_bool(v, "eof_nl", true);
-        if (!out->id || !out->file || !out->op || !out->msg) {
+        if (!out->id || !out->file || !out->op) {
             snprintf(err, errsz, "commit record missing required field");
+            return false;
+        }
+        if (!out->intent || !out->behavior || !out->intent[0] ||
+            !out->behavior[0]) {
+            snprintf(err, errsz, "commit %s has no intent and behavior",
+                     out->id);
             return false;
         }
         if (!get_text_array(a, v, "old_text", &out->old_text, &out->old_n) ||

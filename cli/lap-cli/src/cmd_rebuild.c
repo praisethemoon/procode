@@ -5,7 +5,10 @@
  * the command when the log's hash chain is broken.
  */
 int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
+    static const char *const bool_flags[] = {"--json", "--verify", NULL};
     bool json = has_flag(argc, argv, NULL, "--json");
+    if (!flags_known(argc, argv, NULL, bool_flags))
+        return LAP_EXIT_ERR;
     bool verify = has_flag(argc, argv, NULL, "--verify");
 
     Repo repo;

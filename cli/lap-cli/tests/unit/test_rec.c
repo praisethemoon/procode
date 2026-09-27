@@ -17,7 +17,8 @@ void test_rec(void) {
     rec.session = "S2";
     rec.file = "src/a b/weird\"name.c";
     rec.op = "edit";
-    rec.msg = "multi\nline \"message\"\twith tabs";
+    rec.intent = "multi\nline \"intent\"\twith tabs";
+    rec.behavior = "what it \"does\"";
     rec.ts = "2026-09-20T10:00:00Z";
     rec.prev = LAP_HASH_ZERO;
     rec.old_start = 10;
@@ -41,7 +42,11 @@ void test_rec(void) {
     ASSERT_EQ_S(back.session, "S2");
     ASSERT_EQ_S(back.file, "src/a b/weird\"name.c");
     ASSERT_EQ_S(back.op, "edit");
-    ASSERT_EQ_S(back.msg, "multi\nline \"message\"\twith tabs");
+    ASSERT_EQ_S(back.intent, "multi\nline \"intent\"\twith tabs");
+    ASSERT_EQ_S(back.behavior, "what it \"does\"");
+    ASSERT_TRUE(!back.forced);
+    ASSERT_TRUE(strstr(line, "\"forced\"") == NULL);
+    ASSERT_TRUE(strstr(line, "\"msg\"") == NULL);
     ASSERT_EQ_I(back.old_start, 10);
     ASSERT_EQ_I(back.old_lines, 2);
     ASSERT_EQ_I(back.new_start, 10);
@@ -51,6 +56,30 @@ void test_rec(void) {
     ASSERT_EQ_I(back.new_n, 3);
     ASSERT_TRUE(str_eq(back.new_text[0], newt[0]));
     ASSERT_EQ_S(back.hash, rec.hash);
+
+    t_begin("rec: forced is written only when set, and read back");
+    rec.forced = true;
+    line = rec_encode(a, &rec, &len);
+    ASSERT_TRUE(strstr(line, "\"forced\":true") != NULL);
+    ASSERT_TRUE(rec_decode(a, line, len, &back, err, sizeof err));
+    ASSERT_TRUE(back.forced);
+    rec.forced = false;
+
+    t_begin("rec: a commit without intent and behavior is malformed");
+    const char *msg_only =
+        "{\"type\":\"commit\",\"id\":\"L1\",\"session\":null,\"file\":\"f\","
+        "\"op\":\"edit\",\"old_start\":1,\"old_lines\":0,\"new_start\":1,"
+        "\"new_lines\":0,\"eof_nl\":true,\"old_text\":[],\"new_text\":[],"
+        "\"msg\":\"m\",\"ts\":\"t\",\"prev\":\"p\"}";
+    ASSERT_TRUE(!rec_decode(a, msg_only, strlen(msg_only), &back, err,
+                            sizeof err));
+    const char *no_behavior =
+        "{\"type\":\"commit\",\"id\":\"L1\",\"session\":null,\"file\":\"f\","
+        "\"op\":\"edit\",\"old_start\":1,\"old_lines\":0,\"new_start\":1,"
+        "\"new_lines\":0,\"eof_nl\":true,\"old_text\":[],\"new_text\":[],"
+        "\"intent\":\"i\",\"behavior\":\"\",\"ts\":\"t\",\"prev\":\"p\"}";
+    ASSERT_TRUE(!rec_decode(a, no_behavior, strlen(no_behavior), &back, err,
+                            sizeof err));
 
     t_begin("rec: null session survives the round-trip");
     rec.session = NULL;
@@ -139,7 +168,8 @@ void test_rec(void) {
         "{\"type\":\"commit\",\"id\":\"L1\",\"session\":null,\"file\":\"f\","
         "\"op\":\"edit\",\"old_start\":1,\"old_lines\":2,\"new_start\":1,"
         "\"new_lines\":0,\"eof_nl\":true,\"old_text\":[\"only-one\"],"
-        "\"new_text\":[],\"msg\":\"m\",\"ts\":\"t\",\"prev\":\"p\"}";
+        "\"new_text\":[],\"intent\":\"i\",\"behavior\":\"b\",\"ts\":\"t\","
+        "\"prev\":\"p\"}";
     ASSERT_TRUE(!rec_decode(a, bad_counts, strlen(bad_counts), &back, err,
                             sizeof err));
 

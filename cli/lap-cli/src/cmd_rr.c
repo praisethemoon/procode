@@ -3,11 +3,11 @@
 /* lap rr — a review request: what a run of work changed, and why.
  *
  * Two halves, and both matter. The TRAJECTORY is the ordered reasoning:
- * every commit's message, in the order the work happened. The NET CHANGE
- * is what a reviewer of the result would see: each touched file replayed
- * to just before the range and again at its end, then diffed — so edits
- * that cancelled out show as nothing, and ten commits to one function show
- * as one coherent change.
+ * every commit's intent and behavior, in the order the work happened. The
+ * NET CHANGE is what a reviewer of the result would see: each touched file
+ * replayed to just before the range and again at its end, then diffed — so
+ * edits that cancelled out show as nothing, and ten commits to one function
+ * show as one coherent change.
  *
  * It reads; it never writes. Asking twice costs nothing and changes
  * nothing.
@@ -35,24 +35,21 @@ static bool range_from_session(const RecLog *log, uint32_t sess, Range *out) {
     return out->first >= 0;
 }
 
-static bool range_from_ids(const RecLog *log, const char *from,
-                           const char *to, Range *out) {
-    out->first = -1;
-    out->last = -1;
-    for (int32_t i = 0; i < log->count; i++) {
-        if (log->v[i].type == REC_COMMIT &&
-            strcmp(log->v[i].id, from) == 0) {
-            out->first = i;
-            break;
-        }
+/* Both ends are commit references; a bad one is reported here. */
+static bool range_from_refs(const RecLog *log, const char *from,
+                            const char *to, bool json, Range *out,
+                            bool *reported) {
+    const char *code;
+    char err[512];
+    out->first = ref_find(log, from, &code, err, sizeof err);
+    if (out->first >= 0)
+        out->last = ref_find(log, to, &code, err, sizeof err);
+    if (out->first < 0 || out->last < 0) {
+        err_out(json, code, "%s", err);
+        *reported = true;
+        return false;
     }
-    for (int32_t i = log->count - 1; i >= 0; i--) {
-        if (log->v[i].type == REC_COMMIT && strcmp(log->v[i].id, to) == 0) {
-            out->last = i;
-            break;
-        }
-    }
-    return out->first >= 0 && out->last >= 0 && out->first <= out->last;
+    return out->first <= out->last;
 }
 
 /* Renders the net change of one file as a unified-style diff. */
@@ -82,15 +79,13 @@ static void render_net(StrBuf *sb, Arena *a, Lines before, Lines after,
 }
 
 int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"--session", "--from", "--to",
-                                              NULL};
-    bool json = has_flag(argc, argv, value_flags, "--json");
-    bool no_diff = has_flag(argc, argv, value_flags, "--no-diff");
-    const char *f_session = flag_value(argc, argv, value_flags, "--session");
-    const char *f_from = flag_value(argc, argv, value_flags, "--from");
-    const char *f_to = flag_value(argc, argv, value_flags, "--to");
-    const char *pos0 = positional_arg(argc, argv, value_flags, 0);
-    const char *pos1 = positional_arg(argc, argv, value_flags, 1);
+    static const char *const bool_flags[] = {"--json", "--no-diff", NULL};
+    bool json = has_flag(argc, argv, NULL, "--json");
+    if (!flags_known(argc, argv, NULL, bool_flags))
+        return LAP_EXIT_ERR;
+    bool no_diff = has_flag(argc, argv, NULL, "--no-diff");
+    const char *pos0 = positional_arg(argc, argv, NULL, 0);
+    const char *pos1 = positional_arg(argc, argv, NULL, 1);
 
     Repo repo;
     char err[512];
@@ -111,14 +106,13 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
     char label[160];
 
     if (pos0 && pos1) {
-        ok = range_from_ids(&log, pos0, pos1, &rng);
+        bool reported = false;
+        ok = range_from_refs(&log, pos0, pos1, json, &rng, &reported);
+        if (reported)
+            return LAP_EXIT_ERR;
         snprintf(label, sizeof label, "%s..%s", pos0, pos1);
-    } else if (f_from && f_to) {
-        ok = range_from_ids(&log, f_from, f_to, &rng);
-        snprintf(label, sizeof label, "%s..%s", f_from, f_to);
     } else {
-        const char *sid = f_session ? f_session : pos0;
-        uint32_t sess = rec_session_no(sid);
+        uint32_t sess = rec_session_no(pos0);
         if (!sess) { /* no target given: review the most recent session */
             for (int32_t i = log.count - 1; i >= 0 && !sess; i--) {
                 if (log.v[i].type == REC_SESSION_START)
@@ -199,14 +193,15 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
     if (pathw > 40)
         pathw = 40;
 
+    /* Humans read the trajectory by goal: a run of commits sharing an
+     * intent prints it once, then each commit's own behavior. JSON stays
+     * one entry per commit and leaves the grouping to its reader. */
     int32_t printed = 0;
+    const char *heading = NULL;
     for (int32_t i = rng.first; i <= rng.last; i++) {
         const Rec *rec = &log.v[i];
         if (rec->type != REC_COMMIT)
             continue;
-        const char *nl = strchr(rec->msg, '\n');
-        int32_t mlen = nl ? (int32_t)(nl - rec->msg)
-                          : (int32_t)strlen(rec->msg);
         if (json) {
             if (printed)
                 sb_putc(&sb, ',');
@@ -214,12 +209,29 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
             json_commit(&sb, rec, NULL);
             sb_putc(&sb, '}');
         } else {
-            sb_puts(&sb, "  ");
+            if (!heading || strcmp(heading, rec->intent) != 0) {
+                heading = rec->intent;
+                if (printed)
+                    sb_putc(&sb, '\n');
+                sb_indented(&sb, "  ", rec->intent);
+            }
+            char sh[SHORT_HASH_LEN + 1];
+            short_hash(rec, sh);
+            const char *nl = strchr(rec->behavior, '\n');
+            int32_t blen = nl ? (int32_t)(nl - rec->behavior)
+                              : (int32_t)strlen(rec->behavior);
+            sb_puts(&sb, "    ");
             sb_field(&sb, S_ID, rec->id, 6);
+            sb_putc(&sb, ' ');
+            sb_field(&sb, S_MUTED, sh, 0);
             sb_puts(&sb, "  ");
             sb_pad_text(&sb, rec->file, pathw);
             sb_puts(&sb, "  ");
-            sb_text(&sb, rec->msg, (size_t)mlen);
+            sb_text(&sb, rec->behavior, (size_t)blen);
+            if (rec->forced) {
+                sb_putc(&sb, ' ');
+                sb_field(&sb, S_MUTED, "(forced)", 0);
+            }
             sb_putc(&sb, '\n');
         }
         printed++;

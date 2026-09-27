@@ -149,8 +149,11 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
 }
 
 int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"-m", "-F", "--meta", NULL};
+    static const char *const value_flags[] = {"-F", "--meta", NULL};
+    static const char *const bool_flags[] = {"--json", NULL};
     bool json = has_flag(argc, argv, value_flags, "--json");
+    if (!flags_known(argc, argv, value_flags, bool_flags))
+        return LAP_EXIT_ERR;
     const char *sub = positional_arg(argc, argv, value_flags, 0);
 
     Repo repo;
@@ -210,16 +213,21 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
     } else if (strcmp(sub, "list") == 0) {
         rc = session_list(a, &repo, json, &meta);
     } else if (strcmp(sub, "start") == 0) {
-        const char *msg = NULL;
-        char merr[512];
-        int32_t mrc = message_arg(a, argc, argv, value_flags, &msg, merr,
-                                  sizeof merr);
-        if (mrc < 0) {
-            err_out(json, "bad_message", "%s", merr);
+        const char *msg = positional_arg(argc, argv, value_flags, 1);
+        const char *file = flag_value(argc, argv, value_flags, "-F");
+        if (msg && file) {
+            err_out(json, "usage",
+                    "give the purpose as an argument or with -F, not both");
             goto done;
         }
-        if (mrc == 0)
-            msg = positional_arg(argc, argv, value_flags, 1);
+        if (file) {
+            char *text;
+            if (!read_text_arg(a, file, &text, err, sizeof err)) {
+                err_out(json, "bad_message_file", "%s", err);
+                goto done;
+            }
+            msg = text;
+        }
         if (!msg || msg[0] == '\0') {
             err_out(json, "message_required",
                     "a session needs a purpose: lap session start \"fix the "
