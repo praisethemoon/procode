@@ -12,6 +12,25 @@ static bool is_value_flag(const char *const *value_flags, const char *arg) {
     return false;
 }
 
+/* The value in "--flag=value" when arg is that form of `flag`, a long
+ * flag; else NULL. */
+static const char *eq_value(const char *arg, const char *flag) {
+    size_t n = strlen(flag);
+    if (strncmp(flag, "--", 2) != 0 || strncmp(arg, flag, n) != 0 ||
+        arg[n] != '=')
+        return NULL;
+    return arg + n + 1;
+}
+
+/* True when arg is "--flag=value" for one of the value flags. */
+static bool is_value_eq(const char *const *value_flags, const char *arg) {
+    for (int32_t f = 0; value_flags && value_flags[f]; f++) {
+        if (eq_value(arg, value_flags[f]))
+            return true;
+    }
+    return false;
+}
+
 bool has_flag(int32_t argc, char **argv, const char *const *value_flags,
               const char *flag) {
     for (int32_t i = 0; i < argc; i++) {
@@ -32,6 +51,9 @@ const char *flag_value(int32_t argc, char **argv,
             return NULL;
         if (strcmp(argv[i], flag) == 0)
             return i + 1 < argc ? argv[i + 1] : NULL;
+        const char *eq = eq_value(argv[i], flag);
+        if (eq)
+            return eq;
         if (is_value_flag(value_flags, argv[i]))
             i++;
     }
@@ -45,10 +67,15 @@ bool flags_known(int32_t argc, char **argv, const char *const *value_flags,
         if (strcmp(w, "--") == 0)
             return true;
         if (is_value_flag(value_flags, w)) {
+            if (i + 1 >= argc) {
+                err_out(tty_json(), "usage", "%s needs a value", w);
+                return false;
+            }
             i++;
             continue;
         }
         if (w[0] != '-' || is_value_flag(bool_flags, w) ||
+            is_value_eq(value_flags, w) ||
             strcmp(w, "--no-color") == 0 ||
             strncmp(w, "--color=", sizeof "--color=" - 1) == 0)
             continue;

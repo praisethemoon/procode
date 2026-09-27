@@ -417,6 +417,18 @@ expect_grep "unknown_flag" "$LAP" rr --from L1 --to L2 --json
 # colour flags belong to lap and are accepted by every command
 expect_ok "$LAP" log -n 1 --color=never
 expect_ok "$LAP" status --no-color
+# a long value flag takes its value joined too; a value flag with none is usage
+expect_grep '"error":"usage","message":"--branch needs a value"' "$LAP" log --json --branch
+expect_grep "needs a value" "$LAP" commit uf.txt -i "a b c" -b "d e f" --lines
+expect_grep '"error":"usage"' "$LAP" search --json --msg
+[ "$("$LAP" log --session=S1 --json)" = "$("$LAP" log --session S1 --json)" ] ||
+    fail "--session=S1 and --session S1 differ"
+[ "$("$LAP" search --msg=a --json)" = "$("$LAP" search --msg a --json)" ] ||
+    fail "--msg=a and --msg a differ"
+expect_grep '"commits":\[{' "$LAP" search --msg=a --json
+expect_grep "unknown_flag" "$LAP" log --bogus=1 --json
+expect_grep "unknown_flag" "$LAP" commit uf.txt -i=x -b "d e f" --json
+[ "$(history | wc -c)" = "$BEFORE" ] || fail "a refused command wrote to the log"
 rm -f uf.txt
 
 t "session start takes its purpose from -F, not both"

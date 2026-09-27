@@ -740,7 +740,10 @@ a message like `-i "--no-session"` is never misread as a flag; a literal
 starts with `-` and is not one of the command's flags (or lap's own colour
 flags) is refused with `unknown_flag`, naming it; nothing is run. A
 skipped flag would let its value pass for an argument — `-x "text" f.c`
-would name a file `text`.
+would name a file `text`. A long flag that takes a value also takes it
+joined, `--branch=feat` for `--branch feat` (short ones only apart:
+`-i "..."`); a value-taking flag that ends the command line is refused with
+`usage`, naming it.
 
 ### Colour
 
