@@ -404,6 +404,13 @@ folder, `lap merge <branch> [--dry-run]`.
    first conflict stops that file**: none of its later commits are adopted,
    in this merge or later ones. Other files carry on.
 
+   **Whether the file exists** is judged first, since an empty file and
+   a missing one have the same (no) lines: a commit that edits a file the
+   parent deleted is a conflict (`the parent deleted the file`); a create
+   of a file the parent has is already done when the lines (and the final
+   newline) are the same, else a conflict (`both sides create it`); a
+   delete of a file the parent deleted is already done.
+
    **Identical changes are already done.** A commit that overlaps exactly
    one parent change, of exactly its region and size, and lands where the
    parent's text already is its new text (with the same final newline) is

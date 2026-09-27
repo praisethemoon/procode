@@ -491,8 +491,8 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         Lines parent = file_at(a, &plog, files[f], parent_at,
                                &parent_has);
         Placement p;
-        adopt_place(a, base, parent, (const Rec *const *)mine, (int32_t)n,
-                    &p);
+        adopt_place(a, base, parent, parent_has, (const Rec *const *)mine,
+                    (int32_t)n, &p);
         int32_t last = -1; /* the last commit placed, not already done */
         for (int32_t k = 0; k < p.placed; k++) {
             Lin *l = &lin[lof[idx[k]]];

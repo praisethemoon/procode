@@ -28,8 +28,8 @@ static Str *strip_text(Arena *a, const Str *v, int32_t n) {
     return lines_without_cr(a, l).lines;
 }
 
-void adopt_place(Arena *a, Lines base, Lines parent, const Rec *const *commits,
-                 int32_t n, Placement *out) {
+void adopt_place(Arena *a, Lines base, Lines parent, bool parent_has,
+                 const Rec *const *commits, int32_t n, Placement *out) {
     memset(out, 0, sizeof *out);
     out->start = (int32_t *)arena_alloc(a, (size_t)(n ? n : 1) *
                                                sizeof(int32_t));
@@ -38,6 +38,7 @@ void adopt_place(Arena *a, Lines base, Lines parent, const Rec *const *commits,
 
     Lines branch = base;
     Lines merged = parent;
+    bool mexists = parent_has; /* the parent's file, as commits are placed */
     Regions pr = diff_lines(a, lines_without_cr(a, base),
                             lines_without_cr(a, parent));
     Change *ch = (Change *)arena_alloc(
@@ -68,21 +69,47 @@ void adopt_place(Arena *a, Lines base, Lines parent, const Rec *const *commits,
         int32_t at = s + offset;
         Lines mnocr = lines_without_cr(a, merged);
 
+        /* Existence first: lines alone cannot tell an empty file from a
+         * missing one. A delete of a file the parent deleted, or a create
+         * of the same lines the parent created, is already done; creating
+         * a file the parent has otherwise, or editing one it deleted, is a
+         * conflict. */
+        bool create = strcmp(c->op, "create") == 0;
+        bool both = false;
+        if (del && !mexists) {
+            both = true;
+        } else if (create && mexists) {
+            both = merged.count == c->new_n && merged.eof_nl == c->eof_nl &&
+                   text_at(mnocr, 1, strip_text(a, c->new_text, c->new_n),
+                           c->new_n);
+            if (!both) {
+                out->why = "both sides create it";
+                break;
+            }
+        } else if (!create && !del && !mexists) {
+            out->why = "the parent deleted the file";
+            break;
+        }
+        if (both) {
+            branch = del ? (Lines){NULL, 0, true} : merged;
+            for (int32_t i = 0; i < pr.count; i++)
+                ch[i].len = -1; /* the branch's version is the parent's */
+            out->already[k] = true;
+            out->start[k] = 1;
+            out->eof_nl[k] = merged.eof_nl;
+            out->placed = k + 1;
+            continue;
+        }
+
         /* The parent made exactly this change: already done. */
-        if (hits == 1 && ch[hit].start == s && ch[hit].len == c->old_lines &&
+        if (!del && hits == 1 && ch[hit].start == s &&
+            ch[hit].len == c->old_lines &&
             ch[hit].delta == c->new_n - c->old_lines &&
             text_at(mnocr, at, strip_text(a, c->new_text, c->new_n),
                     c->new_n) &&
-            (del ? merged.count == 0
-                 : c->eof_nl == branch.eof_nl || c->eof_nl == merged.eof_nl)) {
-            if (del) {
-                branch.lines = NULL;
-                branch.count = 0;
-                branch.eof_nl = true;
-            } else {
-                branch = lines_replace(a, branch, s, c->old_lines, c->new_text,
-                                       c->new_n, c->eof_nl);
-            }
+            (c->eof_nl == branch.eof_nl || c->eof_nl == merged.eof_nl)) {
+            branch = lines_replace(a, branch, s, c->old_lines, c->new_text,
+                                   c->new_n, c->eof_nl);
             ch[hit].len = -1;
             for (int32_t i = 0; i < pr.count; i++) {
                 if (ch[i].start >= e)
@@ -126,6 +153,7 @@ void adopt_place(Arena *a, Lines base, Lines parent, const Rec *const *commits,
             branch = lines_replace(a, branch, s, c->old_lines, c->new_text,
                                    c->new_n, c->eof_nl);
         }
+        mexists = !del;
         for (int32_t i = 0; i < pr.count; i++) {
             if (ch[i].start >= e)
                 ch[i].start += c->new_n - c->old_lines;

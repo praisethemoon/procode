@@ -56,7 +56,7 @@ void test_adopt(void) {
     Lines parent = lines_replace(a, base, 4, 0, L(a, "import x\n").lines, 1,
                                  true);
     const Rec *c1[] = {edit(a, base, 51, 0, "fn() {\n}\n")};
-    adopt_place(a, base, parent, c1, 1, &p);
+    adopt_place(a, base, parent, true, c1, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_EQ_I(p.start[0], 52);
     ASSERT_EQ_I(p.result.count, 63);
@@ -68,7 +68,7 @@ void test_adopt(void) {
     t_begin("adopt: a parent change below the branch's does not move it");
     parent = lines_replace(a, base, 50, 1, L(a, "L50\n").lines, 1, true);
     const Rec *c2[] = {edit(a, base, 10, 1, "L10\n")};
-    adopt_place(a, base, parent, c2, 1, &p);
+    adopt_place(a, base, parent, true, c2, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_EQ_I(p.start[0], 10);
     ASSERT_TRUE(str_eq_c(p.result.lines[9], "L10"));
@@ -77,7 +77,7 @@ void test_adopt(void) {
     t_begin("adopt: deletions on the parent above move the branch's edit up");
     parent = lines_replace(a, base, 2, 3, NULL, 0, true);
     const Rec *c3[] = {edit(a, base, 20, 1, "L20\n")};
-    adopt_place(a, base, parent, c3, 1, &p);
+    adopt_place(a, base, parent, true, c3, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_EQ_I(p.start[0], 17);
     ASSERT_TRUE(str_eq_c(p.result.lines[16], "L20"));
@@ -95,7 +95,7 @@ void test_adopt(void) {
     Rec *b2 = edit(a, bv, 40, 1, "B40\n");
     ASSERT_TRUE(str_eq_c(b2->old_text[0], "l38"));
     const Rec *c4[] = {b1, b2};
-    adopt_place(a, base, parent, c4, 2, &p);
+    adopt_place(a, base, parent, true, c4, 2, &p);
     ASSERT_EQ_I(p.placed, 2);
     ASSERT_EQ_I(p.start[0], 11);
     ASSERT_EQ_I(p.start[1], 42);
@@ -107,7 +107,7 @@ void test_adopt(void) {
     t_begin("adopt: a region overlapping a parent change is a conflict");
     parent = lines_replace(a, base, 10, 1, L(a, "P10\n").lines, 1, true);
     const Rec *c5[] = {edit(a, base, 9, 3, "x\n")};
-    adopt_place(a, base, parent, c5, 1, &p);
+    adopt_place(a, base, parent, true, c5, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
     ASSERT_TRUE(p.why && strstr(p.why, "overlaps") != NULL);
     ASSERT_EQ_S(text(a, p.result), text(a, parent));
@@ -115,7 +115,7 @@ void test_adopt(void) {
     t_begin("adopt: both sides inserting at one point is a conflict");
     parent = lines_replace(a, base, 10, 0, L(a, "p\n").lines, 1, true);
     const Rec *c6[] = {edit(a, base, 10, 0, "b\n")};
-    adopt_place(a, base, parent, c6, 1, &p);
+    adopt_place(a, base, parent, true, c6, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
     ASSERT_TRUE(p.why && strstr(p.why, "same point") != NULL);
 
@@ -123,13 +123,13 @@ void test_adopt(void) {
             "line away is not");
     parent = lines_replace(a, base, 10, 1, L(a, "P10\n").lines, 1, true);
     const Rec *c7[] = {edit(a, base, 11, 1, "B11\n")};
-    adopt_place(a, base, parent, c7, 1, &p);
+    adopt_place(a, base, parent, true, c7, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
     const Rec *c7b[] = {edit(a, base, 9, 1, "B9\n")};
-    adopt_place(a, base, parent, c7b, 1, &p);
+    adopt_place(a, base, parent, true, c7b, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
     const Rec *c7c[] = {edit(a, base, 12, 1, "B12\n")};
-    adopt_place(a, base, parent, c7c, 1, &p);
+    adopt_place(a, base, parent, true, c7c, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_EQ_I(p.start[0], 12);
 
@@ -138,7 +138,7 @@ void test_adopt(void) {
     Rec *bad = edit(a, after(a, base, ok1), 10, 1, "B10\n");
     Rec *ok2 = edit(a, after(a, after(a, base, ok1), bad), 40, 1, "B40\n");
     const Rec *c8[] = {ok1, bad, ok2};
-    adopt_place(a, base, parent, c8, 3, &p);
+    adopt_place(a, base, parent, true, c8, 3, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_TRUE(str_eq_c(p.result.lines[29], "B30"));
     ASSERT_TRUE(str_eq_c(p.result.lines[39], "l40"));
@@ -146,13 +146,13 @@ void test_adopt(void) {
     t_begin("adopt: pure insertions at the very top and the very bottom");
     parent = lines_replace(a, base, 30, 1, L(a, "P30\n").lines, 1, true);
     const Rec *c9[] = {edit(a, base, 1, 0, "top\n")};
-    adopt_place(a, base, parent, c9, 1, &p);
+    adopt_place(a, base, parent, true, c9, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_EQ_I(p.start[0], 1);
     ASSERT_TRUE(str_eq_c(p.result.lines[0], "top"));
     parent = lines_replace(a, base, 2, 0, L(a, "p2\n").lines, 1, true);
     const Rec *c10[] = {edit(a, base, 61, 0, "bottom\n")};
-    adopt_place(a, base, parent, c10, 1, &p);
+    adopt_place(a, base, parent, true, c10, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_EQ_I(p.start[0], 62);
     ASSERT_TRUE(str_eq_c(p.result.lines[61], "bottom"));
@@ -163,7 +163,7 @@ void test_adopt(void) {
     Lines crparent = L(a, "a\r\nb\r\nc\r\nd\r\n");
     Lines lfview = L(a, "a\nb\nc\n");
     const Rec *c11[] = {edit(a, lfview, 2, 1, "B\n")};
-    adopt_place(a, crbase, crparent, c11, 1, &p);
+    adopt_place(a, crbase, crparent, true, c11, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_EQ_I(p.start[0], 2);
     ASSERT_TRUE(str_eq_c(p.result.lines[1], "B"));
@@ -172,7 +172,7 @@ void test_adopt(void) {
             "conflict");
     Lines other = L(a, "x\ny\nz\n");
     const Rec *c12[] = {edit(a, other, 2, 1, "Y\n")};
-    adopt_place(a, lfview, lfview, c12, 1, &p);
+    adopt_place(a, lfview, lfview, true, c12, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
     ASSERT_TRUE(p.why && strstr(p.why, "not the parent's") != NULL);
 
@@ -181,14 +181,14 @@ void test_adopt(void) {
     Lines noeol = L(a, "a\nb\nc");
     Rec *c13 = edit(a, lfview, 1, 1, "A\n");
     const Rec *c13v[] = {c13};
-    adopt_place(a, lfview, noeol, c13v, 1, &p);
+    adopt_place(a, lfview, noeol, true, c13v, 1, &p);
     ASSERT_EQ_I(p.placed, 1); /* the parent's change is line 3, not 1 */
     ASSERT_EQ_S(text(a, p.result), "A\nb\nc");
     Lines five = L(a, "a\nb\nc\nd\ne\n");
     Lines five_noeol = L(a, "a\nb\nc\nd\ne");
     Rec *c14 = edit(a, five, 1, 1, "A\n");
     const Rec *c14v[] = {c14};
-    adopt_place(a, five, five_noeol, c14v, 1, &p);
+    adopt_place(a, five, five_noeol, true, c14v, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_TRUE(!p.eof_nl[0]);
     ASSERT_EQ_S(text(a, p.result), "A\nb\nc\nd\ne");
@@ -198,11 +198,11 @@ void test_adopt(void) {
     Rec *del = edit(a, five, 1, 5, "");
     del->op = "delete";
     const Rec *c15[] = {del};
-    adopt_place(a, five, five, c15, 1, &p);
+    adopt_place(a, five, five, true, c15, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_EQ_I(p.result.count, 0);
     Lines five_changed = L(a, "a\nb\nC\nd\ne\n");
-    adopt_place(a, five, five_changed, c15, 1, &p);
+    adopt_place(a, five, five_changed, true, c15, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
 
     t_begin("adopt: a file created on the branch alone is placed; created on "
@@ -211,10 +211,10 @@ void test_adopt(void) {
     Rec *cr = edit(a, none, 1, 0, "new\nfile\n");
     cr->op = "create";
     const Rec *c16[] = {cr};
-    adopt_place(a, none, none, c16, 1, &p);
+    adopt_place(a, none, none, false, c16, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_EQ_S(text(a, p.result), "new\nfile\n");
-    adopt_place(a, none, L(a, "theirs\n"), c16, 1, &p);
+    adopt_place(a, none, L(a, "theirs\n"), true, c16, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
 
     t_begin("adopt: a parent file rewritten past the diff's effort cap is one "
@@ -226,7 +226,7 @@ void test_adopt(void) {
                                   true);
     ASSERT_TRUE(diff_lines(a, big, rewritten).truncated);
     const Rec *c17[] = {edit(a, big, 1501, 0, "branch\n")};
-    adopt_place(a, big, rewritten, c17, 1, &p);
+    adopt_place(a, big, rewritten, true, c17, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
 
     t_begin("adopt: the same edit on both sides is already done, and the "
@@ -235,7 +235,7 @@ void test_adopt(void) {
     Rec *same = edit(a, twenty, 5, 1, "X\n");
     Lines same_v = after(a, twenty, same);
     const Rec *c18[] = {same, edit(a, same_v, 12, 1, "Y\n")};
-    adopt_place(a, twenty, same_v, c18, 2, &p);
+    adopt_place(a, twenty, same_v, true, c18, 2, &p);
     ASSERT_EQ_I(p.placed, 2);
     ASSERT_TRUE(p.already[0] && !p.already[1]);
     ASSERT_EQ_I(p.start[1], 12);
@@ -247,20 +247,20 @@ void test_adopt(void) {
     t_begin("adopt: a near-identical edit, one line different, still "
             "conflicts");
     Lines near = lines_replace(a, twenty, 5, 1, L(a, "X2\n").lines, 1, true);
-    adopt_place(a, twenty, near, c18, 2, &p);
+    adopt_place(a, twenty, near, true, c18, 2, &p);
     ASSERT_EQ_I(p.placed, 0);
     ASSERT_TRUE(!p.already[0]);
     ASSERT_TRUE(p.why != NULL);
 
     t_begin("adopt: a file deleted on both sides is already done");
-    adopt_place(a, five, none, c15, 1, &p);
+    adopt_place(a, five, none, false, c15, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_TRUE(p.already[0]);
     ASSERT_EQ_I(p.result.count, 0);
 
     t_begin("adopt: a file created on both sides with the same lines is "
             "already done");
-    adopt_place(a, none, L(a, "new\nfile\n"), c16, 1, &p);
+    adopt_place(a, none, L(a, "new\nfile\n"), true, c16, 1, &p);
     ASSERT_EQ_I(p.placed, 1);
     ASSERT_TRUE(p.already[0]);
     ASSERT_EQ_S(text(a, p.result), "new\nfile\n");
@@ -271,12 +271,56 @@ void test_adopt(void) {
     Lines bi = after(a, twenty, ins);
     Lines pi = lines_replace(a, bi, 16, 1, L(a, "P\n").lines, 1, true);
     const Rec *c19[] = {ins, edit(a, bi, 10, 1, "Z\n")};
-    adopt_place(a, twenty, pi, c19, 2, &p);
+    adopt_place(a, twenty, pi, true, c19, 2, &p);
     ASSERT_EQ_I(p.placed, 2);
     ASSERT_TRUE(p.already[0] && !p.already[1]);
     ASSERT_EQ_I(p.start[1], 10);
     ASSERT_TRUE(str_eq_c(p.result.lines[9], "Z"));
     ASSERT_TRUE(str_eq_c(p.result.lines[15], "P"));
+
+    t_begin("adopt: an edit to an empty file the parent deleted conflicts; "
+            "deleting an empty file the parent wrote into conflicts");
+    Lines empty = {NULL, 0, true}; /* e.txt exists, with no lines */
+    Rec *write = edit(a, empty, 1, 0, "hello\n");
+    const Rec *c20[] = {write};
+    adopt_place(a, empty, none, false, c20, 1, &p);
+    ASSERT_EQ_I(p.placed, 0);
+    ASSERT_EQ_S(p.why, "the parent deleted the file");
+    Rec *del_empty = edit(a, empty, 1, 0, "");
+    del_empty->op = "delete";
+    const Rec *c21[] = {del_empty};
+    adopt_place(a, empty, L(a, "hello\n"), true, c21, 1, &p);
+    ASSERT_EQ_I(p.placed, 0);
+
+    t_begin("adopt: created on both sides, empty on one and not the other, "
+            "conflicts either way; empty on both is already done");
+    Rec *cr_full = edit(a, none, 1, 0, "content\n");
+    cr_full->op = "create";
+    const Rec *c22[] = {cr_full};
+    adopt_place(a, none, empty, true, c22, 1, &p);
+    ASSERT_EQ_I(p.placed, 0);
+    ASSERT_EQ_S(p.why, "both sides create it");
+    Rec *cr_empty = edit(a, none, 1, 0, "");
+    cr_empty->op = "create";
+    const Rec *c23[] = {cr_empty};
+    adopt_place(a, none, L(a, "content\n"), true, c23, 1, &p);
+    ASSERT_EQ_I(p.placed, 0);
+    adopt_place(a, none, empty, true, c23, 1, &p);
+    ASSERT_EQ_I(p.placed, 1);
+    ASSERT_TRUE(p.already[0]);
+    adopt_place(a, none, none, false, c23, 1, &p); /* the branch's alone */
+    ASSERT_EQ_I(p.placed, 1);
+    ASSERT_TRUE(!p.already[0]);
+
+    t_begin("adopt: an empty file deleted on both sides is already done, and "
+            "a later create carries on");
+    Rec *recreate = edit(a, none, 1, 0, "back\n");
+    recreate->op = "create";
+    const Rec *c24[] = {del_empty, recreate};
+    adopt_place(a, empty, none, false, c24, 2, &p);
+    ASSERT_EQ_I(p.placed, 2);
+    ASSERT_TRUE(p.already[0] && !p.already[1]);
+    ASSERT_EQ_S(text(a, p.result), "back\n");
 
     arena_free(a);
 }

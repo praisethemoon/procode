@@ -42,9 +42,11 @@ typedef struct {
 } Placement;
 
 /* Places commits[0..n) (commit records to one file) on parent, given the
- * file at the branch's base. Lines are compared as lap compares them,
- * blind to a CRLF line ending's '\r'. */
-void adopt_place(Arena *a, Lines base, Lines parent, const Rec *const *commits,
-                 int32_t n, Placement *out);
+ * file at the branch's base; parent_has says whether the parent has the
+ * file at all, which its lines cannot (an empty file is no lines too).
+ * Lines are compared as lap compares them, blind to a CRLF line ending's
+ * '\r'. */
+void adopt_place(Arena *a, Lines base, Lines parent, bool parent_has,
+                 const Rec *const *commits, int32_t n, Placement *out);
 
 #endif /* LAP_ADOPT_H */

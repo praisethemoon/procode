@@ -1624,6 +1624,33 @@ expect_grep "unrelated_history" "$LAP" merge x --json
 [ "$(both15)" = "$SUM15" ] || fail "a merge refused as unrelated_history changed a .lap"
 cd "$WORK"
 
+t "an edit to an empty file the parent deleted stops that file"
+mkdir -p "$WORK/m17-p" && cd "$WORK/m17-p" || exit 1
+git init -q . && git config user.name e2e && git config user.email e2e@lap
+printf '.lap/*\n!.lap/log/\n' > .gitignore
+"$LAP" init >/dev/null 2>&1
+: > e.txt && printf 'f\n' > f.txt
+for f in e.txt f.txt .lapignore .gitignore; do
+    "$LAP" commit "$f" --no-session -i "seed the merge fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+git add -A && git commit -qm base
+git worktree add -q "$WORK/m17-w" -b b
+cd "$WORK/m17-w" && "$LAP" branch start b --from ../m17-p >/dev/null 2>&1
+"$LAP" session start "fill e" --branch b >/dev/null 2>&1
+printf 'hello\n' > e.txt && "$LAP" commit e.txt --branch b -i "fill the empty file" -b "writes hello into e.txt" >/dev/null 2>&1 ||
+    fail "branch edit of e.txt"
+git add -A && git commit -qm "fill e" >/dev/null
+cd "$WORK/m17-p" && rm e.txt && "$LAP" commit e.txt --branch main --no-session -i "drop the empty file" -b "deletes e.txt on the parent" >/dev/null 2>&1 ||
+    fail "parent delete of e.txt"
+git add -A && git commit -qm "drop e" >/dev/null
+git merge -q --no-edit b >/dev/null 2>&1 # modify/delete: keep the parent's delete
+git rm -q e.txt 2>/dev/null; git commit -qm "merged b, e.txt stays deleted" >/dev/null
+expect_grep '"stopped":\[{"file":"e.txt","at":"[0-9a-f]*","why":"the parent deleted the file"}\]' "$LAP" merge b --json
+[ -e e.txt ] && fail "e.txt came back"
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
 t "a merge stopped after any record is redone exactly by running it again"
 merge_pair m16; BP="$WORK/m16-p"; BW="$WORK/m16-w"
 cd "$BW" && "$LAP" session start "three edits" --branch b >/dev/null 2>&1
