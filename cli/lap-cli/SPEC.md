@@ -277,7 +277,14 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   and line. A break that points at a sealed chunk is reported as
   *"sealed chunk `main.000002.jsonl` was modified"*: lap never writes a
   sealed chunk, so only a mistake (a bad conflict resolution, a
-  repository-wide replace) can have changed one.
+  repository-wide replace) can have changed one. At a chunk's first record
+  the boundary alone cannot say which side changed, so its `prev` decides:
+  a record inside the chunk before means that chunk was appended to (it is
+  the one modified); the last record of another chunk means this chunk is
+  a stray or a duplicate (*"chunk `main.000006.jsonl` does not belong after
+  `main.000005.jsonl`: it continues `main.000002.jsonl`"*); anything else
+  names both (*"chunk `main.000003.jsonl` does not continue sealed chunk
+  `main.000002.jsonl`"*).
 - git tracks `.lap/log/`. Appending changes one file, the open chunk; a
   sealed chunk never changes again.
 - **The single-file log of older versions.** A folder holding

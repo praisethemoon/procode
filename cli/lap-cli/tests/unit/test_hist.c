@@ -272,6 +272,63 @@ static void test_listing(Arena *a) {
     ASSERT_EQ_I(log.chain_break_off, l1 + 1);
     ASSERT_TRUE(strstr(log.chain_err, "log line 2") != NULL);
     clear_chunks();
+
+    /* session starts chained from prev; hash receives each one's hash */
+    Rec s[4];
+    char *sl[4];
+    const char *ids[4] = {"S1", "S2", "S3", "S9"};
+    for (int32_t i = 0; i < 4; i++) {
+        memset(&s[i], 0, sizeof s[i]);
+        s[i].type = REC_SESSION_START;
+        s[i].id = ids[i];
+        s[i].msg = "boundary";
+        s[i].ts = "2026-09-27T00:00:01Z";
+        /* S9 chains onto S2 like S3: the record appended to a sealed chunk */
+        s[i].prev = i == 0 ? LAP_HASH_ZERO : i == 3 ? s[1].hash : s[i - 1].hash;
+        size_t n;
+        sl[i] = rec_encode(a, &s[i], &n);
+    }
+#define BREAK_OF(c1, c2, c3)                                                   \
+    do {                                                                       \
+        clear_chunks();                                                        \
+        put_file("main.000001.jsonl", c1);                                     \
+        put_file("main.000002.jsonl", c2);                                     \
+        if (c3)                                                                \
+            put_file("main.000003.jsonl", c3);                                 \
+        ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));     \
+        ASSERT_TRUE(hist_read_all(a, &h, &data, &len));                        \
+        ASSERT_TRUE(rec_log_parse(a, data, len, NULL, NULL, &log, err,         \
+                                  sizeof err));                                \
+        ASSERT_TRUE(!log.chain_ok);                                            \
+        hist_name_break(&h, data, &log);                                       \
+    } while (0)
+    char *c12 = arena_printf(a, "%s\n%s\n", sl[0], sl[1]);
+    char *c3 = arena_printf(a, "%s\n", sl[2]);
+
+    t_begin("hist: a stray chunk continuing another chunk is the one blamed");
+    BREAK_OF(c12, c3, c3);
+    ASSERT_TRUE(strstr(log.chain_err,
+                       "chunk main.000003.jsonl does not belong after "
+                       "main.000002.jsonl: it continues main.000001.jsonl") !=
+                NULL);
+
+    t_begin("hist: a sealed chunk appended to is the one blamed");
+    BREAK_OF(arena_printf(a, "%s%s\n", c12, sl[3]), c3, (char *)NULL);
+    ASSERT_TRUE(strstr(log.chain_err,
+                       "sealed chunk main.000001.jsonl was modified") != NULL);
+
+    t_begin("hist: a chunk whose first prev leads nowhere names both chunks");
+    BREAK_OF(arena_printf(a, "%s\n", sl[0]), c3, (char *)NULL);
+    ASSERT_TRUE(strstr(log.chain_err,
+                       "chunk main.000002.jsonl does not continue sealed "
+                       "chunk main.000001.jsonl") != NULL);
+
+    t_begin("hist: a break inside a sealed chunk blames that chunk");
+    BREAK_OF(arena_printf(a, "%s\n%s\n", sl[0], sl[2]), c3, (char *)NULL);
+    ASSERT_TRUE(strstr(log.chain_err,
+                       "sealed chunk main.000001.jsonl was modified") != NULL);
+#undef BREAK_OF
+    clear_chunks();
 }
 
 static void test_legacy(Arena *a) {

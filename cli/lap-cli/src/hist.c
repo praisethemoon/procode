@@ -896,3 +896,57 @@ int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out) {
     *out = l.v;
     return l.n;
 }
+
+void hist_name_break(const Hist *h, const char *data, RecLog *log) {
+    /* A record whose prev does not match was usually preceded by a
+     * changed record: the chunk holding that one is to blame, which for
+     * a chunk's first record is the chunk before. A sealed chunk to
+     * blame changed by mistake (a bad conflict resolution, a
+     * repository-wide replace): lap never writes one. */
+    int32_t at = hist_locate(h, log->chain_break_off);
+    if (at > 0 && h->v[at].start == log->chain_break_off) {
+        /* At a chunk's first record the boundary alone cannot say which
+         * side changed; where the record's prev points can. */
+        int32_t n = at;
+        do
+            at--;
+        while (at > 0 && h->v[at].size == 0);
+        const char *prev = log->v[log->chain_break_index].prev;
+        int32_t j = 0;
+        while (j < log->count && strcmp(log->v[j].hash, prev) != 0)
+            j++;
+        int32_t cj = j < log->count
+                         ? hist_locate(h, (uint64_t)(log->v[j].raw - data))
+                         : -1;
+        bool last = j + 1 >= log->count ||
+                    hist_locate(h, (uint64_t)(log->v[j + 1].raw - data)) !=
+                        cj;
+        char was[256];
+        snprintf(was, sizeof was, "%s", log->chain_err);
+        if (cj >= 0 && cj != at && last) {
+            /* a stray or duplicated chunk: it continues another one */
+            snprintf(log->chain_err, sizeof log->chain_err,
+                     "chunk %s does not belong after %s: it continues "
+                     "%s (%s)",
+                     h->v[n].name, h->v[at].name, h->v[cj].name, was);
+            return;
+        }
+        if (cj != at) { /* no clue which side changed: name both */
+            snprintf(log->chain_err, sizeof log->chain_err,
+                     "chunk %s does not continue %s%s (%s)", h->v[n].name,
+                     hist_is_sealed(h, at) ? "sealed chunk " : "",
+                     h->v[at].name, was);
+            return;
+        }
+        /* it continues a record inside the chunk before, which was
+         * appended to after it was sealed: that one is to blame */
+    }
+    int32_t sealed = hist_is_sealed(h, at) ? at : -1;
+    if (sealed >= 0) {
+        char was[256];
+        snprintf(was, sizeof was, "%s", log->chain_err);
+        snprintf(log->chain_err, sizeof log->chain_err,
+                 "sealed chunk %s was modified: %s", h->v[sealed].name,
+                 was);
+    }
+}

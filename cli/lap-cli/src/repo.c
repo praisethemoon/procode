@@ -614,28 +614,8 @@ bool repo_log_load(Arena *a, Repo *r, RecLog *out, char *err, size_t errsz) {
         out->v[i].lineage = hist_label(&r->hist, k);
     }
     rec_amend_log(a, out);
-    if (!out->chain_ok) {
-        /* A record whose prev does not match was usually preceded by a
-         * changed record: the chunk holding that one is to blame, which for
-         * a chunk's first record is the chunk before. A sealed chunk to
-         * blame changed by mistake (a bad conflict resolution, a
-         * repository-wide replace): lap never writes one. */
-        const Hist *h = &r->hist;
-        int32_t at = hist_locate(h, out->chain_break_off);
-        if (at > 0 && h->v[at].start == out->chain_break_off) {
-            do
-                at--;
-            while (at > 0 && h->v[at].size == 0);
-        }
-        int32_t sealed = hist_is_sealed(h, at) ? at : -1;
-        if (sealed >= 0) {
-            char was[256];
-            snprintf(was, sizeof was, "%s", out->chain_err);
-            snprintf(out->chain_err, sizeof out->chain_err,
-                     "sealed chunk %s was modified: %s", h->v[sealed].name,
-                     was);
-        }
-    }
+    if (!out->chain_ok)
+        hist_name_break(&r->hist, data, out);
     return true;
 }
 

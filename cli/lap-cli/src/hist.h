@@ -101,6 +101,10 @@ int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out);
 bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
                        Rec *out, char *err, size_t errsz);
 
+/* Names, in log->chain_err, the chunk to blame for the chain break that
+ * rec_log_parse found in h's bytes (data, as hist_read_all read them). */
+void hist_name_break(const Hist *h, const char *data, RecLog *log);
+
 /* The damage a history can show without being read whole: a sealed chunk
  * (any but the last) not ending in a newline — cut or copied short — and,
  * with chain, a chunk whose first record does not chain from the last

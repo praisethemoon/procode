@@ -1123,9 +1123,43 @@ expect_grep "chain ok" "$LAP" verify
 t "verify names a sealed chunk that was modified"
 cp .lap/log/main.000002.jsonl .lap/sealed.bak
 sed 's/appends row/APPENDS ROW/' .lap/sealed.bak > .lap/log/main.000002.jsonl
-expect_grep "sealed chunk main.000002.jsonl was modified" "$LAP" verify
+expect_grep "chunk main.000003.jsonl does not continue sealed chunk main.000002.jsonl" "$LAP" verify
 expect_fail "$LAP" verify
 mv .lap/sealed.bak .lap/log/main.000002.jsonl
+expect_grep "chain ok" "$LAP" verify
+
+t "at a chunk boundary verify blames the side the chunks show changed"
+LASTC=$(ls .lap/log/main.*.jsonl | tail -n 1)
+NEXTC=$(printf '.lap/log/main.%06d.jsonl' $(( $(basename "$LASTC" .jsonl | sed 's/^main\.0*//') + 1 )))
+# a stray chunk: a copy of chunk 2 after the last one
+cp .lap/log/main.000002.jsonl "$NEXTC"
+expect_grep "chunk $(basename "$NEXTC") does not belong after $(basename "$LASTC"): it continues main.000001.jsonl" "$LAP" verify
+rm "$NEXTC"
+# a sealed chunk appended to: a record chained onto its last one
+cp .lap/log/main.000002.jsonl .lap/sealed.bak
+python3 - .lap/log/main.000002.jsonl <<'PY'
+import hashlib, sys
+p = sys.argv[1]
+last = open(p, "rb").read().rstrip(b"\n").split(b"\n")[-1]
+h = hashlib.sha256(last).hexdigest()
+open(p, "ab").write(('{"type":"session_end","id":"S9","ts":"2026-09-27T00:00:00Z","prev":"%s"}\n' % h).encode())
+PY
+expect_grep "sealed chunk main.000002.jsonl was modified" "$LAP" verify
+mv .lap/sealed.bak .lap/log/main.000002.jsonl
+# a sealed chunk truncated: its last record gone, nothing says which side
+TC=$(for f in $(ls .lap/log/main.*.jsonl | sed '$d'); do [ "$(wc -l < "$f")" -ge 2 ] && echo "$f" && break; done)
+[ -n "$TC" ] || fail "no sealed chunk of two records to truncate"
+TN=$(printf 'main.%06d.jsonl' $(( $(basename "$TC" .jsonl | sed 's/^main\.0*//') + 1 )))
+cp "$TC" .lap/sealed.bak
+sed '$d' .lap/sealed.bak > "$TC"
+expect_grep "chunk $TN does not continue sealed chunk $(basename "$TC")" "$LAP" verify
+mv .lap/sealed.bak "$TC"
+# the open chunk's first prev wrong, with no other clue: both named
+cp "$LASTC" .lap/open.bak
+sed '1s/"prev":"[0-9a-f]*"/"prev":"'"$(printf '1%.0s' $(seq 64))"'"/' .lap/open.bak > "$LASTC"
+PREVC=$(ls .lap/log/main.*.jsonl | tail -n 2 | head -n 1)
+expect_grep "chunk $(basename "$LASTC") does not continue sealed chunk $(basename "$PREVC")" "$LAP" verify
+mv .lap/open.bak "$LASTC"
 expect_grep "chain ok" "$LAP" verify
 
 t "a gap in the chunk numbers is refused, naming the missing chunk"
