@@ -512,7 +512,7 @@ and `(from #<short hash>)` after its behavior in `lap rr`'s trajectory.
 ### Registry
 
 The parent's `.lap/branches.json` lists the branches started from it:
-`[{"id","name","path","base","started"}]`, the path absolute. It is
+`[{"id","name","path","base","started"}]`, the path absolute and canonical (symlinks resolved, one spelling however it was typed). It is
 machine-local (not committed: a path means nothing elsewhere), neither
 history nor a cache — nothing rebuilds it — and **hints only**: a missing
 or malformed registry reads as no branches, and no command fails because

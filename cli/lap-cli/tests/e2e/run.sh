@@ -1657,6 +1657,28 @@ cd "$WORK/m18-w2" && expect_grep "name_taken" "$LAP" branch start b --from ../m1
 expect_ok "$LAP" branch start b2 --from ../m18-p
 cd "$WORK"
 
+t "folders reached through a symlink work for branch start, branch move and merge"
+mkdir -p "$WORK/m19-p" && cd "$WORK/m19-p" && "$LAP" init >/dev/null 2>&1
+printf 'f\n' > f.txt
+for f in f.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+ln -s m19-p "$WORK/m19-link"
+cp -R "$WORK/m19-p" "$WORK/m19-w" && cd "$WORK/m19-w" || exit 1
+expect_ok "$LAP" branch start x --from ../m19-link
+grep -q 'm19-link' "$WORK/m19-p/.lap/branches.json" && fail "the registry kept the symlink's spelling"
+cp -R "$WORK/m19-p" "$WORK/m19-w2" && rm -f "$WORK/m19-w2/.lap/branches.json" && cd "$WORK/m19-w2" || exit 1
+expect_ok "$LAP" branch start y --from "$WORK/m19-p" # $WORK may itself be under a symlink (/var)
+cd "$WORK/m19-w" && "$LAP" session start "x work" --branch x >/dev/null 2>&1
+printf 'F\n' > f.txt && "$LAP" commit f.txt --branch x -i "change f in x" -b "rewrites f.txt in x" >/dev/null 2>&1
+mv "$WORK/m19-w" "$WORK/m19-w-moved" && ln -s m19-w-moved "$WORK/m19-wlink"
+cd "$WORK/m19-p" && expect_ok "$LAP" branch move x ../m19-wlink
+cp "$WORK/m19-w-moved/f.txt" f.txt # plain folders: the code comes back by hand
+expect_grep "adopted 1 of 1" "$LAP" merge x
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
 t "an edit to an empty file the parent deleted stops that file"
 mkdir -p "$WORK/m17-p" && cd "$WORK/m17-p" || exit 1
 git init -q . && git config user.name e2e && git config user.email e2e@lap

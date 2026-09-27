@@ -12,6 +12,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -247,7 +248,41 @@ bool plat_mkdir(const char *path) {
 #else
     if (mkdir(path, 0777) == 0)
         return true;
-    return errno == EEXIST && plat_is_dir(path);
+    /* there already: a directory, or a symlink to one (stat follows it;
+     * plat_is_dir does not, for the tree walk's sake) */
+    struct stat st;
+    return errno == EEXIST && stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+#endif
+}
+
+bool plat_realpath(const char *path, char *out, size_t outsz) {
+#ifdef _WIN32
+    char wb[LAP_PATH_MAX];
+    HANDLE h = CreateFileA(winpath(wb, sizeof wb, path), 0,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE |
+                               FILE_SHARE_DELETE,
+                           NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS,
+                           NULL);
+    if (h == INVALID_HANDLE_VALUE)
+        return false;
+    char buf[LAP_PATH_MAX];
+    DWORD n = GetFinalPathNameByHandleA(h, buf, sizeof buf, 0);
+    CloseHandle(h);
+    if (n == 0 || n >= sizeof buf)
+        return false;
+    const char *p = strncmp(buf, "\\\\?\\", 4) == 0 ? buf + 4 : buf;
+    if (snprintf(out, outsz, "%s", p) >= (int)outsz)
+        return false;
+    for (char *c = out; *c; c++) {
+        if (*c == '\\')
+            *c = '/';
+    }
+    return true;
+#else
+    char buf[PATH_MAX];
+    if (!realpath(path, buf))
+        return false;
+    return snprintf(out, outsz, "%s", buf) < (int)outsz;
 #endif
 }
 

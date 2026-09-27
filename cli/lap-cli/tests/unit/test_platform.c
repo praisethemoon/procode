@@ -27,6 +27,22 @@ void test_platform(void) {
     remove(T_PLATDIR "/link");
     ASSERT_TRUE(symlink("sub", T_PLATDIR "/link") == 0);
     ASSERT_TRUE(plat_same_file(T_PLATDIR "/link", T_PLATDIR "/sub"));
+
+    t_begin("plat_mkdir: a symlink to a directory is a directory that is "
+            "there; plat_mkdirs goes through it");
+    ASSERT_TRUE(plat_mkdir(T_PLATDIR "/link"));
+    ASSERT_TRUE(plat_mkdirs(T_PLATDIR "/link/deeper"));
+    ASSERT_TRUE(plat_is_dir(T_PLATDIR "/sub/deeper"));
+
+    t_begin("plat_realpath: a path through a symlink resolves to the "
+            "directory's own path; a missing one is false");
+    char r1[LAP_PATH_MAX], r2[LAP_PATH_MAX];
+    ASSERT_TRUE(plat_realpath(T_PLATDIR "/link", r1, sizeof r1));
+    ASSERT_TRUE(plat_realpath(T_PLATDIR "/other/../sub", r2, sizeof r2));
+    ASSERT_EQ_S(r1, r2);
+    ASSERT_TRUE(r1[0] == '/');
+    ASSERT_TRUE(!plat_realpath(T_PLATDIR "/nothing", r1, sizeof r1));
+    remove(T_PLATDIR "/sub/deeper");
     remove(T_PLATDIR "/link");
 #endif
 

@@ -292,7 +292,14 @@ bool repo_abspath(const char *user_path, char *out, size_t outsz) {
                 (int)sizeof absbuf)
             return false;
     }
-    return normalize_path(absbuf, out, outsz);
+    if (!normalize_path(absbuf, out, outsz))
+        return false;
+    /* an existing folder by its one real spelling, symlinks resolved, so
+     * what lap stores and compares is the same however it was typed */
+    char real[LAP_PATH_MAX];
+    if (plat_realpath(out, real, sizeof real))
+        snprintf(out, outsz, "%s", real);
+    return true;
 }
 
 /* Writers drop the registry entries of branches merged up to their head
