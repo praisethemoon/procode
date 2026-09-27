@@ -1193,6 +1193,32 @@ expect_grep "chunk $(basename "$LASTC") does not continue sealed chunk $(basenam
 mv .lap/open.bak "$LASTC"
 expect_grep "chain ok" "$LAP" verify
 
+t "an index over a history rewritten to the same size is not trusted"
+mkdir -p "$WORK/same" && cd "$WORK/same" && export LAP_TEST_CHUNK_BYTES=1000000 && "$LAP" init >/dev/null 2>&1
+"$LAP" commit .lapignore --no-session -i "seed the same-size fixture" -b "records .lapignore as it starts" >/dev/null 2>&1
+printf 'x\n' > a.txt && printf 'x\n' > b.txt
+"$LAP" commit a.txt --no-session -i "seed the same-size fixture" -b "creates the first one-line file" >/dev/null 2>&1
+"$LAP" commit b.txt --no-session -i "seed the same-size fixture" -b "creates the other one-line file" >/dev/null 2>&1
+CH=$(ls .lap/log/main.*.jsonl | tail -n 1)
+N=$(wc -l < "$CH")
+A=$(sed -n "$((N - 1))p" "$CH"); B=$(sed -n "${N}p" "$CH")
+[ "${#A}" = "${#B}" ] || fail "the fixture's two records differ in length"
+"$LAP" log --file a.txt --json >/dev/null 2>&1 # the index covers both
+cp "$CH" .lap/same.bak
+# the two records swapped: same size, same boundaries, other files there
+{ sed "$((N - 1)),\$d" .lap/same.bak; printf '%s\n%s\n' "$B" "$A"; } > "$CH"
+cmp -s "$CH" .lap/same.bak && fail "the swap changed nothing"
+WITH=$("$LAP" log --file a.txt --json 2>/dev/null)
+cp .lap/index .lap/index.keep && rm .lap/index
+WITHOUT=$("$LAP" log --file a.txt --json 2>/dev/null)
+mv .lap/index.keep .lap/index
+[ "$WITH" = "$WITHOUT" ] || fail "log --file over a same-size rewrite differs with the index"
+mv .lap/same.bak "$CH"
+expect_ok "$LAP" rebuild
+expect_grep "chain ok" "$LAP" verify
+export LAP_TEST_CHUNK_BYTES=700
+cd "$WORK/chunks" || exit 1
+
 t "a temp file left in .lap/log is never read as a chunk, and the next writer removes it"
 cp "$LASTC" "$LASTC.tmp.4242"
 printf 'junk\n' >> "$LASTC.tmp.4242"

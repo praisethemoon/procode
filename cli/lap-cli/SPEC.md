@@ -78,7 +78,7 @@ intent and what it does; git keeps its normal human-scale history.
 
 ## The acceleration layer
 
-- **Index** (`.lap/index`): a 40-byte header then one 64-byte entry per log
+- **Index** (`.lap/index`): an 88-byte header then one 64-byte entry per log
   record — byte offset/length into the history (its chunks read as one
   stream, §Chunks), kind, op, numeric session,
   `file_id`, epoch timestamp, the region coordinates, a running commit
@@ -87,7 +87,10 @@ intent and what it does; git keeps its normal human-scale history.
   the file's previous commit. Blame, per-file log, and replay walk that
   chain and never touch unrelated records. `amend` records are entries of
   their own kind: a reader decodes them once and gives each commit it
-  fetches its latest text, as a full scan would.
+  fetches its latest text, as a full scan would. The header also keeps where the last record it covers is and that
+  record's SHA-256: an index is used only while the history still holds
+  that record there, so a history rewritten to the same size (a git merge,
+  a hand edit) is read without it and rebuilt by the next writer.
 - **Snapshots** (`.lap/snapshots/<path>.jsonl`): one JSON line per snapshot
   `{"at": <record index>, "eof_nl": …, "content": "…"}`. Policy (tunable,
   cache-only): a writer emits one after a commit when the file has

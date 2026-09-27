@@ -26,7 +26,7 @@ enum {
 enum { IDX_OP_EDIT, IDX_OP_CREATE, IDX_OP_DELETE };
 
 typedef struct {
-    char magic[8];    /* "LAPIDX03" */
+    char magic[8];    /* "LAPIDX04" */
     uint64_t covered; /* history bytes these entries describe */
     uint64_t count;
     uint32_t commits;      /* total commits indexed */
@@ -34,6 +34,12 @@ typedef struct {
     uint32_t open_session; /* active session number; 0 = none */
     uint32_t unknown; /* records of a type a newer lap wrote (0 in indexes
                          from before this field: it was padding) */
+    /* the last record covered: where it is and the SHA-256 of its bytes,
+     * so a history rewritten to the same size is not taken as covered */
+    uint64_t tail_off;
+    uint32_t tail_len;
+    uint32_t pad;
+    uint8_t tail[32];
 } IdxHeader;
 
 typedef struct {

@@ -2,12 +2,15 @@
 
 #include <time.h>
 
+#include "sha256.h"
+
 /* 02: offsets into the chunked history. 03: amend entries; a lap from
  * before them finds no index it knows, reads the history itself and so
- * sees the amend records it cannot write after. */
-#define IDX_MAGIC "LAPIDX03"
+ * sees the amend records it cannot write after. 04: the last covered
+ * record's hash in the header. */
+#define IDX_MAGIC "LAPIDX04"
 
-_Static_assert(sizeof(IdxHeader) == 40, "index header is 40 bytes");
+_Static_assert(sizeof(IdxHeader) == 88, "index header is 88 bytes");
 _Static_assert(sizeof(IdxEntry) == 64, "index entries are 64 bytes");
 _Static_assert(sizeof(FileHead) == 32, "head slots are 32 bytes");
 
@@ -92,11 +95,37 @@ bool idx_header(Arena *a, const Repo *r, IdxHeader *out) {
     return true;
 }
 
+/* The hash of the record at off/len in the history, or false when it
+ * cannot be read. */
+static bool record_hash(Arena *a, const Repo *r, uint64_t off, uint32_t len,
+                        uint8_t out[32]) {
+    char *line;
+    if (off + len > r->hist.size || !hist_read(a, &r->hist, off, len, &line))
+        return false;
+    Sha256 c;
+    sha256_init(&c);
+    sha256_update(&c, line, len);
+    sha256_final(&c, out);
+    return true;
+}
+
+/* Whether the history still holds, where the index says, the last record
+ * it covered: a size check alone takes a history rewritten to the same
+ * size (a git merge, a hand edit) for the one indexed. */
+static bool tail_matches(Arena *a, const Repo *r, const IdxHeader *h) {
+    if (h->count == 0)
+        return true;
+    uint8_t now[32];
+    return record_hash(a, r, h->tail_off, h->tail_len, now) &&
+           memcmp(now, h->tail, 32) == 0;
+}
+
 Idx *idx_ready(Arena *a, const Repo *r) {
     if (r->foreign) /* the index covers this folder's history only */
         return NULL;
     Idx *idx = (Idx *)arena_alloc(a, sizeof(Idx));
-    if (idx_load(a, r, idx, true) && idx->h.covered == r->hist.size) {
+    if (idx_load(a, r, idx, true) && idx->h.covered == r->hist.size &&
+        tail_matches(a, r, &idx->h)) {
         idx->arena = a;
         if (idx->h.unknown > 0)
             rec_note_newer(NULL);
@@ -331,6 +360,12 @@ static bool sync_write(const Repo *r, Sync *s, uint64_t covered, char *err,
         ok = plat_write_file_atomic(path, s->heads,
                                     s->npaths * sizeof(FileHead));
     }
+    if (ok && s->newn > 0) { /* the last record now covered */
+        const IdxEntry *last = &s->newv[s->newn - 1];
+        s->idx.h.tail_off = last->off;
+        s->idx.h.tail_len = last->len;
+        ok = record_hash(s->pm.a, r, last->off, last->len, s->idx.h.tail);
+    }
     if (ok) {
         s->idx.h.covered = covered;
         s->idx.h.count += s->newn;
@@ -352,7 +387,8 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
     Sync s;
     memset(&s, 0, sizeof s);
     pm_init(&s.pm, a);
-    bool loaded = idx_load(a, r, &s.idx, false) && s.idx.h.covered <= size;
+    bool loaded = idx_load(a, r, &s.idx, false) &&
+                  s.idx.h.covered <= size && tail_matches(a, r, &s.idx.h);
     if (!loaded)
         memset(&s.idx, 0, sizeof s.idx); /* damaged or shrunk: full rebuild */
     for (int32_t i = 0; i < s.idx.npaths; i++) {
