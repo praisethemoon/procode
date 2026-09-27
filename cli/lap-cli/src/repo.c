@@ -164,13 +164,13 @@ static bool state_heal(Repo *r, bool persist, char *err, size_t errsz) {
     }
     /* Only the counters, the active session and the last hash are needed, so
      * each record is decoded into a scratch arena and dropped: healing costs
-     * the log's bytes, not every record's text. rec_log_load's rules hold:
+     * the log's bytes, not every record's text. rec_log_parse's rules hold:
      * a torn final line is ignored, and so are blank lines. */
     Arena *bytes = arena_new(1 << 16);
     char *data;
     size_t len;
-    if (!plat_read_file_max(bytes, r->logpath, &data, &len, (size_t)-1)) {
-        snprintf(err, errsz, "cannot read log file %s", r->logpath);
+    if (!hist_read_all(bytes, &r->hist, &data, &len)) {
+        snprintf(err, errsz, "cannot read the history in %s", r->hist.dir);
         arena_free(bytes);
         return false;
     }
@@ -269,93 +269,6 @@ const char *repo_user(Repo *r) {
     return r->cached_user;
 }
 
-/* Reads the last complete line's hash from the log using a bounded tail
- * window (doubling until the line fits) — never the whole file, and never
- * subject to any size cap. A torn unterminated tail is skipped.
- */
-static bool log_tail_hash(Arena *a, const char *path, char out[65]) {
-    size_t window = 64 * 1024;
-    for (;;) {
-        char *data;
-        size_t len;
-        uint64_t fsize;
-        if (!plat_read_tail(a, path, window, &data, &len, &fsize))
-            return false;
-        if (len == 0) {
-            snprintf(out, 65, "%s", LAP_HASH_ZERO);
-            return true;
-        }
-        bool whole_file = (uint64_t)len == fsize;
-        /* skip a torn (unterminated) tail */
-        size_t end = len;
-        while (end > 0 && data[end - 1] != '\n')
-            end--;
-        if (end == 0) {
-            if (whole_file) {
-                snprintf(out, 65, "%s", LAP_HASH_ZERO);
-                return true;
-            }
-            window *= 2;
-            continue; /* the torn line alone exceeds the window */
-        }
-        /* end points just past the '\n' of the last complete line; skip
-         * any blank lines above it */
-        size_t line_end = end - 1;
-        while (line_end > 0 && data[line_end - 1] == '\n')
-            line_end--;
-        if (line_end == 0) {
-            if (whole_file) {
-                snprintf(out, 65, "%s", LAP_HASH_ZERO);
-                return true;
-            }
-            window *= 2;
-            continue;
-        }
-        size_t start = line_end;
-        while (start > 0 && data[start - 1] != '\n')
-            start--;
-        if (start == 0 && !whole_file) {
-            window *= 2; /* line may begin before the window */
-            continue;
-        }
-        sha256_hex(data + start, line_end - start, out);
-        return true;
-    }
-}
-
-/* A crash mid-append leaves an unterminated final line. Writers repair the
- * log by truncating it away (the record was never acknowledged: state.json
- * was not updated and the appender reported failure). Lock must be held.
- */
-static bool log_repair_torn_tail(Arena *a, const char *path) {
-    size_t window = 64 * 1024;
-    for (;;) {
-        char *data;
-        size_t len;
-        uint64_t fsize;
-        if (!plat_read_tail(a, path, window, &data, &len, &fsize))
-            return true; /* no log yet: nothing to repair */
-        if (len == 0 || data[len - 1] == '\n')
-            return true;
-        size_t end = len;
-        while (end > 0 && data[end - 1] != '\n')
-            end--;
-        if (end == 0 && (uint64_t)len != fsize) {
-            window *= 2;
-            continue;
-        }
-        uint64_t keep = fsize - (uint64_t)(len - end);
-        uint64_t dropped = fsize - keep;
-        if (!plat_truncate(path, keep))
-            return false;
-        fprintf(stderr,
-                "lap: repaired torn log tail (%llu bytes from an "
-                "interrupted append dropped)\n",
-                (unsigned long long)dropped);
-        return true;
-    }
-}
-
 bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
     memset(r, 0, sizeof(*r));
     r->a = a;
@@ -365,7 +278,6 @@ bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
         return false;
     }
     snprintf(r->lapdir, sizeof r->lapdir, "%s/%s", r->root, LAP_DIR);
-    snprintf(r->logpath, sizeof r->logpath, "%s/%s", r->lapdir, LAP_LOG_NAME);
 
     if (for_write) {
         char lockpath[LAP_PATH_MAX];
@@ -375,13 +287,21 @@ bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
             snprintf(err, errsz, "cannot acquire repository lock");
             return false;
         }
-        /* with the lock held, clean up any crash-torn append before we
-         * append after it */
-        if (!log_repair_torn_tail(a, r->logpath)) {
-            snprintf(err, errsz, "cannot repair torn log tail in %s",
-                     r->logpath);
-            return false;
-        }
+    }
+    /* listed under the lock, so a writer's view cannot go stale */
+    if (!hist_open(a, r->lapdir, LAP_MAIN_LINEAGE, &r->hist, err, errsz))
+        return false;
+    if (r->hist.n == 0) {
+        snprintf(err, errsz, "no history in %s (expected %s/%s.000001.jsonl)",
+                 r->hist.dir, LAP_LOG_DIR, LAP_MAIN_LINEAGE);
+        return false;
+    }
+    /* with the lock held, clean up any crash-torn append before we append
+     * after it */
+    if (for_write && !hist_repair_torn_tail(a, &r->hist)) {
+        snprintf(err, errsz, "cannot repair torn log tail in %s",
+                 r->hist.dir);
+        return false;
     }
 
     char spath[LAP_PATH_MAX];
@@ -422,8 +342,9 @@ bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
 
     if (!healed) {
         char tail[65];
-        if (!log_tail_hash(a, r->logpath, tail)) {
-            snprintf(err, errsz, "cannot read log %s", r->logpath);
+        if (!hist_tail_hash(a, &r->hist, tail)) {
+            snprintf(err, errsz, "cannot read the history in %s",
+                     r->hist.dir);
             return false;
         }
         if (strcmp(tail, r->last_hash) != 0) {
@@ -464,7 +385,8 @@ bool repo_init(Arena *a, const char *dir, char *err, size_t errsz) {
     r.a = a;
     snprintf(r.root, sizeof r.root, "%s", dir);
     snprintf(r.lapdir, sizeof r.lapdir, "%s", lapdir);
-    snprintf(r.logpath, sizeof r.logpath, "%s/%s", lapdir, LAP_LOG_NAME);
+    if (!hist_open(a, lapdir, LAP_MAIN_LINEAGE, &r.hist, err, errsz))
+        return false;
     r.next_commit = 1;
     r.next_session = 1;
     snprintf(r.last_hash, sizeof r.last_hash, "%s", LAP_HASH_ZERO);
@@ -502,11 +424,50 @@ bool repo_append(Repo *r, Rec *rec, char *err, size_t errsz) {
     char *with_nl = (char *)arena_alloc(r->a, len + 2);
     memcpy(with_nl, line, len);
     with_nl[len] = '\n';
-    if (!plat_append_file_sync(r->logpath, with_nl, len + 1)) {
-        snprintf(err, errsz, "cannot append to %s", r->logpath);
+    if (!hist_append(r->a, &r->hist, with_nl, len + 1, err, errsz))
+        return false;
+    snprintf(r->last_hash, sizeof r->last_hash, "%s", rec->hash);
+    return true;
+}
+
+static void where_in_history(const void *ctx, const char *data, uint64_t off,
+                             char *out, size_t outsz) {
+    hist_where((const Hist *)ctx, data, off, out, outsz);
+}
+
+bool repo_log_load(Arena *a, Repo *r, RecLog *out, char *err, size_t errsz) {
+    char *data;
+    size_t len;
+    /* lap's own history must never become unreadable by growing: no cap */
+    if (!hist_read_all(a, &r->hist, &data, &len)) {
+        snprintf(err, errsz, "cannot read the history in %s", r->hist.dir);
         return false;
     }
-    snprintf(r->last_hash, sizeof r->last_hash, "%s", rec->hash);
+    if (!rec_log_parse(a, data, len, where_in_history, &r->hist, out, err,
+                       errsz))
+        return false;
+    if (!out->chain_ok) {
+        /* A record whose prev does not match was usually preceded by a
+         * changed record: the chunk holding that one is to blame, which for
+         * a chunk's first record is the chunk before. A sealed chunk to
+         * blame changed by mistake (a bad conflict resolution, a
+         * repository-wide replace): lap never writes one. */
+        const Hist *h = &r->hist;
+        int32_t at = hist_locate(h, out->chain_break_off);
+        if (at > 0 && h->v[at].start == out->chain_break_off) {
+            do
+                at--;
+            while (at > 0 && h->v[at].size == 0);
+        }
+        int32_t sealed = hist_is_sealed(h, at) ? at : -1;
+        if (sealed >= 0) {
+            char was[256];
+            snprintf(was, sizeof was, "%s", out->chain_err);
+            snprintf(out->chain_err, sizeof out->chain_err,
+                     "sealed chunk %s was modified: %s", h->v[sealed].name,
+                     was);
+        }
+    }
     return true;
 }
 

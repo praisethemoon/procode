@@ -128,7 +128,7 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         return LAP_EXIT_ERR;
     }
     RecLog log;
-    if (!rec_log_load(a, repo.logpath, &log, err, sizeof err)) {
+    if (!repo_log_load(a, &repo, &log, err, sizeof err)) {
         err_out(json, "log_unreadable", "%s", err);
         return LAP_EXIT_ERR;
     }

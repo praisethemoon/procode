@@ -2,7 +2,7 @@
 
 #include <time.h>
 
-#define IDX_MAGIC "LAPIDX01"
+#define IDX_MAGIC "LAPIDX02" /* 02: offsets into the chunked history */
 
 _Static_assert(sizeof(IdxHeader) == 40, "index header is 40 bytes");
 _Static_assert(sizeof(IdxEntry) == 64, "index entries are 64 bytes");
@@ -83,9 +83,7 @@ static bool idx_load(Arena *a, const Repo *r, Idx *out, bool with_entries) {
 
 Idx *idx_ready(Arena *a, const Repo *r) {
     Idx *idx = (Idx *)arena_alloc(a, sizeof(Idx));
-    uint64_t size;
-    if (idx_load(a, r, idx, true) && plat_file_size(r->logpath, &size) &&
-        idx->h.covered == size)
+    if (idx_load(a, r, idx, true) && idx->h.covered == r->hist.size)
         return idx;
     return NULL;
 }
@@ -124,7 +122,7 @@ bool idx_fetch(Arena *a, const Repo *r, const Idx *idx, int64_t entry,
     const IdxEntry *e = &idx->v[entry];
     char *line;
     char err[128];
-    return plat_read_range(a, r->logpath, e->off, e->len, &line) &&
+    return hist_read(a, &r->hist, e->off, e->len, &line) &&
            rec_decode(a, line, e->len, out, err, sizeof err);
 }
 
@@ -290,11 +288,7 @@ static bool sync_write(const Repo *r, Sync *s, uint64_t covered, char *err,
 }
 
 bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
-    uint64_t size;
-    if (!plat_file_size(r->logpath, &size)) {
-        snprintf(err, errsz, "cannot stat %s", r->logpath);
-        return false;
-    }
+    uint64_t size = r->hist.size;
     Sync s;
     memset(&s, 0, sizeof s);
     pm_init(&s.pm, a);
@@ -314,7 +308,7 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
 
     char *data;
     size_t dlen = (size_t)(size - s.idx.h.covered);
-    if (!plat_read_range(a, r->logpath, s.idx.h.covered, dlen, &data)) {
+    if (!hist_read(a, &r->hist, s.idx.h.covered, dlen, &data)) {
         snprintf(err, errsz, "cannot read log tail");
         return false;
     }

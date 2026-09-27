@@ -93,7 +93,7 @@ static const char *session_last_behavior(Arena *a, Repo *repo,
     }
     RecLog log;
     char err[256];
-    if (!rec_log_load(a, repo->logpath, &log, err, sizeof err))
+    if (!repo_log_load(a, repo, &log, err, sizeof err))
         return NULL;
     for (int32_t i = log.count - 1; i >= 0; i--) {
         const Rec *rec = &log.v[i];

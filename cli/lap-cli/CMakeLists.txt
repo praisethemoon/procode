@@ -39,6 +39,7 @@ set(LAP_LIB_SOURCES
     src/cmd_rr.c
     src/idx.c
     src/snap.c
+    src/hist.c
     src/tty.c
 )
 

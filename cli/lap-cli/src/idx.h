@@ -17,8 +17,8 @@ enum { IDX_INIT, IDX_COMMIT, IDX_SESSION_START, IDX_SESSION_END };
 enum { IDX_OP_EDIT, IDX_OP_CREATE, IDX_OP_DELETE };
 
 typedef struct {
-    char magic[8];    /* "LAPIDX01" */
-    uint64_t covered; /* log bytes these entries describe */
+    char magic[8];    /* "LAPIDX02" */
+    uint64_t covered; /* history bytes these entries describe */
     uint64_t count;
     uint32_t commits;      /* total commits indexed */
     uint32_t sessions;     /* highest session number seen */
@@ -27,7 +27,7 @@ typedef struct {
 } IdxHeader;
 
 typedef struct {
-    uint64_t off;     /* record's byte offset in log.jsonl */
+    uint64_t off;     /* record's byte offset in the history (hist.h) */
     uint32_t len;     /* record length, excluding '\n' */
     uint32_t id;      /* commits so far (monotonic; binary-searchable) */
     uint8_t kind;

@@ -1,6 +1,7 @@
 /* Log records: encoding, decoding, chain hashing, log-file loading.
  *
- * The log is append-only JSONL at .lap/log.jsonl. Every record carries
+ * The log is append-only JSONL, kept as chunk files under .lap/log/ (see
+ * hist.h) and read as one stream. Every record carries
  * "prev": the SHA-256 of the previous record's exact serialized bytes
  * (the first record chains from 64 zeros). Tampering or truncation in the
  * middle of the file breaks the chain and is detected by `lap verify`.
@@ -68,6 +69,7 @@ typedef struct {
     /* Chain verification result (always computed). */
     bool chain_ok;
     int32_t chain_break_index; /* first bad record, -1 if chain_ok */
+    uint64_t chain_break_off;  /* its byte offset in what was parsed */
     char chain_err[256];
     /* A crash mid-append leaves an unterminated final line. Readers drop it
      * (it was never acknowledged) and report it here; the next writing
@@ -77,13 +79,20 @@ typedef struct {
     uint64_t torn_bytes; /* bytes dropped from the tail */
 } RecLog;
 
-/* Loads the whole log. Returns false only when the file is unreadable or a
- * complete record is unparseable; a torn final line is tolerated (see
- * torn_tail) and a broken hash chain still loads (readers stay usable on a
- * damaged repo) and is reported through chain_ok.
+/* Names a byte offset of the parsed data for people, e.g.
+ * "main.000002.jsonl line 7". */
+typedef void (*RecWhereFn)(const void *ctx, const char *data, uint64_t off,
+                           char *out, size_t outsz);
+
+/* Parses a whole log held in data (records point into it). Returns false
+ * only when a complete record is unparseable; a torn final line is
+ * tolerated (see torn_tail) and a broken hash chain still loads (readers
+ * stay usable on a damaged repo) and is reported through chain_ok. where
+ * names positions in messages; NULL gives "log line N".
  */
-bool rec_log_load(Arena *a, const char *path, RecLog *out, char *err,
-                  size_t errsz);
+bool rec_log_parse(Arena *a, const char *data, size_t len, RecWhereFn where,
+                   const void *where_ctx, RecLog *out, char *err,
+                   size_t errsz);
 
 /* Replays commits [0..upto_index] (inclusive; may be -1 for "nothing") for
  * one file. Returns false if the file never appeared; *deleted reports a

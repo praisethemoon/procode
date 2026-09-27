@@ -18,7 +18,13 @@
 #define LAP_VERSION "0.1.0"
 
 #define LAP_DIR ".lap"
-#define LAP_LOG_NAME "log.jsonl"
+#define LAP_LOG_NAME "log.jsonl" /* the single-file log before chunks */
+#define LAP_LOG_DIR "log"         /* .lap/log/: the history's chunk files */
+#define LAP_MAIN_LINEAGE "main"   /* the first folder's line of history */
+/* A chunk is sealed once an append would take it past this many bytes. A
+ * constant, so every folder chunks alike; LAP_TEST_CHUNK_BYTES overrides it
+ * for tests only. */
+#define LAP_CHUNK_BYTES (4u * 1024u * 1024u)
 #define LAP_STATE_NAME "state.json"
 #define LAP_SHADOW_NAME "shadow"
 #define LAP_LOCK_NAME "lock"

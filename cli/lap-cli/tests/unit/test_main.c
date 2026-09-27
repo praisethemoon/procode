@@ -18,6 +18,7 @@ void test_rec(void);
 void test_tty(void);
 void test_msg(void);
 void test_time(void);
+void test_hist(void);
 
 int main(void) {
     test_arena();
@@ -30,6 +31,7 @@ int main(void) {
     test_tty();
     test_msg();
     test_time();
+    test_hist();
     printf("unit tests: %d passed, %d failed\n", t_pass, t_fail);
     return t_fail == 0 ? 0 : 1;
 }

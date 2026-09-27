@@ -317,9 +317,7 @@ void region_describe(const Region *r, char *out, size_t outsz) {
  * answers: reconstruct the file's last-committed state from the log
  * instead of reporting an untracked file. */
 static bool shadow_from_log(Arena *a, Repo *r, const char *rel, Lines *out) {
-    uint64_t size;
-    if (!plat_file_size(r->logpath, &size))
-        return false;
+    uint64_t size = r->hist.size;
     if (!r->shadow_loaded || r->shadow_log_size != size) {
         /* In the command's arena, not a: a caller may hand each file a
          * scratch arena it resets, and this outlives the file. */
@@ -328,7 +326,7 @@ static bool shadow_from_log(Arena *a, Repo *r, const char *rel, Lines *out) {
         if (!r->shadow_idx) {
             RecLog *log = (RecLog *)arena_alloc(r->a, sizeof(RecLog));
             char err[256];
-            if (rec_log_load(r->a, r->logpath, log, err, sizeof err))
+            if (repo_log_load(r->a, r, log, err, sizeof err))
                 r->shadow_log = log;
         }
         r->shadow_log_size = size;

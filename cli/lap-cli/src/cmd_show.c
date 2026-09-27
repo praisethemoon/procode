@@ -9,7 +9,7 @@ static bool show_replay(Arena *a, Repo *repo, Idx *ix, const Rec *rec,
     if (ix && snap_replay(a, repo, ix, rec->file, entry, out, deleted))
         return true;
     if (log->count == 0 &&
-        !rec_log_load(a, repo->logpath, log, err, errsz))
+        !repo_log_load(a, repo, log, err, errsz))
         return false;
     if (!rec_replay_file(a, log, rec->file, (int32_t)entry, out, deleted)) {
         snprintf(err, errsz, "cannot reconstruct %s at %s", rec->file,
@@ -54,7 +54,7 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
     }
     if (!rec) { /* no index, or it could not answer: scan */
         ix = NULL;
-        if (!rec_log_load(a, repo.logpath, &log, err, sizeof err)) {
+        if (!repo_log_load(a, &repo, &log, err, sizeof err)) {
             err_out(json, "log_unreadable", "%s", err);
             return LAP_EXIT_ERR;
         }

@@ -248,7 +248,7 @@ bool snap_rebuild_all(Arena *a, Repo *r, char *err, size_t errsz) {
     } else {
         const IdxEntry *last = &idx->v[idx->h.count - 1];
         char *line;
-        if (!plat_read_range(a, r->logpath, last->off, last->len, &line)) {
+        if (!hist_read(a, &r->hist, last->off, last->len, &line)) {
             snprintf(err, errsz, "cannot read log tail record");
             return false;
         }

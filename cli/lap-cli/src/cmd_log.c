@@ -46,7 +46,7 @@ static bool log_via_scan(Arena *a, Repo *repo, const LogQuery *q, StrBuf *sb,
                          bool json, int64_t *printed, char *err,
                          size_t errsz) {
     RecLog log;
-    if (!rec_log_load(a, repo->logpath, &log, err, errsz))
+    if (!repo_log_load(a, repo, &log, err, errsz))
         return false;
     for (int32_t i = log.count - 1; i >= 0; i--) {
         const Rec *rec = &log.v[i];

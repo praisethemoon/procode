@@ -218,18 +218,22 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
     return true;
 }
 
-bool rec_log_load(Arena *a, const char *path, RecLog *out, char *err,
-                  size_t errsz) {
+static void where_line(const char *data, uint64_t off, char *out,
+                       size_t outsz) {
+    int32_t line = 1;
+    for (uint64_t p = 0; p < off; p++) {
+        if (data[p] == '\n')
+            line++;
+    }
+    snprintf(out, outsz, "log line %d", line);
+}
+
+bool rec_log_parse(Arena *a, const char *data, size_t len, RecWhereFn where,
+                   const void *where_ctx, RecLog *out, char *err,
+                   size_t errsz) {
     memset(out, 0, sizeof(*out));
     out->chain_ok = true;
     out->chain_break_index = -1;
-    char *data;
-    size_t len;
-    /* lap's own log must never become unreadable by growing: no size cap */
-    if (!plat_read_file_max(a, path, &data, &len, (size_t)-1)) {
-        snprintf(err, errsz, "cannot read log file %s", path);
-        return false;
-    }
     /* Drop a torn (unterminated) final line: a crash mid-append wrote it,
      * no one ever acknowledged it. */
     if (len > 0 && data[len - 1] != '\n') {
@@ -248,17 +252,29 @@ bool rec_log_load(Arena *a, const char *path, RecLog *out, char *err,
     for (int32_t i = 0; i < l.count; i++) {
         if (l.lines[i].len == 0)
             continue;
+        uint64_t off = (uint64_t)(l.lines[i].ptr - data);
+        char pos[160]; /* named only when a message needs it: naming
+                          counts lines from the start */
         char lerr[256];
         if (!rec_decode(a, l.lines[i].ptr, l.lines[i].len, &recs[n], lerr,
                         sizeof lerr)) {
-            snprintf(err, errsz, "log line %d: %s", i + 1, lerr);
+            if (where)
+                where(where_ctx, data, off, pos, sizeof pos);
+            else
+                where_line(data, off, pos, sizeof pos);
+            snprintf(err, errsz, "%s: %s", pos, lerr);
             return false;
         }
         if (out->chain_ok && strcmp(recs[n].prev, prev_hash) != 0) {
+            if (where)
+                where(where_ctx, data, off, pos, sizeof pos);
+            else
+                where_line(data, off, pos, sizeof pos);
             out->chain_ok = false;
             out->chain_break_index = n;
+            out->chain_break_off = off;
             snprintf(out->chain_err, sizeof out->chain_err,
-                     "hash chain broken at log line %d (record %s)", i + 1,
+                     "hash chain broken at %s (record %s)", pos,
                      recs[n].id ? recs[n].id : "init");
         }
         prev_hash = recs[n].hash;

@@ -59,7 +59,7 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
                             const Rec *filter) {
     RecLog log;
     char err[512];
-    if (!rec_log_load(a, repo->logpath, &log, err, sizeof err)) {
+    if (!repo_log_load(a, repo, &log, err, sizeof err)) {
         err_out(json, "log_unreadable", "%s", err);
         return LAP_EXIT_ERR;
     }
@@ -189,7 +189,7 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
                 Rec none;
                 memset(&none, 0, sizeof none);
                 const Rec *st = &none;
-                if (rec_log_load(a, repo.logpath, &log, err, sizeof err)) {
+                if (repo_log_load(a, &repo, &log, err, sizeof err)) {
                     for (int32_t i = log.count - 1; i >= 0; i--) {
                         if (log.v[i].type == REC_SESSION_START &&
                             strcmp(log.v[i].id, repo.active_session) == 0) {

@@ -197,19 +197,14 @@ void test_rec(void) {
     sb_putn(&fsb, l2, lb);
     sb_putc(&fsb, '\n');
     sb_puts(&fsb, "{\"type\":\"commit\",\"id\":\"L9"); /* torn, no newline */
-    /* cwd, not bin/: ctest runs from the build directory, where bin/ may
-     * not exist, and a write that silently fails takes the assertions with
-     * it */
-    const char *tp = ".torn_unit_test.jsonl";
-    ASSERT_TRUE(plat_write_file_atomic(tp, fsb.data, fsb.len));
     RecLog tl;
     char terr[256];
-    ASSERT_TRUE(rec_log_load(a, tp, &tl, terr, sizeof terr));
+    ASSERT_TRUE(rec_log_parse(a, fsb.data, fsb.len, NULL, NULL, &tl, terr,
+                              sizeof terr));
     ASSERT_EQ_I(tl.count, 2);
     ASSERT_TRUE(tl.torn_tail);
     ASSERT_TRUE(tl.torn_bytes > 0);
     ASSERT_TRUE(tl.chain_ok);
-    plat_remove_file(tp);
 
     t_begin("rec: tampering changes the hash (chain detection)");
     Rec r1;

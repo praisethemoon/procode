@@ -1,7 +1,7 @@
 /* Repository discovery, state cache, shadow store, record append.
  *
  * Layout inside <root>/.lap/:
- *   log.jsonl    append-only record log (source of truth)
+ *   log/         the history as chunk files (source of truth; hist.h)
  *   state.json   cache: counters, active session, last chain hash
  *   shadow/      last-committed content of every tracked file
  *   lock         exclusive lock taken by writing commands
@@ -13,6 +13,7 @@
 #ifndef LAP_REPO_H
 #define LAP_REPO_H
 
+#include "hist.h"
 #include "platform.h"
 #include "rec.h"
 
@@ -20,7 +21,7 @@ typedef struct {
     Arena *a;
     char root[LAP_PATH_MAX];    /* absolute repo root, '/' separators */
     char lapdir[LAP_PATH_MAX];  /* <root>/.lap */
-    char logpath[LAP_PATH_MAX]; /* <root>/.lap/log.jsonl */
+    Hist hist; /* this folder's history, as its chunks were at open */
 
     int64_t next_commit;  /* next L<n> */
     int64_t next_session; /* next S<n> */
@@ -37,7 +38,7 @@ typedef struct {
      * loading it once per file made status grow with files x log size. */
     struct Idx *shadow_idx;
     RecLog *shadow_log;
-    uint64_t shadow_log_size;
+    uint64_t shadow_log_size; /* history bytes when it was loaded */
     bool shadow_loaded;
 } Repo;
 
@@ -59,6 +60,10 @@ void repo_close(Repo *r);
 
 /* Creates a new repo in dir (absolute). Fails if one already exists there. */
 bool repo_init(Arena *a, const char *dir, char *err, size_t errsz);
+
+/* Reads and parses this folder's whole history; messages name chunks and
+ * lines ("main.000002.jsonl line 7"). */
+bool repo_log_load(Arena *a, Repo *r, RecLog *out, char *err, size_t errsz);
 
 /* Sets rec->prev/ts, encodes, appends to the log, refreshes r->last_hash in
  * memory. Does NOT persist state.json: callers finish their side effects
