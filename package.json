@@ -17,6 +17,6 @@
         "setup": "npm install && npm run build",
         "build": "npm run compile --workspaces --if-present",
         "test": "npm test --workspaces --if-present",
-        "package": "npm run package --workspace packages/index-vscode"
+        "package": "npm run package --workspace combined"
     }
 }

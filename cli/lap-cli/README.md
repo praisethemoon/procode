@@ -219,8 +219,8 @@ rather than failing.
 **Caches are machine-local** and native-endian. Transport a repository as
 its `log.jsonl` plus the working tree, then run `lap rebuild` on arrival.
 
-**Windows is best-effort and untested.** The `_WIN32` branches exist and
-compile via CMake, but POSIX is the only platform covered by the suites.
+**Windows** builds with MSVC through CMake and runs the unit suite under
+ctest. The e2e suite is a shell script, run on macOS and Linux.
 
 ## For agents
 
