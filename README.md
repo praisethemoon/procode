@@ -1,6 +1,6 @@
-# procode
+# progressive code
 
-Tools for working alongside AI coding agents:
+procode, is a set of tools for working alongside AI coding agents:
 
 - **lap** records every edit an agent makes, one commit per edit, each
   with its intent (why) and its behavior (what it makes the code do).
@@ -10,11 +10,12 @@ Tools for working alongside AI coding agents:
   and agents work from together.
 - **Artifacts** are pages an agent publishes for people to read in the
   editor: reports, comparisons, findings.
+- You can install each separately, if you do not want the entire bulk.
 
 Each ships as a CLI or an MCP server for agents, plus a VS Code view for
 people. The four views come as one extension, **procode**.
 
-## The parts
+## Parts
 
 | part | path | what it is |
 |---|---|---|
@@ -28,11 +29,20 @@ people. The four views come as one extension, **procode**.
 
 ## Requirements
 
-- A C11 compiler (clang or gcc), and `make` or CMake 3.16+
-- Node.js 18+ with npm
-- VS Code 1.101+
+For the CLIs, a C11 compiler and CMake 3.16+:
 
-Development happens on macOS. CMake is the route on Windows.
+- **macOS:** clang from the Xcode Command Line Tools
+  (`xcode-select --install`), and CMake (`brew install cmake`).
+- **Linux:** gcc or clang, make and CMake, e.g.
+  `sudo apt install build-essential cmake` on Debian and Ubuntu, or
+  `sudo dnf install gcc make cmake` on Fedora.
+- **Windows:** Visual Studio 2022 (or its Build Tools) with the
+  *Desktop development with C++* workload, which includes MSVC and CMake.
+
+For the packages and the extension: Node.js 18+ with npm, and VS Code
+1.101+.
+
+Development happens on macOS; the CLIs are also built on Windows with MSVC.
 
 ## Build and test
 
@@ -56,16 +66,21 @@ it.
 
 In this order: the extension and its MCP servers run the CLIs from `PATH`.
 
-1. **The CLIs.** On macOS and Linux they go into `/usr/local/bin`
-   (`PREFIX=...` to change it):
+1. **The CLIs**, built with CMake from the repository root.
+
+   On macOS and Linux, into `/usr/local/bin`:
 
    ```sh
-   sudo make -C cli/lap-cli install
-   sudo make -C cli/kb-cli install
+   cmake -B build -DCMAKE_BUILD_TYPE=Release
+   cmake --build build
+   sudo cmake --install build
    ```
 
-   On Windows, build them with CMake and MSVC, from a Developer PowerShell
-   for Visual Studio in the repository root:
+   `-DCMAKE_BUILD_TYPE=Release` matters: without it the build is
+   unoptimised, and kb's semantic search is much slower. Add
+   `--prefix <dir>` to the install for somewhere other than `/usr/local`.
+
+   On Windows, from a Developer PowerShell for Visual Studio:
 
    ```powershell
    cmake -B build
@@ -140,6 +155,24 @@ packages/   coboard, artifacts, kb-js, kb-mcp,
             artifacts-vscode, combined                          TypeScript, one npm workspace
 specs/      the kb contract and the artifact format
 ```
+
+## Limitations
+
+> [!WARNING]
+> **lap and board histories do not merge across git branches.** Both are
+> append-only logs committed to git (`.lap/log.jsonl`, `.coboard/log.jsonl`).
+> If two branches both record lap commits or change the board, merging them
+> conflicts on that log, and no resolution keeps both sides: each branch
+> has handed out the same next ids (`L…`, `S…`, `T-…`), and interleaving
+> lap's lines breaks its hash chain. Keep one side's log and discard the
+> other's.
+>
+> To avoid it, record lap sessions and board changes on one line of work,
+> or keep `.lap/` out of git so it stays on one machine.
+
+lap's other limits (it cannot restore files, it takes changes git makes
+for yours, renames are two commits) are in
+[its README](cli/lap-cli/README.md#limitations).
 
 ## License
 
