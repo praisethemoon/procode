@@ -84,6 +84,10 @@ bool repo_view_branch(Arena *a, Repo *r, const char *name, bool json);
  * unknown_session. */
 bool session_resolve(Arena *a, Repo *r, const char *ref, const char **sid,
                      bool *adopted, bool json);
+/* Where branch `lineage`'s own records start in log (its view): just after
+ * its branch record; 0 for main (lineage NULL), whose records are all its
+ * own. A session before that is inherited from the branch it started from. */
+int32_t own_part_start(const RecLog *log, const char *lineage);
 /* How a session is named to people and agents: "<branch>/S<n>" when the
  * branch it belongs to (a record's lineage label) is not main, else
  * "S<n>". Unique wherever it is copied to. */

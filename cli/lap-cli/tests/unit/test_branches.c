@@ -235,6 +235,23 @@ void test_branches(void) {
     remove(subpath);
     remove(path);
 
+    t_begin("own_part_start: a branch's own records start after its own "
+            "branch record, not its parent branch's; main's at 0");
+    Rec op[5];
+    memset(op, 0, sizeof op);
+    op[1].type = REC_BRANCH;
+    op[1].id = "0123456789ab"; /* the branch it started from */
+    op[3].type = REC_BRANCH;
+    op[3].id = "ba9876543210"; /* its own */
+    RecLog olog;
+    memset(&olog, 0, sizeof olog);
+    olog.v = op;
+    olog.count = 5;
+    ASSERT_EQ_I(own_part_start(&olog, "ba9876543210"), 4);
+    ASSERT_EQ_I(own_part_start(&olog, "0123456789ab"), 2);
+    ASSERT_EQ_I(own_part_start(&olog, NULL), 0);
+    ASSERT_EQ_I(own_part_start(&olog, "ffffffffffff"), 0);
+
     t_begin("merge_redo_point: no earlier run, or one followed by other "
             "work, places against the latest record; one at the end is "
             "redone from just before it");

@@ -530,6 +530,15 @@ const char *session_ref(Arena *a, const char *lineage, const char *sid) {
     return arena_printf(a, "%s/%s", lineage, sid);
 }
 
+int32_t own_part_start(const RecLog *log, const char *lineage) {
+    int32_t own = 0;
+    for (int32_t i = 0; lineage && i < log->count; i++) {
+        if (log->v[i].type == REC_BRANCH && strcmp(log->v[i].id, lineage) == 0)
+            own = i + 1;
+    }
+    return own;
+}
+
 bool session_resolve(Arena *a, Repo *r, const char *ref, const char **sid,
                      bool *adopted, bool json) {
     *adopted = false;
@@ -544,17 +553,19 @@ bool session_resolve(Arena *a, Repo *r, const char *ref, const char **sid,
     if (!repo_view_branch(a, &view, name, json))
         return false;
     *sid = id;
-    if (!view.foreign) /* the branch is this folder's own */
-        return true;
-    /* the branch's session_start, then whether lap merge adopted it here */
+    /* the branch's own session_start — after its branch record: a session
+     * from before its base is the parent's, not the branch's — then whether
+     * lap merge adopted it here */
     RecLog blog, mine;
     char err[512];
     const char *hash = NULL;
     if (repo_log_load(a, &view, &blog, err, sizeof err)) {
-        for (int32_t i = 0; i < blog.count; i++) {
+        int32_t own = own_part_start(
+            &blog, view.hist.parent[0] ? view.hist.lineage : NULL);
+        for (int32_t i = own; i < blog.count; i++) {
             if (blog.v[i].type == REC_SESSION_START &&
                 strcmp(blog.v[i].id, id) == 0)
-                hash = blog.v[i].hash; /* the last: the branch's own */
+                hash = blog.v[i].hash;
         }
     }
     if (!hash) {
@@ -562,6 +573,8 @@ bool session_resolve(Arena *a, Repo *r, const char *ref, const char **sid,
                 id);
         return false;
     }
+    if (!view.foreign) /* the branch is this folder's own */
+        return true;
     if (repo_log_load(a, r, &mine, err, sizeof err)) {
         for (int32_t i = 0; i < mine.count; i++) {
             const Rec *s = &mine.v[i];

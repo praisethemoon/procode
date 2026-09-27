@@ -1624,6 +1624,39 @@ expect_grep "unrelated_history" "$LAP" merge x --json
 [ "$(both15)" = "$SUM15" ] || fail "a merge refused as unrelated_history changed a .lap"
 cd "$WORK"
 
+t "a branch name stays with one branch, and name/S<n> never means an inherited session"
+mkdir -p "$WORK/m18-p" && cd "$WORK/m18-p" || exit 1
+git init -q . && git config user.name e2e && git config user.email e2e@lap
+printf '.lap/*\n!.lap/log/\n' > .gitignore
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "before any branch" >/dev/null 2>&1 # S1, main's own
+printf 'f\n' > f.txt
+for f in f.txt .lapignore .gitignore; do
+    "$LAP" commit "$f" -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+"$LAP" session end >/dev/null 2>&1
+git add -A && git commit -qm base
+git worktree add -q "$WORK/m18-w" -b b
+cd "$WORK/m18-w" && "$LAP" branch start b --from ../m18-p >/dev/null 2>&1
+"$LAP" session start "the branch's work" --branch b >/dev/null 2>&1 # S2
+printf 'F\n' > f.txt && "$LAP" commit f.txt --branch b -i "change f in b" -b "rewrites f.txt in the branch" >/dev/null 2>&1
+"$LAP" session end --branch b >/dev/null 2>&1
+expect_grep "unknown_session" "$LAP" rr b/S1 --json
+expect_grep "the branch's work" "$LAP" rr b/S2
+git add -A && git commit -qm "b's work" >/dev/null
+cd "$WORK/m18-p" && git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge m18"
+expect_grep "adopted 1 of 1" "$LAP" merge b
+expect_grep "unknown_session" "$LAP" rr b/S1 --json
+expect_grep "adopted from b/S2" "$LAP" rr b/S2
+git add -A && git commit -qm "took in b" >/dev/null
+git worktree remove --force "$WORK/m18-w"
+"$LAP" session start "after b" --branch main >/dev/null 2>&1 # a write: b is pruned
+grep -q '"name":"b"' .lap/branches.json 2>/dev/null && fail "the merged, gone branch was not pruned"
+git worktree add -q "$WORK/m18-w2" -b b-again
+cd "$WORK/m18-w2" && expect_grep "name_taken" "$LAP" branch start b --from ../m18-p --json
+expect_ok "$LAP" branch start b2 --from ../m18-p
+cd "$WORK"
+
 t "an edit to an empty file the parent deleted stops that file"
 mkdir -p "$WORK/m17-p" && cd "$WORK/m17-p" || exit 1
 git init -q . && git config user.name e2e && git config user.email e2e@lap

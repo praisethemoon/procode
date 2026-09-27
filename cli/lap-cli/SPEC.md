@@ -483,7 +483,13 @@ once it leaves its folder — in a ticket comment, say. **`<branch>/S<n>`**
   read with `--branch`. JSON carries it as `ref` (sessions) and
   `session_ref` (commits); `id` and `session` stay the bare ids.
 - A name that is no branch here is `unknown_branch`; a session the branch
-  does not have is `unknown_session`.
+  does not have is `unknown_session` — including one from before its base,
+  which its history holds but which is its parent's: `<branch>/S<n>` names
+  only the branch's own sessions, after its branch record.
+- A branch name names one branch for good: `lap branch start` refuses a
+  name any branch here ever had (`name_taken`) — in the registry, among
+  the branch chunks here, or in a merge record — so a name in an old
+  ticket comment never comes to mean another branch.
 
 ### Reading another branch
 

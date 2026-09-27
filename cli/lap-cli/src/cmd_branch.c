@@ -231,10 +231,26 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
 
     Branches reg;
     branches_load(a, pr.lapdir, &reg);
-    if (name && branches_find(&reg, name)) {
+    /* A name stays taken once used here — in the registry, by a branch
+     * whose chunks are here, or by one a merge recorded — so a name names
+     * one branch for good. */
+    bool taken = name && (branches_find(&reg, name) ||
+                          branch_find(a, &pr, &reg, name));
+    if (name && !taken) {
+        RecLog plog;
+        char perr[256];
+        if (rec_log_parse(a, theirs, theirs_len, NULL, NULL, &plog, perr,
+                          sizeof perr)) {
+            for (int32_t i = 0; i < plog.count && !taken; i++)
+                taken = plog.v[i].type == REC_MERGE &&
+                        strcmp(plog.v[i].name, name) == 0;
+        }
+    }
+    if (taken) {
         err_out(json, "name_taken",
-                "%s already has a branch named %s; pick another name", there,
-                name);
+                "%s already has, or had, a branch named %s: a name stays "
+                "with one branch for good; pick another name",
+                there, name);
         repo_close(&pr);
         return LAP_EXIT_ERR;
     }
