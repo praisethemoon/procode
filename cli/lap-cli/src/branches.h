@@ -47,6 +47,7 @@ typedef struct {
     int32_t since_base; /* commits after its start; -1 when not readable */
     int32_t since_merge; /* commits after the last merged head; -1 idem */
     const char **stopped; /* files a merge of it stopped, for good */
+    const char **stopped_at; /* the first commit to each not adopted */
     int32_t nstopped;
     /* "active", "merged" (adopted up to its head), "partly merged" (a file
      * stopped), or "missing" (its folder is gone, and it was not merged

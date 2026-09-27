@@ -1,0 +1,119 @@
+/* A ticket's work across branches: sessions still in a branch folder are
+ * listed with their branch; once lap merge adopted them they are listed
+ * once, as the adopted ones, with the branch and what its merge stopped;
+ * sessions a branch shares with its parent (from before its base) are not
+ * listed twice. First on its own (mergeSessions), then through lap. */
+
+import * as assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { test } from "node:test";
+
+import { LapSession, mergeSessions, ticketSessions } from "../lap";
+import { cliBin, noCli } from "./cli-bin";
+
+const s = (id: string, hash: string, started: string, extra: Partial<LapSession> = {}): LapSession => ({
+    id,
+    hash,
+    msg: `${id} work`,
+    started,
+    ended: null,
+    commits: 1,
+    active: false,
+    ...extra,
+});
+
+test("mergeSessions: before a merge, the branch's sessions are listed with their branch", () => {
+    const main = [s("S1", "h1", "2026-09-27T10:00:00Z")];
+    const out = mergeSessions(main, [
+        { name: "parser", stops: [], sessions: [s("S1", "h1", "2026-09-27T10:00:00Z"), s("S2", "h2", "2026-09-27T11:00:00Z")] },
+    ]);
+    assert.deepEqual(out.map((x) => `${x.branch ?? "main"}/${x.id}`), ["main/S1", "parser/S2"], "the shared S1 is listed once");
+});
+
+test("mergeSessions: after a merge, an adopted session is listed once, as the adopted one", () => {
+    const main = [s("S1", "h1", "2026-09-27T10:00:00Z"), s("S3", "h3", "2026-09-27T11:00:00Z", { from: "h2" })];
+    const out = mergeSessions(main, [
+        { name: "parser", stops: [{ file: "a.ts", at: "c9" }], sessions: [s("S2", "h2", "2026-09-27T11:00:00Z")] },
+    ]);
+    assert.deepEqual(out.map((x) => x.id), ["S1", "S3"]);
+    assert.equal(out[1].adoptedFrom, "parser");
+    assert.deepEqual(out[1].stops, [{ file: "a.ts", at: "c9" }], "a partly merged branch's stops go with its adopted session");
+    assert.equal(out[1].branch, undefined);
+    assert.equal(main[1].adoptedFrom, undefined, "the input is left as it was");
+});
+
+test("mergeSessions: sessions come out oldest first, and with no branches, as they were", () => {
+    const main = [s("S1", "h1", "2026-09-27T10:00:00Z")];
+    assert.deepEqual(mergeSessions(main, []), main);
+    const out = mergeSessions(main, [{ name: "b", stops: [], sessions: [s("S2", "h0", "2026-09-27T09:00:00Z")] }]);
+    assert.deepEqual(out.map((x) => x.id), ["S2", "S1"]);
+});
+
+const LAP = cliBin("lap");
+
+test("ticketSessions: through lap, before a merge, after it, and partly merged", { skip: !LAP && noCli("lap") }, async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-sessions-")));
+    const parent = path.join(root, "proj");
+    fs.mkdirSync(parent);
+    const saved = process.env["LAP_BIN"];
+    process.env["LAP_BIN"] = LAP;
+    const lap = (cwd: string, ...args: string[]) => execFileSync(LAP, args, { cwd, env: { ...process.env, LAP_USER: "tester" } });
+    try {
+        lap(parent, "init");
+        fs.writeFileSync(path.join(parent, "a.txt"), "one\ntwo\nthree\nfour\nfive\n");
+        fs.writeFileSync(path.join(parent, "b.txt"), "b\n");
+        lap(parent, "session", "start", "T-1: before the branch", "--meta", "ticket=T-1");
+        for (const f of ["a.txt", "b.txt", ".lapignore"]) lap(parent, "commit", f, "-i", "Seed the project files", "-b", `Records ${f} as it starts`);
+        lap(parent, "session", "end");
+        for (const b of ["feat", "half"]) {
+            fs.cpSync(parent, path.join(root, b), { recursive: true });
+            lap(path.join(root, b), "branch", "start", b, "--from", parent);
+        }
+        const work = (b: string, file: string, from: string, to: string) => {
+            const dir = path.join(root, b);
+            lap(dir, "session", "start", `T-1: work in ${b}`, "--meta", "ticket=T-1", "--branch", b);
+            const p = path.join(dir, file);
+            fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace(from, to));
+            lap(dir, "commit", file, "--branch", b, "-i", `Change ${file} in ${b}`, "-b", `Rewrites ${from.trim()} as ${to.trim()}`);
+            lap(dir, "session", "end");
+        };
+        work("feat", "b.txt", "b\n", "B\n");
+        work("half", "a.txt", "two\n", "TWO\n");
+
+        // before any merge: this folder's session, then one per branch
+        let r = await ticketSessions(parent, "T-1");
+        assert.equal(r.ok, true, r.error);
+        assert.deepEqual(r.value.map((x) => `${x.branch ?? "main"}:${x.msg}`), [
+            "main:T-1: before the branch",
+            "feat:T-1: work in feat",
+            "half:T-1: work in half",
+        ]);
+
+        // feat merged whole: its session is listed once, adopted
+        fs.copyFileSync(path.join(root, "feat", "b.txt"), path.join(parent, "b.txt"));
+        lap(parent, "merge", "feat");
+        r = await ticketSessions(parent, "T-1");
+        const adopted = r.value.filter((x) => x.msg === "T-1: work in feat");
+        assert.equal(adopted.length, 1, "no duplicate after adoption");
+        assert.equal(adopted[0].adoptedFrom, "feat");
+        assert.equal(adopted[0].branch, undefined);
+
+        // half stopped at a conflict: adopted with its stop
+        const a = path.join(parent, "a.txt");
+        fs.writeFileSync(a, fs.readFileSync(a, "utf8").replace("two\n", "deux\n"));
+        lap(parent, "commit", "a.txt", "--branch", "main", "--no-session", "-i", "Translate the second line", "-b", "Rewrites two in French");
+        lap(parent, "merge", "half");
+        r = await ticketSessions(parent, "T-1");
+        const half = r.value.filter((x) => x.msg === "T-1: work in half");
+        assert.equal(half.length, 1);
+        assert.equal(half[0].adoptedFrom, "half");
+        assert.equal(half[0].stops?.[0].file, "a.txt");
+        assert.match(half[0].stops?.[0].at ?? "", /^[0-9a-f]{64}$/);
+    } finally {
+        if (saved === undefined) delete process.env["LAP_BIN"];
+        else process.env["LAP_BIN"] = saved;
+    }
+});

@@ -27,6 +27,7 @@ import {
 
 import { SHOW_EDIT, commentText, regionLabel, regionLines } from "./lapview";
 import type { ViewMode } from "./kanban";
+import { sessionKey } from "./protocol";
 import type { Choices, SidebarToHost, SidebarToView, ToHost, ToView } from "./protocol";
 
 let board: Board | null = null;
@@ -185,21 +186,39 @@ function refreshAll(tree: Sidebar): void {
  * its reason — each opens as the same diff-with-comment a ticket's commits
  * open — and every file's net change. One tab per session, keyed REVIEW+id. */
 const REVIEW = "review:";
-const reviewTickets = new Map<string, string | null>();
+/* What a review tab was opened for, by its key: the ticket, and for a branch
+ * session or an adopted one, its branch and what that branch's merge
+ * stopped. */
+interface ReviewOf {
+    readonly session: string;
+    readonly ticket: string | null;
+    readonly branch?: string;
+    readonly adoptedFrom?: string;
+    readonly stops?: readonly { readonly file: string; readonly at: string }[];
+}
+const reviews = new Map<string, ReviewOf>();
 
 async function pushReview(key: string, panel: vscode.WebviewPanel): Promise<void> {
-    const session = key.slice(REVIEW.length);
+    const of = reviews.get(key) ?? { session: key.slice(REVIEW.length), ticket: null };
     const b = currentBoard();
     if (!b) return;
     syncLapPath();
-    const r = await sessionReview(b.root, session);
-    const msg: ToView = { type: "review", session, ticket: reviewTickets.get(key) ?? null, review: r.value, ...(r.error ? { error: r.error } : {}) };
+    const r = await sessionReview(b.root, of.session, of.branch);
+    const msg: ToView = {
+        type: "review",
+        session: of.session,
+        ticket: of.ticket,
+        review: r.value,
+        ...(r.error ? { error: r.error } : {}),
+        ...(of.branch ? { branch: of.branch } : {}),
+        ...(of.adoptedFrom ? { adoptedFrom: of.adoptedFrom, stops: of.stops ?? [] } : {}),
+    };
     void panel.webview.postMessage(msg);
 }
 
-function openReview(ctx: vscode.ExtensionContext, tree: Sidebar, session: string, ticket: string | null): void {
-    const key = REVIEW + session.trim().toUpperCase();
-    reviewTickets.set(key, ticket);
+function openReview(ctx: vscode.ExtensionContext, tree: Sidebar, of: ReviewOf): void {
+    const key = REVIEW + sessionKey({ id: of.session.trim().toUpperCase(), branch: of.branch });
+    reviews.set(key, of);
     const existing = panels.get(key);
     if (existing) {
         existing.reveal();
@@ -285,7 +304,12 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string
                 open(ctx, tree, m.id);
                 return;
             case "review":
-                openReview(ctx, tree, m.session, m.ticket ?? null);
+                openReview(ctx, tree, {
+                    session: m.session,
+                    ticket: m.ticket ?? null,
+                    ...(m.branch ? { branch: m.branch } : {}),
+                    ...(m.adoptedFrom ? { adoptedFrom: m.adoptedFrom, stops: m.stops ?? [] } : {}),
+                });
                 return;
             case "mode":
                 viewMode = m.mode === "kanban" ? "kanban" : "list";
@@ -326,8 +350,8 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string
             case "commits": {
                 const b = requireBoard();
                 syncLapPath();
-                const r = await sessionCommits(b.root, m.session);
-                const msg: ToView = { type: "commits", session: m.session, commits: r.value, ...(r.error ? { error: r.error } : {}) };
+                const r = await sessionCommits(b.root, m.session, m.branch);
+                const msg: ToView = { type: "commits", session: sessionKey({ id: m.session, branch: m.branch }), commits: r.value, ...(r.error ? { error: r.error } : {}) };
                 void panel.webview.postMessage(msg);
                 return;
             }

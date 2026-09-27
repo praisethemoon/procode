@@ -79,14 +79,32 @@ function Node(props: { item: Extract<TimelineItem<LapReviewStep>, { kind: "node"
             </div>
             <ol className="cb-steps">
                 {item.steps.map((s) => (
-                    <CommitLine key={s.id} commit={s} lines={s.op === "delete" ? "deleted" : `line${s.new_lines === 1 ? "" : "s"} ${linesOf(s)}`} onOpen={() => show(s.id)} />
+                    <CommitLine
+                        key={s.id}
+                        commit={s}
+                        lines={
+                            (s.op === "delete" ? "deleted" : `line${s.new_lines === 1 ? "" : "s"} ${linesOf(s)}`) +
+                            (s.from ? ` · from #${s.from.slice(0, 7)}` : "")
+                        }
+                        onOpen={() => show(s.id)}
+                    />
                 ))}
             </ol>
         </li>
     );
 }
 
-export function Review(props: { session: string; ticket: string | null; review: LapReview | null; error?: string }): JSX.Element {
+export function Review(props: {
+    session: string;
+    ticket: string | null;
+    review: LapReview | null;
+    error?: string;
+    /* a session still only in a branch folder */
+    branch?: string;
+    /* an adopted session: its branch, and what that branch's merge stopped */
+    adoptedFrom?: string;
+    stops?: readonly { readonly file: string; readonly at: string }[];
+}): JSX.Element {
     const r = props.review;
     if (r === null) {
         return (
@@ -108,7 +126,11 @@ export function Review(props: { session: string; ticket: string | null; review: 
                             <span className="cb-sep"> › </span>
                         </span>
                     ) : null}
-                    <span className="cb-muted">lap session {props.session}</span>
+                    <span className="cb-muted">
+                        lap session {props.session}
+                        {props.branch ? ` · in branch ${props.branch}, not merged yet` : ""}
+                        {props.adoptedFrom ? ` · adopted from branch ${props.adoptedFrom}` : ""}
+                    </span>
                 </div>
                 <h1>{r.purpose.split("\n")[0] || props.session}</h1>
                 <p className="cb-muted">
@@ -129,6 +151,34 @@ export function Review(props: { session: string; ticket: string | null; review: 
                     </ul>
                 )}
             </section>
+
+            {props.stops && props.stops.length > 0 ? (
+                <section className="cb-section">
+                    <h3>Stopped by the merge</h3>
+                    <p className="cb-muted">
+                        lap merge placed none of branch {props.adoptedFrom}'s edits to these files from the one named on: they
+                        met the parent's own changes. The rest was committed by hand, or is still pending.
+                    </p>
+                    <ul className="cb-sessions">
+                        {props.stops.map((s) => (
+                            <li key={s.file} className="cb-session">
+                                <Icon name="warning" /> <code>{s.file}</code> <span className="cb-muted">at</span>{" "}
+                                <a
+                                    className="cb-link cb-ref"
+                                    href="#"
+                                    title="The first edit to this file that was not adopted"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        send({ type: "showEdit", commit: s.at });
+                                    }}
+                                >
+                                    #{s.at.slice(0, 7)}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
 
             <section className="cb-section">
                 <h3>How it got there</h3>

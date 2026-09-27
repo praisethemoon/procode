@@ -9,6 +9,7 @@ import { Archived, EPIC_STATUSES, MILESTONE_STATUSES, PRIORITIES, SIZES, TICKET_
 import type { EpicView, MilestoneView, Summary, TicketView } from "coboard/query";
 import { CommitGroup, groupCommits, splitPath } from "../src/commits";
 import { ViewMode, columns, moves } from "../src/kanban";
+import { sessionKey } from "../src/protocol";
 import type { Choices, Fields, Sessions } from "../src/protocol";
 import { CommitLine, CommitText, Description, IdLink, InlineText, Markdown, Pick, Progress, QuickAdd, StatusBadge } from "./parts";
 import { send } from "./rpc";
@@ -369,15 +370,16 @@ function SessionsSection(props: { ticket: string; sessions: Sessions | null; com
             ) : (
                 <ul className="cb-sessions cb-runs">
                     {s.sessions.map((x) => {
-                        const expanded = openRows[x.id] === true;
-                        const commits = props.commits[x.id];
+                        const k = sessionKey(x);
+                        const expanded = openRows[k] === true;
+                        const commits = props.commits[k];
                         return (
-                            <li key={x.id} className="cb-run">
+                            <li key={k} className="cb-run">
                                 <div
                                     className="cb-session cb-run-head"
                                     onClick={() => {
-                                        setOpen({ ...openRows, [x.id]: !expanded });
-                                        if (!expanded && commits === undefined) send({ type: "commits", session: x.id });
+                                        setOpen({ ...openRows, [k]: !expanded });
+                                        if (!expanded && commits === undefined) send({ type: "commits", session: x.id, ...(x.branch ? { branch: x.branch } : {}) });
                                     }}
                                 >
                                     <Icon name={expanded ? "chevron-down" : "chevron-right"} />
@@ -388,6 +390,16 @@ function SessionsSection(props: { ticket: string; sessions: Sessions | null; com
                                             · {x.commits} commit{x.commits === 1 ? "" : "s"} · {x.started.slice(0, 10)}
                                             {x.active ? " · active" : x.ended ? "" : " · open"}
                                         </span>
+                                        {x.branch ? (
+                                            <span className="cb-label" title={`Recorded in branch ${x.branch}; not merged yet`}>
+                                                <Icon name="git-branch" /> {x.branch}
+                                            </span>
+                                        ) : x.adoptedFrom ? (
+                                            <span className="cb-label" title={`Adopted from branch ${x.adoptedFrom} by lap merge`}>
+                                                <Icon name="git-merge" /> from {x.adoptedFrom}
+                                                {x.stops && x.stops.length > 0 ? ` · ${x.stops.length} stopped` : ""}
+                                            </span>
+                                        ) : null}
                                     </span>
                                     {/* The session's own action, inside its card and away from the
                                       * section's Start session. */}
@@ -396,7 +408,15 @@ function SessionsSection(props: { ticket: string; sessions: Sessions | null; com
                                             size="sm"
                                             variant="secondary"
                                             title={`Review ${x.id}: what it changed and how`}
-                                            onClick={() => send({ type: "review", session: x.id, ticket: props.ticket })}
+                                            onClick={() =>
+                                                send({
+                                                    type: "review",
+                                                    session: x.id,
+                                                    ticket: props.ticket,
+                                                    ...(x.branch ? { branch: x.branch } : {}),
+                                                    ...(x.adoptedFrom ? { adoptedFrom: x.adoptedFrom, stops: x.stops ?? [] } : {}),
+                                                })
+                                            }
                                         >
                                             <Icon name="git-pull-request" /> Review
                                         </Button>

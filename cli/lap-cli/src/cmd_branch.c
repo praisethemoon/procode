@@ -440,6 +440,12 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
                     sb_putc(&sb, ',');
                 json_escape_c(&sb, st.stopped[k]);
             }
+            sb_puts(&sb, "],\"stops\":[");
+            for (int32_t k = 0; k < st.nstopped; k++) {
+                sb_puts(&sb, k ? ",{\"file\":" : "{\"file\":");
+                json_escape_c(&sb, st.stopped[k]);
+                sb_printf(&sb, ",\"at\":\"%s\"}", st.stopped_at[k]);
+            }
             sb_puts(&sb, "]}");
             continue;
         }

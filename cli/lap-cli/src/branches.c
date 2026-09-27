@@ -100,8 +100,12 @@ void branches_status(Arena *a, const char *lapdir, const RecLog *log,
                 out->stopped = (const char **)arena_realloc(
                     a, out->stopped, (size_t)cap * sizeof(char *),
                     (size_t)ncap * sizeof(char *));
+                out->stopped_at = (const char **)arena_realloc(
+                    a, out->stopped_at, (size_t)cap * sizeof(char *),
+                    (size_t)ncap * sizeof(char *));
                 cap = ncap;
             }
+            out->stopped_at[out->nstopped] = m->stopped_at[k];
             out->stopped[out->nstopped++] = m->stopped_file[k];
         }
     }

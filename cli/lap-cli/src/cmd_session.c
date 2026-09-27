@@ -87,12 +87,20 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
                 strcmp(log.v[j].session, st->id) == 0)
                 commits++;
         }
-        bool active = !end_ts && repo->active_session[0] &&
-                      strcmp(repo->active_session, st->id) == 0;
+        /* another branch's history (--branch): its open session is its
+         * active one, whatever this folder has open */
+        bool active = repo->foreign
+                          ? !end_ts && !st->from
+                          : !end_ts && repo->active_session[0] &&
+                                strcmp(repo->active_session, st->id) == 0;
         if (json) {
             if (printed)
                 sb_putc(&sb, ',');
-            sb_printf(&sb, "{\"id\":\"%s\",\"msg\":", st->id);
+            sb_printf(&sb, "{\"id\":\"%s\",\"hash\":\"%s\"", st->id,
+                      st->hash);
+            if (st->from)
+                sb_printf(&sb, ",\"from\":\"%s\"", st->from);
+            sb_puts(&sb, ",\"msg\":");
             json_escape_c(&sb, st->msg);
             sb_printf(&sb, ",\"started\":\"%s\"", st->ts);
             if (end_ts)
@@ -214,6 +222,11 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
         }
         rc = LAP_EXIT_OK;
     } else if (strcmp(sub, "list") == 0) {
+        /* on list, --branch reads that branch's sessions, as on log */
+        if (!repo_view_branch(a, &repo,
+                              flag_value(argc, argv, value_flags, "--branch"),
+                              json))
+            goto done;
         rc = session_list(a, &repo, json, &meta);
     } else if (strcmp(sub, "start") == 0) {
         if (!branch_check(a, &repo, branch_given(argc, argv, value_flags),

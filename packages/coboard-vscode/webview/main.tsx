@@ -29,7 +29,15 @@ function ReviewApp(props: { session: string }): JSX.Element {
             {data === null ? (
                 <p className="cb-muted">Reading {props.session} from lap…</p>
             ) : (
-                <Review session={data.session} ticket={data.ticket} review={data.review} error={data.error} />
+                <Review
+                    session={data.session}
+                    ticket={data.ticket}
+                    review={data.review}
+                    error={data.error}
+                    branch={data.branch}
+                    adoptedFrom={data.adoptedFrom}
+                    stops={data.stops}
+                />
             )}
         </main>
     );

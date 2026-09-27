@@ -1381,6 +1381,7 @@ expect_grep "adopted 2 of 2 commits (L6, L7)" "$LAP" merge b
 expect_grep "clean" "$LAP" status
 expect_grep "the parent's own session" "$LAP" session current
 expect_grep "T-7: branch work" "$LAP" session list --meta ticket=T-7
+expect_grep '"hash":"[0-9a-f]\{64\}","from":"[0-9a-f]\{64\}","msg":"T-7: branch work"' "$LAP" session list --meta ticket=T-7 --json
 expect_grep '"from":"' "$LAP" show L6 --json
 expect_grep "^from: #" "$LAP" show L7
 expect_grep "appends g4 on the branch (from #" "$LAP" rr S2 --no-diff
@@ -1472,6 +1473,8 @@ cd "$BP" || exit 1
 expect_grep '"behavior":"puts a line to review in g.txt".*"branch":"b"' "$LAP" log --branch b --json
 expect_not_grep "puts a line to review" "$LAP" log --json
 expect_grep "puts a line to review in g.txt" "$LAP" rr --branch b
+expect_grep '"msg":"branch review work".*"active":true' "$LAP" session list --branch b --json
+expect_not_grep "branch review work" "$LAP" session list
 expect_grep "branch: b" "$LAP" show L5 --branch b
 expect_grep "unknown_branch" "$LAP" log --branch nope --json
 cd "$BW" && expect_not_grep "puts a line" "$LAP" log --branch main

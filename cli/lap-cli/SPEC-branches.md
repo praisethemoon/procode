@@ -88,11 +88,12 @@ keep its lock. One board means one answer to "is T-93 done?".
 
 ### Views
 
-Lap History and the board's review read branches through `lap branch list
---json` and `--branch`: each branch with its state, its sessions and commits,
-and after a merge, adopted commits linking to their originals and stopped
-files listed. A `missing` branch shows its last path and the two ways to fix
-it.
+Built. Lap History and the board's review read branches through `lap branch
+list --json` and `--branch`: each branch with its state, its sessions and
+commits, and after a merge, adopted commits linking to their originals and
+stopped files listed. A `missing` branch shows its last path and the two
+ways to fix it. A ticket's sessions on the board include those still in a
+branch, and show an adopted one once (`session list`'s `hash` and `from`).
 
 ## Core rules that change
 

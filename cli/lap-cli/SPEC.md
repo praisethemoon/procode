@@ -644,6 +644,13 @@ a `meta` object. This is how other tools link work to a session: coboard
 starts sessions with `--meta ticket=T-12` and finds a ticket's sessions with
 `lap session list --meta ticket=T-12`.
 
+`list --json` gives each session its `hash` (its `session_start` record's)
+and, for one `lap merge` adopted, its `from`. `list --branch <name>` lists
+another branch's sessions (§Branches → Reading another branch); there a
+session is active when it is still open. Together they let a tool follow
+a ticket's work into its branches and see each piece once: a branch
+session whose hash is an adopted session's `from` was adopted.
+
 ### `lap rr [<session>] [<from> <to>] [--no-diff] [--branch B]`
 A **review request**: what a run of work changed, and why. Two halves —
 the *trajectory* (every commit in the order the work happened) and the
@@ -686,9 +693,10 @@ known path (`(gone)` when its folder is not there), its commits since its
 base and since the last merge, the files a merge stopped, and for a
 `missing` one the two fixes. `--json`: `{"ok":true,"self":{id, name,
 parent, base} | null,"branches":[{id, name, state, present, path, base,
-started, since_base, since_merge, merged, stopped}]}`, the counts `null`
-when the branch's history is nowhere to be read, `merged` the last merged
-head or `null`.
+started, since_base, since_merge, merged, stopped, stops}]}`, the counts
+`null` when the branch's history is nowhere to be read, `merged` the last
+merged head or `null`, `stopped` the stopped files and `stops` the same
+with the first commit not adopted in each (`[{file, at}]`).
 
 `forget` drops an entry; `move` points it at a folder that holds that
 branch (else `not_that_branch`). Both are writers; an entry not in the
