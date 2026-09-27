@@ -48,6 +48,24 @@ WORK=$(mktemp -d "${TMPDIR:-/tmp}/lap-e2e.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 cd "$WORK" || exit 1
 
+# ---------------------------------------------------------------- help
+t "lap --help lists every command and flag SPEC.md documents"
+HELP=$("$LAP" --help)
+for w in init status commit amend log show search session rr verify rebuild \
+    "branch start" "branch list" "branch forget" "move <branch> <path>" merge \
+    -F --edit --lines --force-message --no-session --dry-run "--branch <name>" \
+    --full-file --file --line --text --added --removed --msg --session --since \
+    --until --limit --meta --deep --verify --no-diff --from --copy-from-folder \
+    --json --color= --no-color "<branch>/S<n>" "--branch=feat"; do
+    printf '%s\n' "$HELP" | grep -qF -e "$w" || fail "the help does not mention $w"
+done
+# every command's line names --branch where SPEC gives it one
+for c in "log " "show <commit>" "rr "; do
+    printf '%s\n' "$HELP" | grep -F -e "$c" -A1 | grep -qF -e "--branch" ||
+        fail "the help's $c line lacks --branch"
+done
+printf '%s\n' "$HELP" | grep -qF "on list: that" || fail "the help does not give session list --branch"
+
 # ---------------------------------------------------------------- init
 t "init creates the repository"
 expect_ok "$LAP" init
