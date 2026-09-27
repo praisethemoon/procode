@@ -17,9 +17,9 @@ it gives the code. Every edit an agent makes is its own commit, grouped into
 sessions, so you can come back later and see what happened and why.
 
 `lap` is available as a CLI and as an agent skill that teaches the agent
-how to use it. To install the skill, copy
-[cli/lap-cli/skill/lap/](cli/lap-cli/skill/lap/) into your project's
-`.claude/skills/lap/` (or `~/.claude/skills/lap/` for every project).
+how to use it. To install the skills (`lap`, `tickets` and `artifacts`),
+copy the folders in [.claude/skills/](.claude/skills/) into your project's
+`.claude/skills/` (or `~/.claude/skills/` for every project).
 
 The extension's **Lap History** view renders the sessions and their changes
 inside VS Code.
@@ -74,6 +74,9 @@ identical to claude artifacts, except they stay local to your project.
 
 ![artifact-extension](assets/artifact-extension.webp)
 
+Artifacts are meant to live and be rendered in your vscode. They are HTML document,
+that adjust to the user theme since all UI in this repo uses  [baukasten](https://github.com/TypeFox/baukasten).
+
 ## Requirements
 
 For the CLIs, a C11 compiler and CMake 3.16+:
@@ -113,6 +116,8 @@ run the CLIs from `PATH`.
    cmake -B build
    cmake --build build --config Release
    ctest --test-dir build -C Release
+
+   # Change the folder (prefix) in the next command, if you don't like that path, just an example
    cmake --install build --config Release --prefix C:\tools\procode
    ```
 
@@ -218,13 +223,7 @@ for yours, renames are two commits) are in
 | **artifacts** | [packages/artifacts/](packages/artifacts/) | The `.artifact/` store and its MCP server. [Format](specs/artifacts.md) |
 | **kb-js**, **kb-mcp** | [packages/kb-js/](packages/kb-js/), [packages/kb-mcp/](packages/kb-mcp/) | A typed client for the kb CLI, and kb as MCP tools. |
 | **procode** | [packages/combined/](packages/combined/) | The VS Code extension: Lap History, Knowledge, the Board and Artifacts, with the coboard, kb and artifacts MCP servers inside. It is built from `packages/*-vscode`. |
-| **skills** | [.claude/skills/](.claude/skills/) | How agents work here: `lap`, `tickets` (board, lap and git together) and `artifacts`. The lap skill is also in [cli/lap-cli/skill/](cli/lap-cli/skill/) for other projects. |
-
-## Built with
-
-The views are built with [baukasten](https://github.com/TypeFox/baukasten),
-TypeFox's component library for VS Code webviews, and artifact pages are
-styled with its design tokens, so they follow your editor's theme.
+| **skills** | [.claude/skills/](.claude/skills/) | How agents work here: `lap`, `tickets` (board, lap and git together) and `artifacts`. Copy them into your own `.claude/skills/` to use them elsewhere. |
 
 ## License
 

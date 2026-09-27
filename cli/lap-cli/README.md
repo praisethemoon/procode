@@ -224,8 +224,8 @@ compile via CMake, but POSIX is the only platform covered by the suites.
 
 ## For agents
 
-`skill/lap/SKILL.md` is a drop-in skill for Claude Code (copy it to your
-project's `.claude/skills/lap/`) that teaches the cadence: start a session,
+The repository's `.claude/skills/lap/` is a drop-in skill for Claude Code
+(copy it to your project's `.claude/skills/lap/`) that teaches the cadence: start a session,
 edit → commit → edit → commit, end the session, and how to recover when a
 commit is rejected for containing more than one edit.
 
