@@ -205,7 +205,8 @@ export const TOOLS: readonly Tool[] = [
             const s = await ticketSessions(board.root, ticket);
             const sessions = [];
             for (const session of s.value) {
-                sessions.push({ ...session, commits: (await sessionCommits(board.root, session.id)).value });
+                /* a session still only in a branch: that branch's, as ids repeat across folders */
+                sessions.push({ ...session, commits: (await sessionCommits(board.root, session.id, session.branch)).value });
             }
             return { ticket, sessions, ...(s.ok ? {} : { lapError: s.error }), link: sessionCommand(ticket) };
         },

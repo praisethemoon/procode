@@ -12,6 +12,8 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { LapSession, mergeSessions, ticketSessions } from "../lap";
+import { handle } from "../mcp";
+import { Board } from "../store";
 import { cliBin, noCli } from "./cli-bin";
 
 const s = (id: string, hash: string, started: string, extra: Partial<LapSession> = {}): LapSession => ({
@@ -132,6 +134,50 @@ test("ticketSessions: through lap, before a merge, after it, and partly merged",
         assert.equal(half[0].adoptedFrom, "half");
         assert.equal(half[0].stops?.[0].file, "a.txt");
         assert.match(half[0].stops?.[0].at ?? "", /^[0-9a-f]{64}$/);
+    } finally {
+        if (saved === undefined) delete process.env["LAP_BIN"];
+        else process.env["LAP_BIN"] = saved;
+    }
+});
+
+test("board_sessions: a branch's session and the parent's with the same id each get their own commits", { skip: !LAP && noCli("lap") }, async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-sessions-")));
+    const parent = path.join(root, "proj");
+    const feat = path.join(root, "feat");
+    fs.mkdirSync(parent);
+    const saved = process.env["LAP_BIN"];
+    process.env["LAP_BIN"] = LAP;
+    const lap = (cwd: string, ...args: string[]) => execFileSync(LAP, args, { cwd, env: { ...process.env, LAP_USER: "tester" } });
+    try {
+        lap(parent, "init");
+        fs.writeFileSync(path.join(parent, "a.txt"), "one\ntwo\nthree\n");
+        for (const f of ["a.txt", ".lapignore"]) lap(parent, "commit", f, "--no-session", "-i", "Seed the project files", "-b", `Records ${f} as it starts`);
+        fs.cpSync(parent, feat, { recursive: true });
+        lap(feat, "branch", "start", "feat", "--from", parent);
+        const board = new Board(parent);
+        const epic = board.create({ kind: "epic", title: "Work" });
+        const inBranch = board.create({ kind: "ticket", title: "Done in the branch", epic: epic.id });
+        const inParent = board.create({ kind: "ticket", title: "Done in the parent", epic: epic.id });
+        const work = (dir: string, branch: string, ticket: string, to: string) => {
+            lap(dir, "session", "start", `${ticket}: work`, "--meta", `ticket=${ticket}`, "--branch", branch);
+            fs.writeFileSync(path.join(dir, "a.txt"), `one\n${to}\nthree\n`);
+            lap(dir, "commit", "a.txt", "--branch", branch, "-i", `Change a.txt for ${ticket}`, "-b", `Rewrites line two as ${to}`);
+        };
+        work(feat, "feat", inBranch.id, "BRANCH");
+        work(parent, "main", inParent.id, "PARENT");
+        const read = async (ticket: string) => {
+            const out = await handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "board_sessions", arguments: { ticket } } }, { cwd: parent, author: "agent" });
+            const text = (out as { result: { content: { text: string }[] } }).result.content[0].text;
+            return JSON.parse(text) as { sessions: { id: string; branch?: string; commits: { behavior: string }[] }[] };
+        };
+        const b = await read(inBranch.id);
+        const p = await read(inParent.id);
+        assert.equal(b.sessions.length, 1);
+        assert.equal(p.sessions.length, 1);
+        assert.equal(b.sessions[0].id, p.sessions[0].id, "both folders numbered their session alike");
+        assert.equal(b.sessions[0].branch, "feat");
+        assert.deepEqual(b.sessions[0].commits.map((c) => c.behavior), ["Rewrites line two as BRANCH"]);
+        assert.deepEqual(p.sessions[0].commits.map((c) => c.behavior), ["Rewrites line two as PARENT"]);
     } finally {
         if (saved === undefined) delete process.env["LAP_BIN"];
         else process.env["LAP_BIN"] = saved;
