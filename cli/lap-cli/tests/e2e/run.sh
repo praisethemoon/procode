@@ -1005,6 +1005,30 @@ SHORTW=$("$LAP" rr --no-diff | grep ' s.txt' | head -1 | awk '{print length}')
 [ "$SHORTW" -lt 90 ] || fail "a short row was padded to $SHORTW columns"
 cd "$WORK"
 
+t "status over many files with only the log replays each shadow from one load"
+mkdir -p "$WORK/many" && cd "$WORK/many"
+"$LAP" init >/dev/null
+i=0
+while [ $i -lt 120 ]; do
+    awk -v n=$i 'BEGIN { for (j = 1; j <= 150; j++) print "line " j " of file " n " with some text" }' > f$i.txt
+    "$LAP" commit f$i.txt --no-session -i "baseline file $i for the many-files test" \
+        -b "records all of f$i.txt as its first commit" >/dev/null 2>&1 || fail "baseline f$i.txt"
+    i=$((i + 1))
+done
+# a clone carries the log and the working tree, and no cache
+mkdir -p "$WORK/many-clone/.lap"
+cp f*.txt "$WORK/many-clone/"
+cp .lap/log.jsonl "$WORK/many-clone/.lap/"
+cd "$WORK/many-clone"
+sed 's/^line 7 of/LINE 7 OF/' f42.txt > f42.new && mv f42.new f42.txt
+# Loading the log once per file grew with files x log size; one load stays
+# small. Linux enforces the cap; elsewhere this only checks the answer.
+out=$( (ulimit -v 524288 2>/dev/null; "$LAP" status) 2>&1)
+printf '%s' "$out" | grep -q "modified  f42.txt" || fail "the edit to f42.txt was not found: $out"
+[ "$(printf '%s\n' "$out" | grep -c 'modified')" -eq 1 ] || fail "files other than f42.txt were reported: $out"
+[ ! -e .lap/index ] || fail "status, a reader, wrote the index"
+cd "$WORK"
+
 # ------------------------------------------------------------ summary
 echo "e2e: $TESTS scenarios, $FAILED failure(s)"
 [ "$FAILED" -eq 0 ] || exit 1

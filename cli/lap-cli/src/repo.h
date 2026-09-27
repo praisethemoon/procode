@@ -30,6 +30,15 @@ typedef struct {
     char cached_user[128]; /* git user.name, resolved once then persisted */
 
     PlatLock *lock; /* held by writing commands */
+
+    /* What a missing shadow is replayed from (cmd_common.c): the index, or
+     * without one the parsed log. Loaded on the first file that needs it and
+     * reused for every other, while the log keeps shadow_log_size bytes;
+     * loading it once per file made status grow with files x log size. */
+    struct Idx *shadow_idx;
+    RecLog *shadow_log;
+    uint64_t shadow_log_size;
+    bool shadow_loaded;
 } Repo;
 
 /* Committer identity: $LAP_USER > cached git user.name > OS user. The git

@@ -47,7 +47,7 @@ typedef struct {
     uint64_t delta_count;
 } FileHead;
 
-typedef struct {
+typedef struct Idx {
     IdxHeader h;
     IdxEntry *v;
     char **paths;

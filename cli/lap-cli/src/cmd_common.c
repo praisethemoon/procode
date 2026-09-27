@@ -317,9 +317,24 @@ void region_describe(const Region *r, char *out, size_t outsz) {
  * answers: reconstruct the file's last-committed state from the log
  * instead of reporting an untracked file. */
 static bool shadow_from_log(Arena *a, Repo *r, const char *rel, Lines *out) {
+    uint64_t size;
+    if (!plat_file_size(r->logpath, &size))
+        return false;
+    if (!r->shadow_loaded || r->shadow_log_size != size) {
+        r->shadow_idx = idx_ready(a, r);
+        r->shadow_log = NULL;
+        if (!r->shadow_idx) {
+            RecLog *log = (RecLog *)arena_alloc(a, sizeof(RecLog));
+            char err[256];
+            if (rec_log_load(a, r->logpath, log, err, sizeof err))
+                r->shadow_log = log;
+        }
+        r->shadow_log_size = size;
+        r->shadow_loaded = true;
+    }
     Lines st;
     bool deleted = false;
-    Idx *ix = idx_ready(a, r);
+    Idx *ix = r->shadow_idx;
     if (ix) { /* the index knows every tracked file: no log read needed */
         if (idx_file_id(ix, rel) < 0 ||
             !snap_replay(a, r, ix, rel, -1, &st, &deleted) || deleted)
@@ -327,10 +342,9 @@ static bool shadow_from_log(Arena *a, Repo *r, const char *rel, Lines *out) {
         *out = st;
         return true;
     }
-    RecLog log;
-    char err[256];
-    if (!rec_log_load(a, r->logpath, &log, err, sizeof err) ||
-        !rec_replay_file(a, &log, rel, log.count - 1, &st, &deleted) ||
+    RecLog *log = r->shadow_log;
+    if (!log ||
+        !rec_replay_file(a, log, rel, log->count - 1, &st, &deleted) ||
         deleted)
         return false;
     *out = st;
