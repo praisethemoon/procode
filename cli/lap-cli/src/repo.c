@@ -211,11 +211,14 @@ static bool state_heal(Repo *r, bool persist, char *err, size_t errsz) {
             int64_t v = strtol(rec->id + 1, NULL, 10);
             if (v >= next_s)
                 next_s = v + 1;
-            snprintf(r->active_session, sizeof r->active_session, "%s",
-                     rec->id);
-            snprintf(r->active_session_msg, sizeof r->active_session_msg, "%s",
-                     rec->msg ? rec->msg : "");
-        } else if (rec->type == REC_SESSION_END ||
+            if (!rec->from) { /* an adopted session is history, not open */
+                snprintf(r->active_session, sizeof r->active_session, "%s",
+                         rec->id);
+                snprintf(r->active_session_msg,
+                         sizeof r->active_session_msg, "%s",
+                         rec->msg ? rec->msg : "");
+            }
+        } else if ((rec->type == REC_SESSION_END && !rec->from) ||
                    rec->type == REC_BRANCH) {
             /* a branch starts with no session open, whatever its parent
              * had open at the base */
@@ -456,9 +459,11 @@ bool repo_init(Arena *a, const char *dir, char *err, size_t errsz) {
 }
 
 bool repo_append(Repo *r, Rec *rec, char *err, size_t errsz) {
-    char ts[32];
-    plat_timestamp(ts);
-    rec->ts = arena_strdup(r->a, ts);
+    if (!rec->ts) { /* adopted records keep the time the work was done */
+        char ts[32];
+        plat_timestamp(ts);
+        rec->ts = arena_strdup(r->a, ts);
+    }
     rec->prev = arena_strdup(r->a, r->last_hash);
     size_t len;
     char *line = rec_encode(r->a, rec, &len);

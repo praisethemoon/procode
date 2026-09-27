@@ -156,7 +156,16 @@ Record types:
 {"type":"branch","id":"7c1e9a02d4b8","name":"parser-fix", // §Branches
  "parent":"main","base":"<parent head>","base_chunk":3,
  "user":"jane","ts":"...","prev":"<the same base>"}
+
+{"type":"merge","branch":"7c1e9a02d4b8","name":"parser-fix", // §Merging
+ "head":"<branch hash adopted up to>","adopted":41,"left":6,
+ "stopped":[{"file":"src/foo.c","at":"<first commit not adopted>"}],
+ "user":"jane","ts":"...","prev":"..."}
 ```
+
+A commit, `session_start` or `session_end` that `lap merge` adopted carries
+`"from":"<hash of the branch's record>"` (after `forced`, after `meta`,
+after `id` respectively) and keeps the branch record's `ts` and `user`.
 
 A commit record without both `intent` and `behavior` is malformed,
 including one that carries a single `msg` in their place.
@@ -314,6 +323,67 @@ commands unchanged.
 
 It costs a flag and catches the one mistake that corrupts a merge: an agent
 recording in a folder it thinks it is not in.
+
+### Merging
+
+git merges the code; lap adopts the history. The order is always: commit
+your own pending work, `git merge` the branch's code, then, in the parent
+folder, `lap merge <branch> [--dry-run]`.
+
+1. **Finding it.** The branch is named by its name or id, found in the
+   registry or among the branch chunks in `.lap/log/` (`git merge` brings
+   them); neither → `branch_not_found`. Run in a branch folder →
+   `merge_in_branch`. The branch record's base must be in this folder's
+   history, else `unrelated_history`.
+2. **Its chunks.** When the registered folder is reachable (it exists and
+   its `.lap/lineage` names the branch), lap seals the branch's open chunk
+   under the branch's lock, as a branch start seals its parent's, and
+   copies the branch's chunks here. So the originals stay readable after the
+   folder is gone, whether or not git carried them, and every copy is final:
+   a later `git merge` of the branch finds the same file on both sides.
+3. **Placing, file by file.** A merge takes the branch's records after the
+   last merge's `head` (after the branch record, the first time). For each
+   file those commits touch, the three versions are the branch's version at
+   that head (for the first merge, the file at the base), the parent's
+   version now, and the commits. The parent's changes are the diff between
+   the first two, lap's own (§Edit detection, effort cap included: a file
+   the parent rewrote past the cap is one change, and every branch commit to
+   it conflicts). A commit whose region neither overlaps nor touches a
+   parent change moves by the net lines the parent added or removed above
+   it; each placed commit shifts the later ones. Overlapping or touching —
+   both sides inserting at one point, or one at the edge of the other's
+   change — is a conflict, and so is a commit whose old text is not the
+   parent's text where it would land (compared blind to CRLF `\r`). **The
+   first conflict stops that file**: none of its later commits are adopted,
+   in this merge or later ones. Other files carry on.
+4. **Appending**, under the lock, in the branch's order:
+   - a branch `session_start` not adopted before, as a new session with
+     the next `S` id, the same purpose and meta (so `--meta ticket=T-12`
+     still finds the work) and `from`;
+   - each placed commit, with the next `L` id, its region at the placed
+     start, its session's adopted id, and the same text, intent, behavior,
+     `forced` and `user` — the message checks are not run again;
+   - a branch `session_end`, for its adopted session.
+   Adopted records keep the branch's `ts`. They never change this folder's
+   own active session: a `session_start` or `session_end` with `from` is
+   history, not state. A session still open at the branch's head stays open
+   among the adopted ones until a later merge carries its end, and that
+   merge appends to the session already adopted. The shadow takes the
+   placed commits; the working tree is never written (core rule 4).
+5. **The merge record** closes the run: the branch, its head, the commits
+   adopted and left, and the files a conflict stopped with the first commit
+   not adopted in each. A later merge of the branch starts after `head` and
+   keeps every stopped file stopped.
+
+**What is left.** The working tree holds what `git merge` made; the shadow
+holds this history plus what was adopted. The difference — conflict
+resolutions, stopped files, anything git did that lap could not place —
+shows in `lap status` and is committed as usual, with a behavior that cites
+the branch commits it stands for (`#9f3e21a`). When everything was adopted
+and git merged cleanly, there is no difference.
+
+`--dry-run` reports what would be adopted and where each file would stop,
+reading the branch folder in place, and writes nothing.
 
 ### Registry
 
@@ -572,6 +642,15 @@ returns `id`, `name`, `parent`, `base`, `base_chunk`. Errors:
 `missing_from`, `bad_name`, `same_folder`, `already_branch`, `no_parent`,
 `nested_branch`, `unrelated_history`, `not_clean`, `name_taken`,
 `parent_read_only`.
+
+### `lap merge <branch> [--dry-run]`
+Adopts a branch's history into this folder's (§Branches → Merging). Prints
+what was adopted of how many commits, with the new ids, then each stopped
+file with the first commit not adopted and why; `nothing new to adopt` when
+the branch has nothing after the last merge. `--json` returns `dry_run`,
+`branch`, `name`, `new`, `adopted`, `left`, `head`, `stopped`
+(`[{file, at, why}]`) and `commits` (`[{id, from}]`). Errors:
+`branch_not_found`, `merge_in_branch`, `unrelated_history`, `log_broken`.
 
 ### `lap rebuild [--verify]`
 Deletes and reconstructs every derived cache from the log — the executable

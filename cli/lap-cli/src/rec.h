@@ -19,7 +19,8 @@ typedef enum {
     REC_COMMIT,
     REC_SESSION_START,
     REC_SESSION_END,
-    REC_BRANCH /* the first record of a branch's own lineage */
+    REC_BRANCH, /* the first record of a branch's own lineage */
+    REC_MERGE   /* closes a lap merge: what of a branch was adopted */
 } RecType;
 
 typedef struct {
@@ -52,6 +53,19 @@ typedef struct {
     const char *parent;
     const char *base;
     int32_t base_chunk;
+    /* commit, session_start, session_end: the hash of the branch record
+     * this one adopted (lap merge); NULL for the folder's own work. */
+    const char *from;
+    /* merge only: branch is the adopted branch's id (name its name), head
+     * the hash of its last record adopted, adopted and left the commits
+     * placed and not, stopped the files a conflict stopped with the hash
+     * of the first commit to each that was not placed. */
+    const char *branch;
+    const char *head;
+    int32_t adopted, left;
+    const char **stopped_file;
+    const char **stopped_at;
+    int32_t stopped_n;
     const char *prev;    /* hex chain hash */
     int32_t old_start, old_lines, new_start, new_lines; /* commit only */
     Str *old_text;

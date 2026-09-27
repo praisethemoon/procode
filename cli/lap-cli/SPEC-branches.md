@@ -73,95 +73,9 @@ Built: `SPEC.md` §Branches → Starting one.
 
 Built: `SPEC.md` §Branches → Committing: say where.
 
-### Merging: adopt, then commit the rest
+### Merging
 
-The order is always: commit your own pending work, `git merge` the branch's
-code, then
-
-```
-lap merge <branch> [--dry-run]
-```
-
-in the parent folder. lap finds the branch's chunks in this folder
-(`git merge` brought them) or else in the registered branch folder; if
-neither has them, `branch_not_found`. The branch's base must be in this
-folder's history, else `unrelated_history`. When the branch folder is
-reachable, lap seals the branch's open chunk (under the branch's lock, as a
-branch start seals its parent's) and copies the branch's chunks into this
-folder's `.lap/log/`, so the originals that `from` links and `#hash`
-references point to stay readable after the branch folder is gone, whether
-or not git carried them. Sealed first, every copy is the chunk's final
-content: a later `git merge` of the branch finds the same file on both
-sides.
-
-Then, per file, lap walks the branch's commits to that file in order,
-starting after what an earlier merge adopted, and places each on the
-parent's version:
-
-- **Three versions.** *Base*: the file as of the branch's base (the parent's
-  history replayed to it). *Parent*: the file as the parent has it now (its
-  shadow). *Branch*: the base plus the branch's commits so far.
-- **Offsets.** The parent's changes since the base are the diff base → parent.
-  A branch commit whose region does not overlap or touch any of them moves by
-  the net lines the parent added or removed above it: an import added at line
-  4 on the parent puts the branch's insertion before line 51 before line 52.
-  Each adopted commit shifts the later ones in turn.
-- **Conflict.** A region that overlaps a parent change, or touches one (both
-  insert at the same point, where either order is plausible), is a conflict.
-  **That file stops**: none of the branch's later commits to it are adopted,
-  in this merge or later ones. Other files carry on. The diff is lap's own
-  (§Edit detection), effort cap included: a file the parent rewrote past
-  the cap is one change from top to bottom, and every branch commit to it
-  conflicts.
-
-Each adopted commit is appended to the parent's lineage as an ordinary commit
-with the parent's next id, the translated coordinates, and
-
-```jsonc
-"from":"<the branch commit's hash>"
-```
-
-The branch's sessions come across the same way: a new session id, the same
-purpose and meta (so `--meta ticket=T-12` still finds the work), and `from`.
-A branch starts with no active session (the `branch` record ends whatever
-the parent had open, for that lineage), so every branch commit belongs to a
-session the branch started, or to none. In detail:
-
-- A branch `session_start` is appended when first met, with `from`; a
-  `session_end` the branch wrote is appended too. A session still open at
-  the branch's head stays open in the parent until a later merge carries
-  its end, and that later merge appends its new commits to the session
-  already adopted (found by `from`), not to a new one.
-- Adopted records never change the parent's own active session: a
-  `session_start` or `session_end` with `from` is history, not the
-  parent's state.
-- Adopted commits keep their intent, behavior, `forced` and `user` as the
-  branch wrote them; the message checks are not run again.
-
-Adoption writes the parent's history and shadow, never the working tree
-(core rule 4).
-
-Last, a **merge record** closes the run:
-
-```jsonc
-{"type":"merge","branch":"7c1e9a02d4b8","name":"parser-fix",
- "head":"<branch hash adopted up to>","adopted":41,"left":6,
- "stopped":[{"file":"src/foo.c","at":"<first branch commit not adopted>"}],
- "user":"...","ts":"...","prev":"..."}
-```
-
-A later merge of the same branch starts after `head`, and keeps every file in
-`stopped` stopped.
-
-**What is left.** The working tree holds what `git merge` made; the shadow
-holds the parent's history plus what was adopted. The difference — conflict
-resolutions, stopped files, anything git did that lap could not place —
-shows in `lap status` and is committed as usual, with an intent that cites the
-branch commits it stands for (`#9f3e21`). When everything was adopted and git
-merged cleanly, the difference is empty.
-
-`--dry-run` reports what would be adopted and where each file would stop,
-writing nothing.
+Built: `SPEC.md` §Branches → Merging.
 
 ### Registry
 

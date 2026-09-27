@@ -37,6 +37,10 @@ static const char *USAGE =
     "  branch start [name] --from <folder>   make this folder a branch of\n"
     "                             another: its own line of history from\n"
     "                             that folder's head\n"
+    "  merge <branch> [--dry-run] [--json]   after git merged a branch's\n"
+    "                             code here: adopt its commits into this\n"
+    "                             history; what cannot be placed is left\n"
+    "                             to commit by hand\n"
     "\n"
     "global:\n"
     "  --color=auto|always|never  colour output (auto: only at a terminal;\n"
@@ -109,6 +113,8 @@ int main(int argc, char **argv) {
         rc = cmd_rr(a, argc2, argv2);
     else if (strcmp(cmd, "branch") == 0)
         rc = cmd_branch(a, argc2, argv2);
+    else if (strcmp(cmd, "merge") == 0)
+        rc = cmd_merge(a, argc2, argv2);
     else {
         err_out(tty_json(), "unknown_command", "unknown command \"%s\"", cmd);
         if (!tty_json()) {

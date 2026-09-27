@@ -76,6 +76,13 @@ bool hist_write_lineage(const char *lapdir, const char *lineage);
  * branch's own chunks. */
 bool hist_open_folder(Arena *a, const char *lapdir, Hist *h, char *err,
                       size_t errsz);
+/* The history of branch `lineage` as this folder holds it: its parent's
+ * chunks up to its base chunk, then its own. How a parent reads a branch
+ * whose chunks it has (after a git merge, or copied by lap merge). */
+bool hist_open_lineage(Arena *a, const char *lapdir, const char *lineage,
+                       Hist *h, char *err, size_t errsz);
+/* The branch lineages whose first chunk is in lapdir/log, as ids. */
+int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out);
 
 /* The first record of a lineage's chunk 1, which for a branch is its
  * branch record. False when there is none or it does not parse. */

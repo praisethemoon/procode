@@ -161,6 +161,12 @@ lap branch start parser --from ../proj         # its own line of history
   first folder), or `LAP_BRANCH=<name>` in the environment. A missing or
   wrong name is refused and the error names the folder's branch: it means
   you may be in the wrong folder — check before retrying.
+- **Merging back**, in the parent folder: commit its own work, `git merge`
+  the branch, then `lap merge <branch>` (try `--dry-run` first). lap adopts
+  every branch commit it can place, with a `from` link to the original; a
+  file where the branch's work conflicts with the parent's stops, and what
+  is left shows in `lap status` — commit it as usual, citing the branch
+  commits (`#<hash>`) it stands for.
 - Ids repeat across folders (both go on from the base). In text that
   leaves the folder — a ticket comment, another branch's commit — cite
   commits by hash and sessions as `<branch>/S<n>`.

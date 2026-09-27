@@ -130,6 +130,10 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
         if (rec->forced)
             sb_puts(&sb, "forced: the message checks were skipped "
                          "(--force-message)\n");
+        if (rec->from)
+            sb_printf(&sb, "from: #%.7s (adopted from a branch by lap "
+                           "merge; the original is %s)\n",
+                      rec->from, rec->from);
         sb_puts(&sb, "intent:\n");
         sb_indented(&sb, "  ", rec->intent);
         sb_puts(&sb, "behavior:\n");

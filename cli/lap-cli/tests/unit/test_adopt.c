@@ -217,5 +217,17 @@ void test_adopt(void) {
     adopt_place(a, none, L(a, "theirs\n"), c16, 1, &p);
     ASSERT_EQ_I(p.placed, 0);
 
+    t_begin("adopt: a parent file rewritten past the diff's effort cap is one "
+            "change, so a branch edit anywhere in it conflicts");
+    Lines big = numbered(a, 3000);
+    Lines rewritten = big;
+    for (int32_t k = 2; k <= 2998; k += 2) /* 1,499 separate changes */
+        rewritten = lines_replace(a, rewritten, k, 1, L(a, "x\n").lines, 1,
+                                  true);
+    ASSERT_TRUE(diff_lines(a, big, rewritten).truncated);
+    const Rec *c17[] = {edit(a, big, 1501, 0, "branch\n")};
+    adopt_place(a, big, rewritten, c17, 1, &p);
+    ASSERT_EQ_I(p.placed, 0);
+
     arena_free(a);
 }

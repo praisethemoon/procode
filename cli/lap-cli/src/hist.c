@@ -558,6 +558,11 @@ bool hist_open_folder(Arena *a, const char *lapdir, Hist *h, char *err,
         return false;
     if (strcmp(lineage, LAP_MAIN_LINEAGE) == 0)
         return hist_open(a, lapdir, lineage, h, err, errsz);
+    return hist_open_lineage(a, lapdir, lineage, h, err, errsz);
+}
+
+bool hist_open_lineage(Arena *a, const char *lapdir, const char *lineage,
+                       Hist *h, char *err, size_t errsz) {
     Rec br;
     if (!hist_first_record(a, lapdir, lineage, &br, err, errsz))
         return false;
@@ -596,4 +601,36 @@ bool hist_open_folder(Arena *a, const char *lapdir, Hist *h, char *err,
     h->base_chunk = br.base_chunk;
     snprintf(h->name, sizeof h->name, "%s", br.name);
     return true;
+}
+
+typedef struct {
+    Arena *a;
+    const char **v;
+    int32_t n, cap;
+} LineageList;
+
+static WalkAction on_first_chunk(const char *rel, bool is_dir,
+                                 const PlatStat *st, void *ud) {
+    (void)st;
+    LineageList *l = (LineageList *)ud;
+    char lineage[HIST_LINEAGE_MAX];
+    int32_t n;
+    if (is_dir)
+        return WALK_SKIP_DIR;
+    if (!hist_parse_name(rel, lineage, &n) || n != 1 ||
+        strcmp(lineage, LAP_MAIN_LINEAGE) == 0)
+        return WALK_CONT;
+    ARENA_GROW(l->a, l->v, l->n, l->cap, const char *);
+    l->v[l->n++] = arena_strdup(l->a, lineage);
+    return WALK_CONT;
+}
+
+int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out) {
+    char dir[LAP_PATH_MAX];
+    snprintf(dir, sizeof dir, "%s/%s", lapdir, LAP_LOG_DIR);
+    LineageList l = {a, NULL, 0, 0};
+    if (plat_is_dir(dir))
+        plat_walk(a, dir, on_first_chunk, &l);
+    *out = l.v;
+    return l.n;
 }

@@ -11,6 +11,7 @@ static const char *type_name(RecType t) {
     case REC_SESSION_START: return "session_start";
     case REC_SESSION_END: return "session_end";
     case REC_BRANCH: return "branch";
+    case REC_MERGE: return "merge";
     }
     return "?";
 }
@@ -61,6 +62,8 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
         json_escape_c(&sb, rec->behavior);
         if (rec->forced)
             sb_puts(&sb, ",\"forced\":true");
+        if (rec->from)
+            sb_printf(&sb, ",\"from\":\"%s\"", rec->from);
         break;
     case REC_SESSION_START:
         sb_printf(&sb, ",\"id\":\"%s\"", rec->id);
@@ -71,9 +74,13 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
         sb_puts(&sb, ",\"msg\":");
         json_escape_c(&sb, rec->msg);
         rec_meta_json(&sb, rec);
+        if (rec->from)
+            sb_printf(&sb, ",\"from\":\"%s\"", rec->from);
         break;
     case REC_SESSION_END:
         sb_printf(&sb, ",\"id\":\"%s\"", rec->id);
+        if (rec->from)
+            sb_printf(&sb, ",\"from\":\"%s\"", rec->from);
         break;
     case REC_BRANCH:
         sb_printf(&sb, ",\"id\":\"%s\"", rec->id);
@@ -81,6 +88,24 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
         json_escape_c(&sb, rec->name);
         sb_printf(&sb, ",\"parent\":\"%s\",\"base\":\"%s\",\"base_chunk\":%d",
                   rec->parent, rec->base, rec->base_chunk);
+        if (rec->user) {
+            sb_puts(&sb, ",\"user\":");
+            json_escape_c(&sb, rec->user);
+        }
+        break;
+    case REC_MERGE:
+        sb_printf(&sb, ",\"branch\":\"%s\"", rec->branch);
+        sb_puts(&sb, ",\"name\":");
+        json_escape_c(&sb, rec->name);
+        sb_printf(&sb, ",\"head\":\"%s\",\"adopted\":%d,\"left\":%d",
+                  rec->head, rec->adopted, rec->left);
+        sb_puts(&sb, ",\"stopped\":[");
+        for (int32_t i = 0; i < rec->stopped_n; i++) {
+            sb_puts(&sb, i ? ",{\"file\":" : "{\"file\":");
+            json_escape_c(&sb, rec->stopped_file[i]);
+            sb_printf(&sb, ",\"at\":\"%s\"}", rec->stopped_at[i]);
+        }
+        sb_putc(&sb, ']');
         if (rec->user) {
             sb_puts(&sb, ",\"user\":");
             json_escape_c(&sb, rec->user);
@@ -143,6 +168,7 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
         out->intent = jobj_str(v, "intent");
         out->behavior = jobj_str(v, "behavior");
         out->forced = jobj_bool(v, "forced", false);
+        out->from = jobj_str(v, "from");
         out->old_start = (int32_t)jobj_int(v, "old_start", 0);
         out->old_lines = (int32_t)jobj_int(v, "old_lines", 0);
         out->new_start = (int32_t)jobj_int(v, "new_start", 0);
@@ -172,6 +198,7 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
         out->id = jobj_str(v, "id");
         out->user = jobj_str(v, "user");
         out->msg = jobj_str(v, "msg");
+        out->from = jobj_str(v, "from");
         if (!out->id || !out->msg) {
             snprintf(err, errsz, "session_start record missing field");
             return false;
@@ -210,6 +237,7 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
     } else if (strcmp(type, "session_end") == 0) {
         out->type = REC_SESSION_END;
         out->id = jobj_str(v, "id");
+        out->from = jobj_str(v, "from");
         if (!out->id) {
             snprintf(err, errsz, "session_end record missing id");
             return false;
@@ -227,6 +255,34 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
             snprintf(err, errsz, "branch record missing field");
             return false;
         }
+    } else if (strcmp(type, "merge") == 0) {
+        out->type = REC_MERGE;
+        out->branch = jobj_str(v, "branch");
+        out->name = jobj_str(v, "name");
+        out->head = jobj_str(v, "head");
+        out->adopted = (int32_t)jobj_int(v, "adopted", 0);
+        out->left = (int32_t)jobj_int(v, "left", 0);
+        out->user = jobj_str(v, "user");
+        JVal *st = jobj_get(v, "stopped");
+        if (!out->branch || !out->name || !out->head || !st ||
+            st->t != J_ARR) {
+            snprintf(err, errsz, "merge record missing field");
+            return false;
+        }
+        size_t n = st->arr.n ? st->arr.n : 1;
+        out->stopped_file = (const char **)arena_alloc(a, n * sizeof(char *));
+        out->stopped_at = (const char **)arena_alloc(a, n * sizeof(char *));
+        for (size_t i = 0; i < st->arr.n; i++) {
+            const char *f = jobj_str(st->arr.items[i], "file");
+            const char *at = jobj_str(st->arr.items[i], "at");
+            if (!f || !at) {
+                snprintf(err, errsz, "merge record has a bad stopped entry");
+                return false;
+            }
+            out->stopped_file[i] = f;
+            out->stopped_at[i] = at;
+        }
+        out->stopped_n = (int32_t)st->arr.n;
     } else {
         snprintf(err, errsz, "unknown record type \"%s\"", type);
         return false;

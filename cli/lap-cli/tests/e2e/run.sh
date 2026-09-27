@@ -1329,6 +1329,141 @@ expect_ok "$LAP" commit old.txt --no-session --branch main -i "no branches here"
 printf 'plain 2\n' >> old.txt
 expect_ok "$LAP" commit old.txt --no-session -i "no branches here" -b "appends a second plain line"
 
+# A parent ($1-p) and a worktree branch of it ($1-w, git branch and lap
+# branch both named b), f.txt holding sixty numbered lines.
+merge_pair() {
+    mkdir -p "$WORK/$1-p" && cd "$WORK/$1-p" || exit 1
+    git init -q . && git config user.name e2e && git config user.email e2e@lap
+    printf '.lap/*\n!.lap/log/\n' > .gitignore
+    "$LAP" init >/dev/null 2>&1
+    i=1; : > f.txt
+    while [ $i -le 60 ]; do printf 'line %d\n' $i >> f.txt; i=$((i + 1)); done
+    printf 'g1\ng2\ng3\n' > g.txt
+    for f in f.txt g.txt .lapignore .gitignore; do
+        "$LAP" commit "$f" --no-session -i "seed the merge fixture" -b "records $f as the base" >/dev/null 2>&1
+    done
+    git add -A && git commit -qm base
+    git worktree add -q "$WORK/$1-w" -b b
+    cd "$WORK/$1-w" && "$LAP" branch start b --from "../$1-p" >/dev/null 2>&1
+}
+# in_branch/in_parent <file> <sed script> <behavior>: edit and commit there
+in_branch() {
+    cd "$BW" && sed "$2" "$1" > "$1.new" && mv "$1.new" "$1" &&
+        "$LAP" commit "$1" --branch b -i "work on the branch" -b "$3" >/dev/null 2>&1 ||
+        fail "branch commit: $3"
+}
+in_parent() {
+    cd "$BP" && sed "$2" "$1" > "$1.new" && mv "$1.new" "$1" &&
+        "$LAP" commit "$1" --branch main --no-session -i "work on the parent" -b "$3" >/dev/null 2>&1 ||
+        fail "parent commit: $3"
+}
+git_merge_b() {
+    cd "$BW" && git add -A && git commit -qm "branch work" >/dev/null
+    cd "$BP" && git add -A && git commit -qm "parent work" >/dev/null
+    git merge -q --no-edit b >/dev/null 2>&1
+}
+
+t "lap merge adopts a branch whose work is in other files, all of it"
+merge_pair m1; BP="$WORK/m1-p"; BW="$WORK/m1-w"
+cd "$BW" && "$LAP" session start "T-7: branch work" --branch b --meta ticket=T-7 >/dev/null 2>&1
+in_branch g.txt 's/^g2$/G2/' "uppercases g2 on the branch"
+in_branch g.txt '$a\
+g4' "appends g4 on the branch"
+cd "$BW" && "$LAP" session end >/dev/null 2>&1
+in_parent f.txt 's/^line 30$/LINE 30/' "uppercases line 30 on the parent"
+git_merge_b || fail "git merge m1"
+cd "$BP" && "$LAP" session start "the parent's own session" --branch main >/dev/null 2>&1
+BEFORE=$(find .lap -type f | LC_ALL=C sort | xargs shasum)
+expect_grep "would adopt 2 of 2" "$LAP" merge b --dry-run
+[ "$(find .lap -type f | LC_ALL=C sort | xargs shasum)" = "$BEFORE" ] || fail "a dry run wrote to .lap"
+expect_grep "adopted 2 of 2 commits (L6, L7)" "$LAP" merge b
+expect_grep "clean" "$LAP" status
+expect_grep "the parent's own session" "$LAP" session current
+expect_grep "T-7: branch work" "$LAP" session list --meta ticket=T-7
+expect_grep '"from":"' "$LAP" show L6 --json
+expect_grep "^from: #" "$LAP" show L7
+expect_grep '"type":"merge","branch":"' history
+expect_grep "0 mismatch" "$LAP" verify --deep
+expect_grep "nothing new to adopt" "$LAP" merge b
+ls .lap/log | grep -q '^[0-9a-f]\{12\}\.000001\.jsonl$' || fail "the branch's chunks were not brought"
+
+t "lap merge moves a branch's function past the parent's import"
+merge_pair m2; BP="$WORK/m2-p"; BW="$WORK/m2-w"
+cd "$BW" && "$LAP" session start "branch work" --branch b >/dev/null 2>&1
+in_branch f.txt '51i\
+fn() {\
+}' "inserts a function before line 51"
+in_parent f.txt '4i\
+import x' "inserts an import before line 4"
+git_merge_b || fail "git merge m2"
+cd "$BP" && expect_grep "adopted 1 of 1" "$LAP" merge b
+expect_grep "lines 52-53 (insertion)" "$LAP" log -n 1
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+
+t "a conflict stops its file at the right commit; other files are adopted"
+merge_pair m3; BP="$WORK/m3-p"; BW="$WORK/m3-w"
+cd "$BW" && "$LAP" session start "branch work" --branch b >/dev/null 2>&1
+in_branch f.txt 's/^line 50$/branch 50/' "rewrites line 50 on the branch"
+in_branch f.txt 's/^line 10$/branch 10/' "rewrites line 10 on the branch"
+in_branch f.txt 's/^line 55$/branch 55/' "rewrites line 55 on the branch"
+in_branch g.txt 's/^g1$/G1/' "uppercases g1 on the branch"
+# newest first: g1, line 55, line 10 — the stop is the line 10 commit
+STOP=$("$LAP" log -n 3 --json | tr ',' '\n' | grep '"hash"' | sed -n 3p | sed 's/.*"hash":"\([0-9a-f]*\)".*/\1/')
+in_parent f.txt 's/^line 10$/parent 10/' "rewrites line 10 on the parent"
+git_merge_b && fail "git merged a real conflict cleanly"
+cd "$BP" && sed 's/^<<<<<<<.*$//; s/^=======$//; s/^>>>>>>>.*$//' f.txt | grep -v '^$' > f.res && mv f.res f.txt
+grep -q '^branch 50$' f.txt && grep -q '^parent 10$' f.txt || fail "the resolution fixture is wrong"
+git add -A && git commit -qm "merge with a resolution" >/dev/null
+expect_grep "stopped: f.txt at #$(printf %.7s "$STOP")" "$LAP" merge b --dry-run
+expect_grep "adopted 2 of 4" "$LAP" merge b
+expect_grep "modified  f.txt" "$LAP" status
+expect_not_grep "g.txt" "$LAP" status
+grep -q '"stopped":\[{"file":"f.txt","at":"'"$STOP"'"}\]' "$(open_chunk)" || fail "the merge record does not name the stop"
+# what is left: the branch's line 10 beside the parent's, and its line 55
+expect_grep "(2 edits)" "$LAP" status
+expect_ok "$LAP" commit f.txt --branch main --no-session --edit 1 \
+    -i "take the branch's work on f.txt" \
+    -b "keeps the branch's line 10 beside the parent's, from #$(printf %.7s "$STOP")"
+expect_ok "$LAP" commit f.txt --branch main --no-session --edit 1 \
+    -i "take the branch's work on f.txt" \
+    -b "carries the branch's line 55, which followed the stopped commit"
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+
+t "a second merge adopts only what is new, and a stopped file stays stopped"
+in_branch g.txt 's/^g3$/G3/' "uppercases g3 on the branch later"
+in_branch f.txt 's/^line 20$/branch 20/' "rewrites line 20 on the branch later"
+git_merge_b || fail "git merge m3 again"
+cd "$BP" && expect_grep "adopted 1 of 2" "$LAP" merge b
+expect_grep "uppercases g3 on the branch later" "$LAP" log -n 1 --json
+expect_grep "modified  f.txt" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+
+t "a plain-copy branch's chunks are copied by lap merge and outlive its folder"
+cd "$WORK/m2-p" || exit 1
+cp -R "$WORK/m2-p" "$WORK/m5-w" && cd "$WORK/m5-w" || exit 1
+expect_ok "$LAP" branch start copy --from ../m2-p
+ID5=$(cat .lap/lineage)
+"$LAP" session start "copy work" --branch copy >/dev/null 2>&1
+printf 'from the copy\n' >> g.txt
+expect_ok "$LAP" commit g.txt --branch copy -i "work in a plain copy" -b "appends a line to g.txt in the copy"
+cp g.txt "$WORK/m2-p/g.txt" # the code comes back by hand: no git here
+cd "$WORK/m2-p" || exit 1
+[ -e ".lap/log/$ID5.000001.jsonl" ] && fail "the copy's chunk was here before the merge"
+expect_grep "adopted 1 of 1" "$LAP" merge copy
+[ -e ".lap/log/$ID5.000001.jsonl" ] || fail "lap merge did not copy the branch's chunk"
+[ -e "$WORK/m5-w/.lap/log/$ID5.000002.jsonl" ] || fail "lap merge did not seal the branch's chunk"
+rm -rf "$WORK/m5-w"
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+expect_grep "nothing new to adopt" "$LAP" merge copy
+
+t "lap merge refuses what it cannot merge"
+cd "$BP" && expect_grep "branch_not_found" "$LAP" merge nothing-by-that-name --json
+cd "$BW" && expect_grep "merge_in_branch" "$LAP" merge b --json
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

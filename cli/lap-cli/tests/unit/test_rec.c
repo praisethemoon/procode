@@ -247,6 +247,66 @@ void test_rec(void) {
     ASSERT_TRUE(!rec_decode(a, nobase, strlen(nobase), &bback, err,
                             sizeof err));
 
+    t_begin("rec: a merge record round-trips with its stopped files");
+    Rec mr;
+    memset(&mr, 0, sizeof mr);
+    mr.type = REC_MERGE;
+    mr.branch = "7c1e9a02d4b8";
+    mr.name = "feat";
+    mr.head = "cafe";
+    mr.adopted = 41;
+    mr.left = 6;
+    const char *sf[] = {"src/a.c", "src/b \"q\".c"};
+    const char *sa[] = {"aa", "bb"};
+    mr.stopped_file = sf;
+    mr.stopped_at = sa;
+    mr.stopped_n = 2;
+    mr.user = "claude";
+    mr.ts = "2026-09-27T10:00:00Z";
+    mr.prev = "ab";
+    size_t mlen;
+    char *mline = rec_encode(a, &mr, &mlen);
+    ASSERT_TRUE(strstr(mline, "\"stopped\":[{\"file\":\"src/a.c\",\"at\":"
+                              "\"aa\"},{\"file\":") != NULL);
+    Rec mback;
+    ASSERT_TRUE(rec_decode(a, mline, mlen, &mback, err, sizeof err));
+    ASSERT_TRUE(mback.type == REC_MERGE);
+    ASSERT_EQ_S(mback.branch, "7c1e9a02d4b8");
+    ASSERT_EQ_S(mback.head, "cafe");
+    ASSERT_EQ_I(mback.adopted, 41);
+    ASSERT_EQ_I(mback.left, 6);
+    ASSERT_EQ_I(mback.stopped_n, 2);
+    ASSERT_EQ_S(mback.stopped_file[1], "src/b \"q\".c");
+    ASSERT_EQ_S(mback.stopped_at[1], "bb");
+    ASSERT_EQ_S(mback.hash, mr.hash);
+
+    t_begin("rec: from links survive on commits and sessions, and are absent "
+            "otherwise");
+    rec.from = "f00d";
+    char *fline = rec_encode(a, &rec, &len);
+    ASSERT_TRUE(rec_decode(a, fline, len, &back, err, sizeof err));
+    ASSERT_EQ_S(back.from, "f00d");
+    rec.from = NULL;
+    fline = rec_encode(a, &rec, &len);
+    ASSERT_TRUE(strstr(fline, "\"from\"") == NULL);
+    ASSERT_TRUE(rec_decode(a, fline, len, &back, err, sizeof err));
+    ASSERT_TRUE(back.from == NULL);
+    Rec ss;
+    memset(&ss, 0, sizeof ss);
+    ss.type = REC_SESSION_START;
+    ss.id = "S3";
+    ss.msg = "adopted";
+    ss.from = "beef";
+    ss.ts = "t";
+    ss.prev = "p";
+    char *sline = rec_encode(a, &ss, &len);
+    ASSERT_TRUE(rec_decode(a, sline, len, &back, err, sizeof err));
+    ASSERT_EQ_S(back.from, "beef");
+    ss.type = REC_SESSION_END;
+    sline = rec_encode(a, &ss, &len);
+    ASSERT_TRUE(rec_decode(a, sline, len, &back, err, sizeof err));
+    ASSERT_EQ_S(back.from, "beef");
+
     t_begin("rec: tampering changes the hash (chain detection)");
     Rec r1;
     memset(&r1, 0, sizeof r1);

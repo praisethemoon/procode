@@ -130,6 +130,8 @@ void json_commit(StrBuf *sb, const Rec *rec, const char *note) {
     json_escape_c(sb, rec->behavior);
     if (rec->forced)
         sb_puts(sb, ",\"forced\":true");
+    if (rec->from)
+        sb_printf(sb, ",\"from\":\"%s\"", rec->from);
     if (note) {
         sb_puts(sb, ",\"match\":");
         json_escape_c(sb, note);

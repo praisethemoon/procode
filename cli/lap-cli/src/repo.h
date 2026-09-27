@@ -72,7 +72,8 @@ bool repo_init(Arena *a, const char *dir, char *err, size_t errsz);
  * lines ("main.000002.jsonl line 7"). */
 bool repo_log_load(Arena *a, Repo *r, RecLog *out, char *err, size_t errsz);
 
-/* Sets rec->prev/ts, encodes, appends to the log, refreshes r->last_hash in
+/* Sets rec->prev (and rec->ts, to now, when it is NULL: an adopted record
+ * keeps its own), encodes, appends to the log, refreshes r->last_hash in
  * memory. Does NOT persist state.json: callers finish their side effects
  * (shadow updates) first, then call repo_state_save — the log-then-shadow-
  * then-state order is what makes a crash at any point detectable, because

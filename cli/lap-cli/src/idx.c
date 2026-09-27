@@ -366,7 +366,8 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
             e.kind = IDX_SESSION_START;
             uint32_t sn = rec_session_no(rec.id);
             e.session = sn;
-            s.idx.h.open_session = sn;
+            if (!rec.from) /* an adopted session is history, not open */
+                s.idx.h.open_session = sn;
             if (sn > s.idx.h.sessions)
                 s.idx.h.sessions = sn;
             break;
@@ -374,11 +375,15 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
         case REC_SESSION_END:
             e.kind = IDX_SESSION_END;
             e.session = rec_session_no(rec.id);
-            s.idx.h.open_session = 0;
+            if (!rec.from)
+                s.idx.h.open_session = 0;
             break;
         case REC_BRANCH: /* a branch starts with no session open */
             e.kind = IDX_BRANCH;
             s.idx.h.open_session = 0;
+            break;
+        case REC_MERGE:
+            e.kind = IDX_MERGE;
             break;
         }
         e.id = s.idx.h.commits;
