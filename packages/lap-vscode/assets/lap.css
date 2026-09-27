@@ -371,6 +371,20 @@ body {
     vertical-align: text-bottom;
 }
 
+/* lap itself failed: said above the list, which still shows the log. */
+.lh-lap-error {
+    margin: 4px 8px;
+    padding: 4px 6px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--bk-color-warning);
+    border-radius: 3px;
+}
+.lh-lap-error .codicon {
+    color: var(--bk-color-warning);
+    vertical-align: text-bottom;
+}
+
 /* The pager, pinned under the list. */
 .lh-pager {
     display: flex;

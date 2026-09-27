@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { branchView, ownPart, parseBranchList } from "../branches";
+import { branchView, lapBin, lapFailure, ownPart, parseBranchList } from "../branches";
 import { folderFiles, lineageFiles, readStream } from "../chunks";
 import { row } from "../history";
 import { parseLog } from "../model";
@@ -164,4 +164,24 @@ test("branch list rows say which branch a nested one started from", () => {
     });
     assert.deepEqual(rows.map((r) => `${r.name}:${r.via}`), ["busy:null", "sub:0123456789ab"]);
     assert.equal(parseBranchList(LIST)[0].via, null, "an older lap without via: this folder's own");
+});
+
+test("a failing lap is reported in its own words, and a missing one says it could not run", async () => {
+    const { execFile } = await import("node:child_process");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lapfail-"));
+    const standIn = path.join(dir, "lap");
+    fs.writeFileSync(standIn, '#!/bin/sh\necho \'{"ok":false,"error":"newer_history","message":"this history needs a newer lap"}\'\nexit 1\n', { mode: 0o755 });
+    const run = (bin: string) =>
+        new Promise<string | null>((done) => execFile(bin, ["branch", "list", "--json"], (err, stdout) => done(lapFailure(err, String(stdout)))));
+    assert.equal(await run(standIn), "this history needs a newer lap");
+    assert.match((await run(path.join(dir, "no-such-lap"))) ?? "", /^lap could not run: .*ENOENT/);
+    assert.equal(lapFailure(null, '{"ok":true,"branches":[]}'), null);
+    assert.equal(lapFailure(null, ""), "lap printed no answer");
+});
+
+test("the lap path is Lap History's setting, else the Board's, else lap", () => {
+    assert.equal(lapBin("/opt/lap", "/usr/bin/lap"), "/opt/lap");
+    assert.equal(lapBin("  ", "/usr/bin/lap"), "/usr/bin/lap");
+    assert.equal(lapBin(undefined, undefined), "lap");
+    assert.equal(lapBin("", ""), "lap");
 });

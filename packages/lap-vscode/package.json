@@ -42,6 +42,16 @@
         }
       ]
     },
+    "configuration": {
+      "title": "Lap",
+      "properties": {
+        "lap.path": {
+          "type": "string",
+          "default": "",
+          "description": "The lap executable, for branches, references and originals. Empty uses the Board's coboard.lapPath when set, else lap on PATH."
+        }
+      }
+    },
     "commands": [
       {
         "command": "lap.refresh",

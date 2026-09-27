@@ -343,6 +343,27 @@ test("lap: a session tagged with a ticket is found through the board", { skip: !
     assert.deepEqual([c1.behavior, c1.amended], ["The file now opens with one hello line", 1]);
 });
 
+test("board_get and board_sessions say when lap failed, instead of showing no sessions", async () => {
+    const dir = tmp();
+    fs.mkdirSync(path.join(dir, ".git"));
+    const standIn = path.join(dir, "lap-fails.sh");
+    fs.writeFileSync(standIn, '#!/bin/sh\necho \'{"ok":false,"error":"newer_history","message":"this history needs a newer lap"}\'\nexit 1\n', { mode: 0o755 });
+    const was = process.env["LAP_BIN"];
+    process.env["LAP_BIN"] = standIn;
+    try {
+        await call(dir, "board_create", { kind: "epic", title: "E" });
+        await call(dir, "board_create", { kind: "ticket", title: "t", epic: "E-1" });
+        const got = JSON.parse((await call(dir, "board_get", { id: "T-1" })).text);
+        assert.deepEqual(got.sessions, []);
+        assert.equal(got.lapError, "this history needs a newer lap");
+        const s = JSON.parse((await call(dir, "board_sessions", { ticket: "T-1" })).text);
+        assert.equal(s.lapError, "this history needs a newer lap");
+    } finally {
+        if (was === undefined) delete process.env["LAP_BIN"];
+        else process.env["LAP_BIN"] = was;
+    }
+});
+
 /* ------------------------------------------------------------- archiving */
 
 function archivedBoard(): { b: Board; ids: Record<string, string> } {

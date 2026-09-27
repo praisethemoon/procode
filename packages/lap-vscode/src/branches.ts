@@ -100,3 +100,23 @@ export function branchView(row: BranchRow, log: LapLog | null, now: Date): Branc
     const page = query(ownPart(log), { ...EMPTY_FILTER, range: "all" }, { grouped: true, page: 0, now });
     return { row, sessions: page.sessions };
 }
+
+/* Why a lap run gave no answer, in lap's words: its JSON error message, or
+ * why it could not run at all (not installed, not executable). null when
+ * it answered. */
+export function lapFailure(err: { message: string } | null, stdout: string): string | null {
+    try {
+        const o = JSON.parse(stdout) as { ok?: unknown; message?: unknown; error?: unknown };
+        if (o && o.ok === true) return null;
+        if (o && (typeof o.message === "string" || typeof o.error === "string")) return String(o.message ?? o.error);
+    } catch {
+        /* not lap's JSON */
+    }
+    return err ? `lap could not run: ${err.message}` : "lap printed no answer";
+}
+
+/* The lap executable: Lap History's own setting, else the Board's, else
+ * the one on PATH. */
+export function lapBin(own: string | undefined, board: string | undefined): string {
+    return own?.trim() || board?.trim() || "lap";
+}

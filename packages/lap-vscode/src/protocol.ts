@@ -21,6 +21,9 @@ export type ToView =
           /* why the history cannot be shown (a chunk missing from its
            * middle), in lap's words; then page is empty */
           readonly problem: string | null;
+          /* why lap itself failed (not installed, too old for this
+           * history, refusing it), in its words; the log is still shown */
+          readonly lapError: string | null;
       }
     | { readonly type: "collapseAll" };
 

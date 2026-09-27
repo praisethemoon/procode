@@ -54,6 +54,7 @@ const fake = {
     workspace: {
         workspaceFolders: [{ uri: { fsPath: root } }],
         registerTextDocumentContentProvider: () => ({ dispose() {} }),
+        getConfiguration: () => ({ get: () => undefined }),
         createFileSystemWatcher: () => ({
             onDidChange: (fn: () => void) => (onChange = fn),
             onDidCreate() {},

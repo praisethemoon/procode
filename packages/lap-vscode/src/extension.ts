@@ -12,7 +12,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { BranchRow, BranchView, branchView, parseBranchList } from "./branches";
+import { BranchRow, BranchView, branchView, lapBin, lapFailure, parseBranchList } from "./branches";
 import { IncrementalLog, folderFiles, hasHistory, historyProblem, ownFiles, parseChunkName, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
@@ -51,6 +51,14 @@ function findRepo(): Repo | undefined {
         }
     }
     return undefined;
+}
+
+/* The lap to run, as the settings say (lap.path, else coboard.lapPath). */
+function lap(): string {
+    return lapBin(
+        vscode.workspace.getConfiguration("lap").get<string>("path"),
+        vscode.workspace.getConfiguration("coboard").get<string>("lapPath"),
+    );
 }
 
 /* A record's hash: the SHA-256 of its line's exact bytes. */
@@ -152,7 +160,7 @@ class LapLogSource {
         const root = this.repo?.root;
         if (!root) return Promise.resolve(local());
         return new Promise((done) => {
-            execFile("lap", ["show", ref, "--json"], { cwd: root, timeout: 10_000, maxBuffer: 64 * 1024 * 1024 }, (_err, stdout) => {
+            execFile(lap(), ["show", ref, "--json"], { cwd: root, timeout: 10_000, maxBuffer: 64 * 1024 * 1024 }, (_err, stdout) => {
                 try {
                     const r = JSON.parse(String(stdout)) as { ok?: unknown; id?: unknown };
                     if (r.ok === true && typeof r.id === "string") {
@@ -206,6 +214,8 @@ function listSignature(root: string, merges: number): string {
 
 class BranchSource {
     views: BranchView[] = [];
+    /* why lap gave no branch list, in its words; null when it answered */
+    error: string | null = null;
     private logs = new Map<string, IncrementalLog>();
     private signature = "\0"; /* nothing asked yet */
     private watchers: vscode.FileSystemWatcher[] = [];
@@ -231,13 +241,16 @@ class BranchSource {
         if (!force && sig === this.signature) return;
         this.signature = sig;
         if (sig === "") { /* no registry, no branch chunk, no merge */
+            this.error = null;
             if (this.views.length) {
                 this.views = [];
                 this.onChange();
             }
             return;
         }
-        execFile("lap", ["branch", "list", "--json"], { cwd: root, timeout: 10_000, maxBuffer: 16 * 1024 * 1024 }, (_err, stdout) => {
+        execFile(lap(), ["branch", "list", "--json"], { cwd: root, timeout: 10_000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => {
+            /* this folder has branches, so no list is a failure to show */
+            this.error = lapFailure(err, String(stdout));
             let out: unknown = null;
             try {
                 out = JSON.parse(String(stdout));
@@ -303,7 +316,7 @@ class HistoryView implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly source: LapLogSource,
         private readonly onOpen: (id: string) => void,
-        private readonly branches: { readonly views: readonly BranchView[]; refresh(force?: boolean): void },
+        private readonly branches: { readonly views: readonly BranchView[]; readonly error: string | null; refresh(force?: boolean): void },
     ) {}
 
     resolveWebviewView(view: vscode.WebviewView): void {
@@ -351,8 +364,9 @@ class HistoryView implements vscode.WebviewViewProvider {
                   reveal: reveal === null ? null : { id: reveal, filter: this.filter },
                   branches: this.branches.views,
                   problem: this.source.problem,
+                  lapError: this.branches.error,
               }
-            : { type: "page", page: null, hasRepo: false, active: null, reveal: null, branches: [], problem: null };
+            : { type: "page", page: null, hasRepo: false, active: null, reveal: null, branches: [], problem: null, lapError: null };
         void this.view.webview.postMessage(msg);
     }
 
@@ -361,7 +375,7 @@ class HistoryView implements vscode.WebviewViewProvider {
     private original(hash: string): void {
         const root = this.source.repoRoot;
         if (!root) return;
-        execFile("lap", ["show", hash, "--color=never"], { cwd: root, timeout: 10_000, maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => {
+        execFile(lap(), ["show", hash, "--color=never"], { cwd: root, timeout: 10_000, maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => {
             if (err && !stdout) {
                 void vscode.window.showWarningMessage(`lap: the original ${hash.slice(0, 7)} could not be shown: ${err.message}`);
                 return;
@@ -391,7 +405,7 @@ class HistoryView implements vscode.WebviewViewProvider {
             if (!picked || picked.length === 0) return;
             args = ["branch", "move", name, picked[0].fsPath, "--json"];
         }
-        execFile("lap", args, { cwd: root, timeout: 10_000 }, (_err, stdout) => {
+        execFile(lap(), args, { cwd: root, timeout: 10_000 }, (_err, stdout) => {
             try {
                 const r = JSON.parse(String(stdout)) as { ok?: boolean; message?: string };
                 if (r.ok !== true) void vscode.window.showErrorMessage(`lap: ${r.message ?? "the registry was not changed"}`);

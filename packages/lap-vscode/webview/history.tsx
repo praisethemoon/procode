@@ -577,7 +577,7 @@ function History(): JSX.Element {
     const [selected, setSelected] = useState<string | null>(null);
     /* A commit just revealed, to scroll to once it is drawn. */
     const [revealed, setRevealed] = useState<string | null>(null);
-    const [data, setData] = useState<{ page: HistoryPage | null; hasRepo: boolean; active: string | null; branches: readonly BranchView[]; problem: string | null } | null>(null);
+    const [data, setData] = useState<{ page: HistoryPage | null; hasRepo: boolean; active: string | null; branches: readonly BranchView[]; problem: string | null; lapError: string | null } | null>(null);
     const list = useRef<HTMLDivElement>(null);
     const shown = useRef<readonly SessionRow[]>([]);
     shown.current = data?.page?.sessions ?? [];
@@ -589,7 +589,7 @@ function History(): JSX.Element {
         const handler = (e: MessageEvent) => {
             const m = e.data as ToView;
             if (m.type === "page") {
-                setData({ page: m.page, hasRepo: m.hasRepo, active: m.active, branches: m.branches ?? [], problem: m.problem ?? null });
+                setData({ page: m.page, hasRepo: m.hasRepo, active: m.active, branches: m.branches ?? [], problem: m.problem ?? null, lapError: m.lapError ?? null });
                 if (m.reveal && m.page) {
                     /* The host chose the filter and page that show the
                      * commit; the view takes them, opens its session and the
@@ -682,6 +682,11 @@ function History(): JSX.Element {
     return (
         <div className="lh">
             <FilterBar filter={filter} users={p?.users ?? []} onChange={change} />
+            {data?.lapError ? (
+                <div className="lh-lap-error" role="alert">
+                    <Codicon name="warning" /> lap failed, so its branches are not shown: {data.lapError}
+                </div>
+            ) : null}
             <div className="lh-list" role="tree" aria-label="Lap history" ref={list}>
                 <BranchGroup
                     views={data?.branches ?? []}

@@ -143,7 +143,8 @@ export const TOOLS: readonly Tool[] = [
             if (v.kind !== "ticket") return v;
             const root = locateBoard(ctx.cwd).root!;
             const sessions = await ticketSessions(root, v.ticket.id);
-            return { ...v, sessions: sessions.value };
+            /* no sessions because lap failed is not "no work": say so */
+            return { ...v, sessions: sessions.value, ...(sessions.ok ? {} : { lapError: sessions.error }) };
         },
     },
     {
