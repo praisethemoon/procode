@@ -34,6 +34,9 @@ bool plat_truncate(const char *path, uint64_t new_size);
 /* Reads exactly [off, off+len) into a NUL-terminated buffer. */
 bool plat_read_range(Arena *a, const char *path, uint64_t off, size_t len,
                      char **data);
+/* Reads exactly [off, off+len) into buf, which holds at least len bytes. */
+bool plat_read_range_into(const char *path, uint64_t off, size_t len,
+                          char *buf);
 /* File size in bytes; false if the file does not exist. */
 bool plat_file_size(const char *path, uint64_t *size);
 /* Flushes a stream all the way to disk. */

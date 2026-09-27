@@ -179,10 +179,8 @@ bool hist_read(Arena *a, const Hist *h, uint64_t off, size_t len, char **out) {
             take = len - got;
         char path[LAP_PATH_MAX];
         hist_chunk_path(h, i, path, sizeof path);
-        char *part;
-        if (!plat_read_range(a, path, in, take, &part))
+        if (!plat_read_range_into(path, in, take, buf + got))
             return false;
-        memcpy(buf + got, part, take);
         got += take;
         i++;
     }

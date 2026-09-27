@@ -1,8 +1,8 @@
 #include "cmd.h"
 
 /* lap rebuild: drop every derived cache and reconstruct it from the log —
- * the executable proof that log.jsonl alone is the truth. --verify fails
- * the command when the log's hash chain is broken.
+ * the executable proof that the log (.lap/log/) alone is the truth.
+ * --verify fails the command when the log's hash chain is broken.
  */
 int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
     static const char *const bool_flags[] = {"--json", "--verify", NULL};

@@ -335,8 +335,8 @@ bool plat_read_tail(Arena *a, const char *path, size_t want, char **data,
     return true;
 }
 
-bool plat_read_range(Arena *a, const char *path, uint64_t off, size_t len,
-                     char **data) {
+bool plat_read_range_into(const char *path, uint64_t off, size_t len,
+                          char *buf) {
     FILE *f = open_rb(path);
     if (!f)
         return false;
@@ -344,10 +344,15 @@ bool plat_read_range(Arena *a, const char *path, uint64_t off, size_t len,
         fclose(f);
         return false;
     }
-    char *buf = (char *)arena_alloc(a, len + 1);
     size_t got = fread(buf, 1, len, f);
     fclose(f);
-    if (got != len)
+    return got == len;
+}
+
+bool plat_read_range(Arena *a, const char *path, uint64_t off, size_t len,
+                     char **data) {
+    char *buf = (char *)arena_alloc(a, len + 1);
+    if (!plat_read_range_into(path, off, len, buf))
         return false;
     buf[len] = '\0';
     *data = buf;

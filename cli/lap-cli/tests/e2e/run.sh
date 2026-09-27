@@ -39,6 +39,11 @@ $out
     fi
 }
 
+# The history is chunk files under .lap/log/. Appends go to the open chunk
+# (the highest-numbered main chunk); history prints every chunk, in order.
+open_chunk() { ls .lap/log/main.*.jsonl | LC_ALL=C sort | tail -1; }
+history() { cat $(ls .lap/log/main.*.jsonl | LC_ALL=C sort); }
+
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/lap-e2e.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 cd "$WORK" || exit 1
@@ -47,7 +52,8 @@ cd "$WORK" || exit 1
 t "init creates the repository"
 expect_ok "$LAP" init
 [ -d .lap ] || fail ".lap directory missing"
-[ -f .lap/log.jsonl ] || fail "log.jsonl missing"
+[ -f .lap/log/main.000001.jsonl ] || fail "the first chunk is missing"
+[ -e .lap/log.jsonl ] && fail "init created the single-file log"
 [ -f .lap/state.json ] || fail "state.json missing"
 [ -f .lapignore ] || fail "starter .lapignore missing"
 
@@ -224,12 +230,13 @@ NEXT_AFTER=$(sed 's/.*"next_commit":\([0-9]*\).*/\1/' .lap/state.json)
     fail "healed next_commit $NEXT_AFTER != $NEXT_BEFORE + 1"
 
 t "log tampering is detected"
-cp .lap/log.jsonl .lap/log.jsonl.bak
+C=$(open_chunk)
+cp "$C" .lap/tamper.bak
 sed 's/retired after the tests/RETIRED AFTER THE TESTS/' \
-    .lap/log.jsonl > .lap/log.tampered && mv .lap/log.tampered .lap/log.jsonl
+    .lap/tamper.bak > "$C"
 expect_grep "CHAIN BROKEN" "$LAP" verify
 expect_fail "$LAP" verify
-mv .lap/log.jsonl.bak .lap/log.jsonl
+mv .lap/tamper.bak "$C"
 expect_grep "chain ok" "$LAP" verify
 
 # ------------------------------------------- blank lines are not anchors
@@ -300,13 +307,13 @@ expect_grep '"hash":"[0-9a-f]\{64\}"' "$LAP" log -n 1 --json
 
 # ------------------------------------------------------- message checks
 t "the message checks refuse weak messages before anything is written"
-BEFORE=$(wc -c < .lap/log.jsonl)
+BEFORE=$(history | wc -c)
 printf 'check-a\n' > checks.txt
 expect_grep "message_too_short" "$LAP" commit checks.txt -i "fix it" -b "adds the check-a line" --json
 expect_grep "message_too_short" "$LAP" commit checks.txt -i "cover the message checks" -b "adds it" --json
 expect_grep "behavior_repeats_intent" "$LAP" commit checks.txt -i "cover the message checks" -b "cover the message checks" --json
 expect_grep "behavior_restates_code" "$LAP" commit checks.txt -i "cover the message checks" -b "check a check" --json
-[ "$(wc -c < .lap/log.jsonl)" = "$BEFORE" ] || fail "a refused commit wrote to the log"
+[ "$(history | wc -c)" = "$BEFORE" ] || fail "a refused commit wrote to the log"
 expect_ok "$LAP" commit checks.txt -i "cover the message checks" -b "creates the file the checks run against"
 printf 'check-a\ncheck-b\n' > checks.txt
 expect_grep "behavior_repeats_previous" "$LAP" commit checks.txt -i "cover the message checks" -b "creates the file the checks run against" --json
@@ -316,10 +323,10 @@ expect_grep "message_too_short" "$LAP" commit checks.txt -i "fix it" -b "b" --fo
 expect_ok "$LAP" commit checks.txt -i "cover the message checks" -b "creates the file the checks run against" --force-message
 expect_grep '"forced":true' "$LAP" log -n 1 --json
 expect_grep "forced" "$LAP" show "$("$LAP" log -n 1 --json | sed 's/.*"id":"\([^"]*\)".*/\1/')"
-grep -q '"forced":true' .lap/log.jsonl || fail "forced is not in the log"
+history | grep -q '"forced":true' || fail "forced is not in the log"
 printf 'check-a\ncheck-b\ncheck-c\n' > checks.txt
 expect_ok "$LAP" commit checks.txt -i "cover the message checks" -b "appends a third line to exercise a plain commit"
-tail -1 .lap/log.jsonl | grep -q '"forced"' && fail "forced written on an unforced commit"
+tail -1 "$(open_chunk)" | grep -q '"forced"' && fail "forced written on an unforced commit"
 
 t "--no-session commits skip the previous-behavior check"
 printf 'ns1\n' > ns.txt
@@ -356,7 +363,7 @@ t "a hash prefix shared by two commits is ambiguous_ref, listing both"
 if command -v python3 >/dev/null 2>&1; then
     mkdir -p "$WORK/amb" && cd "$WORK/amb" || exit 1
     "$LAP" init >/dev/null 2>&1
-    python3 - .lap/log.jsonl <<'PY' || fail "could not forge a collision"
+    python3 - "$(open_chunk)" <<'PY' || fail "could not forge a collision"
 import hashlib, sys
 def rec(cid, nonce):
     return ('{"type":"commit","id":"%s","session":null,"file":"f.txt",'
@@ -381,7 +388,7 @@ while True:
 PY
     PFX=$(python3 -c "
 import hashlib
-l=open('.lap/log.jsonl','rb').read().split(b'\\n')
+l=open('$(open_chunk)','rb').read().split(b'\\n')
 print(hashlib.sha256(l[-2]).hexdigest()[:7])")
     expect_grep "ambiguous_ref" "$LAP" show "$PFX" --json
     expect_grep "L1 $PFX, L2 $PFX" "$LAP" show "$PFX"
@@ -391,7 +398,7 @@ else
 fi
 
 t "unknown flags are refused, naming the flag, before anything runs"
-BEFORE=$(wc -c < .lap/log.jsonl)
+BEFORE=$(history | wc -c)
 printf 'uf\n' > uf.txt
 expect_grep "unknown_flag" "$LAP" commit uf.txt -m "old spelling" --json
 expect_grep "unknown flag -m" "$LAP" commit uf.txt -m "old spelling"
@@ -406,7 +413,7 @@ expect_grep "unknown_flag" "$LAP" init --bare --json
 expect_grep "unknown_flag" "$LAP" search --msg x --regex --json
 expect_grep "unknown_flag" "$LAP" rr --session S1 --json
 expect_grep "unknown_flag" "$LAP" rr --from L1 --to L2 --json
-[ "$(wc -c < .lap/log.jsonl)" = "$BEFORE" ] || fail "a refused command wrote to the log"
+[ "$(history | wc -c)" = "$BEFORE" ] || fail "a refused command wrote to the log"
 # colour flags belong to lap and are accepted by every command
 expect_ok "$LAP" log -n 1 --color=never
 expect_ok "$LAP" status --no-color
@@ -428,14 +435,14 @@ t "a log holding a msg-only commit is refused"
 mkdir -p "$WORK/oldlog" && cd "$WORK/oldlog" || exit 1
 "$LAP" init >/dev/null 2>&1
 printf '{"type":"commit","id":"L1","session":null,"file":"f.txt","op":"create","old_start":1,"old_lines":0,"new_start":1,"new_lines":0,"eof_nl":true,"old_text":[],"new_text":[],"msg":"an old message","ts":"2026-01-01T00:00:00Z","prev":"%s"}\n' \
-    "$(python3 -c "import hashlib;print(hashlib.sha256(open('.lap/log.jsonl','rb').read().rstrip(b'\\n')).hexdigest())" 2>/dev/null || echo 0)" >> .lap/log.jsonl
+    "$(python3 -c "import hashlib;print(hashlib.sha256(open('$(open_chunk)','rb').read().rstrip(b'\\n')).hexdigest())" 2>/dev/null || echo 0)" >> "$(open_chunk)"
 expect_fail "$LAP" log
 expect_grep "no intent and behavior" "$LAP" log
 cd "$WORK" && rm -rf oldlog
 
 # -------------------------------------------------- crash-safety repairs
 t "torn log tail: readers tolerate it, the next writer repairs it"
-printf '{"type":"commit","id":"L9' >> .lap/log.jsonl
+printf '{"type":"commit","id":"L9' >> "$(open_chunk)"
 expect_ok "$LAP" log
 expect_grep "torn trailing record" "$LAP" verify
 printf 'torn-recovery\n' > torn.txt
@@ -610,7 +617,7 @@ expect_grep "would record L2 in S1" "$LAP" commit d.txt -i "shout the edges" -b 
 expect_grep "behavior_repeats_previous" "$LAP" commit d.txt -i "shout the edges" -b "creates d.txt with three lines" --dry-run --edit 1 --json
 # a dry run is a reader: it repairs nothing it finds broken
 rm .lap/state.json
-printf '{"type":"commit","id":"L9' >> .lap/log.jsonl
+printf '{"type":"commit","id":"L9' >> "$(open_chunk)"
 BEFORE=$(lapsum)
 expect_grep "would record L2 in S1" "$LAP" commit d.txt -i "shout the edges" -b "uppercases the first line" --dry-run --edit 1
 [ "$(lapsum)" = "$BEFORE" ] || fail "a dry run repaired the repository"
@@ -716,11 +723,12 @@ expect_grep "0 mismatch" "$LAP" verify --deep
 expect_grep "clean" "$LAP" status
 
 t "rebuild --verify fails on a tampered log"
-cp .lap/log.jsonl .lap/log.jsonl.bak
+C=$(open_chunk)
+cp "$C" .lap/tamper.bak
 sed 's/quoted-name file landed/QUOTED-NAME FILE LANDED/' \
-    .lap/log.jsonl > .lap/log.t && mv .lap/log.t .lap/log.jsonl
+    .lap/tamper.bak > "$C"
 expect_fail "$LAP" rebuild --verify
-mv .lap/log.jsonl.bak .lap/log.jsonl
+mv .lap/tamper.bak "$C"
 expect_ok "$LAP" rebuild --verify
 
 # ----------------------------------------------------------- snapshots
@@ -772,7 +780,7 @@ expect_grep '"id":"S1"' "$LAP" session start "fix the parser" \
 expect_grep '"meta":{"ticket":"T-12","epic":"E-1","tries":2}' \
     "$LAP" session current --json
 expect_grep '"meta":{"ticket":"T-12","epic":"E-1","tries":2}' \
-    cat .lap/log.jsonl
+    history
 "$LAP" session end >/dev/null 2>&1
 "$LAP" session start "unrelated" >/dev/null 2>&1
 expect_grep '"meta":{}' "$LAP" session list --json
@@ -1018,7 +1026,7 @@ done
 # a clone carries the log and the working tree, and no cache
 mkdir -p "$WORK/many-clone/.lap"
 cp f*.txt "$WORK/many-clone/"
-cp .lap/log.jsonl "$WORK/many-clone/.lap/"
+cp -R .lap/log "$WORK/many-clone/.lap/"
 cd "$WORK/many-clone"
 sed 's/^line 7 of/LINE 7 OF/' f42.txt > f42.new && mv f42.new f42.txt
 # Loading the log once per file grew with files x log size; one load stays
@@ -1048,12 +1056,85 @@ out=$("$LAP" status)
 printf '%s' "$out" | grep -q "a.txt  (1 edit)" || fail "a CRLF edit is not one edit: $out"
 "$LAP" commit a.txt --no-session -i "shout two in the CRLF copy" \
     -b "uppercases the second line of a.txt" >/dev/null 2>&1 || fail "commit in the CRLF copy"
-tail -1 .lap/log.jsonl | grep -q '\\r' && fail "a CRLF edit was recorded with its CR"
+tail -1 "$(open_chunk)" | grep -q '\\r' && fail "a CRLF edit was recorded with its CR"
 expect_grep "clean" "$LAP" status
 expect_ok "$LAP" verify --deep
 # a lone CR that no newline ends is content, not a line ending
 printf 'no final newline\r' > b.txt
 expect_grep "b.txt  (1 edit)" "$LAP" status
+cd "$WORK"
+
+# ------------------------------------------------------------- chunks
+t "the history seals chunks at the limit and chains across them"
+mkdir -p "$WORK/chunks" && cd "$WORK/chunks" || exit 1
+export LAP_TEST_CHUNK_BYTES=700
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "fill several chunks" >/dev/null 2>&1
+i=1
+while [ $i -le 6 ]; do
+    printf 'row %d\n' $i >> rows.txt
+    "$LAP" commit rows.txt -i "grow the history past the chunk limit" \
+        -b "appends row $i to rows.txt" >/dev/null 2>&1 || fail "commit row $i"
+    i=$((i + 1))
+done
+N=$(ls .lap/log | grep -c '^main\.[0-9]*\.jsonl$')
+[ "$N" -ge 3 ] || fail "expected at least three chunks, found $N"
+for c in .lap/log/main.*.jsonl; do
+    [ "$(wc -c < "$c")" -le 700 ] || fail "$c is past the limit"
+done
+# a chunk's first record chains from the previous chunk's last one
+python3 - <<'PY' || fail "a chunk does not chain from the one before"
+import glob, hashlib, json
+prev = None
+for c in sorted(glob.glob('.lap/log/main.*.jsonl')):
+    lines = open(c, 'rb').read().split(b'\n')[:-1]
+    if prev is not None:
+        assert json.loads(lines[0])['prev'] == prev, c
+    prev = hashlib.sha256(lines[-1]).hexdigest()
+PY
+expect_grep "chain ok: 8 records" "$LAP" verify
+expect_grep "0 mismatch" "$LAP" verify --deep
+expect_grep "appends row 1" "$LAP" show L1
+rm -f .lap/index
+expect_grep "appends row 2" "$LAP" show L2
+expect_grep "L6 " "$LAP" log -n 1
+
+t "a record larger than the limit is a chunk of its own"
+BEFORE=$(ls .lap/log | wc -l)
+python3 -c "print('x' * 900)" > big.txt
+expect_ok "$LAP" commit big.txt -i "grow the history past the chunk limit" \
+    -b "creates big.txt with one 900-byte line"
+C=$(open_chunk)
+[ "$(wc -l < "$C")" -eq 1 ] || fail "the large record shares its chunk"
+grep -q '"file":"big.txt"' "$C" || fail "the large record is not in the open chunk"
+[ "$(ls .lap/log | wc -l)" -gt "$BEFORE" ] || fail "no chunk was started"
+expect_grep "chain ok" "$LAP" verify
+
+t "a torn tail in the open chunk is dropped by readers, cut by writers"
+printf '{"type":"commit","id":"L99' >> "$(open_chunk)"
+expect_ok "$LAP" log
+expect_grep "torn trailing record" "$LAP" verify
+printf 'row 7\n' >> rows.txt
+expect_ok "$LAP" commit rows.txt -i "grow the history past the chunk limit" \
+    -b "appends row 7 after a torn append"
+expect_not_grep "L99" history
+expect_grep "chain ok" "$LAP" verify
+
+t "verify names a sealed chunk that was modified"
+cp .lap/log/main.000002.jsonl .lap/sealed.bak
+sed 's/appends row/APPENDS ROW/' .lap/sealed.bak > .lap/log/main.000002.jsonl
+expect_grep "sealed chunk main.000002.jsonl was modified" "$LAP" verify
+expect_fail "$LAP" verify
+mv .lap/sealed.bak .lap/log/main.000002.jsonl
+expect_grep "chain ok" "$LAP" verify
+
+t "a gap in the chunk numbers is refused, naming the missing chunk"
+mv .lap/log/main.000002.jsonl .lap/gap.bak
+expect_grep "main.000002.jsonl is missing" "$LAP" log
+expect_fail "$LAP" status
+mv .lap/gap.bak .lap/log/main.000002.jsonl
+expect_ok "$LAP" status
+unset LAP_TEST_CHUNK_BYTES
 cd "$WORK"
 
 # ------------------------------------------------------------ summary

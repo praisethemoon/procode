@@ -37,7 +37,8 @@ intent and what it does; git keeps its normal human-scale history.
 <root>/
   .lapignore        ignore patterns (tracked like any file)
   .lap/
-    log.jsonl       TRUTH — append-only record log, hash-chained
+    log/            TRUTH — the append-only record log, hash-chained, as
+                    chunk files (§Chunks)
     state.json      cache: counters, active session, last chain hash
     shadow/         cache: last-committed content of every tracked file
     index           cache: one fixed-width entry per record (§acceleration)
@@ -49,12 +50,12 @@ intent and what it does; git keeps its normal human-scale history.
 ```
 
 - Commands find the repository by walking upward from the cwd (like git).
-- **The cache contract:** everything in `.lap/` except `log.jsonl` is a
+- **The cache contract:** everything in `.lap/` except `log/` is a
   derived, disposable cache. Any of it may be deleted at any time; the next
   writing command (or `lap rebuild`) reconstructs it from the log. Cache
   formats may change between versions with no migrations — an unrecognized
   or stale cache is rebuilt. Caches are native-endian and single-machine:
-  transport a repo as its log (plus working tree) and rebuild on arrival.
+  transport a repo as its `log/` (plus working tree) and rebuild on arrival.
 - Writing commands hold the lock for their whole run and keep every cache
   in step; readers never lock and never write — with one exception, the
   stat cache below, which `status` refreshes. A reader that finds a cache
@@ -72,7 +73,8 @@ intent and what it does; git keeps its normal human-scale history.
 ## The acceleration layer
 
 - **Index** (`.lap/index`): a 40-byte header then one 64-byte entry per log
-  record — byte offset/length into the log, kind, op, numeric session,
+  record — byte offset/length into the history (its chunks read as one
+  stream, §Chunks), kind, op, numeric session,
   `file_id`, epoch timestamp, the region coordinates, a running commit
   counter (ids are dense integers, so finding `L<n>` is a binary search and
   per-record access is a seek), and `prev_same_file`: the entry index of
@@ -179,6 +181,43 @@ time; with `Z` or an offset (`+02:00`, `-0400`) it is taken as given. In
 the hour that repeats when clocks go back, a local time means the earlier
 of its two moments. Anything else is refused with `bad_time`. Bounds are
 converted to UTC and compared as strings, which sort as times.
+
+### Chunks
+
+The log is kept as chunk files in `.lap/log/`, read in order as one stream:
+
+```
+.lap/log/
+  main.000001.jsonl      sealed
+  main.000002.jsonl      sealed
+  main.000003.jsonl      open: appends go here
+```
+
+- A chunk is named `<lineage>.<n>.jsonl`: the lineage is `main` (other
+  lineages come with branches, `SPEC-branches.md`), and `n` counts its chunks
+  from 1, six digits, zero-padded. Other files in the directory are ignored.
+- A lineage's **open** chunk is its highest `n`; every lower one is **sealed**
+  and never written again. When an append would take the open chunk past
+  4 MB, the record starts chunk `n + 1` instead; a single record larger than
+  that is a chunk of its own. 4 MB is a constant, not a setting, so every
+  folder chunks alike. (`LAP_TEST_CHUNK_BYTES` overrides it, for tests
+  only.)
+- **Order is the hash chain.** Chunks follow `n`, and a chunk's first record
+  carries the previous chunk's last hash as `prev`, so the chain runs on
+  across chunks exactly as it would in one file. No manifest lists the
+  chunks: there is nothing for git to conflict on. A missing number (chunks
+  1 and 3 but not 2) is refused, naming the missing chunk.
+- Positions in the history — the index's offsets — are offsets into the
+  chunks read as one stream. Only the open chunk grows, so a position never
+  moves.
+- **Torn tails** can occur only in the open chunk (§Concurrency).
+- **`lap verify`** walks the chain across chunks and names positions by chunk
+  and line. A break that points at a sealed chunk is reported as
+  *"sealed chunk `main.000002.jsonl` was modified"*: lap never writes a
+  sealed chunk, so only a mistake (a bad conflict resolution, a
+  repository-wide replace) can have changed one.
+- git tracks `.lap/log/`. Appending changes one file, the open chunk; a
+  sealed chunk never changes again.
 
 ## Messages
 
@@ -413,7 +452,8 @@ session. Targets are given only as arguments; there are no `--session`,
 the hunks, in both the human and JSON shapes. Read-only.
 
 ### `lap verify [--deep]`
-Walks the hash chain. `--deep` also replays every file's history from
+Walks the hash chain across every chunk, naming a modified sealed chunk
+(§Chunks). `--deep` also replays every file's history from
 birth and compares the result byte-for-byte with the shadow store and
 every snapshot. Verification never uses the caches it is checking.
 
@@ -435,10 +475,10 @@ segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git/`,
 
 - One exclusive lock (`.lap/lock`) serializes writers; readers never lock
   and never write.
-- **Torn tail**: a crash mid-append leaves an unterminated final log line.
-  Readers drop it (it was never acknowledged) and continue; `lap verify`
-  notes it; the next writing command truncates it away under the lock
-  before appending.
+- **Torn tail**: a crash mid-append leaves an unterminated final line in the
+  open chunk. Readers drop it (it was never acknowledged) and continue; `lap
+  verify` notes it; the next writing command truncates it away under the
+  lock before appending.
 - Write order: log append (fsync) → shadow update → state write (atomic,
   per-process temp name). A crash at any point leaves `state.json` behind
   the log tail; the next **writer** detects the mismatch and heals —

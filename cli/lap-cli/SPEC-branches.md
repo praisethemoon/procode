@@ -56,7 +56,8 @@ With the user, 2026-09-27:
 
 ## Chunks
 
-### Layout
+Built: `SPEC.md` §Chunks describes chunk files, sealing at the limit, order
+by the hash chain and `verify`. What branches add to them:
 
 ```
 .lap/
@@ -70,32 +71,21 @@ With the user, 2026-09-27:
   lineage                  this folder's lineage when it is a branch: local, not committed
 ```
 
-- A chunk is named `<lineage>.<n>.jsonl`: `main` for the first lineage, a
-  12-hex-digit id for a branch (§Branches), and `n` counting that lineage's
-  chunks from 1. Two copies of one folder never create the same branch id, so
-  chunk files never collide.
-- A lineage's **open** chunk is its highest `n`; every lower one is **sealed**
-  and is never written again. When an append would take the open chunk past
-  4 MB (a lap constant, not a setting), the record starts chunk `n + 1`
-  instead. A single record larger than 4 MB is a chunk of its own. Starting
-  a branch also seals the parent's open chunk: lap creates the parent's
-  chunk `n + 1`, empty, so the next append lands there. An open chunk that
-  is still empty is not sealed again: a second branch started before the
-  parent appended anything shares the first one's base.
+- A branch's lineage is its 12-hex-digit id (§Branches). Two copies of one
+  folder never create the same branch id, so chunk files never collide.
+- Starting a branch also seals the parent's open chunk: lap creates the
+  parent's chunk `n + 1`, empty, so the next append lands there. An open
+  chunk that is still empty is not sealed again: a second branch started
+  before the parent appended anything shares the first one's base.
 - **Which lineage a folder writes** is `main` unless `.lap/lineage` names a
   branch id. `branch start` writes that file. It is machine-local, like the
   registry: after `git merge` the parent folder holds the branch's chunks
   too, so the chunks alone cannot say which lineage is this folder's.
-- **Order is the hash chain.** Within a lineage, chunks follow `n`, and a
-  chunk's first record carries the previous chunk's last hash as `prev`. A
-  branch's first record carries its base as `prev` (§Branches). No manifest
-  lists the chunks, so there is nothing for git to conflict on.
+- A branch's first record carries its base as `prev` (§Branches).
 - A folder's history is its lineage's chunks, preceded by its parent's
-  history up to the base, recursively down to `main`. Chunks of other
-  lineages may sit in `.lap/log/` (a `git merge` brings a branch's chunks into
-  the parent's folder); they are not part of this folder's history until
-  adopted.
-- `.gitignore` commits `.lap/log/` instead of `.lap/log.jsonl`.
+  chunks up to the base. Chunks of other lineages may sit in `.lap/log/` (a
+  `git merge` brings a branch's chunks into the parent's folder); they are
+  not part of this folder's history until adopted.
 
 ### Why a branch start seals its parent's chunk
 
@@ -111,14 +101,7 @@ the branch never had.
 
 ### What changes elsewhere
 
-- **The index** points at (chunk, offset) instead of an offset into one file.
-  It is a cache: its format changes freely.
-- **Torn tails** can only occur in a lineage's open chunk; readers drop them
-  and writers truncate them, as today.
-- **`lap verify`** walks each lineage present. A broken chain inside a sealed
-  chunk is reported as *"sealed chunk `main.000002.jsonl` was modified"*, not
-  as a bare hash mismatch: a sealed chunk only changes by mistake (a bad
-  conflict resolution, a repository-wide replace).
+- **`lap verify`** walks each lineage present, not only this folder's.
 - **Hash lookups** (`show #hash`) search every chunk present, including other
   lineages', so a `from` link can be followed from the parent.
 
