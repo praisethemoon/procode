@@ -352,7 +352,8 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
     Sync s;
     memset(&s, 0, sizeof s);
     pm_init(&s.pm, a);
-    if (!idx_load(a, r, &s.idx, false) || s.idx.h.covered > size)
+    bool loaded = idx_load(a, r, &s.idx, false) && s.idx.h.covered <= size;
+    if (!loaded)
         memset(&s.idx, 0, sizeof s.idx); /* damaged or shrunk: full rebuild */
     for (int32_t i = 0; i < s.idx.npaths; i++) {
         ARENA_GROW(a, s.paths, s.npaths, s.pcap, char *);
@@ -363,12 +364,13 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
         pm_put(&s.pm, s.paths[s.npaths], (int32_t)s.npaths);
         s.npaths++;
     }
-    if (s.idx.h.covered == size)
+    if (loaded && s.idx.h.covered == size)
         return true;
 
-    char *data;
+    /* a history with nothing in it yet still gets its (empty) index */
+    char *data = "";
     size_t dlen = (size_t)(size - s.idx.h.covered);
-    if (!hist_read(a, &r->hist, s.idx.h.covered, dlen, &data)) {
+    if (dlen > 0 && !hist_read(a, &r->hist, s.idx.h.covered, dlen, &data)) {
         snprintf(err, errsz, "cannot read log tail");
         return false;
     }

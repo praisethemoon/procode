@@ -586,6 +586,18 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
         }
         pos = next;
     }
+    if (n == 0) {
+        /* an old file with no complete record is a history with nothing in
+         * it yet, not none: it becomes one empty chunk, which the first
+         * write fills as it would have filled the old file */
+        char name[64], path[LAP_PATH_MAX];
+        hist_chunk_name(LAP_MAIN_LINEAGE, ++n, name);
+        snprintf(path, sizeof path, "%s/%s", tmp, name);
+        if (!plat_write_file_atomic(path, "", 0)) {
+            snprintf(err, errsz, "cannot write %s", path);
+            return false;
+        }
+    }
     /* an existing log/ (an older lap's partial conversion) goes aside
      * whole, its other lineages' chunks carried over; meanwhile readers
      * see only the old file, which is complete */

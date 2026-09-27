@@ -374,6 +374,22 @@ static void test_legacy(Arena *a) {
     ASSERT_TRUE(converted);
     ASSERT_EQ_S(read_history(a), "aaaa\n");
 
+    t_begin("hist: an old file with no complete record becomes one empty "
+            "chunk, never no history");
+    const char *empties[] = {"", "{\"type\":\"init", NULL};
+    for (int32_t i = 0; empties[i]; i++) {
+        clear_chunks();
+        put_legacy(empties[i]);
+        ASSERT_TRUE(hist_convert_legacy(a, T_LAPDIR, 100, &converted, err,
+                                        sizeof err));
+        ASSERT_TRUE(converted);
+        ASSERT_TRUE(!legacy_exists());
+        Hist e;
+        ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &e, err, sizeof err));
+        ASSERT_EQ_I(e.n, 1);
+        ASSERT_EQ_I((int32_t)e.size, 0);
+    }
+
     t_begin("hist: chunks that are a prefix of the old file are redone");
     clear_chunks();
     put_file("main.000001.jsonl", "aaaa\n");

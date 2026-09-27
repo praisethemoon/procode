@@ -291,7 +291,9 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   `.lap/log.jsonl` and no main chunk is read as it is, and readers never
   change it. The first writing command splits it at record boundaries into
   `main.000001.jsonl`, … at the limit, then removes it (a torn final line
-  is dropped, as any writer drops one). Records and hashes are unchanged,
+  is dropped, as any writer drops one; an old file with no complete record
+  becomes one empty `main.000001.jsonl`, a history with nothing in it yet,
+  never none). Records and hashes are unchanged,
   so `verify` passes before and after, and git sees one deleted file and
   some new ones, once. The chunks are written into `.lap/log.converting/`
   and published as `log/` with one rename (an existing `log/` moved aside

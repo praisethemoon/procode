@@ -1231,6 +1231,21 @@ rm .lap/log.jsonl
 expect_ok "$LAP" status
 cd "$WORK"
 
+t "an empty single-file log converts into a working, empty history"
+for e1 in empty torn; do
+    mkdir -p "$WORK/e1-$e1/.lap" && cd "$WORK/e1-$e1" || exit 1
+    if [ "$e1" = empty ]; then : > .lap/log.jsonl; else printf '{"type":"init' > .lap/log.jsonl; fi
+    expect_grep "no commits yet" "$LAP" log
+    expect_grep "moved .lap/log.jsonl into 1 chunk" "$LAP" session start "the first work here"
+    [ -e .lap/log.jsonl ] && fail "the single-file log is still there ($e1)"
+    printf 'a\n' > a.txt
+    expect_grep "^\[L1 " "$LAP" commit a.txt -i "Start the empty repository's work." -b "Creates a.txt with one line."
+    expect_grep "L1 " "$LAP" log
+    expect_grep "chain ok: 2 records" "$LAP" verify
+    expect_grep "0 mismatch" "$LAP" verify --deep
+done
+cd "$WORK"
+
 # ------------------------------------------------------------ branches
 # A parent folder with some history, as git and lap both keep it.
 branch_parent() {
