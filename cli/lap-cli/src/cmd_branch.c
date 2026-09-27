@@ -143,6 +143,20 @@ static int32_t start_locked(Arena *a, bool json, const char *name,
         return LAP_EXIT_ERR;
     }
 
+    /* A start writes to the parent (its lock, a sealed chunk, the registry):
+     * one it could not write to is refused before any of that, so a refusal
+     * leaves the parent as it was. */
+    char there_lap[LAP_PATH_MAX], there_log[LAP_PATH_MAX];
+    snprintf(there_lap, sizeof there_lap, "%s/%s", there, LAP_DIR);
+    snprintf(there_log, sizeof there_log, "%s/%s", there_lap, LAP_LOG_DIR);
+    if (plat_is_dir(there_lap) &&
+        (!plat_is_writable_dir(there_lap) ||
+         (plat_is_dir(there_log) && !plat_is_writable_dir(there_log)))) {
+        err_out(json, "parent_read_only",
+                "cannot write %s; a branch needs its parent writable",
+                plat_is_writable_dir(there_lap) ? there_log : there_lap);
+        return LAP_EXIT_ERR;
+    }
     /* The parent, locked for the whole start: nothing lands on it between
      * the checks and the sealing. */
     Repo pr;

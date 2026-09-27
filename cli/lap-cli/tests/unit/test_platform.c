@@ -4,6 +4,7 @@
 #include "test.h"
 
 #ifndef _WIN32
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -63,4 +64,18 @@ void test_platform(void) {
         ASSERT_TRUE(plat_same_file(T_PLATDIR "/SUB", T_PLATDIR "/sub"));
     else
         ASSERT_TRUE(!plat_same_file(T_PLATDIR "/SUB", T_PLATDIR "/sub"));
+
+    t_begin("plat_is_writable_dir: a folder one may write in; not a file, "
+            "not a missing path");
+    ASSERT_TRUE(plat_is_writable_dir(T_PLATDIR "/sub"));
+    plat_write_file_atomic(T_PLATDIR "/sub/f.txt", "x", 1);
+    ASSERT_TRUE(!plat_is_writable_dir(T_PLATDIR "/sub/f.txt"));
+    ASSERT_TRUE(!plat_is_writable_dir(T_PLATDIR "/nothing"));
+    remove(T_PLATDIR "/sub/f.txt");
+#ifndef _WIN32
+    t_begin("plat_is_writable_dir: a read-only folder is not, but for root");
+    ASSERT_TRUE(chmod(T_PLATDIR "/other", 0555) == 0);
+    ASSERT_TRUE(plat_is_writable_dir(T_PLATDIR "/other") == (getuid() == 0));
+    chmod(T_PLATDIR "/other", 0755);
+#endif
 }

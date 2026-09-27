@@ -2153,6 +2153,18 @@ if [ "$(id -u)" != 0 ]; then
     chmod u+w "$WORK/bp/.lap" "$WORK/bp/.lap/log"
     [ -e .lap ] && fail "a refused start made .lap here"
     grep -q '"path":"'"$WORK/br"'"' "$WORK/bp/.lap/branches.json" && fail "a refused start was registered"
+    # all of the parent's .lap read-only, files and lock too; then .lap
+    # read-only with log/ writable: parent_read_only, and the parent as it was
+    BPSUM=$(cd "$WORK/bp/.lap" && find . -type f | LC_ALL=C sort | xargs shasum)
+    chmod -R a-w "$WORK/bp/.lap"
+    expect_grep '"error":"parent_read_only"' "$LAP" branch start --from ../bp --json
+    chmod -R u+w "$WORK/bp/.lap"
+    chmod a-w "$WORK/bp/.lap"
+    expect_grep '"error":"parent_read_only"' "$LAP" branch start --from ../bp --json
+    chmod u+w "$WORK/bp/.lap"
+    [ "$(cd "$WORK/bp/.lap" && find . -type f | LC_ALL=C sort | xargs shasum)" = "$BPSUM" ] ||
+        fail "a refused start changed the parent's .lap"
+    [ -e .lap ] && fail "a refused start made .lap here"
 else
     echo "skip: running as root, a read-only parent cannot be made"
 fi

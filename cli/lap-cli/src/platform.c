@@ -214,6 +214,18 @@ bool plat_ts_parse(const char *in, char out[32]) {
     return true;
 }
 
+bool plat_is_writable_dir(const char *path) {
+#ifdef _WIN32
+    char wb[LAP_PATH_MAX];
+    DWORD attr = GetFileAttributesA(winpath(wb, sizeof wb, path));
+    return attr != INVALID_FILE_ATTRIBUTES &&
+           (attr & FILE_ATTRIBUTE_DIRECTORY) &&
+           _access(wb, 2) == 0;
+#else
+    return plat_is_dir(path) && access(path, W_OK | X_OK) == 0;
+#endif
+}
+
 bool plat_is_dir(const char *path) {
 #ifdef _WIN32
     char wb[LAP_PATH_MAX];

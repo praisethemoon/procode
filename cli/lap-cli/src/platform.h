@@ -9,6 +9,8 @@
 
 bool plat_is_file(const char *path);
 bool plat_is_dir(const char *path);
+/* A folder this process may create, rename and remove files in. */
+bool plat_is_writable_dir(const char *path);
 /* True when both paths reach one file or directory, however spelled:
  * case, symlinks, "..". False when either does not exist. */
 bool plat_same_file(const char *a, const char *b);
