@@ -371,6 +371,20 @@ static void test_branch_history(Arena *a) {
     plat_write_file_atomic(path, "0123456789AB", 12);
     ASSERT_TRUE(!hist_folder_lineage(a, T_LAPDIR, lin, err, sizeof err));
 
+    t_begin("hist: a lineage whose recorded parent is this folder itself is "
+            "ignored; one whose parent is elsewhere stands");
+    ASSERT_TRUE(hist_write_lineage(T_LAPDIR, "0123456789ab"));
+    char ppath[256];
+    snprintf(ppath, sizeof ppath, "%s/%s", T_LAPDIR, LAP_PARENT_NAME);
+    plat_write_file_atomic(ppath, "..\n", 3); /* another folder */
+    ASSERT_TRUE(hist_folder_lineage(a, T_LAPDIR, lin, err, sizeof err));
+    ASSERT_EQ_S(lin, "0123456789ab");
+    /* this test's lapdir is not named .lap, so it is its own root */
+    plat_write_file_atomic(ppath, T_LAPDIR "\n", strlen(T_LAPDIR) + 1);
+    ASSERT_TRUE(hist_folder_lineage(a, T_LAPDIR, lin, err, sizeof err));
+    ASSERT_EQ_S(lin, "main");
+    remove(ppath);
+
     t_begin("hist: a branch's history is its parent's chunks to the base, "
             "then its own");
     clear_chunks();

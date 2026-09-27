@@ -235,6 +235,23 @@ void test_branches(void) {
     remove(subpath);
     remove(path);
 
+    t_begin("repo_write_gitignore: git keeps only log/ and the file itself; "
+            "a .gitignore already there is kept");
+    plat_mkdirs(".gitignore_unit_test");
+    char gip[128];
+    snprintf(gip, sizeof gip, ".gitignore_unit_test/.gitignore");
+    remove(gip);
+    ASSERT_TRUE(repo_write_gitignore(".gitignore_unit_test"));
+    char *gi;
+    size_t gil;
+    ASSERT_TRUE(plat_read_file(a, gip, &gi, &gil));
+    ASSERT_TRUE(strstr(gi, "\n/*\n!/.gitignore\n!/log/\n") != NULL);
+    plat_write_file_atomic(gip, "mine\n", 5);
+    ASSERT_TRUE(repo_write_gitignore(".gitignore_unit_test"));
+    ASSERT_TRUE(plat_read_file(a, gip, &gi, &gil));
+    ASSERT_EQ_S(gi, "mine\n");
+    remove(gip);
+
     t_begin("own_part_start: a branch's own records start after its own "
             "branch record, not its parent branch's; main's at 0");
     Rec op[5];

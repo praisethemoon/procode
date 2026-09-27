@@ -1679,6 +1679,37 @@ expect_grep "clean" "$LAP" status
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "a branch folder's lineage and parent never reach the parent through git"
+mkdir -p "$WORK/m20-p" && cd "$WORK/m20-p" || exit 1
+git init -q . && git config user.name e2e && git config user.email e2e@lap
+"$LAP" init >/dev/null 2>&1 # no .gitignore of the project's own: lap's guards .lap
+[ -f .lap/.gitignore ] || fail "lap init wrote no .lap/.gitignore"
+printf 'f\n' > f.txt
+for f in f.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+git add -A && git commit -qm base
+git ls-files .lap | grep -qv '^\.lap/\(\.gitignore\|log/\)' && fail "git tracks more of .lap than log/"
+git worktree add -q "$WORK/m20-w" -b b
+cd "$WORK/m20-w" && "$LAP" branch start b --from ../m20-p >/dev/null 2>&1
+"$LAP" session start "b work" --branch b >/dev/null 2>&1
+printf 'F\n' > f.txt && "$LAP" commit f.txt --branch b -i "change f in b" -b "rewrites f.txt in b" >/dev/null 2>&1
+git add -A && git commit -qm "b's work" >/dev/null
+git ls-files .lap | grep -q 'lineage\|parent' && fail "the branch's identity files went into git"
+cd "$WORK/m20-p" && git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge m20"
+[ -e .lap/lineage ] && fail "git brought the branch's lineage"
+expect_grep '"self":null' "$LAP" branch list --json
+expect_grep "adopted 1 of 1" "$LAP" merge b
+# the safety net: a lineage and parent that did get here say nothing
+cp "$WORK/m20-w/.lap/lineage" "$WORK/m20-w/.lap/parent" .lap/
+expect_grep '"self":null' "$LAP" branch list --json
+expect_grep "this folder is main" "$LAP" log -n 1
+"$LAP" session start "after the leak" --branch main >/dev/null 2>&1
+printf 'G\n' >> f.txt
+expect_ok "$LAP" commit f.txt --branch main -i "work on main after the leak" -b "appends G to f.txt on main"
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
 t "an edit to an empty file the parent deleted stops that file"
 mkdir -p "$WORK/m17-p" && cd "$WORK/m17-p" || exit 1
 git init -q . && git config user.name e2e && git config user.email e2e@lap

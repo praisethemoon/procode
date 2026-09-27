@@ -513,6 +513,34 @@ bool hist_folder_lineage(Arena *a, const char *lapdir,
         snprintf(err, errsz, "%s does not hold a branch id", path);
         return false;
     }
+    /* A lineage whose recorded parent is this folder itself came here
+     * through git from its branch (with .lap/parent): this folder is not
+     * that branch, whatever the file says. */
+    char ppath[LAP_PATH_MAX], root[LAP_PATH_MAX];
+    snprintf(ppath, sizeof ppath, "%s/%s", lapdir, LAP_PARENT_NAME);
+    snprintf(root, sizeof root, "%s", lapdir);
+    size_t rl = strlen(root), dl = strlen("/" LAP_DIR);
+    if (rl > dl && strcmp(root + rl - dl, "/" LAP_DIR) == 0)
+        root[rl - dl] = '\0';
+    char *pdata;
+    size_t plen;
+    if (plat_is_file(ppath) && plat_read_file(a, ppath, &pdata, &plen)) {
+        while (plen > 0 && (pdata[plen - 1] == '\n' || pdata[plen - 1] == '\r'))
+            plen--;
+        pdata[plen] = '\0';
+        if (plen > 0 && plat_same_file(pdata, root)) {
+            static bool told; /* once a command */
+            if (!told)
+                fprintf(stderr,
+                        "note: ignoring %s: it names branch %s, whose parent "
+                        "is this folder itself (it came through git?); this "
+                        "folder is main. Remove .lap/lineage and .lap/parent "
+                        "here.\n",
+                        path, out);
+            told = true;
+            snprintf(out, HIST_LINEAGE_MAX, "%s", LAP_MAIN_LINEAGE);
+        }
+    }
     return true;
 }
 

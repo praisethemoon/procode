@@ -70,6 +70,10 @@ void repo_close(Repo *r);
 
 /* Creates a new repo in dir (absolute). Fails if one already exists there. */
 bool repo_init(Arena *a, const char *dir, char *err, size_t errsz);
+/* Writes lapdir/.gitignore, unless one is there: git keeps only log/ (and
+ * the file itself), so nothing machine-local — a branch folder's lineage
+ * and parent above all — reaches another folder through git. */
+bool repo_write_gitignore(const char *lapdir);
 
 /* Reads and parses this folder's whole history; messages name chunks and
  * lines ("main.000002.jsonl line 7"). */

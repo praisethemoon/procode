@@ -448,6 +448,22 @@ void repo_close(Repo *r) {
     }
 }
 
+bool repo_write_gitignore(const char *lapdir) {
+    static const char text[] =
+        "# Written by lap: only the history (log/) travels with the project.\n"
+        "# Everything else here is this machine's: caches, the registry of\n"
+        "# branches, and a branch folder's lineage and parent, which would\n"
+        "# make any folder they reach through git think it is that branch.\n"
+        "/*\n"
+        "!/.gitignore\n"
+        "!/log/\n";
+    char path[LAP_PATH_MAX];
+    snprintf(path, sizeof path, "%s/.gitignore", lapdir);
+    if (plat_is_file(path))
+        return true; /* the user's own, kept */
+    return plat_write_file_atomic(path, text, sizeof text - 1);
+}
+
 bool repo_init(Arena *a, const char *dir, char *err, size_t errsz) {
     char lapdir[LAP_PATH_MAX];
     snprintf(lapdir, sizeof lapdir, "%s/%s", dir, LAP_DIR);
@@ -463,6 +479,10 @@ bool repo_init(Arena *a, const char *dir, char *err, size_t errsz) {
     snprintf(shadow, sizeof shadow, "%s/%s", lapdir, LAP_SHADOW_NAME);
     if (!plat_mkdirs(shadow)) {
         snprintf(err, errsz, "cannot create %s", shadow);
+        return false;
+    }
+    if (!repo_write_gitignore(lapdir)) {
+        snprintf(err, errsz, "cannot write %s/.gitignore", lapdir);
         return false;
     }
 

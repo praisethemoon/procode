@@ -267,7 +267,12 @@ and a `git merge` of the branch's code brings its chunks as new files.
 - **Which lineage a folder writes** is `main`, unless `.lap/lineage` names
   a branch id. That file is machine-local, like the registry: after a `git
   merge` the parent holds the branch's chunks too, and the chunks alone
-  cannot say which lineage is the folder's own.
+  cannot say which lineage is the folder's own. So it never goes through
+  git: `lap init` and `lap branch start` write `.lap/.gitignore`
+  (`/*`, `!/.gitignore`, `!/log/`, kept if one is there), leaving git only
+  the history. Should a `lineage` arrive anyway, with the `.lap/parent`
+  that names this very folder (compared as a directory on disk), it is
+  ignored with a notice: the folder stays `main`.
 - Ids go on from the base: the branch's next `L` and `S` numbers follow
   its parent's at the base, so one folder never shows an id twice. Two
   folders do — the parent goes on from the base too — so text that leaves

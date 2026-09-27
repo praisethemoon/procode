@@ -297,6 +297,14 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
         repo_close(&pr);
         return LAP_EXIT_ERR;
     }
+    /* this folder's lineage and parent never go through git; the parent,
+     * if it predates that rule, gets the same guard */
+    if (!repo_write_gitignore(here_lap)) {
+        err_out(json, "io_error", "cannot write %s/.gitignore", here_lap);
+        repo_close(&pr);
+        return LAP_EXIT_ERR;
+    }
+    repo_write_gitignore(pr.lapdir); /* a hint there: a failure is harmless */
     for (int32_t i = 0; i <= filled; i++) {
         const HistChunk *k = &pr.hist.v[i];
         char path[LAP_PATH_MAX];

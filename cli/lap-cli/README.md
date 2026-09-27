@@ -217,13 +217,18 @@ it — `checkout`, `pull`, `rebase`, `merge` — those changes are
 indistinguishable from edits you made, and `lap status` will report them as
 your pending work. Commit or discard before switching branches.
 
-**A shared history can be corrupted by merging it.** If `.lap/log/` is
-tracked by git and two git branches of one folder both record commits,
-merging them conflicts on the chunk both appended to, and resolving that by
-interleaving lines breaks the hash chain. `lap verify` will detect the
-damage (naming a sealed chunk that changed) but cannot repair it. Either
-keep recorded history on one line of work, or add `.lap/` to `.gitignore`
-and let it stay machine-local.
+**What goes into git.** `lap init` writes `.lap/.gitignore`, so git keeps
+only the history (`.lap/log/`) and nothing machine-local — above all not a
+branch folder's `lineage` and `parent`, which would make the parent think
+it is the branch. To keep the history on this machine too, add `.lap/` to
+the project's own `.gitignore`.
+
+**A shared history can be corrupted by merging it.** If two git branches of
+*one folder* both record commits, merging them conflicts on the chunk both
+appended to, and resolving that by interleaving lines breaks the hash
+chain; `lap verify` detects it but cannot repair it. For parallel work, use
+lap branches (below): each records to its own chunks, and `lap merge`
+adopts them without git ever conflicting on `.lap/log/`.
 
 **Renames are two commits**, because lap tracks paths, not file identity —
 record the old path's disappearance and the new path's appearance, and name
