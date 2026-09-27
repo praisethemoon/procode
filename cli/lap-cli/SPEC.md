@@ -880,6 +880,13 @@ segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git`
   the log tail; the next **writer** detects the mismatch and heals —
   rebuilding counters, the active session, *and the entire shadow tree*
   from a full replay. Readers that hit the mismatch heal in memory only.
+- **Damage is not a crash.** A torn line anywhere but the open chunk's end
+  was not made by a crash (lap repairs its own before sealing or merging):
+  a sealed chunk cut or copied short. Every command refuses such a
+  history, naming the chunk. Writers also refuse a chain broken between
+  chunks (a stray chunk, one truncated at a line, a wrong `prev`): lap
+  never builds on a history it cannot vouch for. Both checks read a few
+  bytes per chunk; `lap verify` reads everything.
 - **An interrupted `lap merge`** (a crash, a full disk) leaves some adopted
   records and no merge record; everything else heals as above. Running the
   same merge again finds those records by their `from` links: when they

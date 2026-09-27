@@ -515,6 +515,59 @@ static void test_nested_history(Arena *a) {
     clear_chunks();
 }
 
+static void test_check(Arena *a) {
+    char err[256];
+    Hist h;
+    Rec r0, r1, r2;
+    memset(&r0, 0, sizeof r0);
+    r0.type = REC_INIT;
+    r0.version = 1;
+    r0.ts = "t0";
+    r0.prev = LAP_HASH_ZERO;
+    size_t n0, n1, n2;
+    char *l0 = rec_encode(a, &r0, &n0);
+    memset(&r1, 0, sizeof r1);
+    r1.type = REC_SESSION_START;
+    r1.id = "S1";
+    r1.msg = "work";
+    r1.ts = "t1";
+    r1.prev = r0.hash;
+    char *l1 = rec_encode(a, &r1, &n1);
+    memset(&r2, 0, sizeof r2);
+    r2.type = REC_SESSION_END;
+    r2.id = "S1";
+    r2.ts = "t2";
+    r2.prev = r1.hash;
+    char *l2 = rec_encode(a, &r2, &n2);
+
+    t_begin("hist_check: whole chunks that chain pass, a torn open chunk "
+            "included");
+    clear_chunks();
+    put_file("main.000001.jsonl", arena_printf(a, "%s\n%s\n", l0, l1));
+    put_file("main.000002.jsonl", arena_printf(a, "%s\n{\"torn", l2));
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(hist_check(a, &h, true, err, sizeof err));
+
+    t_begin("hist_check: a sealed chunk ending in a torn line is refused, "
+            "named, even behind an empty open chunk");
+    put_file("main.000001.jsonl", arena_printf(a, "%s\n%s\n{\"torn", l0, l1));
+    put_file("main.000002.jsonl", "");
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(!hist_check(a, &h, false, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "main.000001.jsonl ends in a torn line") != NULL);
+
+    t_begin("hist_check: with chain, a chunk not continuing the one before "
+            "is refused, named; without, it passes");
+    put_file("main.000001.jsonl", arena_printf(a, "%s\n", l0));
+    put_file("main.000002.jsonl", arena_printf(a, "%s\n", l2)); /* skips l1 */
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(hist_check(a, &h, false, err, sizeof err));
+    ASSERT_TRUE(!hist_check(a, &h, true, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "main.000002.jsonl does not continue "
+                            "main.000001.jsonl") != NULL);
+    clear_chunks();
+}
+
 void test_hist(void) {
     Arena *a = arena_new(0);
     test_names();
@@ -524,5 +577,6 @@ void test_hist(void) {
     test_legacy(a);
     test_branch_history(a);
     test_nested_history(a);
+    test_check(a);
     arena_free(a);
 }

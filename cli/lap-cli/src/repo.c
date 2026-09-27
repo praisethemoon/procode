@@ -380,6 +380,11 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
                  r->hist.dir, LAP_LOG_DIR, LAP_MAIN_LINEAGE);
         return false;
     }
+    /* Damage a reader names instead of tripping over (a sealed chunk cut
+     * short), and a writer never builds on (also a chain broken between
+     * chunks): refused before anything is written. */
+    if (!hist_check(a, &r->hist, for_write, err, errsz))
+        return false;
     /* with the lock held, clean up any crash-torn append before we append
      * after it */
     if (for_write && !hist_repair_torn_tail(a, &r->hist)) {

@@ -98,6 +98,14 @@ int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out);
 bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
                        Rec *out, char *err, size_t errsz);
 
+/* The damage a history can show without being read whole: a sealed chunk
+ * (any but the last) not ending in a newline — cut or copied short — and,
+ * with chain, a chunk whose first record does not chain from the last
+ * record of the chunk before it (a stray chunk, one truncated at a line,
+ * a wrong prev). False with a message naming the chunk. A few small reads
+ * per chunk: cheap enough for every write. */
+bool hist_check(Arena *a, const Hist *h, bool chain, char *err, size_t errsz);
+
 /* The path of chunk i of h. */
 void hist_chunk_path(const Hist *h, int32_t i, char *out, size_t outsz);
 /* The chunk holding offset off (the last chunk for off == size), or -1. */

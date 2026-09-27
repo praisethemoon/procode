@@ -551,18 +551,11 @@ bool hist_write_lineage(const char *lapdir, const char *lineage) {
     return plat_write_file_atomic(path, text, strlen(text));
 }
 
-bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
-                       Rec *out, char *err, size_t errsz) {
-    char name[64], path[LAP_PATH_MAX];
-    hist_chunk_name(lineage, 1, name);
-    snprintf(path, sizeof path, "%s/%s/%s", lapdir, LAP_LOG_DIR, name);
-    uint64_t size;
-    if (!plat_file_size(path, &size) || size == 0) {
-        snprintf(err, errsz, "the history of %s starts nowhere: %s is "
-                             "missing or empty",
-                 lineage, path);
-        return false;
-    }
+/* The first record of the chunk at path (named name, for messages), read
+ * through a head window that doubles until its line fits. */
+static bool chunk_first_record(Arena *a, const char *path, const char *name,
+                               uint64_t size, Rec *out, char *err,
+                               size_t errsz) {
     size_t want = size < 65536 ? (size_t)size : 65536;
     for (;;) {
         char *data;
@@ -586,6 +579,65 @@ bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
         }
         want = (uint64_t)want * 2 < size ? want * 2 : (size_t)size;
     }
+}
+
+bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
+                       Rec *out, char *err, size_t errsz) {
+    char name[64], path[LAP_PATH_MAX];
+    hist_chunk_name(lineage, 1, name);
+    snprintf(path, sizeof path, "%s/%s/%s", lapdir, LAP_LOG_DIR, name);
+    uint64_t size;
+    if (!plat_file_size(path, &size) || size == 0) {
+        snprintf(err, errsz, "the history of %s starts nowhere: %s is "
+                             "missing or empty",
+                 lineage, path);
+        return false;
+    }
+    return chunk_first_record(a, path, name, size, out, err, errsz);
+}
+
+bool hist_check(Arena *a, const Hist *h, bool chain, char *err,
+                size_t errsz) {
+    int32_t prev = -1; /* the last chunk before i that holds records */
+    for (int32_t i = 0; i < h->n; i++) {
+        const HistChunk *k = &h->v[i];
+        if (k->size == 0)
+            continue;
+        char path[LAP_PATH_MAX];
+        hist_chunk_path(h, i, path, sizeof path);
+        if (i < h->n - 1) { /* sealed: whole lines only */
+            char *last;
+            if (!plat_read_range(a, path, k->size - 1, 1, &last)) {
+                snprintf(err, errsz, "cannot read %s", path);
+                return false;
+            }
+            if (last[0] != '\n') {
+                snprintf(err, errsz,
+                         "sealed chunk %s ends in a torn line: it was cut or "
+                         "copied short (lap never writes a sealed chunk)",
+                         k->name);
+                return false;
+            }
+        }
+        if (chain && prev >= 0) {
+            char ppath[LAP_PATH_MAX], tail[65];
+            bool found;
+            Rec first;
+            char ferr[256];
+            hist_chunk_path(h, prev, ppath, sizeof ppath);
+            if (!file_tail_hash(a, ppath, tail, &found) ||
+                !chunk_first_record(a, path, k->name, k->size, &first, ferr,
+                                    sizeof ferr) ||
+                !found || strcmp(first.prev, tail) != 0) {
+                snprintf(err, errsz, "%s does not continue %s: the hash "
+                                     "chain is broken there",
+                         k->name, h->v[prev].name);
+                return false;
+            }
+        }
+        prev = i;
+    }
+    return true;
 }
 
 bool hist_open_folder(Arena *a, const char *lapdir, Hist *h, char *err,

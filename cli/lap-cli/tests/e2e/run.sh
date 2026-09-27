@@ -1710,6 +1710,40 @@ expect_ok "$LAP" commit f.txt --branch main -i "work on main after the leak" -b 
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "a damaged history is named by readers, and no writer builds on it"
+mkdir -p "$WORK/d21" && cd "$WORK/d21" && "$LAP" init >/dev/null 2>&1
+"$LAP" commit .lapignore --no-session -i "seed the fixture" -b "records .lapignore" >/dev/null 2>&1
+for i in 1 2 3 4 5 6; do
+    printf 'line %d\n' $i >> f.txt
+    LAP_TEST_CHUNK_BYTES=500 "$LAP" commit f.txt --no-session -i "grow the fixture over chunks" \
+        -b "appends line $i to f.txt" >/dev/null 2>&1
+done
+LAST21=$(ls .lap/log | grep '^main' | sort | tail -1)
+[ "$LAST21" != "main.000001.jsonl" ] || fail "the fixture is one chunk"
+sums21() { find .lap -type f ! -name lock | sort | xargs cksum; }
+damaged21() { # $1: what was done; the rest: expected text from verify
+    what="$1"; shift
+    expect_grep "$1" "$LAP" verify
+    printf 'more\n' >> f.txt
+    SUM=$(sums21)
+    "$LAP" commit f.txt --no-session -i "try to build on damage" -b "appends more to f.txt" >/dev/null 2>&1 &&
+        fail "$what: a commit was made on a damaged history"
+    [ "$(sums21)" = "$SUM" ] || fail "$what: the refused commit wrote something"
+}
+cp -R "$WORK/d21" "$WORK/d21-torn" && cd "$WORK/d21-torn" || exit 1
+printf '{"type":"commit","partial' >> ".lap/log/$LAST21"
+: > ".lap/log/main.$(printf %06d $(( $(echo "$LAST21" | sed 's/main\.0*\([0-9]*\)\.jsonl/\1/') + 1 ))).jsonl"
+damaged21 "torn sealed chunk" "$LAST21 ends in a torn line"
+cp -R "$WORK/d21" "$WORK/d21-cut" && cd "$WORK/d21-cut" || exit 1
+C1=.lap/log/main.000001.jsonl
+head -c $(( $(wc -c < "$C1") - 30 )) "$C1" > c1.new && mv c1.new "$C1"
+damaged21 "sealed chunk cut short" "main.000001.jsonl ends in a torn line"
+cp -R "$WORK/d21" "$WORK/d21-stray" && cd "$WORK/d21-stray" || exit 1
+N21=$(ls .lap/log | grep -c '^main')
+cp .lap/log/main.000001.jsonl ".lap/log/main.$(printf %06d $((N21 + 1))).jsonl"
+damaged21 "stray chunk" "CHAIN BROKEN"
+cd "$WORK"
+
 t "an edit to an empty file the parent deleted stops that file"
 mkdir -p "$WORK/m17-p" && cd "$WORK/m17-p" || exit 1
 git init -q . && git config user.name e2e && git config user.email e2e@lap
