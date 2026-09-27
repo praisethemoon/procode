@@ -422,6 +422,9 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
         hist_clear_tmp(a, r->lapdir);
     }
     /* listed under the lock, so a writer's view cannot go stale */
+    /* a repository is here; what follows is about its history, whose
+     * damage (a missing chunk, a sealed one cut short) has its own code */
+    open_code = "history_broken";
     if (!hist_open_folder(a, r->lapdir, &r->hist, err, errsz))
         return false;
     if (r->hist.n == 0) {
@@ -434,6 +437,7 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
      * chunks): refused before anything is written. */
     if (!hist_check(a, &r->hist, for_write, err, errsz))
         return false;
+    open_code = "no_repo";
     if (for_write && !newer_check(a, r, err, errsz))
         return false;
     /* with the lock held, clean up any crash-torn append before we append

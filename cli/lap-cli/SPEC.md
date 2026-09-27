@@ -268,7 +268,10 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   carries the previous chunk's last hash as `prev`, so the chain runs on
   across chunks exactly as it would in one file. No manifest lists the
   chunks: there is nothing for git to conflict on. A missing number (chunks
-  1 and 3 but not 2) is refused, naming the missing chunk.
+  1 and 3 but not 2) is refused, naming the missing chunk. Every command,
+  reader or writer, refuses a history it cannot open whole — a chunk
+  missing, a sealed one cut short, none at all — with `history_broken`
+  (`no_repo` is only for a folder with no `.lap/` above it).
 - Positions in the history — the index's offsets — are offsets into the
   chunks read as one stream. Only the open chunk grows, so a position never
   moves.
@@ -465,8 +468,9 @@ folder, `lap merge <branch> [--dry-run]`.
    that head (for the first merge, the file at the base), the parent's
    version now, and the commits. The parent's changes are the diff between
    the first two, lap's own (§Edit detection, effort cap included: a file
-   the parent rewrote past the cap is one change, and every branch commit to
-   it conflicts). A commit whose region neither overlaps nor touches a
+   the parent rewrote past the cap is one change, spanning the lines between
+   its unchanged top and bottom; a branch commit to that span conflicts, and
+   one above or below it is placed as usual). A commit whose region neither overlaps nor touches a
    parent change moves by the net lines the parent added or removed above
    it; each placed commit shifts the later ones. Overlapping or touching —
    both sides inserting at one point, or one at the edge of the other's
@@ -965,7 +969,8 @@ adopt` when the branch has nothing after the
 last merge. `--json` returns `dry_run`, `branch`, `name`, `new`, `adopted`,
 `left`, `head`, `stopped` (`[{file, at, why}]`), `already` (hashes),
 `amendments` (`{carried, left}`) and
-`commits` (`[{id, from}]`). Errors:
+`commits` (`[{id, from}]`: the ids given to adopted commits, so empty in a
+dry run, which gives none; `adopted` counts them either way). Errors:
 `branch_not_found`, `merge_in_branch`, `unrelated_history`, `log_broken`,
 `git_merge_first`.
 

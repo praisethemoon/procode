@@ -1207,6 +1207,8 @@ t "a gap in the chunk numbers is refused, naming the missing chunk"
 mv .lap/log/main.000002.jsonl .lap/gap.bak
 expect_grep "main.000002.jsonl is missing" "$LAP" log
 expect_fail "$LAP" status
+expect_grep '"error":"history_broken"' "$LAP" log --json
+expect_grep '"error":"history_broken"' "$LAP" session start "on a broken history" --json
 mv .lap/gap.bak .lap/log/main.000002.jsonl
 expect_ok "$LAP" status
 unset LAP_TEST_CHUNK_BYTES
@@ -1484,6 +1486,8 @@ git_merge_b || fail "git merge m1"
 cd "$BP" && "$LAP" session start "the parent's own session" --branch main >/dev/null 2>&1
 BEFORE=$(find .lap -type f | LC_ALL=C sort | xargs shasum)
 expect_grep "would adopt 2 of 2" "$LAP" merge b --dry-run
+# a dry run gives no ids: commits is empty while adopted counts them
+expect_grep '"dry_run":true,.*"adopted":2,.*"commits":\[\]}' "$LAP" merge b --dry-run --json
 [ "$(find .lap -type f | LC_ALL=C sort | xargs shasum)" = "$BEFORE" ] || fail "a dry run wrote to .lap"
 expect_grep "adopted 2 of 2 commits (L6, L7)" "$LAP" merge b
 expect_grep "clean" "$LAP" status
