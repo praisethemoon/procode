@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { LapDiff } from "coboard";
 
-import { SHOW_EDIT, commentText, mdCommitText, mdProse, regionLabel, regionLines } from "../lapview";
+import { SHOW_EDIT, commentText, localTime, mdCommitText, mdProse, regionLabel, regionLines } from "../lapview";
 
 const at = { oldStart: 4, oldLines: 2, newStart: 4, newLines: 4 };
 
@@ -55,4 +55,14 @@ test("commits named in the text, by hash or by id, link to themselves", () => {
     const c = commentText(diff({ intent: "Follows L2", behavior: "Reverts #abcdef01" }), null);
     assert.ok(c.body.includes(`**Intent**: Follows [L2]${link("L2")}`));
     assert.ok(c.body.includes(`**Behavior**: Reverts [\\#abcdef01]${link("abcdef01")}`));
+});
+
+test("localTime shows the date, a space, and the time to the second", () => {
+    const iso = "2026-09-27T09:36:48Z";
+    const d = new Date(iso);
+    const date = d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
+    const shown = localTime(iso);
+    assert.ok(shown.startsWith(`${date} `), shown);
+    assert.match(shown.slice(date.length + 1), /^\d{1,2}:\d{2}:48\b/);
+    assert.equal(localTime("not a time"), "not a time");
 });

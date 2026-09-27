@@ -123,6 +123,25 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
     const char *f_session = flag_value(argc, argv, value_flags, "--session");
     const char *f_since = flag_value(argc, argv, value_flags, "--since");
     const char *f_until = flag_value(argc, argv, value_flags, "--until");
+    /* People give times as they read them, in local time; the log holds
+     * UTC, so both bounds become log timestamps before any comparison. */
+    char since_utc[32], until_utc[32];
+    const char *bad = f_since && !plat_ts_parse(f_since, since_utc) ? f_since
+                      : f_until && !plat_ts_parse(f_until, until_utc)
+                          ? f_until
+                          : NULL;
+    if (bad) {
+        err_out(json, "bad_time",
+                "%s is not a time: give a date or a date and time, e.g. "
+                "2026-09-27 or \"2026-09-27 11:36\" (local), or with Z or an "
+                "offset",
+                bad);
+        return LAP_EXIT_ERR;
+    }
+    if (f_since)
+        f_since = since_utc;
+    if (f_until)
+        f_until = until_utc;
     const char *f_limit = flag_value(argc, argv, value_flags, "--limit");
     Match m;
     m.text = flag_value(argc, argv, value_flags, "--text");
@@ -244,7 +263,9 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
             sb_putc(&sb, ' ');
             sb_field(&sb, S_MUTED, sh, 0);
             sb_puts(&sb, " (");
-            sb_field(&sb, S_MUTED, rec->ts, 0);
+            char when[40];
+            plat_ts_local(rec->ts, false, when);
+            sb_field(&sb, S_MUTED, when, 0);
             sb_puts(&sb, ")\n");
             if (rec->session) {
                 sb_puts(&sb, "session: ");

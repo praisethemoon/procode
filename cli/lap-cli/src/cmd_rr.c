@@ -170,9 +170,10 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
             sb_puts(&sb, " — ");
             sb_text(&sb, rng.title, (size_t)tl);
         }
-        char span[80];
-        snprintf(span, sizeof span, "%s → %s", log.v[rng.first].ts,
-                 log.v[rng.last].ts);
+        char from[40], to[40], span[96];
+        plat_ts_local(log.v[rng.first].ts, false, from);
+        plat_ts_local(log.v[rng.last].ts, false, to);
+        snprintf(span, sizeof span, "%s → %s", from, to);
         sb_printf(&sb, "\n  %d commit%s · ", ncommits,
                   ncommits == 1 ? "" : "s");
         sb_field(&sb, S_MUTED, span, 0);

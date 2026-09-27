@@ -19,6 +19,7 @@ import {
     SessionRec,
     consumableBytes,
     createReader,
+    localTime,
     mdEscape,
     readerFeed,
     regionLabel,
@@ -342,25 +343,6 @@ function stateUri(id: string, side: "before" | "after", file: string) {
         scheme: STATE_SCHEME,
         path: `/${id}/${side}/${file}`,
     });
-}
-
-/* The record's UTC timestamp rendered in the viewer's local timezone as
- * "<date>:<time>", e.g. "09/20/2026:10:51 PM". */
-function localTime(iso: string): string {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) {
-        return iso;
-    }
-    const date = d.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-    });
-    const time = d.toLocaleTimeString(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-    return `${date}:${time}`;
 }
 
 /* The changed region in the after-document, 0-based. Deletions anchor on

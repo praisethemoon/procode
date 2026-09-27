@@ -61,15 +61,16 @@ export function regionLines(d: Pick<LapDiff, "newStart" | "newLines">): { start:
     return { start, end: d.newLines > 0 ? start + d.newLines - 1 : start };
 }
 
-/* The UTC timestamp in the viewer's timezone, "<date>:<time>". */
+/* The UTC timestamp in the viewer's time zone and locale: the date, a
+ * space, and the time to the second. */
 export function localTime(iso: string): string {
     const d = new Date(iso);
     if (isNaN(d.getTime())) {
         return iso;
     }
     const date = d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
-    const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-    return `${date}:${time}`;
+    const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return `${date} ${time}`;
 }
 
 /* The comment's author line (the id and short hash) and Markdown body: the

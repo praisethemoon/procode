@@ -73,6 +73,16 @@ typedef WalkAction (*WalkFn)(const char *rel, bool is_dir, const PlatStat *st,
 bool plat_walk(Arena *a, const char *root, WalkFn fn, void *ud);
 /* Seconds since the epoch, now. */
 int64_t plat_now_sec(void);
+/* A log timestamp (UTC, "2026-09-27T09:36:48Z") in this machine's zone for
+ * people: "2026-09-27 11:36:48", then " +02:00" when with_offset. Input it
+ * cannot read is copied through unchanged. */
+void plat_ts_local(const char *utc, bool with_offset, char out[40]);
+/* A time as a person writes it, as a log timestamp. With a "Z" or an offset
+ * it is taken as given; without one it is local time. Accepts a date, or a
+ * date and time ("T" or a space between, seconds optional). In the hour
+ * that repeats when clocks go back, the earlier moment is taken. False when
+ * it is not a time. */
+bool plat_ts_parse(const char *in, char out[32]);
 
 /* Exclusive advisory lock via a lock file. Returns a handle or NULL on
  * failure (waits for a competing holder, with a bounded retry on Windows).

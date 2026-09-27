@@ -169,8 +169,16 @@ applied, so `new_start == old_start` by construction — never the
 working-file position, which may be shifted by other still-pending edits.
 Blame and hunk headers rely on this.
 
-Timestamps are UTC ISO-8601 (`2026-09-20T12:34:56Z`); since they are
-lexicographically ordered, `--since`/`--until` compare as strings.
+Timestamps are stored as UTC ISO-8601 (`2026-09-20T12:34:56Z`), and JSON
+output carries them as stored. Human output shows them in the machine's
+time zone, to the second, year first: `2026-09-20 14:34:56`; `lap show`
+adds the offset (`2026-09-20 14:34:56 +02:00`) so a shared copy still names
+one moment. `--since`/`--until` take what the output shows: a date, or a
+date and time (`T` or a space between, seconds optional), read as local
+time; with `Z` or an offset (`+02:00`, `-0400`) it is taken as given. In
+the hour that repeats when clocks go back, a local time means the earlier
+of its two moments. Anything else is refused with `bad_time`. Bounds are
+converted to UTC and compared as strings, which sort as times.
 
 ## Messages
 

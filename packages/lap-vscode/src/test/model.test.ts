@@ -8,6 +8,7 @@ import { test } from "node:test";
 import {
     consumableBytes,
     createReader,
+    localTime,
     mdEscape,
     mdProse,
     parseLog,
@@ -262,4 +263,14 @@ test("incremental reader survives a torn tail then its repair", () => {
     assert.equal(r.log.commits.length, 2);
     assert.equal(r.log.commits[1].id, "L2");
     assert.equal(r.log.parseErrors, 0);
+});
+
+test("localTime shows the date, a space, and the time to the second", () => {
+    const iso = "2026-09-27T09:36:48Z";
+    const d = new Date(iso);
+    const date = d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
+    const shown = localTime(iso);
+    assert.ok(shown.startsWith(`${date} `), shown);
+    assert.match(shown.slice(date.length + 1), /^\d{1,2}:\d{2}:48\b/);
+    assert.equal(localTime("not a time"), "not a time");
 });

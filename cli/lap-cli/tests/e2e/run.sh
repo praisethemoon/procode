@@ -616,6 +616,27 @@ expect_grep "would record L2 in S1" "$LAP" commit d.txt -i "shout the edges" -b 
 [ "$(lapsum)" = "$BEFORE" ] || fail "a dry run repaired the repository"
 cd "$WORK" && rm -rf dry
 
+t "times: stored in UTC, shown in local time, filtered as people write them"
+mkdir -p "$WORK/tz" && cd "$WORK/tz" || exit 1
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "time zone fixture" >/dev/null 2>&1
+printf 'x\n' > t.txt
+"$LAP" commit t.txt -i "seed the time zone fixture" -b "creates t.txt with one line" >/dev/null 2>&1
+UTC=$("$LAP" log -n 1 --json | sed 's/.*"ts":"\([^"]*\)".*/\1/')
+case "$UTC" in *T*Z) ;; *) fail "the log's JSON time is not UTC ISO: $UTC" ;; esac
+# Tokyo has no daylight saving, so its offset is always +09:00
+SHOWN=$(TZ=Asia/Tokyo "$LAP" log -n 1 | head -1 | awk '{print $3" "$4}')
+expect_grep "date: $SHOWN +09:00" env TZ=Asia/Tokyo "$LAP" show L1
+TZ=UTC "$LAP" log -n 1 | grep -q "$(printf '%s' "$UTC" | tr 'T' ' ' | tr -d Z)" \
+    || fail "in UTC the shown time is not the stored one"
+# what the output shows is what a filter takes
+expect_grep '"id":"L1"' env TZ=Asia/Tokyo "$LAP" search --since "$SHOWN" --json
+expect_grep '"id":"L1"' env TZ=Asia/Tokyo "$LAP" search --until "$SHOWN" --json
+expect_grep '"id":"L1"' env TZ=Asia/Tokyo "$LAP" search --since "$UTC" --json
+expect_grep '"commits":\[\]' env TZ=UTC "$LAP" search --since "$SHOWN" --json
+expect_grep "bad_time" "$LAP" search --since yesterday --json
+cd "$WORK" && rm -rf tz
+
 t "status keeps a stat cache and trusts it only for settled, unchanged files"
 mkdir -p "$WORK/stat" && cd "$WORK/stat" || exit 1
 "$LAP" init >/dev/null 2>&1

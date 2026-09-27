@@ -74,6 +74,126 @@ int64_t plat_now_sec(void) {
     return (int64_t)time(NULL);
 }
 
+/* struct tm read as UTC, whatever the machine's zone. */
+static int64_t utc_seconds(struct tm *tm) {
+#ifdef _WIN32
+    return (int64_t)_mkgmtime(tm);
+#else
+    return (int64_t)timegm(tm);
+#endif
+}
+
+static void local_tm(time_t t, struct tm *out) {
+#ifdef _WIN32
+    localtime_s(out, &t);
+#else
+    localtime_r(&t, out);
+#endif
+}
+
+void plat_ts_local(const char *utc, bool with_offset, char out[40]) {
+    struct tm tm;
+    memset(&tm, 0, sizeof tm);
+    if (sscanf(utc, "%d-%d-%dT%d:%d:%dZ", &tm.tm_year, &tm.tm_mon,
+               &tm.tm_mday, &tm.tm_hour, &tm.tm_min, &tm.tm_sec) != 6) {
+        snprintf(out, 40, "%s", utc);
+        return;
+    }
+    tm.tm_year -= 1900;
+    tm.tm_mon -= 1;
+    time_t t = (time_t)utc_seconds(&tm);
+    struct tm loc;
+    local_tm(t, &loc);
+    size_t n = strftime(out, 40, "%Y-%m-%d %H:%M:%S", &loc);
+    if (with_offset) {
+        /* the local fields read as UTC, less the instant, is the offset */
+        struct tm again = loc;
+        long off = (long)(utc_seconds(&again) - (int64_t)t);
+        long a = off < 0 ? -off : off;
+        snprintf(out + n, 40 - n, " %c%02ld:%02ld", off < 0 ? '-' : '+',
+                 a / 3600, a / 60 % 60);
+    }
+}
+
+bool plat_ts_parse(const char *in, char out[32]) {
+    struct tm tm;
+    memset(&tm, 0, sizeof tm);
+    int used = 0;
+    if (sscanf(in, "%4d-%2d-%2d%n", &tm.tm_year, &tm.tm_mon, &tm.tm_mday,
+               &used) != 3)
+        return false;
+    const char *p = in + used;
+    if (*p == 'T' || *p == ' ') {
+        int h, m, n = 0;
+        if (sscanf(p + 1, "%2d:%2d%n", &h, &m, &n) != 2)
+            return false;
+        tm.tm_hour = h;
+        tm.tm_min = m;
+        p += 1 + n;
+        if (*p == ':') {
+            int s;
+            if (sscanf(p + 1, "%2d%n", &s, &n) != 1)
+                return false;
+            tm.tm_sec = s;
+            p += 1 + n;
+        }
+    }
+    if (tm.tm_mon < 1 || tm.tm_mon > 12 || tm.tm_mday < 1 ||
+        tm.tm_mday > 31 || tm.tm_hour > 23 || tm.tm_min > 59 ||
+        tm.tm_sec > 60)
+        return false;
+    tm.tm_year -= 1900;
+    tm.tm_mon -= 1;
+    int64_t t;
+    if (*p == 'Z' && p[1] == '\0') {
+        t = utc_seconds(&tm);
+    } else if ((*p == '+' || *p == '-') && p[1]) {
+        int oh, om = 0;
+        if (sscanf(p + 1, "%2d:%2d", &oh, &om) < 1 &&
+            sscanf(p + 1, "%2d%2d", &oh, &om) < 1)
+            return false;
+        long off = (long)oh * 3600 + (long)om * 60;
+        t = utc_seconds(&tm) - (*p == '-' ? -off : off);
+    } else if (*p == '\0') {
+        /* local: of the moments these wall-clock fields can name (two in
+         * the repeated hour), the earlier */
+        struct tm a = tm, b = tm;
+        a.tm_isdst = 1;
+        b.tm_isdst = 0;
+        time_t ta = mktime(&a), tb = mktime(&b);
+        struct tm la, lb;
+        local_tm(ta, &la);
+        local_tm(tb, &lb);
+        bool ok_a = ta != (time_t)-1 && la.tm_hour == tm.tm_hour &&
+                    la.tm_min == tm.tm_min && la.tm_mday == tm.tm_mday;
+        bool ok_b = tb != (time_t)-1 && lb.tm_hour == tm.tm_hour &&
+                    lb.tm_min == tm.tm_min && lb.tm_mday == tm.tm_mday;
+        if (ok_a && ok_b)
+            t = (int64_t)(ta < tb ? ta : tb);
+        else if (ok_a || ok_b)
+            t = (int64_t)(ok_a ? ta : tb);
+        else {
+            struct tm c = tm;
+            c.tm_isdst = -1;
+            time_t tc = mktime(&c); /* a skipped hour: whatever it maps to */
+            if (tc == (time_t)-1)
+                return false;
+            t = (int64_t)tc;
+        }
+    } else {
+        return false;
+    }
+    time_t tt = (time_t)t;
+    struct tm g;
+#ifdef _WIN32
+    gmtime_s(&g, &tt);
+#else
+    gmtime_r(&tt, &g);
+#endif
+    strftime(out, 32, "%Y-%m-%dT%H:%M:%SZ", &g);
+    return true;
+}
+
 bool plat_is_dir(const char *path) {
 #ifdef _WIN32
     char wb[LAP_PATH_MAX];

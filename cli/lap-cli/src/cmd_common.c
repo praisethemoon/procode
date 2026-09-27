@@ -145,7 +145,9 @@ void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
     sb_putc(sb, ' ');
     sb_field(sb, S_MUTED, sh, 0);
     sb_putc(sb, ' ');
-    sb_field(sb, S_MUTED, rec->ts, 0);
+    char when[40];
+    plat_ts_local(rec->ts, false, when);
+    sb_field(sb, S_MUTED, when, 0);
     sb_puts(sb, "  ");
     sb_field(sb, S_SESSION, rec->session ? rec->session : "-", 6);
     sb_putc(sb, ' ');

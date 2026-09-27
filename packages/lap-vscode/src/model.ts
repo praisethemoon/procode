@@ -190,6 +190,19 @@ export function parseLog(text: string, hash: LineHash): LapLog {
     return r.log;
 }
 
+/* The record's UTC timestamp in the viewer's time zone and locale: the
+ * date, a space, and the time to the second, e.g. "09/20/2026 10:51:07 PM".
+ * Seconds, because an agent records several commits a minute. */
+export function localTime(iso: string): string {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) {
+        return iso;
+    }
+    const date = d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
+    const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return `${date} ${time}`;
+}
+
 /* A hash's short form: its first 7 hex digits. */
 export function shortHash(hash: string): string {
     return hash.slice(0, 7);

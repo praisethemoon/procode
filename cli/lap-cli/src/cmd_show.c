@@ -118,7 +118,9 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
             sb_putc(&sb, ')');
         }
         sb_puts(&sb, "\ndate: ");
-        sb_field(&sb, S_MUTED, rec->ts, 0);
+        char when[40];
+        plat_ts_local(rec->ts, true, when);
+        sb_field(&sb, S_MUTED, when, 0);
         sb_putc(&sb, '\n');
         if (rec->user)
             sb_printf(&sb, "user: %s\n", rec->user);
