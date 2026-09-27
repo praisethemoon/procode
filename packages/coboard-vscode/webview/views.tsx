@@ -98,11 +98,11 @@ function TicketTable(props: { tickets: readonly Summary[]; empty: string }): JSX
         <table className="cb-table">
             <tbody>
                 {props.tickets.map((t) => (
-                    <tr key={t.id}>
+                    <tr key={t.id} className={t.status === "done" ? "cb-row-done" : undefined}>
                         <td className="cb-col-id">
                             <IdLink id={t.id} />
                         </td>
-                        <td>
+                        <td className="cb-col-title">
                             <IdLink id={t.id}>{t.title}</IdLink>
                             {(t.labels ?? []).map((l) => (
                                 <span key={l} className="cb-label">
@@ -246,11 +246,11 @@ export function Epic(props: { v: EpicView; mode: ViewMode }): JSX.Element {
                     <table className="cb-table">
                         <tbody>
                             {milestones.map((m) => (
-                                <tr key={m.id}>
+                                <tr key={m.id} className={m.status === "done" ? "cb-row-done" : undefined}>
                                     <td className="cb-col-id">
                                         <IdLink id={m.id} />
                                     </td>
-                                    <td>
+                                    <td className="cb-col-title">
                                         <IdLink id={m.id}>{m.title}</IdLink>
                                     </td>
                                     <td className="cb-col-small">

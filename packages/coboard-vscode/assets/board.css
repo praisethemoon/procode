@@ -131,6 +131,18 @@ body {
     white-space: nowrap;
 }
 
+/* A row's title reads as text; the id beside it is the link colour, and the
+ * title shows it opens too when the row is hovered. Finished rows recede. */
+.cb-col-title .cb-link {
+    color: var(--bk-color-foreground);
+}
+.cb-table tr:hover .cb-col-title .cb-link {
+    text-decoration: underline;
+}
+.cb-row-done .cb-col-title .cb-link {
+    color: var(--bk-color-foreground-muted);
+}
+
 .cb-col-small {
     width: 1%;
     white-space: nowrap;
@@ -140,13 +152,53 @@ body {
     width: 200px;
 }
 
+/* A label or tag: a quiet outline that never breaks inside itself. */
 .cb-label {
+    display: inline-block;
     margin-left: 6px;
     padding: 0 6px;
+    border: 1px solid var(--bk-color-border);
     border-radius: 8px;
     font-size: 0.8em;
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    line-height: 1.5;
+    white-space: nowrap;
+    vertical-align: 1px;
+    color: var(--bk-color-foreground-muted);
+}
+
+.cb-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 7px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    font-size: 0.85em;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+.cb-status-todo,
+.cb-status-open {
+    border-color: var(--bk-color-border);
+    color: var(--bk-color-foreground-muted);
+}
+.cb-status-done {
+    padding-left: 0;
+    color: var(--bk-color-foreground-muted);
+}
+.cb-status-doing {
+    background: var(--bk-color-primary);
+    color: var(--bk-color-primary-foreground);
+}
+.cb-status-review {
+    background: color-mix(in srgb, var(--bk-color-warning) 25%, transparent);
+    border-color: var(--bk-color-warning);
+    color: var(--bk-color-foreground);
+}
+.cb-status-blocked {
+    background: color-mix(in srgb, var(--bk-color-danger) 25%, transparent);
+    border-color: var(--bk-color-danger);
+    color: var(--bk-color-foreground);
 }
 
 .cb-progress {

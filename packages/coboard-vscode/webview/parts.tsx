@@ -1,6 +1,6 @@
 /* The pieces every item view is made of. */
 
-import { Badge, Button, IconButton, Icon, Input, Select, TextArea } from "baukasten-ui/core";
+import { Button, IconButton, Icon, Input, Select, TextArea } from "baukasten-ui/core";
 import { useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -117,20 +117,15 @@ export function Markdown(props: { text: string; empty?: string }): JSX.Element {
     );
 }
 
-const STATUS_VARIANT: Record<string, "success" | "warning" | "error" | "info" | "default"> = {
-    todo: "default",
-    open: "default",
-    doing: "info",
-    blocked: "error",
-    review: "warning",
-    done: "success",
-};
-
+/* A status, coloured only when it asks for attention: doing, review and
+ * blocked are filled; todo is an outline and done a muted check, so a list of
+ * finished work stays quiet and the open work in it stands out. */
 export function StatusBadge(props: { status: string }): JSX.Element {
     return (
-        <Badge size="sm" variant={STATUS_VARIANT[props.status] ?? "default"}>
+        <span className={`cb-status cb-status-${props.status}`}>
+            {props.status === "done" ? <i className="codicon codicon-check" aria-hidden="true" /> : null}
             {props.status}
-        </Badge>
+        </span>
     );
 }
 
