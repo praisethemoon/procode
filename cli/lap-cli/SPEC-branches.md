@@ -67,6 +67,7 @@ With the user, 2026-09-27:
     7c1e9a02d4b8.000001.jsonl   a branch's lineage (after git merge, or in its folder)
   ...caches as before...
   branches.json            the registry (§Registry): local, not committed
+  lineage                  this folder's lineage when it is a branch: local, not committed
 ```
 
 - A chunk is named `<lineage>.<n>.jsonl`: `main` for the first lineage, a
@@ -78,7 +79,13 @@ With the user, 2026-09-27:
   4 MB (a lap constant, not a setting), the record starts chunk `n + 1`
   instead. A single record larger than 4 MB is a chunk of its own. Starting
   a branch also seals the parent's open chunk: lap creates the parent's
-  chunk `n + 1`, empty, so the next append lands there.
+  chunk `n + 1`, empty, so the next append lands there. An open chunk that
+  is still empty is not sealed again: a second branch started before the
+  parent appended anything shares the first one's base.
+- **Which lineage a folder writes** is `main` unless `.lap/lineage` names a
+  branch id. `branch start` writes that file. It is machine-local, like the
+  registry: after `git merge` the parent folder holds the branch's chunks
+  too, so the chunks alone cannot say which lineage is this folder's.
 - **Order is the hash chain.** Within a lineage, chunks follow `n`, and a
   chunk's first record carries the previous chunk's last hash as `prev`. A
   branch's first record carries its base as `prev` (§Branches). No manifest
@@ -135,32 +142,52 @@ lap branch start [name] --from <parent folder>
 ```
 
 1. **History.** If this folder has no `.lap/`, lap copies the parent's history
-   (its chunks up to the parent's head). If it has one (a copied folder), its
-   head must be a record of the parent's history, else `unrelated_history`.
-2. **Files.** Every tracked file must equal this folder's committed state (as
-   `status` would find it clean). Otherwise `not_clean`, listing the files: a
-   branch's first commits must not silently absorb differences it never made.
+   (its chunks up to the parent's head). If it has one (a copied folder, or a
+   worktree whose git commit carries `.lap/log/`), its head must be a record
+   of the parent's history, else `unrelated_history`; lap then brings it up
+   to the parent's head. The base is always the parent's head.
+2. **Files.** Every tracked file must equal the committed state at the base
+   (as `status` would find it clean). Otherwise `not_clean`, listing the
+   files: a branch's first commits must not silently absorb differences it
+   never made. The two usual causes are named in the error: the worktree was
+   checked out from a git commit older than lap's head (git-commit the
+   parent's work first), and files lap tracks but git ignores (a worktree
+   does not have them; copy them over).
 3. **Sealing.** Under the parent's lock, lap seals the parent's open chunk
    (§Why a branch start seals its parent's chunk) and copies the sealed
    version here.
 4. **The branch record** starts the new lineage's first chunk:
    ```jsonc
    {"type":"branch","id":"7c1e9a02d4b8","name":"parser-fix",
-    "parent":"main","base":"<parent head>","user":"...","ts":"...","prev":"<base>"}
+    "parent":"main","base":"<parent head>","base_chunk":3,
+    "user":"...","ts":"...","prev":"<base>"}
    ```
    `id` is the first 12 hex digits of SHA-256 over base, name, time and a
    random nonce; `name` is optional (defaults to the id) and is what people
-   type. `parent` is the parent's lineage.
+   type. `parent` is the parent's lineage. `base_chunk` is the parent's
+   chunk the base ends: sealing makes the base the last record of a sealed
+   chunk, so a folder's history is whole chunks — the parent's `1 …
+   base_chunk`, then its own.
 5. **Registration.** lap adds the branch to the parent's registry
    (§Registry), under the same lock. If the parent cannot be written
    (read-only), the branch does not start: sealing is what keeps the later
    `git merge` free of log conflicts.
 
-It prints the id and the name. A branch of a branch is the same command with
-the branch's folder as `--from`.
+6. **Lineage.** lap writes the branch id to this folder's `.lap/lineage`.
+
+It prints the id and the name. The parent must be a `main` folder: a branch
+of a branch is refused with `nested_branch` in this version.
+
+**The recommended layout** keeps the first folder quiet: agents work in
+branch folders, and the first folder only merges. Then a branch always
+starts from a folder nobody is editing, and a merge never meets pending
+work of its own.
 
 Ids inside a branch continue its parent's counters (`L` and `S` numbers after
-the base), so one folder never shows the same id twice.
+the base), so one folder never shows the same id twice. Two folders do: the
+parent and a branch both go on from the base, and the board is shared. So
+text that leaves a folder — a ticket comment, a commit cited from another
+branch — names a commit by its hash, and a session as `<branch>/S<n>`.
 
 ### Committing: say where
 
@@ -170,7 +197,9 @@ must name this folder's own lineage; otherwise `branch_required` or
 `wrong_branch`, which name this folder's branch. It costs a flag and catches
 the one mistake that corrupts a merge: an agent working in the folder it
 thinks it is not in. A folder with no branches at all keeps today's commands
-unchanged.
+unchanged. The environment variable `LAP_BRANCH` counts as the flag when
+the flag is not given, so an orchestrator sets it once per agent and tools
+that call lap (the board, the editor views) need not pass it.
 
 ### Merging: adopt, then commit the rest
 
@@ -184,7 +213,14 @@ lap merge <branch> [--dry-run]
 in the parent folder. lap finds the branch's chunks in this folder
 (`git merge` brought them) or else in the registered branch folder; if
 neither has them, `branch_not_found`. The branch's base must be in this
-folder's history, else `unrelated_history`.
+folder's history, else `unrelated_history`. When the branch folder is
+reachable, lap seals the branch's open chunk (under the branch's lock, as a
+branch start seals its parent's) and copies the branch's chunks into this
+folder's `.lap/log/`, so the originals that `from` links and `#hash`
+references point to stay readable after the branch folder is gone, whether
+or not git carried them. Sealed first, every copy is the chunk's final
+content: a later `git merge` of the branch finds the same file on both
+sides.
 
 Then, per file, lap walks the branch's commits to that file in order,
 starting after what an earlier merge adopted, and places each on the
@@ -201,7 +237,10 @@ parent's version:
 - **Conflict.** A region that overlaps a parent change, or touches one (both
   insert at the same point, where either order is plausible), is a conflict.
   **That file stops**: none of the branch's later commits to it are adopted,
-  in this merge or later ones. Other files carry on.
+  in this merge or later ones. Other files carry on. The diff is lap's own
+  (§Edit detection), effort cap included: a file the parent rewrote past
+  the cap is one change from top to bottom, and every branch commit to it
+  conflicts.
 
 Each adopted commit is appended to the parent's lineage as an ordinary commit
 with the parent's next id, the translated coordinates, and
@@ -212,6 +251,21 @@ with the parent's next id, the translated coordinates, and
 
 The branch's sessions come across the same way: a new session id, the same
 purpose and meta (so `--meta ticket=T-12` still finds the work), and `from`.
+A branch starts with no active session (the `branch` record ends whatever
+the parent had open, for that lineage), so every branch commit belongs to a
+session the branch started, or to none. In detail:
+
+- A branch `session_start` is appended when first met, with `from`; a
+  `session_end` the branch wrote is appended too. A session still open at
+  the branch's head stays open in the parent until a later merge carries
+  its end, and that later merge appends its new commits to the session
+  already adopted (found by `from`), not to a new one.
+- Adopted records never change the parent's own active session: a
+  `session_start` or `session_end` with `from` is history, not the
+  parent's state.
+- Adopted commits keep their intent, behavior, `forced` and `user` as the
+  branch wrote them; the message checks are not run again.
+
 Adoption writes the parent's history and shadow, never the working tree
 (core rule 4).
 
@@ -308,12 +362,13 @@ it.
   move code.
 - Adopting across unrelated histories; merging two branches with each other
   without their common parent.
+- A branch of a branch (`nested_branch`). Every branch starts from a `main`
+  folder.
 
 ## Open questions
 
-1. **`--branch` everywhere, or only in shared folders?** Requiring it in every
-   branch folder is the safe reading of the decision; the only real risk is an
-   agent in the wrong folder, which the flag catches.
+1. **`--branch` everywhere, or only in shared folders?** Settled: required
+   wherever branches exist, with `LAP_BRANCH` standing in for the flag.
 2. **Stopped files and later branch work.** A stopped file stays stopped for
    that branch. Should a later `lap merge --resume <file>` retry it once the
    parent resolved the conflict? Deferred unless it comes up.
