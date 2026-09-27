@@ -18,8 +18,10 @@ import type { ToView } from "../protocol";
 const Module = require("node:module") as { _load: (req: string, parent: unknown, isMain: boolean) => unknown };
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lap-history-"));
-fs.mkdirSync(path.join(root, ".lap"));
-const logPath = path.join(root, ".lap", "log.jsonl");
+// the history as lap keeps it: chunk files, read in order as one stream
+fs.mkdirSync(path.join(root, ".lap", "log"), { recursive: true });
+const logPath = path.join(root, ".lap", "log", "main.000001.jsonl");
+const nextChunk = path.join(root, ".lap", "log", "main.000002.jsonl");
 const rec = (o: object) => JSON.stringify(o) + "\n";
 const commit = (id: string, session: string, intent: string) =>
     rec({ type: "commit", id, session, file: "a.ts", op: "edit", user: "claude",
@@ -117,8 +119,9 @@ test("the view asks for a page, and is sent it again when the log grows or the g
     assert.equal(first.active, "S1");
     assert.deepEqual(first.page.sessions.map((s) => `${s.id}:${s.commits.map((c) => c.id).join(",")}`), ["S1:L2,L1"]);
 
-    // The log grows; the watcher fires; the same query is answered again.
-    fs.appendFileSync(logPath, commit("L3", "S1", "and another"));
+    // The log grows into a new chunk (the first one sealed at the limit);
+    // the watcher fires; the same query is answered again.
+    fs.appendFileSync(nextChunk, commit("L3", "S1", "and another"));
     onChange!();
     await new Promise((r) => setTimeout(r, 300));
     const grown = posted.at(-1)!;
@@ -163,7 +166,7 @@ test("the view asks for a page, and is sent it again when the log grows or the g
 
         // No lap: the log's own hashes resolve a prefix.
         process.env.PATH = nolap;
-        const l3 = createHash("sha256").update(fs.readFileSync(logPath, "utf8").trimEnd().split("\n").at(-1)!).digest("hex");
+        const l3 = createHash("sha256").update(fs.readFileSync(nextChunk, "utf8").trimEnd().split("\n").at(-1)!).digest("hex");
         const byLog = await revealed("#" + l3.slice(0, 7).toUpperCase());
         assert.ok(byLog && byLog.page && byLog.reveal);
         assert.equal(byLog.reveal.id, "L3");

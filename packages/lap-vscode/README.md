@@ -26,8 +26,10 @@ skill); this extension just shows what they did, as they do it.
     intent, behavior, session), its references linked the same way. Real
     editors render all code; nothing is hand-drawn.
 - A **status bar item** showing the active session (click to focus the view).
-- **Live updates**: a watcher on `.lap/log.jsonl` refreshes the tree as the
-  agent commits; a torn in-progress log line is tolerated silently.
+- **Live updates**: a watcher on the history's files (`.lap/log/`, its
+  chunk files; `.lap/log.jsonl` in a folder lap has not written to since
+  chunks came) refreshes the tree as the agent commits; a torn in-progress
+  log line is tolerated silently.
 
 The log is parsed directly (append-only JSONL, schema in
 [cli/lap-cli/SPEC.md](../../cli/lap-cli/SPEC.md)). The CLI is run only to resolve a
@@ -48,6 +50,6 @@ extension was built, so the view has real data on first launch.
 
 ## Notes / limits
 
-- The first workspace folder containing `.lap/log.jsonl` is shown;
+- The first workspace folder with a lap history is shown;
   multi-repo workspaces show only that first one (future work).
 - Visualization-only: no commit/session actions from the UI, on purpose.

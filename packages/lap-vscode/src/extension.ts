@@ -1,5 +1,6 @@
 /* lap-vscode: visualization-only view of a lap repository.
- * Reads .lap/log.jsonl directly and refreshes live through a file watcher.
+ * Reads the history's files in .lap/ directly (chunks.ts) and refreshes
+ * live through a file watcher.
  * See cli/lap-cli/SPEC.md for the record schema. The CLI is asked only to
  * resolve a reference to a commit (`lap show <ref> --json`); where it cannot
  * answer, the log's own hashes do.
@@ -11,6 +12,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { hasHistory, historyFiles, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
     CommitRec,
@@ -36,15 +38,15 @@ const STATE_SCHEME = "lap-state";
 
 interface Repo {
     root: string; /* workspace folder containing .lap */
-    logPath: string;
+    lapDir: string;
 }
 
 function findRepo(): Repo | undefined {
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
         const root = folder.uri.fsPath;
-        const logPath = path.join(root, ".lap", "log.jsonl");
-        if (fs.existsSync(logPath)) {
-            return { root, logPath };
+        const lapDir = path.join(root, ".lap");
+        if (hasHistory(lapDir)) {
+            return { root, lapDir };
         }
     }
     return undefined;
@@ -79,7 +81,9 @@ class LapLogSource {
         this.offset = 0;
     }
 
-    /* Incremental: read only the bytes appended since last time.
+    /* Incremental: read only the bytes appended since last time. The
+     * offset is into the history's files read as one stream; sealed chunks
+     * never change, so only the open chunk's new bytes are read.
      *
      * `offset` never advances past a newline, so it always names a record
      * boundary. That is what makes the incremental read safe against the
@@ -96,30 +100,14 @@ class LapLogSource {
         }
         if (this.repo) {
             try {
-                const size = fs.statSync(this.repo.logPath).size;
+                const files = historyFiles(this.repo.lapDir);
+                const size = files.reduce((n, f) => n + f.size, 0);
                 if (size < this.offset) {
                     this.reset(this.repo); /* truncated: reparse */
                 }
                 if (size > this.offset) {
-                    const fd = fs.openSync(this.repo.logPath, "r");
-                    const buf = Buffer.alloc(size - this.offset);
-                    let got = 0;
-                    for (;;) {
-                        const n = fs.readSync(
-                            fd,
-                            buf,
-                            got,
-                            buf.length - got,
-                            this.offset + got,
-                        );
-                        if (n <= 0 || got + n >= buf.length) {
-                            got += Math.max(n, 0);
-                            break;
-                        }
-                        got += n;
-                    }
-                    fs.closeSync(fd);
-                    const take = consumableBytes(buf, got);
+                    const buf = readStream(files, this.offset, size);
+                    const take = consumableBytes(buf, buf.length);
                     if (take > 0) {
                         readerFeed(
                             this.reader,
@@ -519,7 +507,7 @@ export function activate(context: vscode.ExtensionContext): void {
     };
 
     const watcher = vscode.workspace.createFileSystemWatcher(
-        "**/.lap/log.jsonl",
+        "**/.lap/{log.jsonl,log/*.jsonl}",
     );
     watcher.onDidChange(scheduleRefresh);
     watcher.onDidCreate(scheduleRefresh);

@@ -19,6 +19,7 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "workspaceContains:.lap/log.jsonl",
+    "workspaceContains:.lap/log/main.000001.jsonl",
     "onView:lapHistory"
   ],
   "contributes": {

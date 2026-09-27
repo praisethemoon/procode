@@ -1,4 +1,5 @@
-/* Pure data layer: parses .lap/log.jsonl into commits and sessions.
+/* Pure data layer: parses lap's log (chunks.ts finds its files) into commits
+ * and sessions.
  * No vscode imports here so it stays unit-testable with plain node.
  * Record schema: see cli/lap-cli/SPEC.md. The log is append-only JSONL; a torn
  * final line (a writer mid-append) is tolerated and counted, never fatal.
