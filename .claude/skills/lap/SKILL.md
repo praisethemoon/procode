@@ -179,7 +179,9 @@ lap branch start parser --from ../proj         # its own line of history
   and `lap session start` need `--branch <name>` (`--branch main` in the
   first folder), or `LAP_BRANCH=<name>` in the environment. A missing or
   wrong name is refused and the error names the folder's branch: it means
-  you may be in the wrong folder — check before retrying.
+  you may be in the wrong folder — check before retrying. A repository
+  with no branches ignores `LAP_BRANCH` (an explicit `--branch` is still
+  checked).
 - **Merging back**, in the parent folder: commit its own work, `git merge`
   the branch, then `lap merge <branch>` (try `--dry-run` first) — always in
   that order. lap adopts the history `git merge` brought; on

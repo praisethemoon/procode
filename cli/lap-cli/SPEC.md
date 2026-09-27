@@ -403,7 +403,9 @@ errors name this folder's branch, so the fix is in the message. The
 environment variable `LAP_BRANCH` counts as the flag when the flag is not
 given (the flag wins), so an orchestrator sets it once per agent and tools
 that call lap need not pass it. A folder with no branches at all keeps its
-commands unchanged.
+commands unchanged, and ignores `LAP_BRANCH` whatever it names: a run that
+sets it everywhere does not fail in plain repositories. An explicit
+`--branch` is checked there too.
 
 It costs a flag and catches the one mistake that corrupts a merge: an agent
 recording in a folder it thinks it is not in.

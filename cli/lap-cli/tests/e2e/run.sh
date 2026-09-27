@@ -1439,6 +1439,14 @@ expect_grep "wrong_branch" "$LAP" commit old.txt --no-session --branch feat -i "
 expect_ok "$LAP" commit old.txt --no-session --branch main -i "no branches here" -b "appends a plain line"
 printf 'plain 2\n' >> old.txt
 expect_ok "$LAP" commit old.txt --no-session -i "no branches here" -b "appends a second plain line"
+# a folder with no branches ignores LAP_BRANCH (set for a whole run), while
+# --branch still checks
+printf 'plain 3\n' >> old.txt
+expect_grep "^\[L[0-9]* " env LAP_BRANCH=feat "$LAP" commit old.txt --no-session -i "no branches here" -b "appends a third plain line"
+printf 'plain 4\n' >> old.txt
+expect_grep "wrong_branch" env LAP_BRANCH=feat "$LAP" commit old.txt --no-session --branch feat -i "no branches here" -b "appends a fourth plain line" --json
+expect_grep "started" env LAP_BRANCH=feat "$LAP" session start "an orchestrated run here"
+expect_ok "$LAP" session end
 
 # A parent ($1-p) and a worktree branch of it ($1-w, git branch and lap
 # branch both named b), f.txt holding sixty numbered lines.

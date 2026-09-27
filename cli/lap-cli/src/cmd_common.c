@@ -475,6 +475,15 @@ const char *branch_given(int32_t argc, char **argv,
 bool branch_check(Arena *a, const Repo *r, const char *given, bool json) {
     bool is_branch = r->hist.parent[0] != '\0';
     const char *mine = is_branch ? r->hist.name : LAP_MAIN_LINEAGE;
+    Branches reg;
+    branches_load(a, r->lapdir, &reg);
+    /* LAP_BRANCH is set for a whole run by orchestrators: a folder with no
+     * branches at all ignores it (branch_given returns the environment's
+     * own string, so it is told from a --branch by its pointer). The flag
+     * is checked everywhere. */
+    const char *env = getenv("LAP_BRANCH");
+    if (given && given == env && !is_branch && reg.n == 0)
+        return true;
     if (given) {
         if (strcmp(given, mine) == 0 ||
             (is_branch && strcmp(given, r->hist.lineage) == 0))
@@ -485,8 +494,6 @@ bool branch_check(Arena *a, const Repo *r, const char *given, bool json) {
                 r->root, mine, given, mine);
         return false;
     }
-    Branches reg;
-    branches_load(a, r->lapdir, &reg);
     if (!is_branch && reg.n == 0)
         return true;
     err_out(json, "branch_required",

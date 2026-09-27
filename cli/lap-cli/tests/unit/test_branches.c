@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "branches.h"
 #include "cmd.h"
@@ -169,6 +170,18 @@ void test_branches(void) {
     ASSERT_TRUE(branch_check(a, &r, "main", true));
     ASSERT_TRUE(!branch_check(a, &r, "feat", true));
 
+#ifndef _WIN32
+    t_begin("branch_check: a folder with no branches ignores LAP_BRANCH, "
+            "but not --branch");
+    setenv("LAP_BRANCH", "feat", 1);
+    char *no_flag[] = {"commit", "f.txt"};
+    char *flagged[] = {"commit", "--branch", "feat"};
+    static const char *const bflags[] = {"--branch", NULL};
+    ASSERT_TRUE(branch_check(a, &r, branch_given(2, no_flag, bflags), true));
+    ASSERT_TRUE(!branch_check(a, &r, branch_given(3, flagged, bflags), true));
+    unsetenv("LAP_BRANCH");
+#endif
+
     t_begin("branch_check: a parent with branches needs main said");
     Branches one;
     memset(&one, 0, sizeof one);
@@ -178,6 +191,11 @@ void test_branches(void) {
     ASSERT_TRUE(!branch_check(a, &r, NULL, true));
     ASSERT_TRUE(branch_check(a, &r, "main", true));
     ASSERT_TRUE(!branch_check(a, &r, "feat", true));
+#ifndef _WIN32
+    setenv("LAP_BRANCH", "feat", 1); /* with branches, it is checked */
+    ASSERT_TRUE(!branch_check(a, &r, branch_given(2, no_flag, bflags), true));
+    unsetenv("LAP_BRANCH");
+#endif
 
     t_begin("branch_check: a branch folder takes its name or its id");
     snprintf(r.hist.parent, sizeof r.hist.parent, "main");
