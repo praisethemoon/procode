@@ -570,7 +570,9 @@ bool repo_init(Arena *a, const char *dir, char *err, size_t errsz) {
             "# lap ignore patterns (gitignore-like subset; see lap help)\n"
             "# .lap/, .git/, .hg/, .svn/ and .DS_Store are always ignored.\n"
             "*.o\n"
-            "*.tmp\n";
+            "*.tmp\n"
+            "# the board's own history (coboard): not code\n"
+            ".coboard/\n";
         plat_write_file_atomic(igpath, ig, strlen(ig));
     }
     return true;

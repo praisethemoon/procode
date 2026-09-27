@@ -56,6 +56,7 @@ expect_ok "$LAP" init
 [ -e .lap/log.jsonl ] && fail "init created the single-file log"
 [ -f .lap/state.json ] || fail "state.json missing"
 [ -f .lapignore ] || fail "starter .lapignore missing"
+grep -qx '.coboard/' .lapignore || fail "the starter .lapignore does not list the board's folder"
 
 t "second init fails"
 expect_fail "$LAP" init
@@ -1365,6 +1366,12 @@ printf 'changed\n' > f.txt
 expect_grep "not_clean" "$LAP" branch start --from ../bp --json
 expect_grep "f.txt" "$LAP" branch start --from ../bp
 expect_grep "git-commit the parent's work first" "$LAP" branch start --from ../bp
+expect_grep "Changed from what lap recorded (1): f.txt" "$LAP" branch start --from ../bp
+# a file git tracks but lap never recorded: named apart, with its two ways out
+printf 'tool state\n' > state.jsonl
+expect_grep "Never recorded by lap there (1): state.jsonl" "$LAP" branch start --from ../bp
+expect_grep "Commit them in the parent (lap commit <file>), or add them to .lapignore there" "$LAP" branch start --from ../bp
+rm state.jsonl
 [ -e .lap/lineage ] && fail "a refused start left a lineage file"
 grep -q '"path":"'"$WORK/bx"'"' "$WORK/bp/.lap/branches.json" && fail "a refused start was registered"
 cp "$WORK/bp/f.txt" f.txt

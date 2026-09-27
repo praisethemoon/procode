@@ -364,8 +364,11 @@ holding the parent's lock throughout:
    `unrelated_history`; it is brought up to the parent's head.
 2. **Files.** Every file must equal the parent's committed state at the
    base, as `lap status` would find it there; else `not_clean`, listing
-   them and naming the usual causes: a worktree checked out from a git
-   commit older than lap's history, and files lap tracks that git ignores.
+   apart the files the parent never recorded (git tracks them, lap never
+   did: commit them in the parent, or add them to its `.lapignore`) and
+   the files changed from what it recorded, with their usual causes: a
+   worktree checked out from a git commit older than lap's history, and
+   files lap tracks that git ignores.
 3. **Sealing.** The parent's open chunk is sealed (its next chunk created,
    empty). The chunk this folder copies is then final on both sides, and a
    later `git merge` finds it unchanged. An open chunk that is still empty
@@ -776,7 +779,8 @@ only how it looks.** Concretely —
   by byte count.
 
 ### `lap init`
-Creates `.lap/` in the cwd plus a starter `.lapignore` (kept if present).
+Creates `.lap/` in the cwd plus a starter `.lapignore` (kept if present):
+`*.o`, `*.tmp` and `.coboard/`, the board's own history.
 
 ### `lap status`
 Active session, then every file with pending changes: `new` (line count),

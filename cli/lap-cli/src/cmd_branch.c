@@ -77,9 +77,10 @@ static int cmp_str(const void *pa, const void *pb) {
 
 /* The files of folder `work` that differ from the parent's committed state
  * (`parent`'s shadow, or its history where a shadow is missing), as status
- * would report them there: new, modified or deleted. */
+ * would report them there: new, modified or deleted. *fresh marks those the
+ * parent never recorded at all (new to lap, however old to git). */
 static int32_t pending_against(Arena *a, Repo *parent, const char *work,
-                               const char ***out) {
+                               const char ***out, bool **fresh) {
     Repo view = *parent; /* the parent's history, this folder's files */
     snprintf(view.root, sizeof view.root, "%s", work);
     StrSet seen;
@@ -95,7 +96,8 @@ static int32_t pending_against(Arena *a, Repo *parent, const char *work,
     if (n > 1)
         qsort(v, n, sizeof *v, cmp_str);
     const char **bad = NULL;
-    size_t nb = 0, bcap = 0;
+    bool *isnew = NULL;
+    size_t nb = 0, bcap = 0, ncap = 0;
     Arena *fa = arena_new(1 << 16);
     for (size_t i = 0; i < n; i++) {
         arena_reset(fa);
@@ -107,12 +109,16 @@ static int32_t pending_against(Arena *a, Repo *parent, const char *work,
                        : fd.work_exists != fd.shadow_exists ||
                            fd.regions.count > 0;
         if (differs) {
+            size_t nn = nb;
             ARENA_GROW(a, bad, nb, bcap, const char *);
+            ARENA_GROW(a, isnew, nn, ncap, bool);
+            isnew[nb] = fd.work_exists && !fd.shadow_exists;
             bad[nb++] = v[i];
         }
     }
     arena_free(fa);
     *out = bad;
+    *fresh = isnew;
     return (int32_t)nb;
 }
 
@@ -188,22 +194,45 @@ static int32_t start_locked(Arena *a, bool json, const char *name,
 
     /* 2. Its files must be the parent's committed state: the base. */
     const char **bad;
-    int32_t nbad = pending_against(a, &pr, here, &bad);
+    bool *fresh;
+    int32_t nbad = pending_against(a, &pr, here, &bad, &fresh);
     if (nbad > 0) {
-        StrBuf sb;
-        sb_init(&sb, a);
-        for (int32_t i = 0; i < nbad && i < 20; i++)
-            sb_printf(&sb, "%s%s", i ? ", " : "", bad[i]);
-        if (nbad > 20)
-            sb_printf(&sb, " and %d more", nbad - 20);
-        err_out(json, "not_clean",
-                "%d file%s here differ%s from %s's last commit: %s. A branch "
-                "starts from the parent's committed state. Usual causes: the "
-                "worktree was checked out from a git commit older than lap's "
-                "history (git-commit the parent's work first), or lap tracks "
-                "files git ignores (copy them over)",
-                nbad, nbad == 1 ? "" : "s", nbad == 1 ? "s" : "", there,
-                sb_finish(&sb));
+        /* files lap never recorded (new to it, however old to git) apart
+         * from changed ones: each has its own way out */
+        StrBuf nsb, csb;
+        sb_init(&nsb, a);
+        sb_init(&csb, a);
+        int32_t nnew = 0, nchg = 0;
+        for (int32_t i = 0; i < nbad; i++) {
+            StrBuf *sb = fresh[i] ? &nsb : &csb;
+            int32_t *k = fresh[i] ? &nnew : &nchg;
+            if (*k < 20)
+                sb_printf(sb, "%s%s", *k ? ", " : "", bad[i]);
+            else if (*k == 20)
+                sb_puts(sb, ", …");
+            (*k)++;
+        }
+        StrBuf msg;
+        sb_init(&msg, a);
+        sb_printf(&msg,
+                  "%d file%s here differ%s from %s's last commit. A branch "
+                  "starts from the parent's committed state.",
+                  nbad, nbad == 1 ? "" : "s", nbad == 1 ? "s" : "", there);
+        if (nnew)
+            sb_printf(&msg,
+                      " Never recorded by lap there (%d): %s. Commit them "
+                      "in the parent (lap commit <file>), or add them to "
+                      "%s there if lap should not track them.",
+                      nnew, sb_finish(&nsb), LAP_IGNORE_NAME);
+        if (nchg)
+            sb_printf(&msg,
+                      " Changed from what lap recorded (%d): %s. Usual "
+                      "causes: the worktree was checked out from a git "
+                      "commit older than lap's history (git-commit the "
+                      "parent's work first), or lap tracks files git "
+                      "ignores (copy them over).",
+                      nchg, sb_finish(&csb));
+        err_out(json, "not_clean", "%s", sb_finish(&msg));
         repo_close(&pr);
         return LAP_EXIT_ERR;
     }
