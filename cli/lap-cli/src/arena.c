@@ -18,6 +18,7 @@ struct Arena {
 };
 
 #define ARENA_ALIGN 16
+#define ARENA_MAX_CHUNK ((size_t)64 << 20)
 
 static void *xmalloc(size_t n) {
     void *p = malloc(n);
@@ -52,7 +53,12 @@ void *arena_alloc(Arena *a, size_t size) {
     size = (size + ARENA_ALIGN - 1) & ~(size_t)(ARENA_ALIGN - 1);
     Chunk *c = a->head;
     if (c->cap - c->used < size) {
+        /* Doubling, but capped: a large command asks for many chunks of
+         * ARENA_MAX_CHUNK rather than one that doubles past what the
+         * machine can give (a 64 GiB chunk is how lap once died). */
         size_t want = c->cap * 2;
+        if (want > ARENA_MAX_CHUNK)
+            want = ARENA_MAX_CHUNK;
         if (want < size)
             want = size;
         Chunk *n = chunk_new(want);
@@ -111,6 +117,24 @@ char *arena_printf(Arena *a, const char *fmt, ...) {
 
 size_t arena_used(const Arena *a) {
     return a->total_used;
+}
+
+void arena_reset(Arena *a) {
+    Chunk *keep = a->head;
+    for (Chunk *c = a->head; c; c = c->next)
+        if (c->cap > keep->cap)
+            keep = c;
+    Chunk *c = a->head;
+    while (c) {
+        Chunk *next = c->next;
+        if (c != keep)
+            free(c);
+        c = next;
+    }
+    keep->next = NULL;
+    keep->used = 0;
+    a->head = keep;
+    a->total_used = 0;
 }
 
 void arena_free(Arena *a) {

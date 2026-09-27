@@ -176,8 +176,12 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         }
     }
 
+    /* Each file is read and diffed in fa, emptied before the next: what the
+     * output needs is copied into sb as the file is reported. */
+    Arena *fa = arena_new(1 << 16);
     const char *prev = NULL;
     for (size_t i = 0; i < sw.files.n; i++) {
+        arena_reset(fa);
         const Seen *f = &sw.files.v[i];
         const char *rel = f->path;
         if (prev && strcmp(prev, rel) == 0)
@@ -194,7 +198,7 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         }
 
         FileDiff fd;
-        if (!file_diff_load(a, &repo, rel, &fd, err, sizeof err))
+        if (!file_diff_load(fa, &repo, rel, &fd, err, sizeof err))
             continue;
 
         const char *state = NULL;
@@ -273,6 +277,7 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
             }
         }
     }
+    arena_free(fa);
 
     /* status is a reader, and this is the one cache a reader writes: only
      * when it changed, only under a lock that happens to be free, and

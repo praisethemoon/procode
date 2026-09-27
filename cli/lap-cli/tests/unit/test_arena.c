@@ -49,5 +49,27 @@ void test_arena(void) {
     r = (char *)arena_realloc(a, r, 4, 400);
     ASSERT_EQ_S(r, "abc");
 
+    t_begin("arena: reset empties it for reuse");
+    arena_reset(a);
+    ASSERT_TRUE(arena_used(a) == 0);
+    /* the largest chunk (the 1 MiB one) is kept: this fits in it again */
+    char *again = (char *)arena_alloc(a, 1 << 19);
+    again[0] = 'z';
+    again[(1 << 19) - 1] = 'z';
+    ASSERT_TRUE(arena_used(a) == (size_t)1 << 19);
+    char *after = arena_strdup(a, "still works");
+    ASSERT_EQ_S(after, "still works");
+
+    t_begin("arena: many resets use no more than one item needs");
+    Arena *loop = arena_new(4096);
+    for (int32_t i = 0; i < 2000; i++) {
+        arena_reset(loop);
+        char *p = (char *)arena_alloc(loop, 50000);
+        p[0] = (char)i;
+        p[49999] = (char)i;
+        ASSERT_TRUE(arena_used(loop) <= 50000 + 16);
+    }
+    arena_free(loop);
+
     arena_free(a);
 }

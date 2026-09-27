@@ -321,12 +321,14 @@ static bool shadow_from_log(Arena *a, Repo *r, const char *rel, Lines *out) {
     if (!plat_file_size(r->logpath, &size))
         return false;
     if (!r->shadow_loaded || r->shadow_log_size != size) {
-        r->shadow_idx = idx_ready(a, r);
+        /* In the command's arena, not a: a caller may hand each file a
+         * scratch arena it resets, and this outlives the file. */
+        r->shadow_idx = idx_ready(r->a, r);
         r->shadow_log = NULL;
         if (!r->shadow_idx) {
-            RecLog *log = (RecLog *)arena_alloc(a, sizeof(RecLog));
+            RecLog *log = (RecLog *)arena_alloc(r->a, sizeof(RecLog));
             char err[256];
-            if (rec_log_load(a, r->logpath, log, err, sizeof err))
+            if (rec_log_load(r->a, r->logpath, log, err, sizeof err))
                 r->shadow_log = log;
         }
         r->shadow_log_size = size;
@@ -392,7 +394,7 @@ bool file_diff_load(Arena *a, Repo *r, const char *rel, FileDiff *out,
             return true;
         }
     }
-    if (!shadow_read(r, rel, &sdata, &slen, &out->shadow_exists)) {
+    if (!shadow_read(a, r, rel, &sdata, &slen, &out->shadow_exists)) {
         snprintf(err, errsz, "cannot read shadow copy of %s", rel);
         return false;
     }

@@ -162,15 +162,46 @@ static bool state_heal(Repo *r, bool persist, char *err, size_t errsz) {
             return false;
         return state_write(r, err, errsz);
     }
-    RecLog log;
-    if (!rec_log_load(r->a, r->logpath, &log, err, errsz))
+    /* Only the counters, the active session and the last hash are needed, so
+     * each record is decoded into a scratch arena and dropped: healing costs
+     * the log's bytes, not every record's text. rec_log_load's rules hold:
+     * a torn final line is ignored, and so are blank lines. */
+    Arena *bytes = arena_new(1 << 16);
+    char *data;
+    size_t len;
+    if (!plat_read_file_max(bytes, r->logpath, &data, &len, (size_t)-1)) {
+        snprintf(err, errsz, "cannot read log file %s", r->logpath);
+        arena_free(bytes);
         return false;
+    }
+    while (len > 0 && data[len - 1] != '\n')
+        len--;
+    Arena *scratch = arena_new(1 << 16);
     int64_t next_c = 1, next_s = 1;
     r->active_session[0] = '\0';
     r->active_session_msg[0] = '\0';
     snprintf(r->last_hash, sizeof r->last_hash, "%s", LAP_HASH_ZERO);
-    for (int32_t i = 0; i < log.count; i++) {
-        Rec *rec = &log.v[i];
+    size_t start = 0;
+    int32_t line_no = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (data[i] != '\n')
+            continue;
+        size_t n = i - start;
+        const char *line = data + start;
+        start = i + 1;
+        line_no++;
+        if (n == 0)
+            continue;
+        arena_reset(scratch);
+        Rec one;
+        char lerr[256];
+        if (!rec_decode(scratch, line, n, &one, lerr, sizeof lerr)) {
+            snprintf(err, errsz, "log line %d: %s", line_no, lerr);
+            arena_free(scratch);
+            arena_free(bytes);
+            return false;
+        }
+        Rec *rec = &one;
         if (rec->type == REC_COMMIT && rec->id && rec->id[0] == 'L') {
             int64_t v = strtol(rec->id + 1, NULL, 10);
             if (v >= next_c)
@@ -190,6 +221,8 @@ static bool state_heal(Repo *r, bool persist, char *err, size_t errsz) {
         }
         snprintf(r->last_hash, sizeof r->last_hash, "%s", rec->hash);
     }
+    arena_free(scratch);
+    arena_free(bytes);
     r->next_commit = next_c;
     r->next_session = next_s;
     return true;
@@ -528,8 +561,8 @@ static void shadow_path(Repo *r, const char *rel, char *out, size_t outsz) {
     snprintf(out, outsz, "%s/%s/%s", r->lapdir, LAP_SHADOW_NAME, rel);
 }
 
-bool shadow_read(Repo *r, const char *rel, char **data, size_t *len,
-                 bool *exists) {
+bool shadow_read(Arena *a, Repo *r, const char *rel, char **data,
+                 size_t *len, bool *exists) {
     char path[LAP_PATH_MAX];
     shadow_path(r, rel, path, sizeof path);
     if (!plat_is_file(path)) {
@@ -539,7 +572,7 @@ bool shadow_read(Repo *r, const char *rel, char **data, size_t *len,
         return true;
     }
     *exists = true;
-    return plat_read_file(r->a, path, data, len);
+    return plat_read_file(a, path, data, len);
 }
 
 bool shadow_write(Repo *r, const char *rel, const void *data, size_t len) {

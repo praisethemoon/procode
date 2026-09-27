@@ -77,9 +77,10 @@ bool repo_state_save(Repo *r, char *err, size_t errsz);
 bool repo_relpath(Repo *r, const char *user_path, char *out, size_t outsz,
                   char *err, size_t errsz);
 
-/* Shadow store: content of a file as of its last commit. */
-bool shadow_read(Repo *r, const char *rel, char **data, size_t *len,
-                 bool *exists);
+/* Shadow store: content of a file as of its last commit. shadow_read reads
+ * into a, the caller's arena. */
+bool shadow_read(Arena *a, Repo *r, const char *rel, char **data,
+                 size_t *len, bool *exists);
 bool shadow_write(Repo *r, const char *rel, const void *data, size_t len);
 bool shadow_remove(Repo *r, const char *rel);
 
