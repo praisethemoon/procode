@@ -106,7 +106,9 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
         } else {
             sb_field(&sb, active ? S_ACTIVE : S_SESSION, st->id, 6);
             sb_putc(&sb, ' ');
-            sb_field(&sb, S_MUTED, st->ts, 0);
+            char when[40];
+            plat_ts_local(st->ts, false, when);
+            sb_field(&sb, S_MUTED, when, 0);
             sb_printf(&sb, "  %2d commit%s  ", commits,
                       commits == 1 ? " " : "s");
             const char *fl = first_line(a, st->msg);
