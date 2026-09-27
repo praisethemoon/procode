@@ -9,6 +9,7 @@ import { commitDiff } from "../lap";
 import { handle } from "../mcp";
 import { search, view } from "../query";
 import { Board, BoardError, findBoard } from "../store";
+import { cliBin, noCli } from "./cli-bin";
 
 /* Every test gets its own directory under the system temp dir, and only ever
  * deletes that directory. */
@@ -283,9 +284,9 @@ function findGitAbove(dir: string): boolean {
 
 /* ------------------------------------------------------------ lap */
 
-const LAP = path.resolve(__dirname, "../../../../cli/lap-cli/bin/lap");
+const LAP = cliBin("lap");
 
-test("lap: a session tagged with a ticket is found through the board", { skip: !fs.existsSync(LAP) && "lap is not built" }, async () => {
+test("lap: a session tagged with a ticket is found through the board", { skip: !LAP && noCli("lap") }, async () => {
     const dir = tmp();
     fs.mkdirSync(path.join(dir, ".git"));
     process.env["LAP_BIN"] = LAP;

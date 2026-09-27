@@ -1,5 +1,7 @@
 # progressive code
-
+  <img src="packages/combined/media/procode.svg" alt="procode" width="96" 
+  align="right">
+  
 procode is a set of (very opinionated) tools for working alongside AI coding
 agents. It includes CLIs and MCP servers the agent uses, and a VS Code
 extension, **procode**, for you to follow along.
@@ -63,7 +65,8 @@ Artifacts are pages an agent publishes for you to read in the editor:
 reports, comparisons, findings, anything with a table or a chart. They are
 stored in `.artifact/` and published through the `artifacts` MCP server,
 and the extension's **Artifacts** view opens them in your VS Code theme.
-The format is in [specs/artifacts.md](specs/artifacts.md).
+The format is in [specs/artifacts.md](specs/artifacts.md). These are almost
+identical to claude artifacts, except they stay local to your project.
 
 ## Requirements
 
@@ -82,17 +85,23 @@ Development happens on macOS; the CLIs are also built on Windows with MSVC.
 
 ## Build and test
 
-From the repository root:
+From the repository root, the CLIs with CMake, then the packages with npm:
 
 ```sh
-npm run setup    # npm install, then build both CLIs and every package
-npm test         # both CLIs' suites, then every package's tests
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build    # both CLIs' suites
+
+npm run setup             # npm install, then build every package
+npm test                  # every package's tests
 ```
 
-`npm run build:cli` / `build:packages` and `test:cli` / `test:packages` do
-one half. The CLIs also build with CMake (`cmake -B build && cmake --build
-build`, tests with `ctest --test-dir build`), or alone with `make` in their
-own directory.
+On Windows, add `--config Release` to the build and `-C Release` to ctest.
+Each CLI also builds alone with `make` in its own directory.
+
+Some package tests drive the real CLIs. They use `$LAP_BIN` and `$KB_BIN`
+when set, else the ones built under `build/` (or by `make`), else the ones
+on `PATH`, and skip when there are none.
 
 Run mutation sweeps only with `HOME` and `TMPDIR` pointing at throwaway
 directories: some tests feed shell syntax to code whose job is never to run

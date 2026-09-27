@@ -14,6 +14,7 @@ import { test } from "node:test";
 const Module = require("node:module") as { _load: (req: string, parent: unknown, isMain: boolean) => unknown };
 
 import { Board } from "coboard";
+import { cliBin, noCli } from "./cli-bin";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "coboard-host-"));
 const commands = new Map<string, (...a: unknown[]) => unknown>();
@@ -30,7 +31,7 @@ const threads: {
     label: string;
 }[] = [];
 let content: { provideTextDocumentContent(uri: { toString(): string }): string } | null = null;
-const LAP = path.resolve(__dirname, "../../../../cli/lap-cli/bin/lap");
+const LAP = cliBin("lap");
 let sidebar: { resolveWebviewView(view: unknown): void } | null = null;
 let onMessage: ((m: unknown) => void) | null = null;
 
@@ -226,7 +227,7 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
     assert.equal(b.get("E-1").status, "done");
 });
 
-test("clicking a lap edit on a ticket opens it as a diff at the edited line", { skip: !fs.existsSync(LAP) && "lap is not built" }, async () => {
+test("clicking a lap edit on a ticket opens it as a diff at the edited line", { skip: !LAP && noCli("lap") }, async () => {
     const lap = (...args: string[]) => execFileSync(LAP, args, { cwd: root, env: { ...process.env, LAP_USER: "t" } });
     lap("init");
     lap("session", "start", "T-1: work", "--meta", "ticket=T-1");

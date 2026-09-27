@@ -12,11 +12,12 @@ import { test } from "node:test";
 import { Kb } from "kb-js";
 
 import { TEST_ENV } from "./home";
+import { cliBin, noCli } from "./cli-bin";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Module = require("node:module") as { _load: (req: string, parent: unknown, isMain: boolean) => unknown };
 
-const KB = path.resolve(__dirname, "../../../../cli/kb-cli/bin/kb");
+const KB = cliBin("kb");
 let answer: string | undefined = undefined;
 const fake = {
     window: { showWarningMessage: async () => answer },
@@ -36,7 +37,7 @@ function load(): Pick<Commands, "refreshDocument" | "fetchPage"> {
     }
 }
 
-test("a document is refreshed from its own source", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+test("a document is refreshed from its own source", { skip: !KB && noCli("kb") }, async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-refresh-"));
     const kb = new Kb({ bin: KB, cwd: dir, env: TEST_ENV });
     await kb.init();
@@ -79,7 +80,7 @@ test("a document is refreshed from its own source", { skip: !fs.existsSync(KB) &
     assert.equal((await kb.get(page.document)).document.fetchedAt, page.fetchedAt);
 });
 
-test("a page is refreshed conditionally on its etag, and a failure files nothing", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+test("a page is refreshed conditionally on its etag, and a failure files nothing", { skip: !KB && noCli("kb") }, async () => {
     // A tiny site: one page whose body and ETag the test changes, and which
     // answers 304 to a matching If-None-Match, as a real server does.
     const http = await import("node:http");

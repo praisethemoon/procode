@@ -13,11 +13,12 @@ import { test } from "node:test";
 import { Kb, KbDirAdded, KbEmbedded } from "kb-js";
 
 import { TEST_ENV } from "./home";
+import { cliBin, noCli } from "./cli-bin";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Module = require("node:module") as { _load: (req: string, parent: unknown, isMain: boolean) => unknown };
 
-const KB = path.resolve(__dirname, "../../../../cli/kb-cli/bin/kb");
+const KB = cliBin("kb");
 
 /* What the dialogs answer, and what the reader was shown. */
 let answer: string | undefined = undefined;
@@ -145,7 +146,7 @@ test("the note is empty when nothing is pending and counts one chunk as one", ()
     assert.match(pendingNote(2), /^ 2 chunks left to embed/);
 });
 
-test("finishing with no model is kb's refusal, shown with its code", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+test("finishing with no model is kb's refusal, shown with its code", { skip: !KB && noCli("kb") }, async () => {
     reset();
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-embed-"));
     try {

@@ -40,8 +40,9 @@ import { Kb } from "kb-js";
 
 import { handle } from "../jsonrpc";
 import { Server } from "../server";
+import { cliBin, noCli } from "./cli-bin";
 
-const BIN = path.resolve(__dirname, "..", "..", "..", "..", "cli", "kb-cli", "bin", "kb");
+const BIN = cliBin("kb");
 
 /* One throwaway home for every kb this file starts: the CLI reads HOME to
  * find ~/.kb/models (§8), and a model on the developer's machine must not
@@ -51,7 +52,7 @@ process.on("exit", () => fs.rmSync(HOME, { recursive: true, force: true }));
 const ENV: NodeJS.ProcessEnv = { ...process.env, HOME };
 
 function built(): boolean {
-    return fs.existsSync(BIN);
+    return BIN !== "";
 }
 
 function help(): string {
@@ -126,7 +127,7 @@ THE-WHOLE-DOCUMENT-MARKER
 
 test("a store filed into and searched through §9's tools", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -205,7 +206,7 @@ test("a store filed into and searched through §9's tools", async (t) => {
 
 test("a folder filed through kb_add, relative to the server's directory, and a gone file kept", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -246,7 +247,7 @@ test("a folder filed through kb_add, relative to the server's directory, and a g
 
 test("a filter §4 names is one the real binary accepts", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -280,7 +281,7 @@ test("a filter §4 names is one the real binary accepts", async (t) => {
 
 test("rerank without the reranker model is a model_missing refusal, not a quiet fused list", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     if (!help().includes("--rerank")) {
@@ -305,7 +306,7 @@ test("rerank without the reranker model is a model_missing refusal, not a quiet 
 
 test("a document that is not there is a refusal the model can read", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -322,7 +323,7 @@ test("a document that is not there is a refusal the model can read", async (t) =
 
 test("with no store to find, kb_add is a refusal that tells the agent to run kb init", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     /* A throwaway directory with no `kb init` in it. If some ancestor of the
@@ -360,7 +361,7 @@ test("with no store to find, kb_add is a refusal that tells the agent to run kb 
 
 test("a query full of shell metacharacters reaches the real store as one argument", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -390,7 +391,7 @@ test("a query full of shell metacharacters reaches the real store as one argumen
 
 test("kb_stale is checked against the real binary the moment kb stale exists", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -415,7 +416,7 @@ test("kb_stale is checked against the real binary the moment kb stale exists", a
 
 test("kb_links is checked against the real binary the moment kb links exists", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -473,7 +474,7 @@ test("every tool this server offers is one the CLI could serve", async (t) => {
      * command nobody has written is visible as such rather than discovered by
      * whoever calls it. */
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const text = help();
@@ -506,7 +507,7 @@ test("every tool this server offers is one the CLI could serve", async (t) => {
 
 test("a tool answers every field the reader it is built on answered", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -553,7 +554,7 @@ test("a tool answers every field the reader it is built on answered", async (t) 
 
 test("kb_search tells the agent which path ran and what stale was measured against", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();

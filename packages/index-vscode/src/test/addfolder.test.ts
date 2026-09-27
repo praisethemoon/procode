@@ -13,11 +13,12 @@ import { test } from "node:test";
 import { Kb } from "kb-js";
 
 import { TEST_ENV } from "./home";
+import { cliBin, noCli } from "./cli-bin";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Module = require("node:module") as { _load: (req: string, parent: unknown, isMain: boolean) => unknown };
 
-const KB = path.resolve(__dirname, "../../../../cli/kb-cli/bin/kb");
+const KB = cliBin("kb");
 
 /* What the dialogs answer, and what the reader was shown. */
 let folder: string | undefined = undefined;
@@ -68,7 +69,7 @@ function load(): Pick<Commands, "addFolder" | "refreshDocument"> {
     }
 }
 
-test("a folder is added whole, and added again forgets what is gone", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+test("a folder is added whole, and added again forgets what is gone", { skip: !KB && noCli("kb") }, async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-folder-"));
     try {
         const project = path.join(dir, "project");

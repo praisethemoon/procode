@@ -36,9 +36,9 @@ import { Kb } from "../client";
 import { KbError, isKbError } from "../errors";
 import { obj } from "../shape";
 import { addArgv, addBatchArgv, addDirArgv, embedArgv, batchLines, deleteCollectionArgv, forgetArgv, lsArgv, refreshArgv, refreshSourceArgv, searchArgv, sourceArgv, sourcesArgv } from "../argv";
+import { cliBin, noCli } from "./cli-bin";
 
-const ROOT = path.resolve(__dirname, "..", "..");
-const BIN = path.resolve(ROOT, "..", "..", "cli", "kb-cli", "bin", "kb");
+const BIN = cliBin("kb");
 
 /* One throwaway home for every kb this file starts. */
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "kb-js-home-"));
@@ -46,7 +46,7 @@ process.on("exit", () => fs.rmSync(HOME, { recursive: true, force: true }));
 const ENV: NodeJS.ProcessEnv = { ...process.env, HOME };
 
 function built(): boolean {
-    return fs.existsSync(BIN);
+    return BIN !== "";
 }
 
 /* `kb --help`, which is the CLI's own statement of its surface. */
@@ -81,7 +81,7 @@ function workspace(): Work {
 
 test("every flag this package spells for an implemented command is one the CLI names", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const text = help();
@@ -129,7 +129,7 @@ test("every flag this package spells for an implemented command is one the CLI n
 
 test("search's flags are checked the moment the command exists", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const text = help();
@@ -156,7 +156,7 @@ test("search's flags are checked the moment the command exists", async (t) => {
 
 test("a store filed into and read back through this package", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -245,7 +245,7 @@ test("a store filed into and read back through this package", async (t) => {
 
 test("a real refusal arrives as a KbError carrying §11's code", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -268,7 +268,7 @@ test("a query full of shell metacharacters reaches the store as one argument", a
      * string arrived as one argument. A shell would have eaten the semicolon
      * and everything after it. */
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -293,7 +293,7 @@ test("a query full of shell metacharacters reaches the store as one argument", a
 
 test("a collection name with a space survives the argument list", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -315,7 +315,7 @@ test("outside any store, a command is refused and says how to make one", async (
      * about it. `status` is the exception, and answers "none" rather than
      * refusing, because "is there a store here" is its whole question. */
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -342,7 +342,7 @@ test("--store is refused as an unknown option on every command", async (t) => {
      * a `kb` that quietly accepted and ignored it would let a caller believe
      * it had narrowed a read that it had not. */
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -419,7 +419,7 @@ test("the refresh reader answers exactly the keys the real binary prints", async
     /* THE REGRESSION TEST FOR THE BUG ITSELF. `refreshed` and `changed` would
      * appear on the right and nowhere on the left. */
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -450,7 +450,7 @@ test("refresh takes the two narrowings §5 gives it, and no invented ones", asyn
      * a different route; a filter on this one would report about a source
      * while looking like it had refetched it. */
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     assert.deepEqual(refreshArgv(), ["refresh"]);
@@ -470,7 +470,7 @@ test("refresh takes the two narrowings §5 gives it, and no invented ones", asyn
 
 test("forgetting through this package: a document, a source, and a collection with its documents", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -503,7 +503,7 @@ test("forgetting through this package: a document, a source, and a collection wi
 
 test("sources through this package: listed, shown with their history, and a file source refreshed", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -546,7 +546,7 @@ test("sources through this package: listed, shown with their history, and a file
 
 test("a batch through this package: filed together, and refused together", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -594,7 +594,7 @@ test("a batch through this package: filed together, and refused together", async
 
 test("a folder through this package: filed, filed again, and a file gone kept or forgotten as asked", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -666,7 +666,7 @@ test("a folder through this package: filed, filed again, and a file gone kept or
 
 test("every reader answers exactly the keys the real binary prints", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -807,7 +807,7 @@ test("every reader answers exactly the keys the real binary prints", async (t) =
 
 test("the whole graph through this package: every edge, both ends, and a forgotten end marked", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();
@@ -832,7 +832,7 @@ test("the whole graph through this package: every edge, both ends, and a forgott
 
 test("filing now and embedding later: pending on every add, vectors on status, and embed refused without a model", async (t) => {
     if (!built()) {
-        t.skip("cli/kb-cli/bin/kb is not built");
+        t.skip(noCli("kb"));
         return;
     }
     const work = workspace();

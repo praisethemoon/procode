@@ -12,8 +12,9 @@ import { Kb } from "kb-js";
 import { TEST_ENV } from "./home";
 
 import { extractPdf, isPdf, pageText, pdfMarkdown } from "../pdf";
+import { cliBin, noCli } from "./cli-bin";
 
-const KB = path.resolve(__dirname, "../../../../cli/kb-cli/bin/kb");
+const KB = cliBin("kb");
 
 /* A minimal valid PDF: pages of text lines, and an Info dictionary. */
 function makePdf(pages: string[][], info: { title: string; author: string }): Buffer {
@@ -78,7 +79,7 @@ test("the document is a title, its author, and a section per page", () => {
     assert.equal(isPdf("/a/paper.md"), false);
 });
 
-test("a PDF is read by pdf.js and filed so its pages are searchable", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+test("a PDF is read by pdf.js and filed so its pages are searchable", { skip: !KB && noCli("kb") }, async () => {
     const pdf = makePdf(
         [
             // Pages of real length: kb merges tiny sibling sections, and a page of one

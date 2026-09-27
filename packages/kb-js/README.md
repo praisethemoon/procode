@@ -76,5 +76,6 @@ reconcile when they land.
 npm test
 ```
 
-`cli.test.ts` drives the real binary when `../../cli/kb-cli/bin/kb` is built and skips
-when it is not, so this package is installable and testable on its own.
+`cli.test.ts` drives the real binary when it finds one (`$KB_BIN`, else a
+build in this repository, else `kb` on `PATH`; see `src/test/cli-bin.ts`)
+and skips when it does not, so this package is installable and testable on its own.

@@ -13,11 +13,12 @@ import { test } from "node:test";
 import { Kb } from "kb-js";
 
 import { TEST_ENV } from "./home";
+import { cliBin, noCli } from "./cli-bin";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Module = require("node:module") as { _load: (req: string, parent: unknown, isMain: boolean) => unknown };
 
-const KB = path.resolve(__dirname, "../../../../cli/kb-cli/bin/kb");
+const KB = cliBin("kb");
 
 type Host = typeof import("../host");
 
@@ -65,7 +66,7 @@ async function ask(
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "knowledge-states-"));
 
-test("a folder with no store is marked as having none, not shown as a refusal", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+test("a folder with no store is marked as having none, not shown as a refusal", { skip: !KB && noCli("kb") }, async () => {
     const r = await ask(tmp(), KB, "ls");
     assert.equal(r["kind"], "failed");
     const error = r["error"] as { code: string; noStore?: boolean };
@@ -73,7 +74,7 @@ test("a folder with no store is marked as having none, not shown as a refusal", 
     assert.equal(error.noStore, true);
 });
 
-test("something missing inside a store stays a plain refusal", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+test("something missing inside a store stays a plain refusal", { skip: !KB && noCli("kb") }, async () => {
     const dir = tmp();
     await new Kb({ bin: KB, cwd: dir, env: TEST_ENV }).init();
     const r = await ask(dir, KB, "get", { id: "D-99" });
@@ -90,7 +91,7 @@ test("a kb that is not there is reported as one that cannot start, with the comm
     assert.equal(r["command"], "/nonexistent/kb");
 });
 
-test("knowledge.rerank is what makes a search ask for --rerank, and without the reranker it is refused", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+test("knowledge.rerank is what makes a search ask for --rerank, and without the reranker it is refused", { skip: !KB && noCli("kb") }, async () => {
     /* The throwaway HOME holds no reranker, so a search that asked for it is
      * refused as model_missing — which is how a test sees that it was asked
      * for — and the same search with the setting off answers. */
@@ -105,7 +106,7 @@ test("knowledge.rerank is what makes a search ask for --rerank, and without the 
     assert.equal((on["error"] as { code: string }).code, "model_missing");
 });
 
-test("a webview cannot turn rerank on for itself", { skip: !fs.existsSync(KB) && "kb is not built" }, async () => {
+test("a webview cannot turn rerank on for itself", { skip: !KB && noCli("kb") }, async () => {
     /* The input is read field by field: a `rerank` in it reaches nothing. */
     const dir = tmp();
     const kb = new Kb({ bin: KB, cwd: dir, env: TEST_ENV });

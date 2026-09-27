@@ -108,8 +108,9 @@ node scripts/link.mjs     # node_modules/kb-js -> ../../kb-js
 npm test                  # compile, then node --test out/test/*.test.js
 ```
 
-`cli.test.ts` drives the real binary when `../../cli/kb-cli/bin/kb` is built and skips
-when it is not. `stdio.test.ts` spawns `bin/kb-mcp` as a process and talks to it
+`cli.test.ts` drives the real binary when it finds one (`$KB_BIN`, else a
+build in this repository, else `kb` on `PATH`; see `src/test/cli-bin.ts`)
+and skips when it does not. `stdio.test.ts` spawns `bin/kb-mcp` as a process and talks to it
 over a real pipe, which is the only place a failure in the wiring — an entry
 point that never starts, a banner on stdout, a process that exits while a call
 is in flight — can be found at all.
