@@ -71,6 +71,25 @@ static void stat_to(PlatStat *out, const struct stat *st) {
 }
 #endif
 
+bool plat_stat(const char *path, PlatStat *out) {
+#ifdef _WIN32
+    char wb[LAP_PATH_MAX];
+    WIN32_FILE_ATTRIBUTE_DATA d;
+    if (!GetFileAttributesExA(winpath(wb, sizeof wb, path),
+                              GetFileExInfoStandard, &d) ||
+        (d.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        return false;
+    filetime_to(out, d.ftLastWriteTime, d.nFileSizeHigh, d.nFileSizeLow);
+    return true;
+#else
+    struct stat st;
+    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode))
+        return false;
+    stat_to(out, &st);
+    return true;
+#endif
+}
+
 int64_t plat_now_sec(void) {
     return (int64_t)time(NULL);
 }

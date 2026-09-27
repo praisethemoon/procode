@@ -84,6 +84,8 @@ typedef struct {
 typedef WalkAction (*WalkFn)(const char *rel, bool is_dir, const PlatStat *st,
                              void *ud);
 bool plat_walk(Arena *a, const char *root, WalkFn fn, void *ud);
+/* A regular file's stat, as the walk takes it; false for anything else. */
+bool plat_stat(const char *path, PlatStat *out);
 /* Seconds since the epoch, now. */
 int64_t plat_now_sec(void);
 /* A log timestamp (UTC, "2026-09-27T09:36:48Z") in this machine's zone for

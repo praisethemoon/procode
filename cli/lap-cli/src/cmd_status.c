@@ -22,7 +22,10 @@ typedef struct {
     Repo *repo;
     const Ignore *ig;
     SeenList files;
+    size_t walked_n; /* files[0, walked_n): the working walk's, sorted */
 } StatusWalk;
+
+static int cmp_seen(const void *pa, const void *pb);
 
 static void seen_push(Arena *a, SeenList *l, const char *p, const PlatStat *st,
                       int64_t head) {
@@ -50,13 +53,21 @@ static WalkAction on_shadow_entry(const char *rel, bool is_dir,
                                   const PlatStat *st, void *ud) {
     (void)st;
     StatusWalk *sw = (StatusWalk *)ud;
-    if (!is_dir) {
-        /* shadow file with no working counterpart => deleted */
-        char wpath[LAP_PATH_MAX];
-        snprintf(wpath, sizeof wpath, "%s/%s", sw->repo->root, rel);
-        if (!plat_is_file(wpath))
-            seen_push(sw->a, &sw->files, rel, NULL, -1);
-    }
+    if (is_dir)
+        return WALK_CONT;
+    /* Every tracked file the working walk did not list: deleted (no
+     * working counterpart), or ignored since it was tracked — the index
+     * lists those too, and a missing cache must not change the output. */
+    Seen key;
+    key.path = rel;
+    if (sw->walked_n > 0 &&
+        bsearch(&key, sw->files.v, sw->walked_n, sizeof(Seen), cmp_seen))
+        return WALK_CONT;
+    char wpath[LAP_PATH_MAX];
+    snprintf(wpath, sizeof wpath, "%s/%s", sw->repo->root, rel);
+    PlatStat wst;
+    seen_push(sw->a, &sw->files, rel, plat_stat(wpath, &wst) ? &wst : NULL,
+              -1);
     return WALK_CONT;
 }
 
@@ -124,6 +135,7 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
     plat_walk(a, repo.root, on_entry, &sw);
     if (sw.files.n > 1)
         qsort(sw.files.v, sw.files.n, sizeof(Seen), cmp_seen);
+    sw.walked_n = sw.files.n;
     Idx *ix = idx_ready(a, &repo);
     if (ix) {
         join_tracked(a, ix, &sw.files);

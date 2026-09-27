@@ -1710,6 +1710,31 @@ expect_ok "$LAP" commit f.txt --branch main -i "work on main after the leak" -b 
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "a file tracked before it was ignored shows the same with and without caches"
+mkdir -p "$WORK/c23/ign" && cd "$WORK/c23" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt && printf 'x\n' > ign/x.txt
+for f in a.txt ign/x.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f" >/dev/null 2>&1
+done
+printf 'ign/\n' >> .lapignore
+"$LAP" commit .lapignore --no-session -i "ignore ign from now on" -b "adds ign/ to .lapignore" >/dev/null 2>&1
+nocache23() { # status with every cache gone, then rebuilt
+    mkdir -p "$WORK/c23-caches" && for c in index snapshots statcache heads paths; do
+        [ -e ".lap/$c" ] && mv ".lap/$c" "$WORK/c23-caches/$c-$1"
+    done
+    "$LAP" status --json
+}
+printf 'changed\n' >> ign/x.txt
+WITH=$("$LAP" status --json)
+expect_grep '"path":"ign/x.txt"' "$LAP" status --json
+[ "$(nocache23 m)" = "$WITH" ] || fail "modified: status differs without caches"
+"$LAP" rebuild >/dev/null 2>&1
+rm ign/x.txt
+WITH=$("$LAP" status --json)
+expect_grep '"path":"ign/x.txt"' "$LAP" status --json
+[ "$(nocache23 d)" = "$WITH" ] || fail "deleted: status differs without caches"
+cd "$WORK"
+
 t "readers never see a half-converted history"
 mkdir -p "$WORK/v22" && cd "$WORK/v22" && "$LAP" init >/dev/null 2>&1
 "$LAP" commit .lapignore --no-session -i "seed the fixture" -b "records .lapignore" >/dev/null 2>&1

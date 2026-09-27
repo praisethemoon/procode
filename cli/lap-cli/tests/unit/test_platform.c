@@ -22,6 +22,17 @@ void test_platform(void) {
     ASSERT_TRUE(!plat_same_file(T_PLATDIR "/sub", T_PLATDIR "/nothing"));
     ASSERT_TRUE(!plat_same_file(T_PLATDIR "/nothing", T_PLATDIR "/nothing"));
 
+    t_begin("plat_stat: a regular file's size; a directory or a missing path "
+            "is not one");
+    plat_write_file_atomic(T_PLATDIR "/sub/f.txt", "hello\n", 6);
+    PlatStat ps;
+    ASSERT_TRUE(plat_stat(T_PLATDIR "/sub/f.txt", &ps));
+    ASSERT_EQ_I((int32_t)ps.size, 6);
+    ASSERT_TRUE(ps.mtime_sec > 0);
+    ASSERT_TRUE(!plat_stat(T_PLATDIR "/sub", &ps));
+    ASSERT_TRUE(!plat_stat(T_PLATDIR "/nothing", &ps));
+    remove(T_PLATDIR "/sub/f.txt");
+
 #ifndef _WIN32
     t_begin("plat_same_file: a symlink reaches the directory it names");
     remove(T_PLATDIR "/link");
