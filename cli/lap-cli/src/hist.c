@@ -1,6 +1,5 @@
 #include "hist.h"
 
-#include "rec.h"
 #include "sha256.h"
 
 static bool is_hex_lower(char c) {
@@ -478,5 +477,123 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
     fprintf(stderr, "lap: moved .lap/%s into %d chunk%s in .lap/%s/\n",
             LAP_LOG_NAME, n, n == 1 ? "" : "s", LAP_LOG_DIR);
     *converted = true;
+    return true;
+}
+
+bool hist_folder_lineage(Arena *a, const char *lapdir,
+                         char out[HIST_LINEAGE_MAX], char *err, size_t errsz) {
+    char path[LAP_PATH_MAX];
+    snprintf(path, sizeof path, "%s/%s", lapdir, LAP_LINEAGE_NAME);
+    char *data;
+    size_t len;
+    if (!plat_is_file(path)) {
+        snprintf(out, HIST_LINEAGE_MAX, "%s", LAP_MAIN_LINEAGE);
+        return true;
+    }
+    if (!plat_read_file(a, path, &data, &len)) {
+        snprintf(err, errsz, "cannot read %s", path);
+        return false;
+    }
+    while (len > 0 && (data[len - 1] == '\n' || data[len - 1] == '\r' ||
+                       data[len - 1] == ' '))
+        len--;
+    char name[64];
+    int32_t n;
+    snprintf(name, sizeof name, "%.*s.000001.jsonl", (int)len, data);
+    if (len != 12 || !hist_parse_name(name, out, &n)) {
+        snprintf(err, errsz, "%s does not hold a branch id", path);
+        return false;
+    }
+    return true;
+}
+
+bool hist_write_lineage(const char *lapdir, const char *lineage) {
+    char path[LAP_PATH_MAX], text[HIST_LINEAGE_MAX + 1];
+    snprintf(path, sizeof path, "%s/%s", lapdir, LAP_LINEAGE_NAME);
+    snprintf(text, sizeof text, "%s\n", lineage);
+    return plat_write_file_atomic(path, text, strlen(text));
+}
+
+bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
+                       Rec *out, char *err, size_t errsz) {
+    char name[64], path[LAP_PATH_MAX];
+    hist_chunk_name(lineage, 1, name);
+    snprintf(path, sizeof path, "%s/%s/%s", lapdir, LAP_LOG_DIR, name);
+    uint64_t size;
+    if (!plat_file_size(path, &size) || size == 0) {
+        snprintf(err, errsz, "the history of %s starts nowhere: %s is "
+                             "missing or empty",
+                 lineage, path);
+        return false;
+    }
+    size_t want = size < 65536 ? (size_t)size : 65536;
+    for (;;) {
+        char *data;
+        if (!plat_read_range(a, path, 0, want, &data)) {
+            snprintf(err, errsz, "cannot read %s", path);
+            return false;
+        }
+        char *nl = memchr(data, '\n', want);
+        if (nl) {
+            char derr[200];
+            if (!rec_decode(a, data, (size_t)(nl - data), out, derr,
+                            sizeof derr)) {
+                snprintf(err, errsz, "%s line 1: %s", name, derr);
+                return false;
+            }
+            return true;
+        }
+        if ((uint64_t)want >= size) {
+            snprintf(err, errsz, "%s holds no complete record", name);
+            return false;
+        }
+        want = (uint64_t)want * 2 < size ? want * 2 : (size_t)size;
+    }
+}
+
+bool hist_open_folder(Arena *a, const char *lapdir, Hist *h, char *err,
+                      size_t errsz) {
+    char lineage[HIST_LINEAGE_MAX];
+    if (!hist_folder_lineage(a, lapdir, lineage, err, errsz))
+        return false;
+    if (strcmp(lineage, LAP_MAIN_LINEAGE) == 0)
+        return hist_open(a, lapdir, lineage, h, err, errsz);
+    Rec br;
+    if (!hist_first_record(a, lapdir, lineage, &br, err, errsz))
+        return false;
+    if (br.type != REC_BRANCH || strcmp(br.id, lineage) != 0) {
+        snprintf(err, errsz,
+                 "the first record of branch %s is not its branch record",
+                 lineage);
+        return false;
+    }
+    Hist par, own;
+    if (!hist_open(a, lapdir, br.parent, &par, err, errsz) ||
+        !hist_open(a, lapdir, lineage, &own, err, errsz))
+        return false;
+    if (par.legacy || par.n < br.base_chunk) {
+        char name[64];
+        hist_chunk_name(br.parent, br.base_chunk, name);
+        snprintf(err, errsz,
+                 "branch %s starts after %s, which is missing from %s",
+                 br.name, name, par.dir);
+        return false;
+    }
+    *h = own;
+    h->cap = br.base_chunk + own.n;
+    h->v = (HistChunk *)arena_alloc(a, (size_t)h->cap * sizeof(HistChunk));
+    memcpy(h->v, par.v, (size_t)br.base_chunk * sizeof(HistChunk));
+    memcpy(h->v + br.base_chunk, own.v, (size_t)own.n * sizeof(HistChunk));
+    h->n = h->cap;
+    uint64_t start = 0;
+    for (int32_t i = 0; i < h->n; i++) {
+        h->v[i].start = start;
+        start += h->v[i].size;
+    }
+    h->size = start;
+    snprintf(h->parent, sizeof h->parent, "%s", br.parent);
+    snprintf(h->base, sizeof h->base, "%s", br.base);
+    h->base_chunk = br.base_chunk;
+    snprintf(h->name, sizeof h->name, "%s", br.name);
     return true;
 }

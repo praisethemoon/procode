@@ -479,8 +479,9 @@ upgrading across a cache-format change.
 gitignore subset: `#` comments; trailing `/` = directories only; a pattern
 containing `/` (or starting with `/`) is anchored to the root; otherwise it
 matches basenames at any depth; `*`, `?` within a segment; `**` spans
-segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git/`,
-`.hg/`, `.svn/`, `.DS_Store`.
+segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git`
+(a directory, or the file a git worktree has in its place), `.hg/`,
+`.svn/`, `.DS_Store`.
 
 ## Concurrency & crash safety
 

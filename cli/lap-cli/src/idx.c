@@ -376,6 +376,10 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
             e.session = rec_session_no(rec.id);
             s.idx.h.open_session = 0;
             break;
+        case REC_BRANCH: /* a branch starts with no session open */
+            e.kind = IDX_BRANCH;
+            s.idx.h.open_session = 0;
+            break;
         }
         e.id = s.idx.h.commits;
         ARENA_GROW(a, s.newv, s.newn, s.newcap, IdxEntry);

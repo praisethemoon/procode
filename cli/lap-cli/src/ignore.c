@@ -14,7 +14,9 @@ struct Ignore {
     size_t n, cap;
 };
 
-static const char *DEFAULTS[] = {".lap/", ".git/", ".hg/", ".svn/",
+/* ".git" without the slash: in a git worktree it is a file pointing at the
+ * main checkout's repository, and it is git's, not the project's. */
+static const char *DEFAULTS[] = {".lap/", ".git", ".hg/", ".svn/",
                                  ".DS_Store"};
 
 /* Segment glob: '*' any run (no '/'), '?' one char. */

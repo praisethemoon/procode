@@ -215,7 +215,10 @@ static bool state_heal(Repo *r, bool persist, char *err, size_t errsz) {
                      rec->id);
             snprintf(r->active_session_msg, sizeof r->active_session_msg, "%s",
                      rec->msg ? rec->msg : "");
-        } else if (rec->type == REC_SESSION_END) {
+        } else if (rec->type == REC_SESSION_END ||
+                   rec->type == REC_BRANCH) {
+            /* a branch starts with no session open, whatever its parent
+             * had open at the base */
             r->active_session[0] = '\0';
             r->active_session_msg[0] = '\0';
         }
@@ -269,12 +272,45 @@ const char *repo_user(Repo *r) {
     return r->cached_user;
 }
 
+bool repo_abspath(const char *user_path, char *out, size_t outsz) {
+    char absbuf[LAP_PATH_MAX];
+    bool is_abs = user_path[0] == '/';
+#ifdef _WIN32
+    if ((user_path[0] && user_path[1] == ':') || user_path[0] == '\\')
+        is_abs = true;
+#endif
+    if (is_abs) {
+        snprintf(absbuf, sizeof absbuf, "%s", user_path);
+    } else {
+        char cwd[LAP_PATH_MAX];
+        if (!plat_getcwd(cwd, sizeof cwd) ||
+            snprintf(absbuf, sizeof absbuf, "%s/%s", cwd, user_path) >=
+                (int)sizeof absbuf)
+            return false;
+    }
+    return normalize_path(absbuf, out, outsz);
+}
+
 bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
-    memset(r, 0, sizeof(*r));
-    r->a = a;
-    if (!find_root(r->root, sizeof r->root)) {
+    char root[LAP_PATH_MAX];
+    if (!find_root(root, sizeof root)) {
+        memset(r, 0, sizeof(*r));
         snprintf(err, errsz,
                  "not inside a lap repository (run \"lap init\" first)");
+        return false;
+    }
+    return repo_open_at(a, r, root, for_write, err, errsz);
+}
+
+bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
+                  char *err, size_t errsz) {
+    memset(r, 0, sizeof(*r));
+    r->a = a;
+    snprintf(r->root, sizeof r->root, "%s", root);
+    char probe[LAP_PATH_MAX];
+    snprintf(probe, sizeof probe, "%s/%s", root, LAP_DIR);
+    if (!plat_is_dir(probe)) {
+        snprintf(err, errsz, "no lap repository at %s", root);
         return false;
     }
     snprintf(r->lapdir, sizeof r->lapdir, "%s/%s", r->root, LAP_DIR);
@@ -294,7 +330,7 @@ bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
             return false;
     }
     /* listed under the lock, so a writer's view cannot go stale */
-    if (!hist_open(a, r->lapdir, LAP_MAIN_LINEAGE, &r->hist, err, errsz))
+    if (!hist_open_folder(a, r->lapdir, &r->hist, err, errsz))
         return false;
     if (r->hist.n == 0) {
         snprintf(err, errsz, "no history in %s (expected %s/%s.000001.jsonl)",

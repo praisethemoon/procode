@@ -30,6 +30,9 @@ static const char *USAGE =
     "  rebuild [--verify]         reconstruct every cache from the log\n"
     "  rr [<session> | <from> <to>]   review request: trajectory + net\n"
     "     [--no-diff] [--json]        change; <from>/<to> are commits\n"
+    "  branch start [name] --from <folder>   make this folder a branch of\n"
+    "                             another: its own line of history from\n"
+    "                             that folder's head\n"
     "\n"
     "global:\n"
     "  --color=auto|always|never  colour output (auto: only at a terminal;\n"
@@ -100,6 +103,8 @@ int main(int argc, char **argv) {
         rc = cmd_rebuild(a, argc2, argv2);
     else if (strcmp(cmd, "rr") == 0 || strcmp(cmd, "review") == 0)
         rc = cmd_rr(a, argc2, argv2);
+    else if (strcmp(cmd, "branch") == 0)
+        rc = cmd_branch(a, argc2, argv2);
     else {
         err_out(tty_json(), "unknown_command", "unknown command \"%s\"", cmd);
         if (!tty_json()) {

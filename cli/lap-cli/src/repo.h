@@ -56,6 +56,13 @@ bool repo_rebuild(Arena *a, Repo *r, char *err, size_t errsz);
  * message in err when there is no repo or the state is unusable.
  */
 bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz);
+/* The same for the repository whose root is root (absolute), found without
+ * walking upward: how a branch reaches its parent folder. */
+bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
+                  char *err, size_t errsz);
+/* A user-supplied path (relative to cwd or absolute) as an absolute,
+ * normalized '/' path. */
+bool repo_abspath(const char *user_path, char *out, size_t outsz);
 void repo_close(Repo *r);
 
 /* Creates a new repo in dir (absolute). Fails if one already exists there. */

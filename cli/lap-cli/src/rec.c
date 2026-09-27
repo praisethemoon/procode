@@ -10,6 +10,7 @@ static const char *type_name(RecType t) {
     case REC_COMMIT: return "commit";
     case REC_SESSION_START: return "session_start";
     case REC_SESSION_END: return "session_end";
+    case REC_BRANCH: return "branch";
     }
     return "?";
 }
@@ -73,6 +74,17 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
         break;
     case REC_SESSION_END:
         sb_printf(&sb, ",\"id\":\"%s\"", rec->id);
+        break;
+    case REC_BRANCH:
+        sb_printf(&sb, ",\"id\":\"%s\"", rec->id);
+        sb_puts(&sb, ",\"name\":");
+        json_escape_c(&sb, rec->name);
+        sb_printf(&sb, ",\"parent\":\"%s\",\"base\":\"%s\",\"base_chunk\":%d",
+                  rec->parent, rec->base, rec->base_chunk);
+        if (rec->user) {
+            sb_puts(&sb, ",\"user\":");
+            json_escape_c(&sb, rec->user);
+        }
         break;
     }
     sb_printf(&sb, ",\"ts\":\"%s\"", rec->ts);
@@ -200,6 +212,19 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
         out->id = jobj_str(v, "id");
         if (!out->id) {
             snprintf(err, errsz, "session_end record missing id");
+            return false;
+        }
+    } else if (strcmp(type, "branch") == 0) {
+        out->type = REC_BRANCH;
+        out->id = jobj_str(v, "id");
+        out->name = jobj_str(v, "name");
+        out->parent = jobj_str(v, "parent");
+        out->base = jobj_str(v, "base");
+        out->base_chunk = (int32_t)jobj_int(v, "base_chunk", 0);
+        out->user = jobj_str(v, "user");
+        if (!out->id || !out->name || !out->parent || !out->base ||
+            out->base_chunk < 1) {
+            snprintf(err, errsz, "branch record missing field");
             return false;
         }
     } else {

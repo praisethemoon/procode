@@ -7,7 +7,8 @@
  *   - '*' matches within a path segment, '?' matches one character,
  *     '**' matches any number of whole segments
  *   - negation ('!') is not supported in this version
- * Built-in defaults: .lap/, .git/, .hg/, .svn/, .DS_Store
+ * Built-in defaults: .lap/, .git (a directory, or a worktree's file),
+ * .hg/, .svn/, .DS_Store
  */
 #ifndef LAP_IGNORE_H
 #define LAP_IGNORE_H

@@ -13,7 +13,13 @@
 
 #include "repo.h"
 
-enum { IDX_INIT, IDX_COMMIT, IDX_SESSION_START, IDX_SESSION_END };
+enum {
+    IDX_INIT,
+    IDX_COMMIT,
+    IDX_SESSION_START,
+    IDX_SESSION_END,
+    IDX_BRANCH
+};
 enum { IDX_OP_EDIT, IDX_OP_CREATE, IDX_OP_DELETE };
 
 typedef struct {

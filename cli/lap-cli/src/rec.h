@@ -18,7 +18,8 @@ typedef enum {
     REC_INIT,
     REC_COMMIT,
     REC_SESSION_START,
-    REC_SESSION_END
+    REC_SESSION_END,
+    REC_BRANCH /* the first record of a branch's own lineage */
 } RecType;
 
 typedef struct {
@@ -43,6 +44,14 @@ typedef struct {
     const char **meta_keys;
     const char **meta_vals;
     int32_t meta_n;
+    /* branch only: id is the branch's lineage (12 hex digits), name what
+     * people type, parent the lineage it started from, base the parent's
+     * head then (also its prev), base_chunk the parent's chunk that base
+     * ends. */
+    const char *name;
+    const char *parent;
+    const char *base;
+    int32_t base_chunk;
     const char *prev;    /* hex chain hash */
     int32_t old_start, old_lines, new_start, new_lines; /* commit only */
     Str *old_text;

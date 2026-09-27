@@ -40,6 +40,8 @@ set(LAP_LIB_SOURCES
     src/idx.c
     src/snap.c
     src/hist.c
+    src/branches.c
+    src/cmd_branch.c
     src/tty.c
 )
 

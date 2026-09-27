@@ -16,6 +16,7 @@
 #define LAP_HIST_H
 
 #include "platform.h"
+#include "rec.h"
 
 #define HIST_LINEAGE_MAX 16
 
@@ -36,6 +37,12 @@ typedef struct {
     uint64_t size; /* bytes in the whole history */
     uint64_t limit; /* the chunk limit appends seal at; hist_chunk_limit() */
     bool legacy; /* read from the single-file log.jsonl of before chunks */
+    /* A branch folder's history: its parent's chunks 1..base_chunk, then
+     * its own. parent is "" in a main folder. */
+    char parent[HIST_LINEAGE_MAX];
+    char base[65];
+    int32_t base_chunk;
+    char name[128]; /* the branch's name, from its branch record */
 } Hist;
 
 /* "main.000003.jsonl" -> lineage "main", n 3. False for any other name:
@@ -55,6 +62,25 @@ uint64_t hist_chunk_limit(void);
  * of a legacy history; readers never convert it. */
 bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
                char *err, size_t errsz);
+
+/* The lineage a folder writes: the id in lapdir/lineage, or "main" when
+ * there is no such file. False, with a reason, for a file that does not
+ * hold a branch id. */
+bool hist_folder_lineage(Arena *a, const char *lapdir,
+                         char out[HIST_LINEAGE_MAX], char *err, size_t errsz);
+/* Writes lapdir/lineage. */
+bool hist_write_lineage(const char *lapdir, const char *lineage);
+
+/* A folder's whole history: for main, hist_open's; for a branch, the
+ * parent's chunks up to the base chunk its branch record names, then the
+ * branch's own chunks. */
+bool hist_open_folder(Arena *a, const char *lapdir, Hist *h, char *err,
+                      size_t errsz);
+
+/* The first record of a lineage's chunk 1, which for a branch is its
+ * branch record. False when there is none or it does not parse. */
+bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
+                       Rec *out, char *err, size_t errsz);
 
 /* The path of chunk i of h. */
 void hist_chunk_path(const Hist *h, int32_t i, char *out, size_t outsz);

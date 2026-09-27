@@ -39,6 +39,8 @@ void test_ignore(void) {
     ASSERT_TRUE(ignore_match(ig, ".git", true));
     ASSERT_TRUE(ignore_match(ig, ".lap/log.jsonl", false));
     ASSERT_TRUE(ignore_match(ig, "sub/.git/config", false));
+    ASSERT_TRUE(ignore_match(ig, ".git", false)); /* a worktree's .git file */
+    ASSERT_TRUE(!ignore_match(ig, ".gitignore", false));
     ASSERT_TRUE(ignore_match(ig, "a/b/.DS_Store", false));
     ASSERT_TRUE(!ignore_match(ig, "src/main.c", false));
     arena_free(a);
