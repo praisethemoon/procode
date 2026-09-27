@@ -520,7 +520,9 @@ folder, `lap merge <branch> [--dry-run]`.
    not adopted in each, and `already`: the hashes of the commits already
    done here (left out when there are none), so the history says they were
    seen, not lost. A later merge of the branch starts after `head` and
-   keeps every stopped file stopped. A chain writes one merge record per
+   keeps every stopped file stopped: it leaves the file's new commits,
+   reports the file again ("an earlier merge stopped it here") and records
+   it in its own merge record, at the commit where it first stopped. A chain writes one merge record per
    branch with anything new, outer first, each with its own counts and
    stops: a branch the chain passed through advances to the base of the
    next, so its own later merge adopts only what came after — and a file

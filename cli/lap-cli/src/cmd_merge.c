@@ -378,9 +378,10 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     /* What earlier merges took in of each branch, and the sessions they
      * carried: a session adopted before, straight from its branch or by way
      * of a branch that had adopted it, is not adopted again. */
-    StrSet stopped_before, ended;
-    strset_init(&stopped_before, a);
+    StrSet ended;
     strset_init(&ended, a); /* branch session_end hashes adopted here */
+    /* file -> the first commit to it an earlier merge did not place */
+    Map stopped_before = {0};
     Map adopted_sessions = {0}; /* branch session_start hash -> our id */
     for (int32_t i = 0; i < plog.count; i++) {
         const Rec *p = &plog.v[i];
@@ -389,8 +390,11 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 if (strcmp(p->branch, lin[k].id) != 0)
                     continue;
                 lin[k].head = p->head;
-                for (int32_t s = 0; s < p->stopped_n; s++)
-                    strset_add(&stopped_before, p->stopped_file[s]);
+                for (int32_t s = 0; s < p->stopped_n; s++) {
+                    if (!map_get(&stopped_before, p->stopped_file[s]))
+                        map_put(a, &stopped_before, p->stopped_file[s],
+                                p->stopped_at[s]);
+                }
             }
         } else if (p->type == REC_SESSION_START && p->from) {
             map_put(a, &adopted_sessions, p->from, p->id);
@@ -494,10 +498,31 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             idx[n] = i;
             n++;
         }
-        if (strset_has(&stopped_before, files[f])) {
-            left += (int32_t)n; /* stopped once, stopped for good */
-            for (size_t k = 0; k < n; k++)
-                lin[lof[idx[k]]].left++;
+        const char *was = map_get(&stopped_before, files[f]);
+        if (was) {
+            /* stopped once, stopped for good: reported and recorded again,
+             * at the commit where it first stopped */
+            left += (int32_t)n;
+            for (size_t k = 0; k < n; k++) {
+                Lin *l = &lin[lof[idx[k]]];
+                l->left++;
+                if (l->nstop > 0 && l->stop_file[l->nstop - 1] == files[f])
+                    continue;
+                size_t s2 = l->nstop;
+                ARENA_GROW(a, l->stop_file, l->nstop, l->scap, const char *);
+                ARENA_GROW(a, l->stop_at, s2, l->scap2, const char *);
+                l->stop_file[l->nstop] = files[f];
+                l->stop_at[l->nstop] = was;
+                l->nstop++;
+            }
+            size_t s2 = nstop, s3 = nstop;
+            ARENA_GROW(a, stop_file, nstop, scap, const char *);
+            ARENA_GROW(a, stop_at, s2, scap2, const char *);
+            ARENA_GROW(a, stop_why, s3, scap3, const char *);
+            stop_file[nstop] = files[f];
+            stop_at[nstop] = was;
+            stop_why[nstop] = "an earlier merge stopped it here";
+            nstop++;
             continue;
         }
         bool base_has, parent_has;

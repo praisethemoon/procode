@@ -1528,7 +1528,11 @@ t "a second merge adopts only what is new, and a stopped file stays stopped"
 in_branch g.txt 's/^g3$/G3/' "uppercases g3 on the branch later"
 in_branch f.txt 's/^line 20$/branch 20/' "rewrites line 20 on the branch later"
 git_merge_b || fail "git merge m3 again"
-cd "$BP" && expect_grep "adopted 1 of 2" "$LAP" merge b
+cd "$BP" && expect_grep "stopped: f.txt at #[0-9a-f]\{7\} (an earlier merge stopped it here)" "$LAP" merge b --dry-run
+expect_grep '"stopped":\[{"file":"f.txt","at":"[0-9a-f]\{64\}","why":"an earlier merge stopped it here"}\]' "$LAP" merge b --dry-run --json
+expect_grep "adopted 1 of 2" "$LAP" merge b
+[ "$(grep '"type":"merge"' .lap/log/main.*.jsonl | tail -n 1 | grep -c '"stopped":\[{"file":"f.txt"')" = 1 ] ||
+    fail "the second merge record does not name the still-stopped file"
 expect_grep "^b  *partly merged" "$LAP" branch list
 expect_grep "  stopped: f.txt" "$LAP" branch list
 expect_grep "uppercases g3 on the branch later" "$LAP" log -n 1 --json
