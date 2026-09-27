@@ -215,6 +215,7 @@ function Row(props: {
         webviewSection: s.kind,
         id: s.id,
         coboardArchived: s.archived === true,
+        coboardDone: s.status === "done",
         preventDefaultContextMenuItems: true,
     });
     const dim = filtering && !matched.has(s.id);

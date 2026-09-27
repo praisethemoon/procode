@@ -469,6 +469,34 @@ export function activate(ctx: vscode.ExtensionContext): void {
         requireBoard().unarchive(id);
         refreshAll(tree);
     });
+    /* Close is the Status field's "done" from a row's right-click. A closed
+     * epic or milestone reads as finished, so tickets under it that are not
+     * done are counted and the close is confirmed first. */
+    reg("coboard.close", async (arg) => {
+        const id = idOf(arg);
+        if (!id) return;
+        const b = requireBoard();
+        const item = b.get(id);
+        const open = b
+            .all()
+            .filter((c) => c.kind === "ticket" && c.status !== "done" && (c.epic === item.id || c.milestone === item.id)).length;
+        if (open > 0) {
+            const go = await vscode.window.showWarningMessage(
+                `${item.id} has ${open} ticket${open === 1 ? "" : "s"} not done. Close it anyway?`,
+                { modal: true },
+                "Close",
+            );
+            if (go !== "Close") return;
+        }
+        b.update(item.id, { status: "done" });
+        refreshAll(tree);
+    });
+    reg("coboard.reopen", (arg) => {
+        const id = idOf(arg);
+        if (!id) return;
+        requireBoard().update(id, { status: "open" });
+        refreshAll(tree);
+    });
     reg("coboard.startSession", async (arg) => {
         const id = idOf(arg);
         if (!id) return;

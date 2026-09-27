@@ -47,6 +47,8 @@
       { "command": "coboard.delete", "title": "Delete", "category": "Board" },
       { "command": "coboard.archive", "title": "Archive…", "category": "Board", "icon": "$(archive)" },
       { "command": "coboard.unarchive", "title": "Unarchive", "category": "Board" },
+      { "command": "coboard.close", "title": "Close", "category": "Board" },
+      { "command": "coboard.reopen", "title": "Reopen", "category": "Board" },
       { "command": "coboard.startSession", "title": "Start lap Session for Ticket", "category": "Board" },
       { "command": "coboard.showEdit", "title": "Show lap Edit", "category": "Board" },
       { "command": "coboard.refresh", "title": "Refresh", "category": "Board", "icon": "$(refresh)" },
@@ -63,6 +65,8 @@
         { "command": "coboard.newMilestone", "when": "webviewId == 'coboard.tree' && webviewSection == 'epic'", "group": "1_new@1" },
         { "command": "coboard.newTicket", "when": "webviewId == 'coboard.tree' && webviewSection =~ /^(epic|milestone)$/", "group": "1_new@2" },
         { "command": "coboard.startSession", "when": "webviewId == 'coboard.tree' && webviewSection == 'ticket'", "group": "2_lap@1" },
+        { "command": "coboard.close", "when": "webviewId == 'coboard.tree' && webviewSection =~ /^(epic|milestone)$/ && !coboardDone", "group": "3_status@1" },
+        { "command": "coboard.reopen", "when": "webviewId == 'coboard.tree' && webviewSection =~ /^(epic|milestone)$/ && coboardDone", "group": "3_status@1" },
         { "command": "coboard.archive", "when": "webviewId == 'coboard.tree' && webviewSection =~ /^(epic|milestone|ticket)$/ && !coboardArchived", "group": "8_archive@1" },
         { "command": "coboard.unarchive", "when": "webviewId == 'coboard.tree' && webviewSection =~ /^(epic|milestone|ticket)$/ && coboardArchived", "group": "8_archive@1" },
         { "command": "coboard.delete", "when": "webviewId == 'coboard.tree' && webviewSection =~ /^(epic|milestone|ticket)$/", "group": "9_delete@1" }
@@ -74,6 +78,8 @@
         { "command": "coboard.delete", "when": "false" },
         { "command": "coboard.archive", "when": "false" },
         { "command": "coboard.unarchive", "when": "false" },
+        { "command": "coboard.close", "when": "false" },
+        { "command": "coboard.reopen", "when": "false" },
         { "command": "coboard.startSession", "when": "false" },
         { "command": "coboard.showEdit", "when": "false" },
         { "command": "coboard.collapseAll", "when": "false" }

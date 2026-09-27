@@ -19,6 +19,8 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), "coboard-host-"));
 const commands = new Map<string, (...a: unknown[]) => unknown>();
 const posted: unknown[] = [];
 const prompts: string[] = [];
+const warnings: string[] = [];
+let warningAnswer: string | undefined;
 const executed: unknown[][] = [];
 const threads: {
     uri: { path: string };
@@ -87,6 +89,10 @@ const fake = {
             },
         }),
         showErrorMessage: (m: string) => assert.fail(`the host reported an error: ${m}`),
+        showWarningMessage: async (m: string) => {
+            warnings.push(m);
+            return warningAnswer;
+        },
         showInputBox: async (o: { title?: string }) => {
             prompts.push(o.title ?? "");
             return "shipped";
@@ -138,6 +144,8 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
         "coboard.delete",
         "coboard.archive",
         "coboard.unarchive",
+        "coboard.close",
+        "coboard.reopen",
         "coboard.startSession",
         "coboard.refresh",
         "coboard.collapseAll",
@@ -194,6 +202,28 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
     onMessage!({ type: "unarchive", id: "M-1" });
     await new Promise((r) => setTimeout(r, 10));
     assert.equal(b.get("T-1").archived, undefined);
+
+    // Close from a row's right-click: with tickets not done it asks, and a
+    // dismissed question leaves the milestone open.
+    const row = { webviewSection: "milestone", id: "M-1", coboardDone: false };
+    warningAnswer = undefined;
+    await commands.get("coboard.close")!(row);
+    assert.equal(warnings.at(-1), "M-1 has 2 tickets not done. Close it anyway?");
+    assert.equal(b.get("M-1").status, "open");
+    warningAnswer = "Close";
+    await commands.get("coboard.close")!(row);
+    assert.equal(b.get("M-1").status, "done");
+    // The sidebar is sent the new status, which the menu reads as coboardDone.
+    const closed = toSidebar.filter((m) => m.type === "items").at(-1) as unknown as { items: { id: string; status: string }[] };
+    assert.equal(closed.items.find((i) => i.id === "M-1")!.status, "done");
+    await commands.get("coboard.reopen")!({ ...row, coboardDone: true });
+    assert.equal(b.get("M-1").status, "open");
+    // With every ticket done there is nothing to ask.
+    for (const id of ["T-1", "T-2", "T-3"]) b.update(id, { status: "done" });
+    const asked = warnings.length;
+    await commands.get("coboard.close")!({ webviewSection: "epic", id: "E-1", coboardDone: false });
+    assert.equal(warnings.length, asked);
+    assert.equal(b.get("E-1").status, "done");
 });
 
 test("clicking a lap edit on a ticket opens it as a diff at the edited line", { skip: !fs.existsSync(LAP) && "lap is not built" }, async () => {
