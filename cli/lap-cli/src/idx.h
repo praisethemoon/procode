@@ -19,7 +19,8 @@ enum {
     IDX_SESSION_START,
     IDX_SESSION_END,
     IDX_BRANCH,
-    IDX_MERGE
+    IDX_MERGE,
+    IDX_UNKNOWN /* a record type a newer lap wrote */
 };
 enum { IDX_OP_EDIT, IDX_OP_CREATE, IDX_OP_DELETE };
 
@@ -30,7 +31,8 @@ typedef struct {
     uint32_t commits;      /* total commits indexed */
     uint32_t sessions;     /* highest session number seen */
     uint32_t open_session; /* active session number; 0 = none */
-    uint32_t pad;
+    uint32_t unknown; /* records of a type a newer lap wrote (0 in indexes
+                         from before this field: it was padding) */
 } IdxHeader;
 
 typedef struct {
@@ -62,6 +64,9 @@ typedef struct Idx {
     int32_t npaths;
 } Idx;
 
+/* The index's header, read only (it may cover less than the history now):
+ * false when there is no usable index. */
+bool idx_header(Arena *a, const Repo *r, IdxHeader *out);
 /* Loaded and covering the whole log, else NULL (readers then full-scan). */
 Idx *idx_ready(Arena *a, const Repo *r);
 /* Writer-side (lock held): index the log bytes not yet covered; a damaged

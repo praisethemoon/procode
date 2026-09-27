@@ -20,7 +20,10 @@ typedef enum {
     REC_SESSION_START,
     REC_SESSION_END,
     REC_BRANCH, /* the first record of a branch's own lineage */
-    REC_MERGE   /* closes a lap merge: what of a branch was adopted */
+    REC_MERGE,  /* closes a lap merge: what of a branch was adopted */
+    /* a type a newer lap wrote: in the chain (prev, ts, hash), otherwise
+     * not understood; its type name is kept in name */
+    REC_UNKNOWN
 } RecType;
 
 typedef struct {
@@ -107,12 +110,20 @@ typedef struct {
      */
     bool torn_tail;
     uint64_t torn_bytes; /* bytes dropped from the tail */
+    /* records of a type a newer lap wrote: how many, and the first's type */
+    int32_t unknown_n;
+    const char *unknown_type;
 } RecLog;
 
 /* Names a byte offset of the parsed data for people, e.g.
  * "main.000002.jsonl line 7". */
 typedef void (*RecWhereFn)(const void *ctx, const char *data, uint64_t off,
                            char *out, size_t outsz);
+
+/* Tells the user, once a command, that the history holds records of a type
+ * a newer lap wrote (type NULL when the name is not at hand): readers skip
+ * them and go on. */
+void rec_note_newer(const char *type);
 
 /* Parses a whole log held in data (records point into it). Returns false
  * only when a complete record is unparseable; a torn final line is

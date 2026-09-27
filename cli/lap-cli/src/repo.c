@@ -334,7 +334,51 @@ static void prune_branches(Arena *a, Repo *r) {
         branches_save(a, r->lapdir, &keep);
 }
 
+/* Why the last repo_open failed, as an error code. */
+static const char *open_code = "no_repo";
+
+const char *repo_error_code(void) {
+    return open_code;
+}
+
+/* A writer never builds on records it does not understand: what they mean
+ * (a merge's, an amendment's) could make its own write wrong. Read only,
+ * before anything is repaired or healed: the index's count, then the
+ * history past what the index covers (all of it without an index). */
+static bool newer_check(Arena *a, Repo *r, char *err, size_t errsz) {
+    int32_t unknown = 0;
+    const char *type = NULL;
+    uint64_t from = 0; /* history bytes not yet looked at */
+    IdxHeader h;
+    if (idx_header(a, r, &h) && h.covered <= r->hist.size) {
+        unknown = (int32_t)h.unknown;
+        from = h.covered;
+    }
+    if (unknown == 0 && from < r->hist.size) {
+        char *data, ierr[256];
+        size_t len = (size_t)(r->hist.size - from);
+        RecLog log;
+        if (hist_read(a, &r->hist, from, len, &data) &&
+            rec_log_parse(a, data, len, NULL, NULL, &log, ierr,
+                          sizeof ierr)) {
+            unknown = log.unknown_n;
+            type = log.unknown_type;
+        }
+    }
+    if (unknown == 0)
+        return true;
+    open_code = "newer_history";
+    snprintf(err, errsz,
+             "this history holds %d record%s of a type this lap does not "
+             "know%s%s%s: a newer lap wrote %s. Update lap before writing "
+             "here (reading still works)",
+             unknown, unknown == 1 ? "" : "s", type ? " (\"" : "",
+             type ? type : "", type ? "\")" : "", unknown == 1 ? "it" : "them");
+    return false;
+}
+
 bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
+    open_code = "no_repo";
     char root[LAP_PATH_MAX];
     if (!find_root(root, sizeof root)) {
         memset(r, 0, sizeof(*r));
@@ -384,6 +428,8 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
      * short), and a writer never builds on (also a chain broken between
      * chunks): refused before anything is written. */
     if (!hist_check(a, &r->hist, for_write, err, errsz))
+        return false;
+    if (for_write && !newer_check(a, r, err, errsz))
         return false;
     /* with the lock held, clean up any crash-torn append before we append
      * after it */
@@ -559,6 +605,8 @@ bool repo_log_load(Arena *a, Repo *r, RecLog *out, char *err, size_t errsz) {
     if (!rec_log_parse(a, data, len, where_in_history, &r->hist, out, err,
                        errsz))
         return false;
+    if (out->unknown_n > 0)
+        rec_note_newer(out->unknown_type);
     for (int32_t i = 0, k = 0; i < out->count; i++) {
         uint64_t off = (uint64_t)(out->v[i].raw - data);
         while (k + 1 < r->hist.n && r->hist.v[k + 1].start <= off)

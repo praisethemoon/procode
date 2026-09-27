@@ -59,6 +59,10 @@ bool repo_rebuild(Arena *a, Repo *r, char *err, size_t errsz);
  * message in err when there is no repo or the state is unusable.
  */
 bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz);
+/* The error code of the last repo_open's failure: newer_history for a
+ * writer refused because the history holds records of a type this lap does
+ * not know, else no_repo. */
+const char *repo_error_code(void);
 /* The same for the repository whose root is root (absolute), found without
  * walking upward: how a branch reaches its parent folder. */
 bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,

@@ -228,7 +228,7 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     Repo repo;
     char err[512];
     if (!repo_open(a, &repo, !dry, err, sizeof err)) {
-        err_out(json, "no_repo", "%s", err);
+        err_out(json, repo_error_code(), "%s", err);
         return LAP_EXIT_ERR;
     }
     if (!branch_check(a, &repo, branch_given(argc, argv, value_flags),

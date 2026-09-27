@@ -12,6 +12,7 @@ static const char *type_name(RecType t) {
     case REC_SESSION_END: return "session_end";
     case REC_BRANCH: return "branch";
     case REC_MERGE: return "merge";
+    case REC_UNKNOWN: break; /* never written by this lap */
     }
     return "?";
 }
@@ -25,6 +26,22 @@ static void put_text_array(StrBuf *sb, const char *key, const Str *lines,
         json_escape(sb, lines[i].ptr, lines[i].len);
     }
     sb_putc(sb, ']');
+}
+
+void rec_note_newer(const char *type) {
+    static bool told; /* once a command */
+    if (told)
+        return;
+    told = true;
+    if (type)
+        fprintf(stderr, "note: this history has records of a newer type "
+                        "(\"%s\") that this lap does not know: they are "
+                        "skipped here. Update lap to see them.\n",
+                type);
+    else
+        fprintf(stderr, "note: this history has records of a newer type "
+                        "that this lap does not know: they are skipped "
+                        "here. Update lap to see them.\n");
 }
 
 char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
@@ -116,6 +133,8 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
             sb_puts(&sb, ",\"user\":");
             json_escape_c(&sb, rec->user);
         }
+        break;
+    case REC_UNKNOWN: /* only ever read: a writer refuses such a history */
         break;
     }
     sb_printf(&sb, ",\"ts\":\"%s\"", rec->ts);
@@ -308,8 +327,9 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
             out->already_n = (int32_t)al->arr.n;
         }
     } else {
-        snprintf(err, errsz, "unknown record type \"%s\"", type);
-        return false;
+        /* written by a newer lap: kept in the chain, not interpreted */
+        out->type = REC_UNKNOWN;
+        out->name = type;
     }
     out->ts = jobj_str(v, "ts");
     out->prev = jobj_str(v, "prev");
@@ -382,6 +402,8 @@ bool rec_log_parse(Arena *a, const char *data, size_t len, RecWhereFn where,
                      "hash chain broken at %s (record %s)", pos,
                      recs[n].id ? recs[n].id : "init");
         }
+        if (recs[n].type == REC_UNKNOWN && out->unknown_n++ == 0)
+            out->unknown_type = recs[n].name;
         prev_hash = recs[n].hash;
         n++;
     }

@@ -173,7 +173,7 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
     bool writing = sub && (strcmp(sub, "start") == 0 ||
                            strcmp(sub, "end") == 0);
     if (!repo_open(a, &repo, writing, err, sizeof err)) {
-        err_out(json, "no_repo", "%s", err);
+        err_out(json, repo_error_code(), "%s", err);
         return LAP_EXIT_ERR;
     }
     int32_t rc = LAP_EXIT_ERR;

@@ -81,12 +81,23 @@ static bool idx_load(Arena *a, const Repo *r, Idx *out, bool with_entries) {
     return true;
 }
 
+bool idx_header(Arena *a, const Repo *r, IdxHeader *out) {
+    Idx idx;
+    if (!idx_load(a, r, &idx, false))
+        return false;
+    *out = idx.h;
+    return true;
+}
+
 Idx *idx_ready(Arena *a, const Repo *r) {
     if (r->foreign) /* the index covers this folder's history only */
         return NULL;
     Idx *idx = (Idx *)arena_alloc(a, sizeof(Idx));
-    if (idx_load(a, r, idx, true) && idx->h.covered == r->hist.size)
+    if (idx_load(a, r, idx, true) && idx->h.covered == r->hist.size) {
+        if (idx->h.unknown > 0)
+            rec_note_newer(NULL);
         return idx;
+    }
     return NULL;
 }
 
@@ -389,6 +400,10 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
             break;
         case REC_MERGE:
             e.kind = IDX_MERGE;
+            break;
+        case REC_UNKNOWN: /* a writer refuses a history holding one */
+            e.kind = IDX_UNKNOWN;
+            s.idx.h.unknown++;
             break;
         }
         e.id = s.idx.h.commits;

@@ -399,7 +399,7 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
     Repo repo;
     char err[512];
     if (!repo_open(a, &repo, false, err, sizeof err)) {
-        err_out(json, "no_repo", "%s", err);
+        err_out(json, repo_error_code(), "%s", err);
         return LAP_EXIT_ERR;
     }
     RecLog log;
@@ -542,7 +542,7 @@ static int32_t branch_edit(Arena *a, int32_t argc, char **argv, bool json,
     Repo repo;
     char err[512];
     if (!repo_open(a, &repo, true, err, sizeof err)) {
-        err_out(json, "no_repo", "%s", err);
+        err_out(json, repo_error_code(), "%s", err);
         return LAP_EXIT_ERR;
     }
     int32_t rc = LAP_EXIT_ERR;

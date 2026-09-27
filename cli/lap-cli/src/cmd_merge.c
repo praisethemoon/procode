@@ -196,7 +196,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     Repo repo;
     char err[1024];
     if (!repo_open(a, &repo, !dry, err, sizeof err)) {
-        err_out(json, "no_repo", "%s", err);
+        err_out(json, repo_error_code(), "%s", err);
         return LAP_EXIT_ERR;
     }
     int32_t rc = LAP_EXIT_ERR;

@@ -1710,6 +1710,33 @@ expect_ok "$LAP" commit f.txt --branch main -i "work on main after the leak" -b 
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "an older lap reads a newer history as far as it understands it, and never writes to it"
+mkdir -p "$WORK/u24" && cd "$WORK/u24" && "$LAP" init >/dev/null 2>&1
+"$LAP" session start "before the newer lap" >/dev/null 2>&1
+printf 'a\n' > a.txt
+for f in a.txt .lapignore; do
+    "$LAP" commit "$f" -i "seed the fixture" -b "records $f as it starts" >/dev/null 2>&1
+done
+"$LAP" session end >/dev/null 2>&1
+CH24=$(ls .lap/log/main.*.jsonl | tail -n 1)
+PREV24=$(tail -n 1 "$CH24" | tr -d '\n' | shasum -a 256 | cut -d' ' -f1)
+# a record a newer lap would write, chained like any other
+printf '{"type":"amend","of":"x","intent":"better","behavior":"clearer","ts":"2026-09-27T00:00:00Z","prev":"%s"}\n' "$PREV24" >> "$CH24"
+expect_grep "records a.txt as it starts" "$LAP" log --json
+expect_grep 'newer type ("amend")' "$LAP" log
+expect_grep "records a.txt as it starts" "$LAP" show L1
+expect_grep "before the newer lap" "$LAP" rr S1
+expect_grep "clean" "$LAP" status
+expect_grep "chain ok: 6 records" "$LAP" verify
+expect_grep '1 record of a type this lap does not know ("amend")' "$LAP" verify
+printf 'b\n' >> a.txt
+SUM24=$(find .lap -type f ! -name lock | sort | xargs cksum)
+expect_grep '"error":"newer_history"' "$LAP" commit a.txt --no-session -i "try to write on it" -b "appends b to a.txt" --json
+expect_grep "newer_history" "$LAP" session start "try again" --json
+[ "$(find .lap -type f ! -name lock | sort | xargs cksum)" = "$SUM24" ] ||
+    fail "a refused writer changed .lap"
+cd "$WORK"
+
 t "a file tracked before it was ignored shows the same with and without caches"
 mkdir -p "$WORK/c23/ign" && cd "$WORK/c23" && "$LAP" init >/dev/null 2>&1
 printf 'a\n' > a.txt && printf 'x\n' > ign/x.txt

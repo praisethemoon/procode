@@ -124,7 +124,7 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
     Repo repo;
     char err[512];
     if (!repo_open(a, &repo, false, err, sizeof err)) {
-        err_out(json, "no_repo", "%s", err);
+        err_out(json, repo_error_code(), "%s", err);
         return LAP_EXIT_ERR;
     }
     RecLog log;
@@ -241,6 +241,11 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         if (log.torn_tail)
             sb_printf(&sb, ",\"torn_tail_bytes\":%llu",
                       (unsigned long long)log.torn_bytes);
+        if (log.unknown_n > 0) {
+            sb_printf(&sb, ",\"unknown_records\":%d,\"unknown_type\":",
+                      log.unknown_n);
+            json_escape_c(&sb, log.unknown_type);
+        }
         if (deep) {
             sb_printf(&sb, ",\"deep_checked\":%d,\"deep_mismatched\":%d",
                       checked, mismatched);
@@ -265,6 +270,11 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
             printf("note: torn trailing record ignored (%llu bytes from an "
                    "interrupted append; the next commit repairs it)\n",
                    (unsigned long long)log.torn_bytes);
+        if (log.unknown_n > 0)
+            printf("note: %d record%s of a type this lap does not know "
+                   "(\"%s\"): in the chain checked above, not interpreted\n",
+                   log.unknown_n, log.unknown_n == 1 ? "" : "s",
+                   log.unknown_type);
         if (deep) {
             fputs(sb_finish(&deep_out), stdout);
             printf("deep check: %d file%s, %s%d mismatch%s%s\n", checked,

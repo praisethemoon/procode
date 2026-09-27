@@ -347,5 +347,44 @@ void test_rec(void) {
     ASSERT_TRUE(rec_decode(a, tampered, len, &back2, err, sizeof err));
     ASSERT_TRUE(strcmp(back2.hash, r1.hash) != 0);
 
+    t_begin("rec: a record of a newer type decodes as unknown, in the chain, "
+            "its type kept");
+    const char *newer = "{\"type\":\"amend\",\"of\":\"x\",\"intent\":\"i\","
+                        "\"ts\":\"t\",\"prev\":\"p\"}";
+    Rec nu;
+    ASSERT_TRUE(rec_decode(a, newer, strlen(newer), &nu, err, sizeof err));
+    ASSERT_TRUE(nu.type == REC_UNKNOWN);
+    ASSERT_EQ_S(nu.name, "amend");
+    ASSERT_EQ_S(nu.prev, "p");
+    ASSERT_EQ_I((int32_t)strlen(nu.hash), 64);
+    const char *no_prev = "{\"type\":\"amend\",\"ts\":\"t\"}";
+    ASSERT_TRUE(!rec_decode(a, no_prev, strlen(no_prev), &nu, err,
+                            sizeof err));
+
+    t_begin("rec: a log with newer records parses, counts them, and checks "
+            "their chain");
+    char *n1 = tline; /* S1 from above, prev zero */
+    char *n2 = arena_printf(a, "{\"type\":\"amend\",\"of\":\"%s\",\"ts\":\"t\","
+                               "\"prev\":\"%s\"}",
+                            r1.hash, r1.hash);
+    Rec amend;
+    ASSERT_TRUE(rec_decode(a, n2, strlen(n2), &amend, err, sizeof err));
+    Rec r3;
+    memset(&r3, 0, sizeof r3);
+    r3.type = REC_SESSION_END;
+    r3.id = "S1";
+    r3.ts = "t";
+    r3.prev = amend.hash;
+    size_t l3n;
+    char *n3 = rec_encode(a, &r3, &l3n);
+    char *whole = arena_printf(a, "%s\n%s\n%s\n", n1, n2, n3);
+    RecLog nl;
+    ASSERT_TRUE(rec_log_parse(a, whole, strlen(whole), NULL, NULL, &nl, err,
+                              sizeof err));
+    ASSERT_EQ_I(nl.count, 3);
+    ASSERT_EQ_I(nl.unknown_n, 1);
+    ASSERT_EQ_S(nl.unknown_type, "amend");
+    ASSERT_TRUE(nl.chain_ok);
+
     arena_free(a);
 }

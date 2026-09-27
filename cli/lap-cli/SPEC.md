@@ -201,6 +201,18 @@ the hour that repeats when clocks go back, a local time means the earlier
 of its two moments. Anything else is refused with `bad_time`. Bounds are
 converted to UTC and compared as strings, which sort as times.
 
+**Records of a newer type.** From this version on, a lap reads a history a
+newer lap wrote as far as it understands it. A record whose `type` it does
+not know is kept in the chain (its `prev`, `ts` and hash are checked like
+any record's) and otherwise skipped, with one notice per command: *"this
+history has records of a newer type ("amend") … Update lap to see them"*.
+`verify` checks their chain and reports them (`unknown_records`,
+`unknown_type` in JSON). A **writer refuses** such a history
+(`newer_history`) before it repairs, heals or writes anything: what those
+records mean — a merge's, an amendment's — could make its write wrong.
+The rule protects the versions from this one on; an older lap refuses the
+whole history, as it always did.
+
 ### Chunks
 
 The log is kept as chunk files in `.lap/log/`, read in order as one stream:
