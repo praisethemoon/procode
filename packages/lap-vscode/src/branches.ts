@@ -17,6 +17,9 @@ export interface BranchRow {
     /* its folder is there and still this branch */
     readonly present: boolean;
     readonly path: string;
+    /* false for a branch known here only by its chunks (brought by git from
+     * another clone, or pruned once merged): it has no folder here */
+    readonly registered: boolean;
     /* commits since its base and since the last merge; null when its history
      * is nowhere to be read */
     readonly sinceBase: number | null;
@@ -64,6 +67,7 @@ export function parseBranchList(out: unknown, log: LapLog | null = null): Branch
             state: (STATES.includes(state) ? state : "active") as BranchState,
             present: b["present"] === true,
             path: typeof b["path"] === "string" ? (b["path"] as string) : "",
+            registered: b["registered"] !== false, /* absent: a lap from before */
             sinceBase: num(b["since_base"]),
             sinceMerge: num(b["since_merge"]),
             stopped: (Array.isArray(b["stopped"]) ? (b["stopped"] as unknown[]) : [])

@@ -49,6 +49,18 @@ test("branch list JSON becomes rows, with a stopped file's commit from the merge
     assert.equal(rows[1].present, false);
 });
 
+test("a branch known only by its chunks here is a row too, marked unregistered", () => {
+    const rows = parseBranchList({
+        ok: true,
+        branches: [
+            { id: "4123456789ab", name: "elsewhere", state: "active", present: false, path: "", registered: false, since_base: 1, since_merge: 1, stopped: [] },
+            { id: "5123456789ab", name: "pruned", state: "merged", present: false, path: "", registered: false, since_base: 2, since_merge: 0, stopped: [] },
+        ],
+    });
+    assert.deepEqual(rows.map((r) => `${r.name}:${r.state}:${r.registered}`), ["elsewhere:active:false", "pruned:merged:false"]);
+    assert.equal(parseBranchList(LIST)[0].registered, true, "a lap from before the field: registered");
+});
+
 test("anything that is not branch list's shape reads as no branches", () => {
     assert.deepEqual(parseBranchList(null), []);
     assert.deepEqual(parseBranchList({ ok: false, error: "unknown_command" }), []);

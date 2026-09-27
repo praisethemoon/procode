@@ -424,7 +424,7 @@ function BranchLine(props: {
                 aria-level={d + 1}
                 aria-expanded={isOpen}
                 tabIndex={0}
-                title={`branch ${r.name} (${r.id}) · ${r.state}\n${r.path}${r.present ? "" : " (gone)"}`}
+                title={`branch ${r.name} (${r.id}) · ${r.state}\n${r.registered ? `${r.path}${r.present ? "" : " (gone)"}` : "not registered here: read from its chunks, which git brought"}`}
                 onClick={() => props.setOpen(key, !isOpen)}
                 onKeyDown={(e) => {
                     if (e.key === "Enter" || (e.key === "ArrowRight") !== isOpen) props.setOpen(key, !isOpen);

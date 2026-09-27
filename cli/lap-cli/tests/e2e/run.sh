@@ -1559,7 +1559,10 @@ rm -rf "$BW"
 expect_grep "^b  *merged  *.* (gone)" "$LAP" branch list
 OUT=$("$LAP" session end 2>&1)
 [ "$OUT" = "session S1 ended" ] || fail "pruning said something: $OUT"
-expect_not_grep "^b " "$LAP" branch list
+grep -q '"name":"b"' .lap/branches.json && fail "the merged, gone branch is still registered"
+# its chunks are here: it is still listed, by its branch record, merged
+expect_grep "^b  *merged  *(not registered here: its chunks are)$" "$LAP" branch list
+expect_grep '"name":"b","state":"merged","present":false,"path":"","registered":false' "$LAP" branch list --json
 expect_grep "^d  *missing" "$LAP" branch list
 expect_grep "0 mismatch" "$LAP" verify --deep
 
@@ -2132,6 +2135,21 @@ expect_grep "0 mismatch" "$LAP" verify --deep
 expect_grep "nothing new to adopt" "$LAP" merge b
 [ "$(cat .lap/log/main.*.jsonl | grep -c '"type":"amend"')" = 1 ] ||
     fail "the parent does not hold exactly one amend record"
+cd "$WORK"
+
+t "a branch git merge brought from another clone is listed, with its sessions, though never registered here"
+merge_pair uc; BP="$WORK/uc-p"; BW="$WORK/uc-w"
+cd "$BW" && "$LAP" session start "T-8: work from elsewhere" --branch b --meta ticket=T-8 >/dev/null 2>&1
+in_branch g.txt 's/^g1$/G1/' "uppercases g1 on the branch"
+cd "$BW" && "$LAP" session end >/dev/null 2>&1
+git_merge_b || fail "git merge uc"
+# as in a clone that never started b: its registry does not know it
+cd "$BP" && printf '{"branches":[]}\n' > .lap/branches.json
+expect_grep "^b  *active  *(not registered here: its chunks are)$" "$LAP" branch list
+expect_grep '"name":"b","state":"active","present":false,"path":"","registered":false' "$LAP" branch list --json
+expect_grep "T-8: work from elsewhere" "$LAP" session list --branch b --meta ticket=T-8
+expect_grep "adopted 1 of 1" "$LAP" merge b
+expect_grep "^b  *merged" "$LAP" branch list
 cd "$WORK"
 else
     echo "skip: git not found, the branch scenarios did not run"

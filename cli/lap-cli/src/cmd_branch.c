@@ -392,6 +392,19 @@ static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
     return LAP_EXIT_OK;
 }
 
+/* True when lineage is main, or one whose chunks this folder's own history
+ * reads (itself, and in a branch folder the branches it started from). */
+static bool in_this_history(const Hist *h, const char *lineage) {
+    if (strcmp(lineage, LAP_MAIN_LINEAGE) == 0 ||
+        strcmp(lineage, h->lineage) == 0)
+        return true;
+    for (int32_t k = 0; k < h->n; k++) {
+        if (strcmp(h->v[k].lineage, lineage) == 0)
+            return true;
+    }
+    return false;
+}
+
 static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
     static const char *const bool_flags[] = {"--json", NULL};
     if (!flags_known(argc, argv, NULL, bool_flags))
@@ -409,9 +422,29 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
     }
     Branches reg; /* with the branches started from these branches */
     branches_load_deep(a, repo.lapdir, &reg);
+    const Hist *h = &repo.hist;
+    /* Branches whose chunks are here though no registry lists them: brought
+     * by git merge from another clone, or pruned once merged. Listed too,
+     * from their branch records, so their sessions and the name of what
+     * was adopted from them stay findable. */
+    int32_t nreg = reg.n;
+    const char **lins;
+    int32_t nlins = hist_lineages(a, repo.lapdir, &lins);
+    for (int32_t i = 0; i < nlins; i++) {
+        Rec br;
+        char ferr[256];
+        if (in_this_history(h, lins[i]) || branches_find(&reg, lins[i]) ||
+            !hist_first_record(a, repo.lapdir, lins[i], &br, ferr,
+                               sizeof ferr) ||
+            br.type != REC_BRANCH)
+            continue;
+        BranchEntry e = {lins[i], br.name, "", br.base, br.ts, NULL};
+        if (br.parent && !in_this_history(h, br.parent))
+            e.via = br.parent; /* a branch of another branch listed here */
+        branches_add(a, &reg, e);
+    }
     StrBuf sb;
     sb_init(&sb, a);
-    const Hist *h = &repo.hist;
     if (json) {
         sb_puts(&sb, "{\"ok\":true,\"self\":");
         if (h->parent[0]) {
@@ -449,6 +482,11 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
             branches_status(a, repo.lapdir, &log, e, &st);
         if (vopen)
             repo_close(&vr);
+        /* no folder is known for it, so none is missing: work not merged
+         * is going on elsewhere */
+        bool registered = i < nreg;
+        if (!registered && strcmp(st.state, "missing") == 0)
+            st.state = "active";
         int32_t depth = 0; /* how many branches it is below this folder */
         for (const BranchEntry *p = via; p && depth < 32;
              p = p->via ? branches_find(&reg, p->via) : NULL)
@@ -461,6 +499,7 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
             sb_printf(&sb, ",\"state\":\"%s\",\"present\":%s,\"path\":",
                       st.state, st.present ? "true" : "false");
             json_escape_c(&sb, e->path);
+            sb_printf(&sb, ",\"registered\":%s", registered ? "true" : "false");
             sb_printf(&sb, ",\"base\":\"%s\",\"started\":\"%s\"", e->base,
                       e->started);
             if (st.readable)
@@ -493,7 +532,9 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
         }
         int in = depth * 2; /* nested under the branch it started from */
         sb_printf(&sb, "%*s%-16s %-14s %s%s", in, "", e->name, st.state,
-                  e->path, st.present ? "" : " (gone)");
+                  registered ? e->path : "(not registered here: its chunks "
+                                         "are)",
+                  st.present || !registered ? "" : " (gone)");
         if (via)
             sb_printf(&sb, "  (from %s)", via->name);
         sb_putc(&sb, '\n');

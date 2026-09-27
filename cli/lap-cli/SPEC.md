@@ -598,6 +598,14 @@ finding its history nowhere.
   id) in `--json`, and judges its state against that branch's history,
   where its merges are recorded. It is tended (`forget`, `move`) in that
   branch's folder.
+- **Known by its chunks only.** A branch whose chunks are in `.lap/log/`
+  but which no registry lists — brought by `git merge` from a clone that
+  started it, or dropped once merged and gone — is listed too, after the
+  registered ones, from its branch record: `registered: false`, no path,
+  never `missing` (no folder of it is known here; one not merged is
+  `active`), and `via` its parent when that is another branch listed here.
+  Its sessions read with `--branch`, and the sessions adopted from it keep
+  its name.
 
 ### Not in this version
 
@@ -903,8 +911,9 @@ started from it, indented: its name, state and last known path (`(gone)`
 when its folder is not there), its commits since its base and since the
 last merge, the files a merge stopped, and for a `missing` one the two
 fixes. `--json`: `{"ok":true,"self":{id, name, parent, base} |
-null,"branches":[{id, name, state, present, path, base, started,
-since_base, since_merge, merged, stopped, stops, via}]}`, the counts
+null,"branches":[{id, name, state, present, path, registered, base, started,
+since_base, since_merge, merged, stopped, stops, via}]}`, `registered`
+false (and `path` empty) for a branch known here only by its chunks, the counts
 `null` when the branch's history is nowhere to be read, `merged` the last
 merged head or `null`, `stopped` the stopped files, `stops` the same with
 the first commit not adopted in each (`[{file, at}]`), and `via` the id of

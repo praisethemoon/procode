@@ -134,6 +134,16 @@ test("ticketSessions: through lap, before a merge, after it, and partly merged",
         assert.equal(half[0].adoptedFrom, "half");
         assert.equal(half[0].stops?.[0].file, "a.txt");
         assert.match(half[0].stops?.[0].at ?? "", /^[0-9a-f]{64}$/);
+
+        // feat's folder gone: the next write prunes it from the registry,
+        // and its adopted session still names it, from its chunks here
+        fs.rmSync(path.join(root, "feat"), { recursive: true });
+        lap(parent, "session", "start", "unrelated", "--branch", "main");
+        assert.doesNotMatch(fs.readFileSync(path.join(parent, ".lap", "branches.json"), "utf8"), /"feat"/);
+        r = await ticketSessions(parent, "T-1");
+        const kept = r.value.filter((x) => x.msg === "T-1: work in feat");
+        assert.equal(kept.length, 1);
+        assert.equal(kept[0].adoptedFrom, "feat");
     } finally {
         if (saved === undefined) delete process.env["LAP_BIN"];
         else process.env["LAP_BIN"] = saved;
