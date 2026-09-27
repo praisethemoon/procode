@@ -600,7 +600,8 @@ finding its history nowhere.
 - **States.** `merged`: a merge adopted it up to its head, with no file
   stopped. `partly merged`: a merge stopped a file. `missing`: its folder
   is gone and it was not merged up to its head. `active`: anything else.
-- **Merged and gone → dropped silently** by the next writing command: its
+- **Merged and gone → dropped silently** by the next writing command (gone:
+  its folder is missing, or holds another branch now): its
   history is in this folder's chunks, nothing is lost. Everything else
   stays — an unmerged or stopped branch whose folder is gone is shown as
   `missing` until `lap branch forget` drops it or `lap branch move` points

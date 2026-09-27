@@ -303,17 +303,21 @@ bool repo_abspath(const char *user_path, char *out, size_t outsz) {
 }
 
 /* Writers drop the registry entries of branches merged up to their head
- * whose folder is gone: their history is in this folder's chunks, nothing
- * is lost. Nothing else about the registry is acted on, and nothing here
- * can fail the command: hints never do. */
+ * whose folder is gone — missing, or now holding another branch: their
+ * history is in this folder's chunks, nothing is lost. Nothing else about
+ * the registry is acted on, and nothing here can fail the command: hints
+ * never do. */
 static void prune_branches(Arena *a, Repo *r) {
     Branches reg;
     branches_load(a, r->lapdir, &reg);
-    bool any_gone = false; /* the common case costs one stat per branch */
+    /* the common case costs one small read per branch */
+    bool any_gone = false;
     for (int32_t i = 0; i < reg.n && !any_gone; i++) {
-        char elap[LAP_PATH_MAX];
+        char elap[LAP_PATH_MAX], lin[HIST_LINEAGE_MAX], err[256];
         snprintf(elap, sizeof elap, "%s/%s", reg.v[i].path, LAP_DIR);
-        any_gone = !plat_is_dir(elap);
+        any_gone = !plat_is_dir(elap) ||
+                   !hist_folder_lineage(a, elap, lin, err, sizeof err) ||
+                   strcmp(lin, reg.v[i].id) != 0;
     }
     if (!any_gone)
         return;

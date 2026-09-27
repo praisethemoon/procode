@@ -2247,6 +2247,24 @@ expect_grep "nothing new to adopt" "$LAP" merge b
     fail "the parent does not hold exactly one amend record"
 cd "$WORK"
 
+t "a merged branch whose folder now holds another branch leaves the registry on the next write"
+merge_pair rf; BP="$WORK/rf-p"; BW="$WORK/rf-w"
+cd "$BW" && "$LAP" session start "branch work" --branch b >/dev/null 2>&1
+in_branch g.txt 's/^g3$/G3/' "uppercases g3 on the branch"
+cd "$BW" && "$LAP" session end >/dev/null 2>&1
+git_merge_b || fail "git merge rf"
+cd "$BP" && expect_grep "adopted 1 of 1" "$LAP" merge b
+# the folder is reused: its lap history goes, and it starts branch c
+cd "$BW" && rm -rf .lap && git checkout -q --detach && git reset -q --hard "$(cd "$BP" && git rev-parse HEAD)"
+expect_grep "branch c " "$LAP" branch start c --from ../rf-p
+cd "$BP" && expect_ok "$LAP" session start "a write in the parent" --branch main
+grep -q '"name":"b"' .lap/branches.json && fail "the merged branch whose folder holds c is still registered"
+grep -q '"name":"c"' .lap/branches.json || fail "branch c left the registry"
+[ "$("$LAP" branch list | grep -c "$(cd "$BW" && pwd -P)")" = 1 ] ||
+    fail "branch list shows the folder more than once"
+expect_grep "^b  *merged  *(not registered here" "$LAP" branch list
+cd "$WORK"
+
 t "a branch git merge brought from another clone is listed, with its sessions, though never registered here"
 merge_pair uc; BP="$WORK/uc-p"; BW="$WORK/uc-w"
 cd "$BW" && "$LAP" session start "T-8: work from elsewhere" --branch b --meta ticket=T-8 >/dev/null 2>&1
