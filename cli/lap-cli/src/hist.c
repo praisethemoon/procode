@@ -767,10 +767,13 @@ bool hist_write_lineage(const char *lapdir, const char *lineage) {
 }
 
 /* The first record of the chunk at path (named name, for messages), read
- * through a head window that doubles until its line fits. */
+ * through a head window that doubles until its line fits. A chunk with no
+ * complete line fails with *torn (when given) set. */
 static bool chunk_first_record(Arena *a, const char *path, const char *name,
-                               uint64_t size, Rec *out, char *err,
+                               uint64_t size, Rec *out, bool *torn, char *err,
                                size_t errsz) {
+    if (torn)
+        *torn = false;
     size_t want = size < 65536 ? (size_t)size : 65536;
     for (;;) {
         char *data;
@@ -790,6 +793,8 @@ static bool chunk_first_record(Arena *a, const char *path, const char *name,
         }
         if ((uint64_t)want >= size) {
             snprintf(err, errsz, "%s holds no complete record", name);
+            if (torn)
+                *torn = true;
             return false;
         }
         want = (uint64_t)want * 2 < size ? want * 2 : (size_t)size;
@@ -808,7 +813,7 @@ bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
                  lineage, path);
         return false;
     }
-    return chunk_first_record(a, path, name, size, out, err, errsz);
+    return chunk_first_record(a, path, name, size, out, NULL, err, errsz);
 }
 
 bool hist_check(Arena *a, const Hist *h, bool chain, char *err,
@@ -839,11 +844,16 @@ bool hist_check(Arena *a, const Hist *h, bool chain, char *err,
             bool found;
             Rec first;
             char ferr[256];
+            bool torn;
             hist_chunk_path(h, prev, ppath, sizeof ppath);
-            if (!file_tail_hash(a, ppath, tail, &found) ||
-                !chunk_first_record(a, path, k->name, k->size, &first, ferr,
-                                    sizeof ferr) ||
-                !found || strcmp(first.prev, tail) != 0) {
+            bool read = chunk_first_record(a, path, k->name, k->size, &first,
+                                           &torn, ferr, sizeof ferr);
+            /* an open chunk holding only a torn line is an empty chunk with
+             * a torn tail, which the writer cuts under the lock */
+            if (!read && torn && i == h->n - 1)
+                break;
+            if (!file_tail_hash(a, ppath, tail, &found) || !read || !found ||
+                strcmp(first.prev, tail) != 0) {
                 snprintf(err, errsz, "%s does not continue %s: the hash "
                                      "chain is broken there",
                          k->name, h->v[prev].name);

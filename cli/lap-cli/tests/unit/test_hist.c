@@ -730,6 +730,22 @@ static void test_check(Arena *a) {
     ASSERT_TRUE(!hist_check(a, &h, true, err, sizeof err));
     ASSERT_TRUE(strstr(err, "main.000002.jsonl does not continue "
                             "main.000001.jsonl") != NULL);
+
+    t_begin("hist_check: an open chunk holding only a torn line is an empty "
+            "chunk with a torn tail, not a broken chain");
+    clear_chunks();
+    put_file("main.000001.jsonl", arena_printf(a, "%s\n%s\n", l0, l1));
+    put_file("main.000002.jsonl", "{\"type\":\"commit\",\"id\":\"L9");
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(hist_check(a, &h, true, err, sizeof err));
+
+    t_begin("hist_check: a sealed chunk holding only a torn line is still "
+            "refused");
+    put_file("main.000002.jsonl", "{\"type\":\"commit\",\"id\":\"L9");
+    put_file("main.000003.jsonl", arena_printf(a, "%s\n", l2));
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(!hist_check(a, &h, true, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "main.000002.jsonl ends in a torn line") != NULL);
     clear_chunks();
 }
 

@@ -2363,6 +2363,19 @@ once "B2 shouts line 40"
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "a torn first line in the open chunk a branch start left empty is cut by the next commit"
+merge_pair tf1; BP="$WORK/tf1-p"; cd "$BP"
+C=$(open_chunk)
+[ ! -s "$C" ] || fail "the branch start left the open chunk non-empty"
+printf '{"type":"commit","id":"L9' >> "$C"
+expect_grep "torn trailing record" "$LAP" verify
+in_parent g.txt 's/^g1$/G1/' "uppercases g1 after the torn append"
+cd "$WORK/tf1-p"
+expect_not_grep '"id":"L9' cat "$C"
+expect_grep "chain ok" "$LAP" verify
+expect_grep "uppercases g1 after the torn append" cat "$C"
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"
