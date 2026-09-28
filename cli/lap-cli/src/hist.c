@@ -873,6 +873,12 @@ bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
     hist_chunk_name(lineage, 1, name);
     snprintf(path, sizeof path, "%s/%s/%s", lapdir, LAP_LOG_DIR, name);
     uint64_t size;
+    if (plat_is_unreachable(path)) { /* there, maybe, but not to be read */
+        snprintf(err, errsz, "cannot read the history of %s: %s cannot be "
+                             "reached (no permission on its folder)",
+                 lineage, path);
+        return false;
+    }
     if (!plat_file_size(path, &size) || size == 0) {
         snprintf(err, errsz, "the history of %s starts nowhere: %s is "
                              "missing or empty",

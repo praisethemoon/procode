@@ -2681,6 +2681,23 @@ expect_not_grep "warning" "$LAP" rebuild
 cd "$WORK/ll1-main" && expect_not_grep "warning" "$LAP" rebuild
 cd "$WORK"
 
+t "a branch whose chunks cannot be reached is named as unreadable, not as missing"
+mkdir -p "$WORK/ur2-main" && cd "$WORK/ur2-main" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+for f in a.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+cp -R "$WORK/ur2-main" "$WORK/ur2-feat" && cd "$WORK/ur2-feat" &&
+    "$LAP" branch start feat --from ../ur2-main >/dev/null 2>&1 || fail "start feat"
+if [ "$(id -u)" != 0 ]; then
+    chmod 000 "$WORK/ur2-feat/.lap/log"
+    cd "$WORK/ur2-main"
+    expect_grep "cannot be reached (no permission on its folder)" "$LAP" log --branch feat
+    expect_not_grep "missing or empty" "$LAP" log --branch feat
+    chmod 755 "$WORK/ur2-feat/.lap/log"
+fi
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

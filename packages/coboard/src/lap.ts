@@ -108,6 +108,9 @@ export async function ticketSessions(root: string, ticket: string): Promise<LapR
         return { ok: false, value: [], error: (e as Error).message };
     }
     const branches: BranchSessions[] = [];
+    /* what could not be read, each named: the sessions read are still
+     * given, but never as if they were all of them */
+    const errors: string[] = [];
     try {
         const list = await run(root, ["branch", "list"]);
         const rows = (list["branches"] as Record<string, unknown>[]) ?? [];
@@ -126,14 +129,19 @@ export async function ticketSessions(root: string, ticket: string): Promise<LapR
             try {
                 const p = await run(root, ["session", "list", "--meta", `ticket=${ticket}`, "--branch", name]);
                 branches.push({ name, stops, sessions: (p["sessions"] as LapSession[]) ?? [], ...more });
-            } catch {
-                branches.push({ name, stops, sessions: [], ...more }); /* its history is nowhere to be read */
+            } catch (e) {
+                branches.push({ name, stops, sessions: [], ...more });
+                errors.push(`branch ${name}: ${(e as Error).message}`);
             }
         }
-    } catch {
-        /* a lap from before branches, or none started: this folder's alone */
+    } catch (e) {
+        /* a lap from before branches knows no such command: this folder's
+         * sessions are all there are; anything else is a failure to say */
+        const message = (e as Error).message;
+        if (!/unknown command/.test(message)) errors.push(`lap branch list: ${message}`);
     }
-    return { ok: true, value: mergeSessions(main, branches) };
+    const value = mergeSessions(main, branches);
+    return errors.length ? { ok: false, value, error: errors.join("; ") } : { ok: true, value };
 }
 
 export interface BranchSessions {

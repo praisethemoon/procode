@@ -271,3 +271,65 @@ test("startSession: records where lap says this folder does — main despite a l
         else process.env["LAP_BRANCH"] = savedBranch;
     }
 });
+
+test("ticketSessions: a branch whose history cannot be read is named in the error, its sessions not silently dropped", { skip: (!LAP && noCli("lap")) || process.getuid?.() === 0 }, async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-sessions-")));
+    const parent = path.join(root, "proj");
+    const feat = path.join(root, "feat");
+    fs.mkdirSync(parent);
+    const saved = process.env["LAP_BIN"];
+    process.env["LAP_BIN"] = LAP;
+    const lap = (cwd: string, ...args: string[]) => execFileSync(LAP, args, { cwd, env: { ...process.env, LAP_USER: "tester" } });
+    try {
+        lap(parent, "init");
+        fs.writeFileSync(path.join(parent, "a.txt"), "one\n");
+        for (const f of ["a.txt", ".lapignore"]) lap(parent, "commit", f, "--no-session", "-i", "Seed the project files", "-b", `Records ${f} as it starts`);
+        lap(parent, "session", "start", "T-1: on main", "--meta", "ticket=T-1", "--branch", "main");
+        lap(parent, "session", "end");
+        fs.cpSync(parent, feat, { recursive: true });
+        lap(feat, "branch", "start", "feat", "--from", parent);
+        lap(feat, "session", "start", "T-1: in feat", "--meta", "ticket=T-1", "--branch", "feat");
+        fs.chmodSync(path.join(feat, ".lap", "log"), 0o000);
+        const r = await ticketSessions(parent, "T-1");
+        fs.chmodSync(path.join(feat, ".lap", "log"), 0o755);
+        assert.equal(r.ok, false);
+        assert.match(r.error ?? "", /^branch feat: .*cannot be reached \(no permission on its folder\)/);
+        assert.deepEqual(r.value.map((s) => s.msg), ["T-1: on main"], "what could be read is still given");
+    } finally {
+        if (saved === undefined) delete process.env["LAP_BIN"];
+        else process.env["LAP_BIN"] = saved;
+    }
+});
+
+test("board_sessions: a session whose commits could not be read is named in lapError", async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-sessions-")));
+    /* a lap that lists one session and cannot read its commits */
+    const fake = path.join(root, "fake-lap");
+    fs.writeFileSync(
+        fake,
+        `#!/bin/sh
+case "$1 $2" in
+"session list") echo '{"ok":true,"sessions":[{"id":"S1","msg":"T-1: work","started":"2026-09-28T00:00:00Z","ended":null,"commits":1,"active":false}]}' ;;
+"branch list") echo '{"ok":true,"self":null,"branches":[]}' ;;
+*) echo '{"ok":false,"error":"history_broken","message":"history chunk main.000002.jsonl is missing"}'; exit 1 ;;
+esac
+`,
+    );
+    fs.chmodSync(fake, 0o755);
+    const saved = process.env["LAP_BIN"];
+    process.env["LAP_BIN"] = fake;
+    try {
+        const board = new Board(root);
+        const epic = board.create({ kind: "epic", title: "Work" });
+        const t = board.create({ kind: "ticket", title: "A ticket", epic: epic.id });
+        const out = await handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "board_sessions", arguments: { ticket: t.id } } }, { cwd: root, author: "agent" });
+        const text = (out as { result: { content: { text: string }[] } }).result.content[0].text;
+        const got = JSON.parse(text) as { sessions: { id: string; commits: unknown[] }[]; lapError?: string };
+        assert.equal(got.sessions.length, 1);
+        assert.deepEqual(got.sessions[0].commits, []);
+        assert.equal(got.lapError, "session S1: history chunk main.000002.jsonl is missing");
+    } finally {
+        if (saved === undefined) delete process.env["LAP_BIN"];
+        else process.env["LAP_BIN"] = saved;
+    }
+});

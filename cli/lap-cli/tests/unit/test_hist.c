@@ -1,5 +1,6 @@
 #include <stdio.h>
 #ifndef _WIN32
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -972,6 +973,32 @@ static void test_lost_lineage(Arena *a) {
     clear_chunks();
 }
 
+static void test_first_record_unreadable(Arena *a) {
+#ifndef _WIN32
+    if (getuid() == 0)
+        return; /* root reads through any permission */
+    t_begin("hist_first_record: a chunk it cannot reach is named as "
+            "unreadable, not as missing");
+    clear_chunks();
+    put_file("0123456789ab.000001.jsonl",
+             lost_branch_line(a, "0123456789ab", "main", 1));
+    char logdir[256], err[512];
+    snprintf(logdir, sizeof logdir, "%s/%s", T_LAPDIR, LAP_LOG_DIR);
+    Rec br;
+    ASSERT_TRUE(hist_first_record(a, T_LAPDIR, "0123456789ab", &br, err,
+                                  sizeof err));
+    ASSERT_TRUE(chmod(logdir, 0) == 0);
+    ASSERT_TRUE(!hist_first_record(a, T_LAPDIR, "0123456789ab", &br, err,
+                                   sizeof err));
+    chmod(logdir, 0755);
+    ASSERT_TRUE(strstr(err, "cannot be reached (no permission") != NULL);
+    ASSERT_TRUE(strstr(err, "missing or empty") == NULL);
+    clear_chunks();
+#else
+    (void)a;
+#endif
+}
+
 void test_hist(void) {
     Arena *a = arena_new(0);
     test_names();
@@ -985,6 +1012,7 @@ void test_hist(void) {
     test_index_match(a);
     test_lineages(a);
     test_lost_lineage(a);
+    test_first_record_unreadable(a);
     test_tmp_files(a);
     arena_free(a);
 }

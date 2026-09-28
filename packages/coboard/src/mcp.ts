@@ -218,11 +218,14 @@ export const TOOLS: readonly Tool[] = [
             board.get(ticket);
             const s = await ticketSessions(board.root, ticket);
             const sessions = [];
+            const errors = s.ok ? [] : [s.error ?? "lap failed"];
             for (const session of s.value) {
                 /* a session still only in a branch: that branch's, as ids repeat across folders */
-                sessions.push({ ...session, commits: (await sessionCommits(board.root, session.id, session.branch)).value });
+                const c = await sessionCommits(board.root, session.id, session.branch);
+                if (!c.ok) errors.push(`session ${session.branch ? `${session.branch}/` : ""}${session.id}: ${c.error ?? "lap failed"}`);
+                sessions.push({ ...session, commits: c.value });
             }
-            return { ticket, sessions, ...(s.ok ? {} : { lapError: s.error }), link: sessionCommand(ticket) };
+            return { ticket, sessions, ...(errors.length ? { lapError: errors.join("; ") } : {}), link: sessionCommand(ticket) };
         },
     },
 ];
