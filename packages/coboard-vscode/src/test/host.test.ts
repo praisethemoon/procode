@@ -163,6 +163,7 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
         "coboard.open",
         "coboard.delete",
         "coboard.archive",
+        "coboard.archiveWithNote",
         "coboard.unarchive",
         "coboard.close",
         "coboard.reopen",
@@ -210,9 +211,16 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
     const t = b.get("T-3");
     assert.ok(t.kind === "ticket" && t.comments.length === 1);
 
-    // Archive from a row's right-click: it says what goes with it, asks why,
-    // and the sidebar is sent the archived items, marked, to filter itself.
-    await commands.get("coboard.archive")!({ webviewSection: "milestone", id: "M-1", coboardArchived: false });
+    // Archive from a row's right-click archives at once: nothing asked, no note.
+    const promptsBefore = prompts.length;
+    await commands.get("coboard.archive")!({ webviewSection: "ticket", id: "T-2", coboardArchived: false });
+    assert.equal(prompts.length, promptsBefore, "Archive asked for a note");
+    const direct = b.get("T-2").archived;
+    assert.ok(direct && direct.via === null && direct.reason === undefined, "archived itself, with no note");
+    await commands.get("coboard.unarchive")!({ webviewSection: "ticket", id: "T-2" });
+    // Archive with Note says what goes with it, asks why, and the sidebar is
+    // sent the archived items, marked, to filter itself.
+    await commands.get("coboard.archiveWithNote")!({ webviewSection: "milestone", id: "M-1", coboardArchived: false });
     assert.equal(prompts.at(-1), "Archive M-1 and the 2 items under it");
     const archived = b.get("T-1").archived;
     assert.deepEqual(archived && [archived.via, archived.reason], ["M-1", "shipped"]);

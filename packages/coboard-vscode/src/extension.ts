@@ -519,23 +519,30 @@ export function activate(ctx: vscode.ExtensionContext): void {
         panels.get(item.id)?.dispose();
         refreshAll(tree);
     });
-    reg("coboard.archive", async (arg) => {
+    /* Archive archives at once, with no note; Archive with Note asks for
+     * one first, saying what goes with the item, and Escape cancels. */
+    const archive = async (arg: unknown, withNote: boolean) => {
         const id = idOf(arg);
         if (!id) return;
         const b = requireBoard();
         const item = b.get(id);
-        const under = b
-            .all({ archived: "include" })
-            .filter((c) => !c.archived && ((c.kind !== "epic" && c.epic === item.id) || (c.kind === "ticket" && c.milestone === item.id)));
-        const reason = await vscode.window.showInputBox({
-            title: `Archive ${item.id}${under.length > 0 ? ` and the ${under.length} item${under.length === 1 ? "" : "s"} under it` : ""}`,
-            prompt: "Why, optionally. Archived items leave the board's lists and search; Unarchive brings them back.",
-            placeHolder: "e.g. shipped in 0.1",
-        });
-        if (reason === undefined) return;
-        b.archive(item.id, { by: author(), reason });
+        let reason: string | undefined;
+        if (withNote) {
+            const under = b
+                .all({ archived: "include" })
+                .filter((c) => !c.archived && ((c.kind !== "epic" && c.epic === item.id) || (c.kind === "ticket" && c.milestone === item.id)));
+            reason = await vscode.window.showInputBox({
+                title: `Archive ${item.id}${under.length > 0 ? ` and the ${under.length} item${under.length === 1 ? "" : "s"} under it` : ""}`,
+                prompt: "Why, optionally. Archived items leave the board's lists and search; Unarchive brings them back.",
+                placeHolder: "e.g. shipped in 0.1",
+            });
+            if (reason === undefined) return;
+        }
+        b.archive(item.id, { by: author(), ...(reason ? { reason } : {}) });
         refreshAll(tree);
-    });
+    };
+    reg("coboard.archive", (arg) => archive(arg, false));
+    reg("coboard.archiveWithNote", (arg) => archive(arg, true));
     reg("coboard.unarchive", (arg) => {
         const id = idOf(arg);
         if (!id) return;

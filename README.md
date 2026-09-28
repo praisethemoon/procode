@@ -51,7 +51,9 @@ Coboard is a very simple board of epics, milestones and tickets. It is meant
 to be a more robust alternative to Claude's plan: you can always keep track
 of the progress, comment on the tickets, and have better visibility. Agents
 work it through its MCP server; you work it in the extension's **Board**
-view.
+view. Finished work is archived from a row's right-click: **Archive** takes
+it (and what is under it) out of the lists at once, **Archive with Note**
+asks why first; **Unarchive** brings it back.
 
 Coboard works perfectly fine without lap. But if lap is available, a ticket
 also shows the sessions (groups of changes) made under it, for a smoother
