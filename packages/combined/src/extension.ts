@@ -2,10 +2,11 @@
  *
  * Each part is the extension it always was — its own activate(), its own
  * views and commands (the manifest is merged from theirs at build time) — and
- * this file only starts them in turn. The lap and kb CLIs are not in the
- * package: the user builds them, and each part finds its CLI through its own
- * setting (clis.ts). That keeps the package free of native code, so one .vsix
- * installs on every platform.
+ * this file only starts them in turn. A platform package carries the lap and
+ * kb CLIs in its bin/, and they are placed in ~/.procode/bin before any part
+ * starts (procodebin.ts); the package for every platform carries none, and
+ * the user builds them. Either way each part finds its CLI through its own
+ * setting (clis.ts), else ~/.procode/bin, else PATH.
  */
 
 import * as fs from "node:fs";
@@ -15,9 +16,10 @@ import * as vscode from "vscode";
 import { forClaude } from "./claude";
 import { CLIS, Cli, missingMessage, resolveCli, serverNeeds } from "./clis";
 import { outdated, withServers } from "./mcpjson";
+import { commandFor, exeName, place, procodeBinDir, sourceOf } from "./procodebin";
 import { ShippedSkill, behind, folderHash, install, shippedSkills, stateOf } from "./skills";
 
-export { folderHash, forClaude, outdated, resolveCli, withServers };
+export { commandFor, folderHash, forClaude, outdated, place, resolveCli, sourceOf, withServers };
 
 interface Part {
     activate(ctx: vscode.ExtensionContext): unknown;
@@ -32,10 +34,29 @@ const PARTS: readonly [string, Part][] = [
     ["techdocs", require("../../techdocs-vscode/out/extension.js") as Part],
 ];
 
-/* The command a CLI's setting names, "kb" or "lap" when it names none. */
-function cliCommand(settingId: string, fallback: string): string {
-    const [section, key] = settingId.split(".");
-    return vscode.workspace.getConfiguration(section).get<string>(key, fallback)?.trim() || fallback;
+/* The settings that can name each CLI, first match wins: lap's own view has
+ * lap.path besides the Board's setting. */
+const CLI_SETTINGS: Record<Cli["name"], readonly string[]> = {
+    kb: ["knowledge.cliPath"],
+    lap: ["coboard.lapPath", "lap.path"],
+};
+
+/* The command a setting the user set names for a CLI; undefined when every
+ * one is at its default. */
+function setByUser(cli: Cli["name"]): string | undefined {
+    for (const id of CLI_SETTINGS[cli]) {
+        const [section, key] = id.split(".");
+        const i = vscode.workspace.getConfiguration(section).inspect<string>(key);
+        const value = (i?.workspaceFolderValue ?? i?.workspaceValue ?? i?.globalValue)?.trim();
+        if (value) return value;
+    }
+    return undefined;
+}
+
+/* The command to run a CLI: the user's setting, else ~/.procode/bin's, else
+ * the bare name for PATH. */
+function cliCommand(cli: Cli["name"]): string {
+    return commandFor(cli, setByUser(cli), isFile);
 }
 
 /* Board › Board Folder, handed to coboard's server as COBOARD_DIR so agents
@@ -69,14 +90,14 @@ export function servers(ctx: vscode.ExtensionContext): Server[] {
             label: "coboard: the board",
             command: process.execPath,
             args: [script("coboard")],
-            env: { ...node, LAP_BIN: cliCommand("coboard.lapPath", "lap"), ...boardFolder() },
+            env: { ...node, LAP_BIN: cliCommand("lap"), ...boardFolder() },
         },
         {
             name: "kb",
             label: "kb: the knowledge base",
             command: process.execPath,
             args: [script("kb")],
-            env: { ...node, KB_BIN: cliCommand("knowledge.cliPath", "kb") },
+            env: { ...node, KB_BIN: cliCommand("kb") },
         },
         {
             name: "techdocs",
@@ -329,7 +350,7 @@ function isFile(p: string): boolean {
 /* The command a CLI's setting names, when it cannot be found; null when it
  * can. */
 function missingCli(cli: Cli): string | null {
-    const command = cliCommand(cli.settingId, cli.name);
+    const command = cliCommand(cli.name);
     return resolveCli(command, process.env["PATH"] ?? "", isFile) ? null : command;
 }
 
@@ -352,7 +373,40 @@ function checkClis(): void {
     }
 }
 
+/* Places each CLI in ~/.procode/bin (procodebin.ts), and puts that folder
+ * first on the extension host's PATH, where the parts look for a bare "lap"
+ * or "kb". PATH is searched without the folder itself, so a link never
+ * points at its own copy. */
+function installClis(ctx: vscode.ExtensionContext): void {
+    const dir = procodeBinDir();
+    const pathVar = (process.env["PATH"] ?? "")
+        .split(path.delimiter)
+        .filter((d) => path.resolve(d) !== path.resolve(dir))
+        .join(path.delimiter);
+    let any = false;
+    for (const cli of CLIS) {
+        const setting = setByUser(cli.name);
+        const bundled = path.join(ctx.extensionPath, "bin", exeName(cli.name));
+        const source = sourceOf(
+            setting ? resolveCli(setting, pathVar, isFile) : null,
+            isFile(bundled) ? bundled : null,
+            resolveCli(cli.name, pathVar, isFile),
+        );
+        const to = path.join(dir, exeName(cli.name));
+        if (source) {
+            try {
+                place(source, to);
+            } catch (e) {
+                console.error(`procode: could not place ${cli.name} in ${dir}: ${(e as Error).message}`);
+            }
+        }
+        any ||= isFile(to);
+    }
+    if (any) process.env["PATH"] = [dir, pathVar].join(path.delimiter);
+}
+
 export function activate(ctx: vscode.ExtensionContext): void {
+    installClis(ctx);
     for (const [name, part] of PARTS) {
         try {
             void part.activate(ctx);

@@ -29,6 +29,18 @@ const manifest = JSON.parse(fs.readFileSync(path.join(dist, "package.json"), "ut
 const folder = fs.mkdtempSync(path.join(os.tmpdir(), "procode-check-"));
 fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify({ mcpServers: { other: { command: "x" } } }));
 
+/* ~/.procode/bin, in the check's own folder so the real one is never
+ * touched, and a lap and kb "on PATH" for procode to link into it. */
+const procodeBin = path.join(folder, "procode-bin");
+process.env.PROCODE_BIN_DIR = procodeBin;
+const onPath = path.join(folder, "on-path");
+fs.mkdirSync(onPath);
+const osExe = (cli) => (process.platform === "win32" ? `${cli}.exe` : cli);
+for (const cli of ["lap", "kb"]) {
+    fs.writeFileSync(path.join(onPath, osExe(cli)), `#!/bin/sh\necho ${cli}\n`, { mode: 0o755 });
+}
+process.env.PATH = [onPath, process.env.PATH].join(path.delimiter);
+
 const registered = new Map();
 const errors = [];
 const warnings = [];
@@ -133,6 +145,7 @@ const vscode = new Proxy(
                  * show it is passed on, and the CLI paths the scenarios move) */
                 getConfiguration: (section) => ({
                     get: (k, d) => (`${section}.${k}` in settings ? settings[`${section}.${k}`] : d),
+                    inspect: (k) => ({ globalValue: settings[`${section}.${k}`] }),
                     update: async () => undefined,
                 }),
             },
@@ -158,6 +171,22 @@ await new Promise((r) => setTimeout(r, 200));
 Module._load = load;
 
 assert.deepEqual(errors, [], "no part reported an error while starting");
+
+// Activation placed each CLI in ~/.procode/bin: a copy of the package's own
+// when it carries one (a platform build), else a link to the one on PATH
+// (a copy on Windows); and it put that folder first on PATH for the parts.
+for (const cli of ["lap", "kb"]) {
+    const placed = path.join(procodeBin, osExe(cli));
+    const own = path.join(dist, "bin", osExe(cli));
+    if (fs.existsSync(own)) {
+        assert.deepEqual(fs.readFileSync(placed), fs.readFileSync(own), `the package's ${cli} is copied into ~/.procode/bin`);
+    } else if (process.platform === "win32") {
+        assert.deepEqual(fs.readFileSync(placed), fs.readFileSync(path.join(onPath, osExe(cli))), `${cli} is copied into ~/.procode/bin`);
+    } else {
+        assert.equal(fs.readlinkSync(placed), path.join(onPath, cli), `${cli} in ~/.procode/bin links to the one on PATH`);
+    }
+}
+assert.equal(process.env.PATH.split(path.delimiter)[0], procodeBin, "~/.procode/bin is first on PATH");
 for (const c of [...manifest.contributes.viewsContainers.activitybar, ...Object.values(manifest.contributes.views).flat()]) {
     if (typeof c.icon === "string" && !c.icon.startsWith("$(")) {
         assert.ok(fs.existsSync(path.join(dist, c.icon)), `${c.id}'s icon ${c.icon} is in dist/`);
@@ -175,10 +204,10 @@ for (const d of defs) {
     assert.equal(d.cwd.fsPath, folder);
     assert.equal(d.version, manifest.version, "each server's version is the extension's");
 }
-assert.equal(defs[0].env.LAP_BIN, "lap", "coboard is handed Board › Lap Path, lap by default");
+assert.equal(defs[0].env.LAP_BIN, path.join(procodeBin, osExe("lap")), "coboard is handed ~/.procode/bin's lap when no setting names one");
 assert.equal(defs[0].env.COBOARD_DIR, "/shared/project", "coboard is handed Board › Board Folder as COBOARD_DIR");
 assert.equal(defs[1].env.COBOARD_DIR, undefined, "only coboard is handed the board folder");
-assert.equal(defs[1].env.KB_BIN, "kb", "kb is handed Knowledge › Cli Path, kb by default");
+assert.equal(defs[1].env.KB_BIN, path.join(procodeBin, osExe("kb")), "kb is handed ~/.procode/bin's kb when no setting names one");
 
 // A setting the definitions are made from, or the folders, changing tells
 // VS Code to ask again, once; any other setting does not.
@@ -243,6 +272,37 @@ assert.equal(ext.resolveCli("kb", "/nowhere", () => false), null);
 assert.equal(ext.resolveCli("kb", ["/a", "/b"].join(path.delimiter), (p) => p === path.join("/b", "kb")), path.join("/b", "kb"));
 assert.equal(ext.resolveCli("/opt/kb", "", (p) => p === "/opt/kb"), "/opt/kb");
 assert.equal(ext.resolveCli("kb", "/w", (p) => p === path.join("/w", "kb.exe"), "win32"), path.join("/w", "kb.exe"));
+
+// Where ~/.procode/bin's copy comes from: the user's setting, else the
+// package's own, else PATH; and the command a CLI is run with.
+assert.deepEqual(ext.sourceOf("/mine/lap", "/pkg/lap", "/usr/bin/lap"), { kind: "link", file: "/mine/lap" });
+assert.deepEqual(ext.sourceOf(null, "/pkg/lap", "/usr/bin/lap"), { kind: "copy", file: "/pkg/lap" });
+assert.deepEqual(ext.sourceOf(null, null, "/usr/bin/lap"), { kind: "link", file: "/usr/bin/lap" });
+assert.equal(ext.sourceOf(null, null, null), null);
+assert.equal(ext.commandFor("lap", "/mine/lap", () => true), "/mine/lap", "a setting the user set wins");
+assert.equal(ext.commandFor("lap", undefined, () => true), path.join(procodeBin, osExe("lap")), "then ~/.procode/bin");
+assert.equal(ext.commandFor("lap", undefined, () => false), "lap", "then PATH");
+// A copy is written once, again only when the bytes change, and a file that
+// cannot be replaced (a running .exe on Windows) is left for next time.
+const placing = path.join(folder, "placing");
+fs.mkdirSync(placing);
+const pkgLap = path.join(placing, "pkg-lap");
+const placedLap = path.join(placing, "bin", "lap");
+fs.writeFileSync(pkgLap, "v1");
+assert.equal(ext.place({ kind: "copy", file: pkgLap }, placedLap), "placed");
+assert.equal(fs.readFileSync(placedLap, "utf8"), "v1");
+if (process.platform !== "win32") assert.ok(fs.statSync(placedLap).mode & 0o111, "a placed copy is executable");
+assert.equal(ext.place({ kind: "copy", file: pkgLap }, placedLap), "current", "the same bytes are not written again");
+fs.writeFileSync(pkgLap, "v2");
+const locked = () => {
+    throw Object.assign(new Error("busy"), { code: "EBUSY" });
+};
+assert.equal(ext.place({ kind: "copy", file: pkgLap }, placedLap, process.platform, locked), "busy");
+assert.equal(fs.readFileSync(placedLap, "utf8"), "v1", "a file that cannot be replaced keeps its old bytes");
+assert.deepEqual(fs.readdirSync(path.dirname(placedLap)), ["lap"], "and no temporary file is left beside it");
+assert.equal(ext.place({ kind: "copy", file: pkgLap }, placedLap), "placed", "the next try replaces it");
+assert.equal(fs.readFileSync(placedLap, "utf8"), "v2");
+assert.equal(ext.place({ kind: "link", file: pkgLap }, placedLap, "win32"), "current", "Windows copies instead of linking");
 
 // The Claude Code command writes our servers and keeps the other one; the
 // artifacts entry an earlier procode wrote, renamed techdocs, goes.

@@ -1,8 +1,10 @@
 /* The two CLIs procode's parts run, found the way the parts find them: the
  * command their setting names (Knowledge › Cli Path for kb, Board › Lap Path
- * for lap), a bare name resolved through PATH. procode does not ship them —
- * the user builds them — so the one thing it can do is say, once, when one
- * cannot be found and how to fix that. Pure apart from the probe it is given. */
+ * for lap), else ~/.procode/bin (procodebin.ts), else a bare name resolved
+ * through PATH. A platform package puts its own in ~/.procode/bin; the
+ * package for every platform has none, and the user builds them, so the one
+ * thing it can do is say, once, when one cannot be found and how to fix
+ * that. Pure apart from the probe it is given. */
 
 import * as path from "node:path";
 
