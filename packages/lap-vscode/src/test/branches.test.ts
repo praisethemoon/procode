@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { branchView, lapBin, lapFailure, ownPart, parseBranchList } from "../branches";
+import { askBranchList, branchView, LapExec, lapBin, lapFailure, ListGate, ownPart, parseBranchList } from "../branches";
 import { folderFiles, lineageFiles, readStream } from "../chunks";
 import { row } from "../history";
 import { parseLog } from "../model";
@@ -196,4 +196,36 @@ test("the lap path is Lap History's setting, else the Board's, else lap", () => 
     assert.equal(lapBin("  ", "/usr/bin/lap"), "/usr/bin/lap");
     assert.equal(lapBin(undefined, undefined), "lap");
     assert.equal(lapBin("", ""), "lap");
+});
+
+test("askBranchList: a failed list is asked again on the next refresh; an answered one only when something moved or when forced", () => {
+    const gate = new ListGate();
+    const runs: string[] = [];
+    let reply: { err: { message: string } | null; stdout: string } = { err: { message: "spawn lap ENOENT" }, stdout: "" };
+    const exec: LapExec = (args, cwd, cb) => {
+        runs.push(`${cwd}: ${args.join(" ")}`);
+        cb(reply.err, reply.stdout);
+    };
+    const got: (string | null)[] = [];
+    const ask = (sig: string, force = false) => askBranchList(gate, sig, force, "/w", exec, (error) => got.push(error));
+
+    assert.equal(ask("s1"), true);
+    assert.equal(got[0], "lap could not run: spawn lap ENOENT");
+    assert.equal(ask("s1"), true, "lap failed: the same signature is asked again");
+    reply = { err: null, stdout: '{"ok":true,"self":null,"branches":[]}' };
+    assert.equal(ask("s1"), true);
+    assert.equal(got[2], null);
+    assert.equal(ask("s1"), false, "answered: nothing moved, nothing asked");
+    assert.equal(ask("s1", true), true, "forced (lap.refresh, a new lap.path): asked");
+    assert.equal(ask("s2"), true, "something moved: asked");
+    assert.deepEqual(runs, Array(5).fill("/w: branch list --json"));
+});
+
+test("ListGate: a list still being asked is not asked twice", () => {
+    const gate = new ListGate();
+    assert.equal(gate.ask("s1", false), true);
+    assert.equal(gate.ask("s1", false), false, "in flight");
+    assert.equal(gate.ask("s1", true), true, "unless forced");
+    gate.done("s1", false);
+    assert.equal(gate.ask("s1", false), true, "it failed: asked again");
 });

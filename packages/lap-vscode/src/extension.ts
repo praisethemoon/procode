@@ -12,7 +12,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { BranchRow, BranchView, branchView, lapBin, lapFailure, parseBranchList } from "./branches";
+import { askBranchList, BranchRow, BranchView, branchView, LapExec, lapBin, ListGate, parseBranchList } from "./branches";
 import { IncrementalLog, folderFiles, hasHistory, historyProblem, ownFiles, parseChunkName, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
@@ -217,7 +217,7 @@ class BranchSource {
     /* why lap gave no branch list, in its words; null when it answered */
     error: string | null = null;
     private logs = new Map<string, IncrementalLog>();
-    private signature = "\0"; /* nothing asked yet */
+    private gate = new ListGate();
     private watchers: vscode.FileSystemWatcher[] = [];
     private watched = "";
     private timer: NodeJS.Timeout | undefined;
@@ -238,9 +238,9 @@ class BranchSource {
             return;
         }
         const sig = listSignature(root, this.source.current.merges.length);
-        if (!force && sig === this.signature) return;
-        this.signature = sig;
         if (sig === "") { /* no registry, no branch chunk, no merge */
+            if (!this.gate.ask(sig, force)) return;
+            this.gate.done(sig, true);
             this.error = null;
             if (this.views.length) {
                 this.views = [];
@@ -248,15 +248,11 @@ class BranchSource {
             }
             return;
         }
-        execFile(lap(), ["branch", "list", "--json"], { cwd: root, timeout: 10_000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => {
+        const exec: LapExec = (args, cwd, cb) =>
+            execFile(lap(), args, { cwd, timeout: 10_000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => cb(err, String(stdout)));
+        askBranchList(this.gate, sig, force, root, exec, (error, out) => {
             /* this folder has branches, so no list is a failure to show */
-            this.error = lapFailure(err, String(stdout));
-            let out: unknown = null;
-            try {
-                out = JSON.parse(String(stdout));
-            } catch {
-                /* no lap, or one from before branches: no branches */
-            }
+            this.error = error;
             const rows = parseBranchList(out, this.source.current);
             this.views = rows.map((r) => branchView(r, this.read(root, r), new Date()));
             this.watch(rows);
@@ -726,6 +722,14 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(watcher);
     context.subscriptions.push(
         vscode.workspace.onDidChangeWorkspaceFolders(scheduleRefresh),
+        /* another lap: everything it said is asked again */
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (!e.affectsConfiguration("lap.path") && !e.affectsConfiguration("coboard.lapPath")) return;
+            tree.refresh();
+            history.push();
+            updateStatus();
+            branches.refresh(true);
+        }),
     );
 
     context.subscriptions.push(
@@ -733,6 +737,7 @@ export function activate(context: vscode.ExtensionContext): void {
             tree.refresh();
             history.push();
             updateStatus();
+            branches.refresh(true);
         }),
         vscode.commands.registerCommand("lap.toggleGrouping", async () => {
             await tree.toggleGrouping();

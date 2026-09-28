@@ -124,3 +124,53 @@ export function lapFailure(err: { message: string } | null, stdout: string): str
 export function lapBin(own: string | undefined, board: string | undefined): string {
     return own?.trim() || board?.trim() || "lap";
 }
+
+/* Whether lap is asked for the branch list again: when what the list
+ * depends on moved (its signature), or when told to. A signature is kept
+ * only once lap answered, so a run that failed (no lap, a wrong lap.path,
+ * an older lap) is tried again on the next refresh; one still running is
+ * not started twice. */
+export class ListGate {
+    private answered = "\0"; /* nothing asked yet */
+    private asking: string | null = null;
+
+    ask(sig: string, force: boolean): boolean {
+        if (!force && (sig === this.answered || sig === this.asking)) return false;
+        this.asking = sig;
+        return true;
+    }
+
+    done(sig: string, ok: boolean): void {
+        if (this.asking === sig) this.asking = null;
+        if (ok) this.answered = sig;
+    }
+}
+
+/* Runs lap with args in cwd and hands back its error and stdout. */
+export type LapExec = (args: string[], cwd: string, cb: (err: { message: string } | null, stdout: string) => void) => void;
+
+/* Asks lap branch list through gate: cb gets lap's failure in its words
+ * (null when it answered) and its JSON (null when none). False, and cb is
+ * never called, when nothing moved. */
+export function askBranchList(
+    gate: ListGate,
+    sig: string,
+    force: boolean,
+    root: string,
+    exec: LapExec,
+    cb: (error: string | null, out: unknown) => void,
+): boolean {
+    if (!gate.ask(sig, force)) return false;
+    exec(["branch", "list", "--json"], root, (err, stdout) => {
+        const error = lapFailure(err, stdout);
+        gate.done(sig, error === null);
+        let out: unknown = null;
+        try {
+            out = JSON.parse(stdout);
+        } catch {
+            /* no lap, or one from before branches: no branches */
+        }
+        cb(error, out);
+    });
+    return true;
+}

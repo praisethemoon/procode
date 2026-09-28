@@ -62,6 +62,7 @@ const fake = {
             dispose() {},
         }),
         onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
+        onDidChangeConfiguration: () => ({ dispose() {} }),
     },
     window: {
         registerWebviewViewProvider: (id: string, p: typeof provider) => {
