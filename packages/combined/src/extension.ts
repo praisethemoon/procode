@@ -51,8 +51,6 @@ function boardFolder(): Record<string, string> {
  * executable with ELECTRON_RUN_AS_NODE=1), so no separate Node is needed,
  * and they are handed the CLIs the settings name. */
 
-const VERSION = "0.1.0";
-
 export interface Server {
     readonly name: string;
     readonly label: string;
@@ -100,8 +98,12 @@ function registerWithVsCode(ctx: vscode.ExtensionContext): void {
         vscode.lm.registerMcpServerDefinitionProvider("procode.mcp", {
             provideMcpServerDefinitions: () => {
                 const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file")?.uri;
+                /* The extension's own version: VS Code compares it to notice
+                 * that a server's tools may have changed, so every release
+                 * that ships new servers says so without a constant to bump. */
+                const version = String(ctx.extension.packageJSON.version);
                 return servers(ctx).map((s) => {
-                    const d = new vscode.McpStdioServerDefinition(s.label, s.command, s.args, s.env, VERSION);
+                    const d = new vscode.McpStdioServerDefinition(s.label, s.command, s.args, s.env, version);
                     if (folder) {
                         d.cwd = folder;
                     }

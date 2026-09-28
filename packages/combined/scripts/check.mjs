@@ -111,7 +111,7 @@ const Module = createRequire(import.meta.url)("node:module");
 const load = Module._load;
 Module._load = (req, parent, isMain) => (req === "vscode" ? vscode : load(req, parent, isMain));
 const ext = createRequire(import.meta.url)(path.join(dist, "out", "extension.js"));
-const ctx = { subscriptions: [], extensionPath: dist, extensionUri: { fsPath: dist, path: dist }, workspaceState: { get: () => undefined, update: async () => undefined }, globalState: { get: () => undefined, update: async () => undefined } };
+const ctx = { subscriptions: [], extension: { packageJSON: manifest }, extensionPath: dist, extensionUri: { fsPath: dist, path: dist }, workspaceState: { get: () => undefined, update: async () => undefined }, globalState: { get: () => undefined, update: async () => undefined } };
 ext.activate(ctx);
 await new Promise((r) => setTimeout(r, 200));
 Module._load = load;
@@ -132,6 +132,7 @@ for (const d of defs) {
     assert.ok(fs.existsSync(d.args[0]), `${d.args[0]} exists`);
     assert.equal(d.env.ELECTRON_RUN_AS_NODE, "1");
     assert.equal(d.cwd.fsPath, folder);
+    assert.equal(d.version, manifest.version, "each server's version is the extension's");
 }
 assert.equal(defs[0].env.LAP_BIN, "lap", "coboard is handed Board › Lap Path, lap by default");
 assert.equal(defs[0].env.COBOARD_DIR, "/shared/project", "coboard is handed Board › Board Folder as COBOARD_DIR");
