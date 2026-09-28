@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <!-- Knowledge: lap's spiral as a magnifier (option 1 of eggzibit page A-1, chosen
-       2026-09-26): four passes as in lap.svg, with a handle. Rendered by
+  <!-- Knowledge: linked notes, three documents and the links between them
+       (option 9 of eggzibit page A-3, chosen 2026-09-28), replacing the spiral
+       lens that read as lap's twin. lap.svg's 2px round stroke. Rendered by
        VS Code as an alpha mask: only the silhouette matters. -->
-  <path d="M10.5 10.5 A1.5 1.5 0 1 1 7.5 10.5 A3 3 0 1 1 13.5 10.5 A4.5 4.5 0 1 1 4.5 10.5 A6 6 0 1 1 16.5 10.5 M15.3 15.3 L21 21"
+  <path d="M8.5 6 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M20.5 9 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M13.5 18 a2.5 2.5 0 1 1 -5 0 a2.5 2.5 0 1 1 5 0 z M8.4 6.6 L15.6 8.4 M7 8.3 L10 15.7 M16.4 10.8 L12.6 15.9"
         stroke="#C5C5C5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
