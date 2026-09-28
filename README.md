@@ -197,14 +197,26 @@ run the CLIs from `PATH`.
 3. **Agents.** VS Code's agent gets the MCP servers on its own; a change to
    **Knowledge › Cli Path**, **Board › Lap Path**, **Board › Board Folder**
    or the workspace folders reaches the servers it starts next, without a
-   reload (one already running keeps what it started with). For Claude
-   Code, run **procode: Set Up MCP for Claude Code** in a project: it adds
-   `coboard`, `kb` and `techdocs` to the project's `.mcp.json` and keeps
-   any other servers. **procode: Add Skills for Claude Code** adds the
-   skills that teach Claude to use them to the project's `.claude/skills/`
-   (lap and techdocs ticked; tickets is this repository's workflow, so it
-   is left for you to pick), and says when a newer version ships. After installing a new build, restart Claude Code (or
-   run `/mcp`) so it starts the new servers.
+   reload (one already running keeps what it started with).
+
+   For Claude Code, once per project:
+
+   1. Open the project's folder in VS Code.
+   2. Open the Command Palette (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>
+      on macOS, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> elsewhere) and
+      run **procode: Set Up MCP for Claude Code**. It adds `coboard`, `kb`
+      and `techdocs` to the project's `.mcp.json` and keeps any other
+      servers.
+   3. Run **procode: Add Skills for Claude Code** the same way. It adds the
+      skills that teach Claude to use the tools to the project's
+      `.claude/skills/`: lap and techdocs are ticked; tickets is this
+      repository's workflow, so it is left for you to pick.
+   4. Start Claude Code in the project, or restart it (or run `/mcp`), and
+      approve the project's servers when it asks.
+
+   When a new build is installed, procode notices a `.mcp.json` that still
+   runs the old servers, and skills older than the ones it ships, and
+   offers to update them; restart Claude Code afterwards.
 
 4. **Stores.** `lap init`, `kb init` in the project root. The board and
    `.techdocs/` are created on first write.

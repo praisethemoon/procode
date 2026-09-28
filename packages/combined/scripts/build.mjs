@@ -133,7 +133,11 @@ const manifest = {
     author: { name: "Soulaymen Chouri", email: "doit@praisethemoon.org" },
     license: "MIT",
     engines: { vscode: "^1.101.0" },
-    categories: ["Other"],
+    categories: ["AI", "Visualization", "Other"],
+    keywords: ["claude", "claude code", "agents", "mcp", "kanban", "tickets", "edit history", "knowledge base", "reports"],
+    repository: { type: "git", url: "https://github.com/praisethemoon/procode.git" },
+    homepage: "https://github.com/praisethemoon/procode#readme",
+    bugs: { url: "https://github.com/praisethemoon/procode/issues" },
     icon: "icon.png",
     main: "./out/extension.js",
     activationEvents: [...activation],
@@ -176,16 +180,8 @@ fs.cpSync(path.join(repo, ".claude", "skills"), path.join(dist, "skills"), { rec
 fs.copyFileSync(path.join(here, "media", "procode.png"), path.join(dist, "icon.png"));
 // dist/ holds exactly what ships; this only tells vsce so.
 fs.writeFileSync(path.join(dist, ".vscodeignore"), "**/*.map\n");
-fs.writeFileSync(
-    path.join(dist, "README.md"),
-    "# procode\n\nLap History, Knowledge, the Board and techdocs in one extension.\n\n" +
-        "Knowledge and the Board run the `kb` and `lap` CLIs, which you build with CMake from the procode " +
-        "repository ([Build and install](https://github.com/praisethemoon/procode#build-and-install)). They are found on PATH, or wherever " +
-        "the settings **Knowledge › Cli Path** and **Board › Lap Path** point.\n\n" +
-        "The kb, coboard and techdocs MCP servers are registered with VS Code's agent automatically. For Claude Code, " +
-        "**procode: Set Up MCP for Claude Code** writes them into the project's `.mcp.json`, and " +
-        "**procode: Add Skills for Claude Code** adds the skills that teach Claude to use them to its `.claude/skills`.\n",
-);
+// The Marketplace page: the extension's own README, not the repository's.
+fs.copyFileSync(path.join(here, "README.md"), path.join(dist, "README.md"));
 
 /* ----------------------------------------------------------------- bundles */
 
@@ -227,6 +223,6 @@ if (process.argv.includes("--package")) {
     // A .vsix that would fail to start is not worth producing.
     execFileSync(process.execPath, [path.join(here, "scripts", "check.mjs")], { cwd: here, stdio: "inherit" });
     const out = path.join(here, `procode-${VERSION}.vsix`);
-    node(bin("@vscode", "vsce", "vsce"), ["package", "--no-dependencies", "--allow-missing-repository", "--out", out], dist);
+    node(bin("@vscode", "vsce", "vsce"), ["package", "--no-dependencies", "--out", out], dist);
     console.log(`combined: packaged ${out}`);
 }
