@@ -1,7 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <!-- Board: lap's spiral, squared (option 1 of eggzibit page A-1, chosen 2026-09-26).
-       The same outward passes as lap.svg, drawn on a grid; 16px span, 2px
-       stroke. Rendered by VS Code as an alpha mask: only the silhouette matters. -->
-  <path d="M12 12 h4 v-4 h-8 v8 h12 v-12 h-16 v16"
+  <!-- Board: a board with a twist (chosen 2026-09-28, replacing lap's spiral
+       squared): a rounded board with one line written on it, its right edge
+       curling into a spiral that rests on the bottom edge. The spiral's turns
+       are 3 apart so they stay separate at 16px. lap.svg's 2px round stroke.
+       Rendered by VS Code as an alpha mask: only the silhouette matters. -->
+  <path d="M15.5 20 H5 a2 2 0 0 1 -2 -2 V6 a2 2 0 0 1 2 -2 H19 a2 2 0 0 1 2 2 V14.5 A5.5 5.5 0 0 1 10 14.5 A4 4 0 0 1 18 14.5 A2.5 2.5 0 0 1 13 14.5 M7 7.5 h8"
         stroke="#C5C5C5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
