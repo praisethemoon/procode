@@ -328,8 +328,9 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
         rc = LAP_EXIT_OK;
     } else {
         err_out(json, "usage",
-                "usage: lap session [start \"purpose\" [--meta k=v]... | end | "
-                "list [--meta k=v]... | current]");
+                "usage: lap session [start (\"purpose\" | -F <file|->) "
+                "[--meta k=v]... [--branch <name>] | end | list [--meta k=v]... "
+                "[--branch <name>] | current] [--json]");
     }
 
 done:

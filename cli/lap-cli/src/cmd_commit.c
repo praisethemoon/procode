@@ -216,7 +216,8 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         err_out(json, "usage",
                 "usage: lap commit <file> (-i \"intent\" -b \"behavior\" | "
                 "-F <file|->) [--edit <n> | --lines <a>-<b>] "
-                "[--force-message] [--no-session] [--dry-run] [--json]");
+                "[--force-message] [--no-session] [--dry-run] "
+                "[--branch <name>] [--json]");
         return LAP_EXIT_ERR;
     }
     const char *intent = NULL, *behavior = NULL;

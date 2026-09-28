@@ -85,7 +85,8 @@ bool flags_known(int32_t argc, char **argv, const char *const *value_flags,
             strcmp(w, "--no-color") == 0 ||
             strncmp(w, "--color=", sizeof "--color=" - 1) == 0)
             continue;
-        err_out(tty_json(), "unknown_flag", "unknown flag %s", w);
+        err_out(tty_json(), "unknown_flag",
+                "unknown flag %s (lap --help lists each command's flags)", w);
         return false;
     }
     return true;

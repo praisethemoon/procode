@@ -2866,6 +2866,15 @@ ORDER=$("$LAP" branch list | grep -oE '^ *(b1|x2|n1) ' | tr -d ' ' | tr '\n' ' '
 "$LAP" branch list | grep -q '^  n1 ' || fail "n1 is not indented under b1"
 cd "$WORK"
 
+t "usage errors list --branch where the command takes it, and --help points at lap --help"
+mkdir -p "$WORK/us1" && cd "$WORK/us1" && "$LAP" init >/dev/null 2>&1
+expect_grep "usage: lap commit .*\[--branch <name>\]" "$LAP" commit
+expect_grep "usage: lap amend .*\[--branch <name>\]" "$LAP" amend
+expect_grep "usage: lap show .*\[--branch <name>\]" "$LAP" show
+expect_grep "usage: lap session .*-F <file|->.*\[--branch <name>\]" "$LAP" session bogus
+expect_grep "unknown flag --help (lap --help lists each command's flags)" "$LAP" commit --help
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

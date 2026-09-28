@@ -30,7 +30,8 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
     const char *id = positional_arg(argc, argv, value_flags, 0);
     if (!id) {
         err_out(json, "usage", "usage: lap show <commit> [--full-file] "
-                               "[--json]  (an id, a hash or a hash prefix)");
+                               "[--branch <name>] [--json]  (an id, a hash "
+                               "or a hash prefix)");
         return LAP_EXIT_ERR;
     }
 

@@ -16,7 +16,7 @@ int32_t cmd_amend(Arena *a, int32_t argc, char **argv) {
     if (!ref) {
         err_out(json, "usage",
                 "usage: lap amend <commit> (-i \"intent\" -b \"behavior\" | "
-                "-F <file|->) [--force-message] [--json]");
+                "-F <file|->) [--force-message] [--branch <name>] [--json]");
         return LAP_EXIT_ERR;
     }
     const char *intent = NULL, *behavior = NULL;
