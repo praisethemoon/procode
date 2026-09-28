@@ -151,17 +151,22 @@ test("the document editor is read-only, and says so in the type it implements", 
         }
     }
     /* The rename field in the collections tab is the ONE input in this package
-     * and it edits a collection's NAME, which §4 puts there on purpose. It is
-     * an `<input>` and not a `<textarea>`, and it is in that file and no
-     * other. */
+     * that writes: it edits a collection's NAME, which §4 puts there on
+     * purpose. It is an `<input>` and not a `<textarea>`. The rail's search
+     * field is the other `<input>`, and it writes nothing: it is the query, a
+     * single element in the sidebar with the bar's class, and no other file
+     * holds one. */
     const inputs = sources().filter(
         (s) => s.file.startsWith("webview") && /<input\b/.test(s.text),
     );
     assert.deepEqual(
-        inputs.map((s) => s.file),
-        [path.join("webview", "Collections.tsx")],
+        inputs.map((s) => s.file).sort(),
+        [path.join("webview", "Collections.tsx"), path.join("webview", "Sidebar.tsx")].sort(),
         "an editable field appeared outside the collections tab, where §4 puts the only two writes",
     );
+    const rail = inputs.find((s) => s.file.endsWith("Sidebar.tsx"))!.text;
+    assert.equal((rail.match(/<input\b/g) ?? []).length, 1, "the rail holds more than its one search field");
+    assert.match(rail, /<input\s+className="kb-search-input"/, "the rail's input is not the search field");
 });
 
 test("the compiled editor keeps one tab per document", () => {

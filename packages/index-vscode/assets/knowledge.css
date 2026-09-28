@@ -95,8 +95,8 @@ html, body {
   align-items: center;
   gap: var(--bk-gap-xs, 4px);
   padding: 6px 4px 4px;
-  background: var(--bk-color-background);
-  border-bottom: 1px solid var(--bk-color-border);
+  /* no fill of its own: the view's, as the Board's and Lap History's bars */
+  border-bottom: 1px solid var(--bk-color-divider);
   flex: 0 0 auto;
 }
 
@@ -107,6 +107,11 @@ html, body {
  * stops the column itself becoming the overflow in a pane too narrow to hold
  * even one of them. */
 .kb-narrow { flex: 0 0 auto; width: 7rem; max-width: 100%; }
+
+/* The scope `Select` at Lap History's size (24px, 12px text) beside a bar of
+ * the same height. baukasten sizes it in rem, and this view's root is 13px
+ * where Lap History's is 16px, so left alone it would be a size smaller. */
+.kb-narrow [role="combobox"] { height: 24px; font-size: 12px; }
 
 /* THE RAIL'S HORIZONTAL OVERFLOW, AT ITS CAUSE.
  *
@@ -133,44 +138,47 @@ html, body {
 /* The box and the cross inside it. `position: relative` here is what the cross
  * is positioned against; it has to be the element WRAPPING the `Input` because
  * baukasten renders a wrapper div of its own around the field. */
+/* THE BAR, as the Board's `.sb-bar` and Lap History's `.lh-bar` draw it: one
+ * VS Code input, 24px, whose border takes the focus colour while the field or
+ * the cross inside it has focus. */
 .kb-search {
-  position: relative;
   display: flex;
   align-items: center;
+  height: 24px;
+  box-sizing: border-box;
+  border: 1px solid var(--bk-color-input-border, transparent);
+  border-radius: 2px;
+  background: var(--bk-color-input-background);
+  color: var(--bk-color-input-foreground);
 }
+.kb-search:focus-within { border-color: var(--bk-color-input-focus-border); }
 
-/* Room at the right end of the FIELD for the cross, reserved whether or not the
- * cross is drawn so text does not reflow under the caret the moment the first
- * character arrives. `className` on baukasten's `Input` lands on the `<input>`
- * itself, and this file is the last stylesheet the document links — so this
- * longhand beats the component's own `padding` shorthand at equal specificity,
- * on source order. */
-.kb-search-input { padding-right: var(--bk-spacing-6, 20px); }
+.kb-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 6px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.kb-search-input::placeholder { color: var(--bk-color-input-placeholder); }
 
+/* The cross sits in the bar after the field, as in the other two bars. */
 .kb-search-clear {
-  position: absolute;
-  right: var(--bk-spacing-0-5, 2px);
-  top: 50%;
-  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--bk-size-xs, 16px);
-  height: var(--bk-size-xs, 16px);
-  padding: 0;
+  height: 100%;
+  padding: 0 4px;
   border: 0;
-  border-radius: var(--bk-radius-sm, 3px);
-  background: none;
-  color: var(--bk-color-input-placeholder);
-  font: inherit;
+  background: transparent;
+  color: var(--bk-color-foreground-muted);
   cursor: pointer;
 }
-
-.kb-search-clear:hover {
-  color: var(--bk-color-input-foreground);
-  background: var(--bk-color-hover);
-}
-
+.kb-search-clear:hover { color: var(--bk-color-foreground); }
 .kb-search-clear:focus-visible {
   outline: 1px solid var(--bk-color-focus);
   outline-offset: -1px;

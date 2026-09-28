@@ -1,5 +1,5 @@
-/* index-ui.md §2: a search `Input` at the top, a collection `Select` beside it,
- * and a list below.
+/* index-ui.md §2: a search bar at the top — the same bar as the Board's and
+ * Lap History's filter — a collection `Select` beside it, and a list below.
  *
  * WITH NO QUERY THE LIST IS EVERY DOCUMENT IN SCOPE, NEWEST FIRST. §2 says so
  * and says why: "browsing is the default state, not an empty prompt — the store
@@ -26,7 +26,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Input, Select } from "baukasten-ui/core";
+import { Select } from "baukasten-ui/core";
 
 import { KbCollection, KbDocument, KbHit, KbStatus } from "kb-js/pure";
 
@@ -235,12 +235,12 @@ export function Sidebar(): JSX.Element {
         <div className="kb-view">
             <div className="kb-bar">
                 <span className="kb-grow kb-search">
-                    <Input
+                    <input
                         className="kb-search-input"
+                        type="text"
                         value={q}
                         placeholder="Search"
-                        size="sm"
-                        fullWidth
+                        spellCheck={false}
                         aria-label="Search the knowledge base"
                         onChange={(e) => setQ(e.currentTarget.value)}
                         onKeyDown={(e) => {
