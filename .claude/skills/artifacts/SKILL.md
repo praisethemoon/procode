@@ -7,8 +7,9 @@ compatibility: Requires the artifacts MCP server (packages/artifacts).
 # artifacts — pages for people
 
 An artifact is finished work handed over as a page. It lives in the
-workspace's `.artifact/`, the person opens it from the Artifacts view, and it
-renders in their editor theme. The format is in `specs/artifacts.md`.
+workspace's `.artifact/`, the person opens it from the Artifacts view — where
+they find it by filtering on its id, title, description and keywords, so
+give it good ones — and it renders in their editor theme. The format is in `specs/artifacts.md`.
 
 ## When to make one
 

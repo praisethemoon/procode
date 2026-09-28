@@ -96,6 +96,9 @@ stored in `.artifact/` and published through the `artifacts` MCP server,
 and the extension's **Artifacts** view opens them in your VS Code theme.
 Each page carries a few keywords the agent gives it when publishing, shown
 in the view and used to find pages on one topic (`artifact_list {keyword}`).
+The view has the same filter bar as the Board and Lap History: type to match
+a page's id, title, description or keywords, or pick keywords under its
+chevron.
 The format is in [specs/artifacts.md](specs/artifacts.md). These are almost
 identical to claude artifacts, except they stay local to your project.
 

@@ -141,9 +141,15 @@ the editor.
 
 `artifacts-vscode`:
 
-- an **Artifacts** view: every artifact, newest first, with its title, its
-  description and when it was last updated; refreshed when `.artifact/`
-  changes;
+- an **Artifacts** view: every artifact, newest first, with its id, title,
+  when it was last updated, its description and its keywords; refreshed when
+  `.artifact/` changes. It is a webview with the same filter bar as the Board
+  and Lap History: the text keeps the pages whose id, title, description or
+  keywords hold every word typed, in any case; the chevron opens the
+  keywords, each with how many pages carry it, and choosing some keeps the
+  pages carrying any of them — as does clicking a keyword on a row. What is
+  typed and chosen survives the view being hidden. A row opens its page;
+  right-click offers Open, Open HTML Source and Delete;
 - opening one shows it in an editor tab titled with the artifact's title. The
   tab builds the frame's document from the page with, in order: a content
   security policy (`default-src 'none'; img-src data:; font-src data:;

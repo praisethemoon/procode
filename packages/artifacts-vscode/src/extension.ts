@@ -1,20 +1,22 @@
 /* Artifacts in VS Code (specs/artifacts.md §5): the list of what agents have
- * published into the workspace, and a tab per artifact that renders its page
- * in the editor's theme.
+ * published into the workspace — a webview with the Board's filter bar —
+ * and a tab per artifact that renders its page in the editor's theme.
  *
  * The store is the `artifacts` package, read fresh on every refresh: the
  * files are small, and an agent writing through MCP is a different process,
  * so there is no cache here that could disagree with the disk.
  */
 
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { Artifact, Artifacts, findArtifacts } from "artifacts";
+import { Artifacts, findArtifacts } from "artifacts";
 
 import { FrameParts, frameDocument } from "./frame";
-import { describeRow, sortForList } from "./list";
+import { sortForList } from "./list";
+import type { ToHost, ToView } from "./protocol";
 import { viewerHtml } from "./viewer";
 
 const panels = new Map<string, vscode.WebviewPanel>();
@@ -26,38 +28,59 @@ function store(): Artifacts | null {
     return new Artifacts(root ?? folder.uri.fsPath);
 }
 
-class Item extends vscode.TreeItem {
-    constructor(readonly artifact: Artifact) {
-        super(artifact.title, vscode.TreeItemCollapsibleState.None);
-        this.id = artifact.id;
-        this.description = describeRow(artifact, Date.now());
-        const tip = new vscode.MarkdownString();
-        tip.appendMarkdown(`**${artifact.title.replace(/[\\`*_[\]]/g, "\\$&")}**\n\n`);
-        if (artifact.description) tip.appendText(`${artifact.description}\n\n`);
-        if (artifact.keywords.length) tip.appendText(`keywords: ${artifact.keywords.join(", ")}\n\n`);
-        tip.appendText(`${artifact.id} · created ${artifact.createdAt} · updated ${artifact.updatedAt}`);
-        this.tooltip = tip;
-        this.iconPath = new vscode.ThemeIcon("preview");
-        this.contextValue = "artifact";
-        this.command = { command: "artifacts.open", title: "Open", arguments: [artifact.id] };
+/* The list: a webview view (a native tree has no room for a filter bar).
+ * The host reads the pages and sends them; the view filters and draws. */
+class Pages implements vscode.WebviewViewProvider {
+    private view: vscode.WebviewView | null = null;
+
+    constructor(private readonly ctx: vscode.ExtensionContext) {}
+
+    resolveWebviewView(view: vscode.WebviewView): void {
+        this.view = view;
+        const media = vscode.Uri.joinPath(this.ctx.extensionUri, "out", "media");
+        view.webview.options = { enableScripts: true, localResourceRoots: [media] };
+        view.webview.html = listHtml(view.webview, media);
+        view.webview.onDidReceiveMessage((m: ToHost) => {
+            if (m?.type === "ready") this.refresh();
+            else if (m?.type === "open") open(this.ctx, m.id);
+            else if (m?.type === "source") void vscode.commands.executeCommand("artifacts.openSource", m.id);
+        });
+        view.onDidDispose(() => {
+            this.view = null;
+        });
+    }
+
+    refresh(): void {
+        const s = store();
+        const pages = sortForList(s?.list() ?? []).map(({ bytes: _bytes, ...row }) => row);
+        const m: ToView = { type: "pages", pages, hasFolder: s !== null };
+        void this.view?.webview.postMessage(m);
     }
 }
 
-class Tree implements vscode.TreeDataProvider<Item> {
-    private readonly changed = new vscode.EventEmitter<void>();
-    readonly onDidChangeTreeData = this.changed.event;
-
-    refresh(): void {
-        this.changed.fire();
-    }
-
-    getTreeItem(item: Item): vscode.TreeItem {
-        return item;
-    }
-
-    getChildren(): Item[] {
-        return sortForList(store()?.list() ?? []).map((a) => new Item(a));
-    }
+function listHtml(webview: vscode.Webview, media: vscode.Uri): string {
+    const nonce = crypto.randomBytes(16).toString("base64");
+    const uri = (f: string) => webview.asWebviewUri(vscode.Uri.joinPath(media, f)).toString();
+    const csp = [
+        "default-src 'none'",
+        `style-src ${webview.cspSource}`,
+        `script-src 'nonce-${nonce}'`,
+        `font-src ${webview.cspSource}`,
+    ].join("; ");
+    const css = ["baukasten-vscode.css", "codicon.css", "pages.css"].map((f) => `<link rel="stylesheet" href="${uri(f)}">`).join("\n");
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+${css}
+</head>
+<body>
+<div id="root"></div>
+<script nonce="${nonce}" src="${uri("pages.js")}"></script>
+</body>
+</html>`;
 }
 
 function parts(ctx: vscode.ExtensionContext): FrameParts {
@@ -108,9 +131,11 @@ function open(ctx: vscode.ExtensionContext, id: string): void {
     panels.set(id, panel);
 }
 
+/* A command's page: its id, or a row's context (right-click in the list). */
 function idOf(arg: unknown): string | undefined {
-    if (arg instanceof Item) return arg.artifact.id;
-    return typeof arg === "string" ? arg : undefined;
+    if (typeof arg === "string") return arg;
+    const id = (arg as { id?: unknown } | null)?.id;
+    return typeof id === "string" ? id : undefined;
 }
 
 async function pick(): Promise<string | undefined> {
@@ -144,14 +169,14 @@ async function remove(id: string): Promise<void> {
 }
 
 export function activate(ctx: vscode.ExtensionContext): void {
-    const tree = new Tree();
-    ctx.subscriptions.push(vscode.window.registerTreeDataProvider("artifacts.list", tree));
+    const list = new Pages(ctx);
+    ctx.subscriptions.push(vscode.window.registerWebviewViewProvider("artifacts.list", list));
 
     let pending: NodeJS.Timeout | undefined;
     const changed = () => {
         if (pending) clearTimeout(pending);
         pending = setTimeout(() => {
-            tree.refresh();
+            list.refresh();
             for (const [id, panel] of panels) load(ctx, id, panel);
         }, 150);
     };
