@@ -1949,8 +1949,8 @@ for f in a.txt ign/x.txt .lapignore; do
 done
 printf 'ign/\n' >> .lapignore
 "$LAP" commit .lapignore --no-session -i "ignore ign from now on" -b "adds ign/ to .lapignore" >/dev/null 2>&1
-nocache23() { # status with every cache gone, then rebuilt
-    mkdir -p "$WORK/c23-caches" && for c in index snapshots statcache heads paths; do
+nocache23() { # status with only log/ left (a clone's .lap), then rebuilt
+    mkdir -p "$WORK/c23-caches" && for c in index snapshots statcache heads paths shadow state.json; do
         [ -e ".lap/$c" ] && mv ".lap/$c" "$WORK/c23-caches/$c-$1"
     done
     "$LAP" status --json
@@ -2536,6 +2536,32 @@ expect_grep 'branch b.s history holds 1 record of a type this lap does not know 
 [ "$(cat .lap/log/*.jsonl | cksum)" = "$SUM" ] || fail "the refused merge wrote history"
 expect_grep 'note: branch b holds 1 record of a type this lap does not know ("annotate")' "$LAP" verify
 expect_grep '"branch":"b",[^}]*"unknown_records":1,"unknown_type":"annotate"' "$LAP" verify --json
+cd "$WORK"
+
+t "lap status in a folder whose .lap holds only log/, a fresh clone, sees what it sees with caches"
+mkdir -p "$WORK/cl1/ig" && cd "$WORK/cl1" || exit 1
+git init -q . && git config user.name e2e && git config user.email e2e@lap
+"$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt && printf 'b\n' > b.txt && printf 'c\n' > ig/c.txt
+for f in a.txt b.txt ig/c.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+rm b.txt && printf 'ig/\n' >> .lapignore && printf 'C\n' >> ig/c.txt
+"$LAP" commit .lapignore --no-session -i "ignore ig from now on" -b "adds ig/ to .lapignore" >/dev/null 2>&1
+WITH=$("$LAP" status)
+echo "$WITH" | grep -q "deleted   b.txt" || fail "the fixture shows no deletion: $WITH"
+echo "$WITH" | grep -q "modified  ig/c.txt" || fail "the fixture shows no ignored edit: $WITH"
+mkdir -p "$WORK/cl1-caches" && mv .lap/heads .lap/paths "$WORK/cl1-caches/" 2>/dev/null
+[ "$("$LAP" status)" = "$WITH" ] || fail "status differs without the index"
+for c in index shadow state.json snapshots statcache heads paths; do
+    [ -e ".lap/$c" ] && mv ".lap/$c" "$WORK/cl1-caches/$c-2"
+done
+[ "$("$LAP" status)" = "$WITH" ] || fail "status differs with only log/"
+# the same in a fresh clone: git carries the files as they are here
+git add -A && git commit -qm "the fixture, as it stands" >/dev/null
+git clone -q "$WORK/cl1" "$WORK/cl1-clone" && cd "$WORK/cl1-clone" || fail "clone cl1"
+[ ! -e .lap/shadow ] && [ ! -e .lap/state.json ] || fail "the clone brought caches"
+[ "$("$LAP" status)" = "$WITH" ] || fail "status differs in a fresh clone"
 cd "$WORK"
 
 t "a read-only parent refuses the start and nothing is made here"

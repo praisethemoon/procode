@@ -138,6 +138,11 @@ int32_t merge_redo_point(const RecLog *log, const StrSet *newer,
 int32_t merge_unknown_records(const RecLog *log, const int32_t *lof,
                               const char **type);
 
+/* The files a history tracks: each file whose last commit in log is not a
+ * delete, in the order they first appear. What the index knows, read from
+ * the history when there is no index. */
+size_t log_tracked_files(Arena *a, const RecLog *log, const char ***out);
+
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);
 

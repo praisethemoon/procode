@@ -22,10 +22,7 @@ typedef struct {
     Repo *repo;
     const Ignore *ig;
     SeenList files;
-    size_t walked_n; /* files[0, walked_n): the working walk's, sorted */
 } StatusWalk;
-
-static int cmp_seen(const void *pa, const void *pb);
 
 static void seen_push(Arena *a, SeenList *l, const char *p, const PlatStat *st,
                       int64_t head) {
@@ -48,29 +45,6 @@ static WalkAction on_entry(const char *rel, bool is_dir, const PlatStat *st,
     return WALK_CONT;
 }
 
-/* Without an index, deleted files are found by walking the shadow store. */
-static WalkAction on_shadow_entry(const char *rel, bool is_dir,
-                                  const PlatStat *st, void *ud) {
-    (void)st;
-    StatusWalk *sw = (StatusWalk *)ud;
-    if (is_dir)
-        return WALK_CONT;
-    /* Every tracked file the working walk did not list: deleted (no
-     * working counterpart), or ignored since it was tracked — the index
-     * lists those too, and a missing cache must not change the output. */
-    Seen key;
-    key.path = rel;
-    if (sw->walked_n > 0 &&
-        bsearch(&key, sw->files.v, sw->walked_n, sizeof(Seen), cmp_seen))
-        return WALK_CONT;
-    char wpath[LAP_PATH_MAX];
-    snprintf(wpath, sizeof wpath, "%s/%s", sw->repo->root, rel);
-    PlatStat wst;
-    seen_push(sw->a, &sw->files, rel, plat_stat(wpath, &wst) ? &wst : NULL,
-              -1);
-    return WALK_CONT;
-}
-
 /* qsort comparator: must return int per the C standard API */
 static int cmp_seen(const void *pa, const void *pb) {
     return strcmp(((const Seen *)pa)->path, ((const Seen *)pb)->path);
@@ -85,11 +59,9 @@ static int cmp_tracked(const void *pa, const void *pb) {
     return strcmp(((const Tracked *)pa)->path, ((const Tracked *)pb)->path);
 }
 
-/* With an index, every file whose last commit is not a delete is tracked.
- * One merge of the sorted walk against the sorted tracked files gives each
- * walked file its head and adds the tracked files the walk did not see —
- * the deleted ones, found without walking the shadow store. */
-static void join_tracked(Arena *a, const Idx *ix, SeenList *files) {
+/* Every file whose last commit is not a delete is tracked: from the index,
+ * each with its head. */
+static size_t tracked_from_index(Arena *a, const Idx *ix, Tracked **out) {
     Tracked *t = (Tracked *)arena_alloc(
         a, (size_t)(ix->npaths ? ix->npaths : 1) * sizeof(Tracked));
     size_t nt = 0;
@@ -98,6 +70,51 @@ static void join_tracked(Arena *a, const Idx *ix, SeenList *files) {
         if (head >= 0 && ix->v[head].op != IDX_OP_DELETE)
             t[nt++] = (Tracked){ix->paths[f], head};
     }
+    *out = t;
+    return nt;
+}
+
+size_t log_tracked_files(Arena *a, const RecLog *log, const char ***out) {
+    StrMap last; /* path -> "d" when its last commit deleted it, else "" */
+    memset(&last, 0, sizeof last);
+    const char **order = (const char **)arena_alloc(
+        a, (size_t)(log->count ? log->count : 1) * sizeof(char *));
+    size_t norder = 0;
+    for (int32_t i = 0; i < log->count; i++) {
+        const Rec *c = &log->v[i];
+        if (c->type != REC_COMMIT || !c->file)
+            continue;
+        if (!strmap_get(&last, c->file))
+            order[norder++] = c->file;
+        strmap_put(a, &last, c->file,
+                   strcmp(c->op, "delete") == 0 ? "d" : "");
+    }
+    size_t n = 0;
+    for (size_t i = 0; i < norder; i++) {
+        if (strcmp(strmap_get(&last, order[i]), "d") != 0)
+            order[n++] = order[i];
+    }
+    *out = order;
+    return n;
+}
+
+/* The same from the history itself, when there is no index (a clone holds
+ * only log/): no heads, so nothing is cached for them. */
+static size_t tracked_from_log(Arena *a, const RecLog *log, Tracked **out) {
+    const char **paths;
+    size_t n = log_tracked_files(a, log, &paths);
+    Tracked *t =
+        (Tracked *)arena_alloc(a, (size_t)(n ? n : 1) * sizeof(Tracked));
+    for (size_t i = 0; i < n; i++)
+        t[i] = (Tracked){paths[i], -1};
+    *out = t;
+    return n;
+}
+
+/* One merge of the sorted walk against the sorted tracked files gives each
+ * walked file its head and adds the tracked files the walk did not see —
+ * the deleted ones, and those ignored since they were recorded. */
+static void join_tracked(Tracked *t, size_t nt, Arena *a, SeenList *files) {
     qsort(t, nt, sizeof *t, cmp_tracked);
     size_t walked = files->n, i = 0, j = 0;
     while (j < nt) {
@@ -137,16 +154,22 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
     plat_walk_report(a, repo.root, on_entry, &sw, &undirs, &nundirs);
     if (sw.files.n > 1)
         qsort(sw.files.v, sw.files.n, sizeof(Seen), cmp_seen);
-    sw.walked_n = sw.files.n;
     Idx *ix = idx_ready(a, &repo);
+    Tracked *tracked = NULL;
+    size_t ntracked = 0;
     if (ix) {
-        join_tracked(a, ix, &sw.files);
+        ntracked = tracked_from_index(a, ix, &tracked);
     } else {
-        char shadow_root[LAP_PATH_MAX];
-        snprintf(shadow_root, sizeof shadow_root, "%s/%s", repo.lapdir,
-                 LAP_SHADOW_NAME);
-        plat_walk(a, shadow_root, on_shadow_entry, &sw);
+        /* no index: the history says what is tracked, as the index would;
+         * the shadow store may be missing too, and never decides it */
+        RecLog log;
+        if (!repo_log_load(a, &repo, &log, err, sizeof err)) {
+            err_out(json, "log_unreadable", "%s", err);
+            return LAP_EXIT_ERR;
+        }
+        ntracked = tracked_from_log(a, &log, &tracked);
     }
+    join_tracked(tracked, ntracked, a, &sw.files);
     if (sw.files.n > 1)
         qsort(sw.files.v, sw.files.n, sizeof(Seen), cmp_seen);
 

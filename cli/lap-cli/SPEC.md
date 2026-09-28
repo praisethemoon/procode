@@ -846,7 +846,9 @@ Active session, then every file with pending changes: `new` (line count),
 A file lap cannot read — no permission on it, or on a folder above it — is
 `unreadable`, never `deleted` or clean, and so is a folder it cannot open
 (listed as `<folder>/`, since what is in it is unknown). Only a path that
-is not there is deleted.
+is not there is deleted. A tracked file is one whose last commit is not a delete, as the
+index says or, without it (a fresh clone's `.lap/` holds only `log/`), as
+the history says: the output is the same with every cache or none.
 
 ### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B] [--force-message] [--no-session] [--dry-run] [--branch B]`
 Records exactly one edit. The message comes from `-i`/`--intent` and

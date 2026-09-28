@@ -376,6 +376,31 @@ void test_branches(void) {
     ASSERT_EQ_I(merge_unknown_records(&ulog, ulof, &utype), 2);
     ASSERT_EQ_S(utype, "annotate");
 
+    t_begin("log_tracked_files: a file is tracked while its last commit is "
+            "not a delete, whatever came before; other records are not files");
+    Rec tl[6];
+    memset(tl, 0, sizeof tl);
+    const char *tfile[] = {"a.txt", "b.txt", NULL, "b.txt", "c.txt", "a.txt"};
+    const char *tops[] = {"create", "create", NULL, "delete", "create", "edit"};
+    for (int32_t i = 0; i < 6; i++) {
+        tl[i].type = tfile[i] ? REC_COMMIT : REC_SESSION_START;
+        tl[i].file = tfile[i];
+        tl[i].op = tops[i];
+    }
+    RecLog tlog;
+    memset(&tlog, 0, sizeof tlog);
+    tlog.v = tl;
+    tlog.count = 6;
+    const char **tpaths;
+    ASSERT_EQ_I((int32_t)log_tracked_files(a, &tlog, &tpaths), 2);
+    ASSERT_EQ_S(tpaths[0], "a.txt");
+    ASSERT_EQ_S(tpaths[1], "c.txt");
+    tl[4].op = "delete"; /* c.txt gone too */
+    tl[3].op = "edit";   /* b.txt kept after all */
+    ASSERT_EQ_I((int32_t)log_tracked_files(a, &tlog, &tpaths), 2);
+    ASSERT_EQ_S(tpaths[0], "a.txt");
+    ASSERT_EQ_S(tpaths[1], "b.txt");
+
     t_begin("own_chunks: this folder's copy wins, and the branch folder is "
             "not read unless it may fill in");
     const char *oid = "0123456789ab";
