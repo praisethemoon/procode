@@ -386,7 +386,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         }
         if (fr.type != REC_BRANCH || strcmp(fr.id, anchor) != 0 ||
             nlin == MERGE_MAX_CHAIN) {
-            err_out(json, "log_broken",
+            err_out(json, "history_broken",
                     "branch %s's history does not open with its branch "
                     "record, or its branches form a loop",
                     anchor);
@@ -493,7 +493,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     }
     for (int32_t k = 0; k < nlin; k++) {
         if (lin[k].first < 0) {
-            err_out(json, "log_broken",
+            err_out(json, "history_broken",
                     "branch %s's history does not hold %s's branch record",
                     key, lin[k].name);
             goto done;
@@ -523,7 +523,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     /* After the base check: an unrelated branch's record does not chain
      * from this folder's history either, and should be named as such. */
     if (!blog.chain_ok) {
-        err_out(json, "log_broken", "branch %s's history is broken: %s", key,
+        err_out(json, "history_broken", "branch %s's history is broken: %s", key,
                 blog.chain_err);
         goto done;
     }
@@ -587,7 +587,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             if (h > upto)
                 upto = h;
         } else if (k == nlin - 1) {
-            err_out(json, "log_broken",
+            err_out(json, "history_broken",
                     "branch %s's history no longer holds %.7s, where the "
                     "last merge stopped",
                     key, lin[k].head);

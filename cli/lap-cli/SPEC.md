@@ -1022,7 +1022,10 @@ pass over the history finds it as a rebuild would make it — each record's
 entry, each commit's file and the file's commit before it, each file's
 last. An index that differs is a mismatch of its own (`index: …`; in JSON,
 `.lap/index` among `mismatched_files`), and the whole history is replayed
-instead.
+instead. `--json`: `{ok, records, chain_ok, chain_error?, history_error?,
+torn_tail_bytes?, unknown_records?, unknown_type?, branches}`, and with
+`--deep` also `deep_checked` (the files and snapshots compared),
+`deep_mismatched` (how many differ) and `mismatched_files` (their paths).
 
 ### `lap branch start [name] --from <folder>`
 Makes the current folder a branch of `<folder>` (§Branches → Starting one),
@@ -1087,14 +1090,98 @@ pruned from the registry once its folder is gone. `--json` returns `dry_run`, `b
 `amendments` (`{carried, left}`) and
 `commits` (`[{id, from}]`: the ids given to adopted commits, so empty in a
 dry run, which gives none; `adopted` counts them either way). Errors:
-`branch_not_found`, `merge_in_branch`, `unrelated_history`, `log_broken`,
-`git_merge_first`.
+`branch_not_found`, `ambiguous_branch`, `merge_in_branch`,
+`unrelated_history`, `history_broken` (the branch's history is broken or
+lacks what the merge needs), `newer_history`, `git_merge_first`,
+`log_unreadable`, `io_error`, and the open's own codes (§Error codes).
 
 ### `lap rebuild [--verify]`
 Deletes and reconstructs every derived cache from the log — the executable
 proof of the cache contract. `--verify` additionally fails when the hash
 chain is broken. Run it after transporting a bare log, deleting caches, or
 upgrading across a cache-format change.
+
+### Error codes
+
+Every error lap reports, in JSON as `{"ok":false,"error":"<code>","message":…}`
+and in text as the message. The commands named are where each is given;
+"any" is every command that opens the repository. A code marked
+*internal* means a write or read failed underneath (a full disk, a file
+lap cannot write): the message says which file.
+
+| code | commands | meaning |
+|---|---|---|
+| `already_branch` | branch start | this folder is already a branch |
+| `ambiguous_branch` | readers with `--branch`, merge | a name two branches share; give the id |
+| `ambiguous_ref` | show, rr, amend | a hash prefix matches more than one commit (or record, for amend) |
+| `append_failed` | commit, session, amend | *internal*: the record could not be appended |
+| `bad_args` | branch | arguments that do not fit together |
+| `bad_color` | any | `--color=` other than auto, always, never |
+| `bad_edit_index` | commit | `--edit N` names no edit |
+| `bad_line` | search | `--line` is not a line of the file |
+| `bad_lineage` | branch start | `.lap/lineage` does not hold a branch id |
+| `bad_lines` | commit | `--lines A-B` matches no edit's range |
+| `bad_message_file` | commit, session | a `-F` file that is not the two sections |
+| `bad_meta` | session start | a `--meta` that is not `key=value` |
+| `bad_name` | branch start | a branch name outside the allowed letters, or `main` |
+| `bad_path` | commit, log, search, branch | a path outside this repository (or in a nested one), or not a file |
+| `bad_time` | search, log | a time lap cannot read |
+| `behavior_repeats_intent` | commit, amend | the behavior is the intent again |
+| `behavior_repeats_previous` | commit, amend | the behavior is the session's previous one again |
+| `behavior_restates_code` | commit, amend | the behavior is the changed lines' words |
+| `binary` | commit | the file looks binary |
+| `branch_not_found` | merge | no branch of that name or id here |
+| `branch_required` | commit, session, amend | this folder has branches or is one: say `--branch` |
+| `chain_broken` | rebuild `--verify` | the hash chain is broken |
+| `copied_branch` | any writer | this folder is a plain copy of a branch folder |
+| `empty_range` | rr | the range holds no commit |
+| `git_merge_first` | merge | the branch's history has not come through git yet |
+| `has_branches` | branch start | this folder has live branches of its own |
+| `history_broken` | any, merge | a chunk missing, cut, emptied or changed, a chain broken, or two shapes that differ |
+| `ignored` | commit | the file is ignored by `.lapignore` |
+| `init_failed` | init | *internal*: `.lap/` could not be made |
+| `internal` | init | *internal*: an unexpected failure |
+| `io_error` | branch, merge | *internal*: a file lap needed to write |
+| `lines_mismatch` | commit | the range given is not the edit's |
+| `log_unreadable` | most readers, merge, rebuild | the history could not be read or parsed |
+| `merge_in_branch` | merge | the merge target is itself a branch that must merge first |
+| `message_required` | session start | no purpose given |
+| `message_too_short` | commit, amend | intent or behavior under three words |
+| `missing_behavior` | commit, amend | no `-b` |
+| `missing_from` | branch start | no `--from` |
+| `missing_intent` | commit, amend | no `-i` |
+| `name_taken` | branch start | the name is, or was, a branch main can see |
+| `newer_history` | any writer, merge, branch start | records of a type a newer lap wrote |
+| `no_active_session` | session end | no session to end |
+| `no_changes` | commit | the file has no pending edit |
+| `no_parent` | branch start | no lap repository at `--from` |
+| `no_repo` | any | not inside a lap repository |
+| `no_session` | commit | no active session and no `--no-session` |
+| `no_target` | rr | nothing to review |
+| `not_a_commit` | amend | the reference names another record |
+| `not_clean` | branch start | this folder's files are not the parent's committed state |
+| `not_found` | search | nothing matches |
+| `not_own_commit` | amend | the commit is from before this branch started |
+| `not_that_branch` | branch move | the folder given is not that branch |
+| `parent_read_only` | branch start | the parent cannot be written |
+| `read_failed` | commit, search | *internal*: a file could not be read |
+| `rebuild_failed` | rebuild | *internal*: a cache could not be rebuilt |
+| `replay_failed` | show | *internal*: a file's state could not be replayed |
+| `same_folder` | branch start | `--from` is this folder itself |
+| `same_message` | amend | the commit already says that |
+| `session_active` | session start | a session is already active |
+| `shadow_failed` | commit | *internal*: the shadow copy could not be written |
+| `state_failed` | commit, amend | *internal*: `state.json` could not be written |
+| `unknown_branch` | readers with `--branch`, branch | no such branch here |
+| `unknown_command` | any | no such command |
+| `unknown_file` | commit | lap never recorded the file and it is not here |
+| `unknown_flag` | any | a flag the command does not take |
+| `unknown_ref` | show, rr, amend | no commit (or record) with that id or hash |
+| `unknown_session` | readers of a session | no such session |
+| `unreadable` | commit | the file is there but cannot be read |
+| `unrelated_history` | branch start, merge | the histories do not share a start |
+| `usage` | most | the command line is wrong: a missing or empty value, a missing argument |
+| `wrong_branch` | commit, session, amend | `--branch` names another line than this folder's |
 
 ## `.lapignore`
 

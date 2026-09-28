@@ -1798,8 +1798,8 @@ sed '2s/work to break/WORK TO BREAK/' ".lap/log/$ID15.000001.jsonl" > t.new && #
     mv t.new ".lap/log/$ID15.000001.jsonl"
 both15() { (cd "$BP" && find .lap -type f | sort | xargs cksum; cd "$BW" && find .lap -type f | sort | xargs cksum); }
 SUM15=$(both15)
-cd "$BP" && expect_grep "log_broken" "$LAP" merge b --json
-[ "$(both15)" = "$SUM15" ] || fail "a merge refused as log_broken changed a .lap"
+cd "$BP" && expect_grep "history_broken" "$LAP" merge b --json
+[ "$(both15)" = "$SUM15" ] || fail "a merge refused as history_broken changed a .lap"
 # an unrelated history's branch, its chunk here as a git merge could bring it
 mkdir -p "$WORK/m15-u" && cd "$WORK/m15-u" && "$LAP" init >/dev/null 2>&1
 printf 'elsewhere\n' > u.txt
