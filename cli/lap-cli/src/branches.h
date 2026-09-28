@@ -47,6 +47,14 @@ void branches_add(Arena *a, Branches *b, BranchEntry e);
  * (brought by copying the folder), not folder's own. */
 const BranchEntry *branches_live_of(Arena *a, const Branches *b,
                                     const char *folder);
+/* Whether folder root (its .lap at lapdir), whose .lap/lineage names
+ * branch `lineage`, is a copy of that branch rather than the branch: its
+ * .lap/parent's registry places the branch in another folder, which is
+ * there and still that branch. *original is then that folder. A branch
+ * moved away (its registered folder gone, or no longer that branch) is not
+ * a copy: it is the branch, not yet told where it went. */
+bool branches_copy_of(Arena *a, const char *lapdir, const char *root,
+                      const char *lineage, const char **original);
 
 /* What the parent knows of one registered branch. An entry is checked,
  * never trusted: its folder counts only while it exists and its .lap is

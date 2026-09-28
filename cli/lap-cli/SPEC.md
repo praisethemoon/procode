@@ -392,6 +392,16 @@ holding the parent's lock throughout:
 5. **The branch record** starts the folder's lineage, and `.lap/lineage`
    names it. A registry copied along with the folder is dropped.
 
+**A plain copy of a branch folder is not that branch.** A copy (`cp -R`)
+keeps `.lap/lineage` and `.lap/parent`; two folders appending to one
+lineage would diverge. A folder is a copy when its `.lap/parent`'s
+registry places its lineage in another folder that is there and still that
+branch. A branch start from a copy goes ahead as from any folder copied
+from that branch (its copied lineage and parent replaced), and every
+writer refuses in it (`copied_branch`, naming both folders) until then. A
+branch moved away — its registered folder gone or no longer it, `lap
+branch move` not run yet — is that branch, not a copy.
+
 The id is the first 12 hex digits of SHA-256 over the base, the name, the
 time and a nonce, so two copies of one folder never make the same one. The
 name is 1–64 letters, digits, `.`, `_` or `-`, not `main`, unique among
@@ -964,7 +974,9 @@ the board follows to the parent's board) could not be written, which the
 text output also warns of — the start itself stands, lap never reads it.
 Errors: `missing_from`, `bad_name`, `same_folder`, `already_branch`,
 `has_branches`, `no_parent`, `unrelated_history`, `not_clean`,
-`name_taken`, `parent_read_only`. `has_branches`: this folder's registry
+`name_taken`, `parent_read_only`; `already_branch` is not given for a
+plain copy of a branch folder, which starts a branch (above). Any writer in
+such a copy is `copied_branch`. `has_branches`: this folder's registry
 lists a live branch of it (its folder is that branch and its `.lap/parent`
 names this folder) — a parent cannot become a branch, above all of its own
 child; a registry that came along with a copied folder names another

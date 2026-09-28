@@ -148,7 +148,17 @@ static int32_t start_locked(Arena *a, bool json, const char *name,
         err_out(json, "bad_lineage", "%s", err);
         return LAP_EXIT_ERR;
     }
-    if (strcmp(lineage, LAP_MAIN_LINEAGE) != 0) {
+    const char *original;
+    if (strcmp(lineage, LAP_MAIN_LINEAGE) != 0 &&
+        branches_copy_of(a, here_lap, here, lineage, &original)) {
+        /* a plain copy of a branch folder: a folder copied from that
+         * branch, whose copied lineage and parent the start replaces */
+        if (!json)
+            fprintf(stderr,
+                    "note: %s is a copy of branch %s (in %s), not that "
+                    "branch: it starts a branch of its own\n",
+                    here, lineage, original);
+    } else if (strcmp(lineage, LAP_MAIN_LINEAGE) != 0) {
         err_out(json, "already_branch",
                 "%s is already branch %s; a folder starts one branch", here,
                 lineage);

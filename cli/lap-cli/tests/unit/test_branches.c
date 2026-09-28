@@ -511,6 +511,53 @@ void test_branches(void) {
     plat_rmdir(".name_unit_b1/.lap");
     plat_rmdir(".name_unit_b1");
 
+    t_begin("branches_copy_of: a folder naming a branch its parent places "
+            "in another folder, which is still it, is a copy; the branch "
+            "itself, or one moved away, is not");
+    char cwd[LAP_PATH_MAX], cpar[LAP_PATH_MAX], corig[LAP_PATH_MAX];
+    char ccopy[LAP_PATH_MAX];
+    ASSERT_TRUE(plat_getcwd(cwd, sizeof cwd));
+    snprintf(cpar, sizeof cpar, "%s/.copy_unit_parent", cwd);
+    snprintf(corig, sizeof corig, "%s/.copy_unit_b1", cwd);
+    snprintf(ccopy, sizeof ccopy, "%s/.copy_unit_x2", cwd);
+    plat_mkdirs(".copy_unit_parent/.lap");
+    plat_mkdirs(".copy_unit_b1/.lap");
+    plat_mkdirs(".copy_unit_x2/.lap");
+    Branches creg;
+    memset(&creg, 0, sizeof creg);
+    branches_add(a, &creg, (BranchEntry){"0123456789ab", "b1", corig, "h",
+                                         "t", NULL});
+    ASSERT_TRUE(branches_save(a, ".copy_unit_parent/.lap", &creg));
+    hist_write_lineage(".copy_unit_b1/.lap", "0123456789ab");
+    hist_write_lineage(".copy_unit_x2/.lap", "0123456789ab");
+    plat_write_file_atomic(".copy_unit_b1/.lap/parent", cpar, strlen(cpar));
+    plat_write_file_atomic(".copy_unit_x2/.lap/parent", cpar, strlen(cpar));
+    const char *orig = NULL;
+    ASSERT_TRUE(branches_copy_of(a, ".copy_unit_x2/.lap", ccopy,
+                                 "0123456789ab", &orig));
+    ASSERT_EQ_S(orig, corig);
+    ASSERT_TRUE(!branches_copy_of(a, ".copy_unit_b1/.lap", corig,
+                                  "0123456789ab", &orig));
+    ASSERT_TRUE(!branches_copy_of(a, ".copy_unit_x2/.lap", ccopy,
+                                  "ba9876543210", &orig)); /* unregistered */
+    remove(".copy_unit_b1/.lap/lineage"); /* b1 moved away from there */
+    ASSERT_TRUE(!branches_copy_of(a, ".copy_unit_x2/.lap", ccopy,
+                                  "0123456789ab", &orig));
+    hist_write_lineage(".copy_unit_b1/.lap", "0123456789ab");
+    remove(".copy_unit_x2/.lap/parent"); /* no parent named: no registry */
+    ASSERT_TRUE(!branches_copy_of(a, ".copy_unit_x2/.lap", ccopy,
+                                  "0123456789ab", &orig));
+    remove(".copy_unit_parent/.lap/" LAP_BRANCHES_NAME);
+    remove(".copy_unit_b1/.lap/lineage");
+    remove(".copy_unit_b1/.lap/parent");
+    remove(".copy_unit_x2/.lap/lineage");
+    plat_rmdir(".copy_unit_parent/.lap");
+    plat_rmdir(".copy_unit_parent");
+    plat_rmdir(".copy_unit_b1/.lap");
+    plat_rmdir(".copy_unit_b1");
+    plat_rmdir(".copy_unit_x2/.lap");
+    plat_rmdir(".copy_unit_x2");
+
     remove(path);
     arena_free(a);
 }

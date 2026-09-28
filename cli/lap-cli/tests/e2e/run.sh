@@ -2423,6 +2423,35 @@ YID=$(cat "$WORK/u1-by/.lap/lineage")
 expect_ok "$LAP" log --branch "$YID"
 cd "$WORK"
 
+t "a plain copy of a branch folder is not that branch"
+mkdir -p "$WORK/cp1-main" && cd "$WORK/cp1-main" || exit 1
+"$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+for f in a.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the copy fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+cp -R "$WORK/cp1-main" "$WORK/cp1-b1" && cd "$WORK/cp1-b1" &&
+    expect_ok "$LAP" branch start b1 --from ../cp1-main
+cp -R "$WORK/cp1-b1" "$WORK/cp1-x2" && cd "$WORK/cp1-x2"
+SUM=$(cat .lap/log/*.jsonl | cksum)
+printf 'x2\n' >> a.txt
+expect_grep '"error":"copied_branch"' "$LAP" commit a.txt --branch b1 --no-session \
+    -i "record in a copy" -b "appends x2 to a.txt" --json
+[ "$(cat .lap/log/*.jsonl | cksum)" = "$SUM" ] || fail "the refused commit wrote history"
+expect_grep "cp1-b1" "$LAP" commit a.txt --branch b1 --no-session -i "record in a copy" -b "appends x2 to a.txt"
+printf 'a\n' > a.txt # back to b1's committed state
+expect_ok "$LAP" branch start x --from ../cp1-b1
+[ "$(cat .lap/lineage)" != "$(cat "$WORK/cp1-b1/.lap/lineage")" ] || fail "the copy kept b1's lineage"
+printf 'x2\n' >> a.txt
+expect_ok "$LAP" commit a.txt --branch x --no-session -i "record in the nested branch" -b "appends x2 to a.txt"
+cd "$WORK/cp1-b1" && printf 'b1\n' >> a.txt
+expect_ok "$LAP" commit a.txt --branch b1 --no-session -i "record in b1" -b "appends b1 to a.txt"
+# a branch moved away, its registry entry not updated yet, is still that branch
+cd "$WORK" && mv cp1-b1 cp1-b1moved && cd cp1-b1moved && printf 'moved\n' >> a.txt
+expect_ok "$LAP" commit a.txt --branch b1 --no-session -i "record after a move" -b "appends moved to a.txt"
+expect_grep "chain ok" "$LAP" verify
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

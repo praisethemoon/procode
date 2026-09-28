@@ -477,6 +477,19 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
     open_code = "no_repo";
     if (for_write && !newer_check(a, r, err, errsz))
         return false;
+    /* two folders never append to one lineage: a plain copy of a branch
+     * folder records nothing until it starts a branch of its own */
+    const char *original;
+    if (for_write && r->hist.parent[0] &&
+        branches_copy_of(a, r->lapdir, r->root, r->hist.lineage, &original)) {
+        open_code = "copied_branch";
+        snprintf(err, errsz,
+                 "%s is a copy of branch %s, which is %s: two folders never "
+                 "record to one branch. Start a branch here (lap branch "
+                 "start <name> --from %s), or record in %s",
+                 r->root, r->hist.name, original, original, original);
+        return false;
+    }
     /* with the lock held, clean up any crash-torn append before we append
      * after it */
     if (for_write && !hist_repair_torn_tail(a, &r->hist)) {

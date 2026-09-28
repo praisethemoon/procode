@@ -209,3 +209,36 @@ const BranchEntry *branches_live_of(Arena *a, const Branches *b,
     }
     return NULL;
 }
+
+bool branches_copy_of(Arena *a, const char *lapdir, const char *root,
+                      const char *lineage, const char **original) {
+    char ppath[LAP_PATH_MAX], plap[LAP_PATH_MAX];
+    snprintf(ppath, sizeof ppath, "%s/%s", lapdir, LAP_PARENT_NAME);
+    char *data;
+    size_t len;
+    if (!plat_read_file(a, ppath, &data, &len))
+        return false;
+    while (len > 0 && (data[len - 1] == '\n' || data[len - 1] == '\r'))
+        len--;
+    if (len == 0)
+        return false;
+    snprintf(plap, sizeof plap, "%.*s/%s", (int)len, data, LAP_DIR);
+    Branches reg;
+    branches_load(a, plap, &reg);
+    for (int32_t i = 0; i < reg.n; i++) {
+        const BranchEntry *e = &reg.v[i];
+        if (strcmp(e->id, lineage) != 0)
+            continue;
+        if (strcmp(e->path, root) == 0 || plat_same_file(e->path, root))
+            return false; /* registered here: this folder is the branch */
+        char elap[LAP_PATH_MAX], elin[HIST_LINEAGE_MAX], err[256];
+        snprintf(elap, sizeof elap, "%s/%s", e->path, LAP_DIR);
+        if (!plat_is_dir(elap) ||
+            !hist_folder_lineage(a, elap, elin, err, sizeof err) ||
+            strcmp(elin, lineage) != 0)
+            return false; /* moved: its registered folder is not it */
+        *original = e->path;
+        return true;
+    }
+    return false;
+}
