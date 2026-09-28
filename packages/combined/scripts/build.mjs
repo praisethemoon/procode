@@ -10,10 +10,10 @@
  *   package.json   generated: the four extensions' contributions merged, plus
  *                  procode's own command and MCP provider
  *   out/extension.js   the entry, with Lap History, Knowledge, the Board and
- *                      eggzibit bundled in
- *   out/media/         the webview assets of Lap History, Knowledge, the Board and eggzibit
+ *                      techdocs bundled in
+ *   out/media/         the webview assets of Lap History, Knowledge, the Board and techdocs
  *   out/pdfjs/         pdf.js, which Knowledge imports at runtime to read PDFs
- *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/eggzibit.js
+ *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/techdocs.js
  *                      the MCP servers, one file each
  *   media/             the parts' activity-bar icons
  *   skills/            the repository's .claude/skills, every file, for
@@ -31,7 +31,7 @@ const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repo = path.resolve(here, "..", "..");
 const dist = path.join(here, "dist");
 const VERSION = JSON.parse(fs.readFileSync(path.join(here, "package.json"), "utf8")).version;
-const PARTS = ["lap-vscode", "index-vscode", "coboard-vscode", "eggzibit-vscode"];
+const PARTS = ["lap-vscode", "index-vscode", "coboard-vscode", "techdocs-vscode"];
 
 /* npm, tsc and vsce all run as JavaScript on this Node. Their commands on
  * PATH are .cmd wrappers on Windows, which execFileSync cannot start without
@@ -106,7 +106,7 @@ if (dup) {
 const manifest = {
     name: "procode",
     displayName: "procode",
-    description: "Lap History, Knowledge, the Board and eggzibit in one extension, with the lap and kb CLIs and the kb, coboard and eggzibit MCP servers.",
+    description: "Lap History, Knowledge, the Board and techdocs in one extension, with the lap and kb CLIs and the kb, coboard and techdocs MCP servers.",
     version: VERSION,
     publisher: "praisethemoon",
     author: { name: "Soulaymen Chouri", email: "doit@praisethemoon.org" },
@@ -154,11 +154,11 @@ fs.copyFileSync(path.join(here, "media", "procode.png"), path.join(dist, "icon.p
 fs.writeFileSync(path.join(dist, ".vscodeignore"), "**/*.map\n");
 fs.writeFileSync(
     path.join(dist, "README.md"),
-    "# procode\n\nLap History, Knowledge, the Board and eggzibit in one extension.\n\n" +
+    "# procode\n\nLap History, Knowledge, the Board and techdocs in one extension.\n\n" +
         "Knowledge and the Board run the `kb` and `lap` CLIs, which you build with CMake from the procode " +
         "repository (see its README). They are found on PATH, or wherever " +
         "the settings **Knowledge › Cli Path** and **Board › Lap Path** point.\n\n" +
-        "The kb, coboard and eggzibit MCP servers are registered with VS Code's agent automatically. For Claude Code, " +
+        "The kb, coboard and techdocs MCP servers are registered with VS Code's agent automatically. For Claude Code, " +
         "**procode: Set Up MCP for Claude Code** writes them into the project's `.mcp.json`, and " +
         "**procode: Add Skills for Claude Code** adds the skills that teach Claude to use them to its `.claude/skills`.\n",
 );
@@ -177,7 +177,7 @@ await esbuild.build({
 });
 for (const [name, entry] of [
     ["coboard", `require(${JSON.stringify(path.join(repo, "packages/coboard/out/mcp.js"))}).main();`],
-    ["eggzibit", `require(${JSON.stringify(path.join(repo, "packages/eggzibit/out/mcp.js"))}).main();`],
+    ["techdocs", `require(${JSON.stringify(path.join(repo, "packages/techdocs/out/mcp.js"))}).main();`],
     [
         "kb",
         `require(${JSON.stringify(path.join(repo, "packages/kb-mcp/out/main.js"))}).main().then(` +

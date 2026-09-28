@@ -1,7 +1,7 @@
 {
-  "name": "eggzibit",
-  "displayName": "eggzibit",
-  "description": "Pages an agent publishes into the workspace's .eggzibit/ directory — HTML written against baukasten's tokens, with a title, a description, keywords and dates — and the MCP server agents publish them through.",
+  "name": "techdocs",
+  "displayName": "techdocs",
+  "description": "Pages an agent publishes into the workspace's .techdocs/ directory — HTML written against baukasten's tokens, with a title, a description, keywords and dates — and the MCP server agents publish them through.",
   "version": "0.1.0",
   "private": true,
   "publisher": "praisethemoon",
@@ -23,7 +23,7 @@
     }
   },
   "bin": {
-    "eggzibit-mcp": "./bin/eggzibit-mcp"
+    "techdocs-mcp": "./bin/techdocs-mcp"
   },
   "files": [
     "out",

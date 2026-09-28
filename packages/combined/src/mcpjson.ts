@@ -13,7 +13,7 @@ export interface ServerEntry {
 type Json = Record<string, unknown>;
 
 /* Servers procode once wrote under a name it no longer uses: `artifacts`,
- * renamed eggzibit. An entry of that name that procode wrote (its script is
+ * renamed techdocs. An entry of that name that procode wrote (its script is
  * procode's) is replaced by the new one; one set up by hand is left alone. */
 export const RETIRED = ["artifacts"] as const;
 

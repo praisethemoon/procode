@@ -1,10 +1,10 @@
-/* eggzibit as MCP tools, over stdio: newline-delimited JSON-RPC 2.0
- * (specs/eggzibit.md §4).
+/* techdocs as MCP tools, over stdio: newline-delimited JSON-RPC 2.0
+ * (specs/techdocs.md §4).
  *
  * Agents publish a page, list what is there and read one back. Deleting is
  * left to people, in the editor.
  *
- * The pages are the `.eggzibit/` found by walking up from the directory the
+ * The pages are the `.techdocs/` found by walking up from the directory the
  * server was started in (or a store from before the rename, moved on the
  * first publish); with none, the first publish creates one at the enclosing
  * git repository's root.
@@ -12,7 +12,7 @@
 
 import * as readline from "node:readline";
 
-import { Eggzibit, EggzibitError, MAX_DESCRIPTION, MAX_KEYWORD, MAX_KEYWORDS, MAX_TITLE, defaultRoot, findEggzibit, hasKeyword } from "./store";
+import { Techdocs, TechdocsError, MAX_DESCRIPTION, MAX_KEYWORD, MAX_KEYWORDS, MAX_TITLE, defaultRoot, findTechdocs, hasKeyword } from "./store";
 import { TEMPLATES } from "./templates";
 
 const VERSION = "0.1.0";
@@ -20,9 +20,9 @@ const VERSION = "0.1.0";
 /* What an agent needs to write a page that looks right, said once, where the
  * agent reads it. The token list is the useful subset of baukasten's; the
  * spec names the rest. */
-export const INSTRUCTIONS = `These are local pages shown in VS Code by procode's eggzibit — not claude.ai artifacts, and not your own Artifact tool.
+export const INSTRUCTIONS = `These are local pages shown in VS Code by procode's techdocs — not claude.ai artifacts, and not your own Artifact tool.
 
-eggzibit pages are finished pieces of work you hand to the person as a page — a report, a comparison, a design note, findings, a chart. Publish one with eggzibit_publish when the result is worth reading as a document rather than as chat.
+techdocs pages are finished pieces of work you hand to the person as a page — a report, a comparison, a design note, findings, a chart. Publish one with techdocs_publish when the result is worth reading as a document rather than as chat.
 
 The page is HTML (a whole document or a fragment). It is shown inside VS Code in the person's theme, so style it ONLY with baukasten's CSS variables, never with fixed colours:
 - colour: --bk-color-foreground, --bk-color-foreground-muted, --bk-color-background, --bk-color-background-secondary, --bk-color-background-elevated, --bk-color-border, --bk-color-divider, --bk-color-link, --bk-color-primary, --bk-color-primary-foreground, --bk-color-success, --bk-color-warning, --bk-color-danger, --bk-color-info, --bk-color-code-background, --bk-color-code-foreground
@@ -31,9 +31,9 @@ The page is HTML (a whole document or a fragment). It is shown inside VS Code in
 - shape: --bk-radius-sm|md|lg, --bk-border-width-1|2, --bk-shadow-sm|md
 Plain elements (headings, paragraphs, lists, tables, code, pre, blockquote, details, links) are already styled, and so are components by class name, so a report needs no CSS at all:
 eyebrow, lede · meta + chip · kpis + kpi (<b>number</b><span>what</span><small>why</small>; kpi.warn, kpi.danger) · callout ok|info|warn|danger (<strong>verdict</strong><p>reason</p>) · cols, panel · tag (ok|warn|danger) · tabs (buttons with aria-pressed) · td.id, td.num · toc · svg.chart with .bar (ok|warn|danger|muted), .grid, .node (accent), .edge (accent|dashed), .arrowhead, text.label.
-For anything longer than a few paragraphs, start from eggzibit_template {name: "report"}: it has every component in place and says what goes where.
+For anything longer than a few paragraphs, start from techdocs_template {name: "report"}: it has every component in place and says what goes where.
 The page has no network: inline everything (SVG, data: images, scripts). Scripts run sandboxed.
-Give every page two to five keywords (short lowercase words or phrases: the topic, the component, the kind of page) so pages about one topic can be found together; eggzibit_list filters by one.
+Give every page two to five keywords (short lowercase words or phrases: the topic, the component, the kind of page) so pages about one topic can be found together; techdocs_list filters by one.
 Republish with the same id to revise a page; its createdAt is kept, and so are its keywords unless you pass new ones.`;
 
 type Json = Record<string, unknown>;
@@ -49,14 +49,14 @@ export interface Ctx {
     readonly cwd: string;
 }
 
-function readStore(ctx: Ctx): Eggzibit | null {
-    const root = findEggzibit(ctx.cwd);
-    return root ? new Eggzibit(root) : null;
+function readStore(ctx: Ctx): Techdocs | null {
+    const root = findTechdocs(ctx.cwd);
+    return root ? new Techdocs(root) : null;
 }
 
 export const TOOLS: readonly Tool[] = [
     {
-        name: "eggzibit_publish",
+        name: "techdocs_publish",
         description:
             "Publish an HTML page the person reads in VS Code. Without id, creates the next A-<n>; with id, replaces that page and its metadata. Style with baukasten's --bk-* variables only (see the server instructions). Returns the artifact and the path of its page.",
         inputSchema: {
@@ -78,7 +78,7 @@ export const TOOLS: readonly Tool[] = [
             required: ["title", "html"],
         },
         call: (args, ctx) => {
-            const store = readStore(ctx) ?? new Eggzibit(defaultRoot(ctx.cwd));
+            const store = readStore(ctx) ?? new Techdocs(defaultRoot(ctx.cwd));
             return store.publish({
                 title: args["title"] as string,
                 html: args["html"] as string,
@@ -89,7 +89,7 @@ export const TOOLS: readonly Tool[] = [
         },
     },
     {
-        name: "eggzibit_template",
+        name: "techdocs_template",
         description:
             "A starting point for a page: every component the viewer styles, in place, with what goes where. Without name, lists the templates.",
         inputSchema: {
@@ -102,13 +102,13 @@ export const TOOLS: readonly Tool[] = [
             }
             const t = TEMPLATES.find((x) => x.name === args["name"]);
             if (!t) {
-                throw new EggzibitError("not_found", `no template "${String(args["name"])}"; there is ${TEMPLATES.map((x) => x.name).join(", ")}`);
+                throw new TechdocsError("not_found", `no template "${String(args["name"])}"; there is ${TEMPLATES.map((x) => x.name).join(", ")}`);
             }
             return t;
         },
     },
     {
-        name: "eggzibit_list",
+        name: "techdocs_list",
         description:
             "Every page in the workspace, most recently updated first, with their keywords and without their pages. With keyword, only the pages carrying it.",
         inputSchema: {
@@ -117,14 +117,14 @@ export const TOOLS: readonly Tool[] = [
         },
         call: (args, ctx) => {
             const keyword = args["keyword"];
-            if (keyword !== undefined && typeof keyword !== "string") throw new EggzibitError("invalid", "keyword must be text");
+            if (keyword !== undefined && typeof keyword !== "string") throw new TechdocsError("invalid", "keyword must be text");
             const all = readStore(ctx)?.list() ?? [];
             const pages = keyword === undefined ? all : all.filter((a) => hasKeyword(a, keyword));
             return { pages, count: pages.length };
         },
     },
     {
-        name: "eggzibit_get",
+        name: "techdocs_get",
         description: "One page's metadata (keywords included) and its HTML.",
         inputSchema: {
             type: "object",
@@ -133,7 +133,7 @@ export const TOOLS: readonly Tool[] = [
         },
         call: (args, ctx) => {
             const store = readStore(ctx);
-            if (!store) throw new EggzibitError("not_found", `no page ${String(args["id"])}: this workspace has none`);
+            if (!store) throw new TechdocsError("not_found", `no page ${String(args["id"])}: this workspace has none`);
             return store.get(args["id"] as string);
         },
     },
@@ -145,7 +145,7 @@ function checkArgs(tool: Tool, args: Json): void {
     const props = (tool.inputSchema["properties"] ?? {}) as Json;
     for (const k of Object.keys(args)) {
         if (!(k in props)) {
-            throw new EggzibitError("invalid", `${tool.name} takes no "${k}"; it takes ${Object.keys(props).join(", ") || "nothing"}`);
+            throw new TechdocsError("invalid", `${tool.name} takes no "${k}"; it takes ${Object.keys(props).join(", ") || "nothing"}`);
         }
     }
 }
@@ -162,7 +162,7 @@ export async function handle(msg: Json, ctx: Ctx): Promise<Json | null> {
             return reply({
                 protocolVersion: String((msg["params"] as Json | undefined)?.["protocolVersion"] ?? "2024-11-05"),
                 capabilities: { tools: {} },
-                serverInfo: { name: "eggzibit", version: VERSION },
+                serverInfo: { name: "techdocs", version: VERSION },
                 instructions: INSTRUCTIONS,
             });
         case "ping":
@@ -181,7 +181,7 @@ export async function handle(msg: Json, ctx: Ctx): Promise<Json | null> {
                 const result = await tool.call(args, ctx);
                 return reply({ content: [{ type: "text", text: JSON.stringify(result, null, 2) }] });
             } catch (e) {
-                const code = e instanceof EggzibitError ? e.code : "internal";
+                const code = e instanceof TechdocsError ? e.code : "internal";
                 return reply({ content: [{ type: "text", text: `${code}: ${(e as Error).message}` }], isError: true });
             }
         }

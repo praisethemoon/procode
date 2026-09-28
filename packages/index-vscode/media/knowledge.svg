@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
   <!-- Knowledge: a spiraled database, a store whose bands wind up around it as
-       one spiral (chosen 2026-09-28, replacing linked notes from eggzibit page
+       one spiral (chosen 2026-09-28, replacing linked notes from techdocs page
        A-3). lap.svg's 2px round stroke. Rendered by VS Code as an alpha mask:
        only the silhouette matters. -->
   <path d="M20 6 c0 1.66 -3.58 3 -8 3 s-8 -1.34 -8 -3 s3.58 -3 8 -3 s8 1.34 8 3 z M4 6 v12 c0 1.66 3.58 3 8 3 s8 -1.34 8 -3 V6 M4 12 C7 15.2 15.5 14 20 7.8 M4 17.2 C7 20.4 15.5 19.2 20 13"

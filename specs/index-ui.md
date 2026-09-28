@@ -21,7 +21,7 @@ One contribution to the VSCode activity bar:
 
 The icon is drawn like lap's (`packages/lap-vscode/media/lap.svg`): 24×24, one
 2px round stroke. It replaced the `book` codicon on 2026-09-26, chosen from the
-options in eggzibit page A-1.
+options in techdocs page A-1.
 
 A webview sidebar, for the same reason the board is one: a native `TreeView`
 cannot carry a search field and per-row metadata.

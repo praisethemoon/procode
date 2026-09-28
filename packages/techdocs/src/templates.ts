@@ -1,7 +1,7 @@
-/* Starting points for a page, served by the eggzibit_template tool.
+/* Starting points for a page, served by the techdocs_template tool.
  *
  * The report is the first page an agent published, reduced to its shape:
- * every component the viewer styles by class (specs/eggzibit.md §3), with
+ * every component the viewer styles by class (specs/techdocs.md §3), with
  * the text replaced by what goes there. It carries no CSS at all — colour,
  * spacing and type come from the viewer — so a page built from it follows
  * the person's theme without trying.

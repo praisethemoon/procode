@@ -1,11 +1,9 @@
-/* eggzibit: pages an agent publishes into the workspace (specs/eggzibit.md). */
+/* techdocs: pages an agent publishes into the workspace (specs/techdocs.md). */
 
 export {
-    Eggzibit,
-    EggzibitError,
-    EggzibitErrorCode,
-    LEGACY_DIR,
-    LEGACY_META,
+    Techdocs,
+    TechdocsError,
+    TechdocsErrorCode,
     MAX_DESCRIPTION,
     MAX_KEYWORD,
     MAX_KEYWORDS,
@@ -17,7 +15,7 @@ export {
     PublishInput,
     STORE_DIR,
     defaultRoot,
-    findEggzibit,
+    findTechdocs,
     hasKeyword,
     isPageId,
     normalizeKeywords,

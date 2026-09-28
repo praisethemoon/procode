@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* The entry point an agent host spawns. Pages go to the .eggzibit/ found
+/* The entry point an agent host spawns. Pages go to the .techdocs/ found
  * by walking up from the directory the host starts this in. */
 "use strict";
 require("../out/mcp.js").main();

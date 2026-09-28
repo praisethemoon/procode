@@ -1,4 +1,4 @@
-/* The document a page renders as (specs/eggzibit.md §5), built from its
+/* The document a page renders as (specs/techdocs.md §5), built from its
  * page. Pure: no vscode, no file system — the host reads the stylesheets and
  * the webview fills in the theme.
  *

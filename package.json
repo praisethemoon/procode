@@ -9,8 +9,8 @@
         "packages/lap-vscode",
         "packages/coboard",
         "packages/coboard-vscode",
-        "packages/eggzibit",
-        "packages/eggzibit-vscode",
+        "packages/techdocs",
+        "packages/techdocs-vscode",
         "packages/combined"
     ],
     "scripts": {

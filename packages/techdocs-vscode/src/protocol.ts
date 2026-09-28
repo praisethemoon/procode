@@ -1,6 +1,6 @@
 /* The messages between the pages view's webview and the extension host. */
 
-import type { Page } from "eggzibit";
+import type { Page } from "techdocs";
 
 /* A page as the list shows it: its metadata, without the page. */
 export type PageRow = Omit<Page, "bytes">;

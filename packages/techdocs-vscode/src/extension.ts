@@ -1,8 +1,8 @@
-/* eggzibit in VS Code (specs/eggzibit.md §5): the list of what agents have
+/* techdocs in VS Code (specs/techdocs.md §5): the list of what agents have
  * published into the workspace — a webview with the Board's filter bar —
  * and a tab per page that renders it in the editor's theme.
  *
- * The store is the `eggzibit` package, read fresh on every refresh: the
+ * The store is the `techdocs` package, read fresh on every refresh: the
  * files are small, and an agent writing through MCP is a different process,
  * so there is no cache here that could disagree with the disk.
  */
@@ -12,7 +12,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { Eggzibit, findEggzibit } from "eggzibit";
+import { Techdocs, findTechdocs } from "techdocs";
 
 import { FrameParts, frameDocument } from "./frame";
 import { sortForList } from "./list";
@@ -21,20 +21,15 @@ import { viewerHtml } from "./viewer";
 
 const panels = new Map<string, vscode.WebviewPanel>();
 
-function store(): Eggzibit | null {
+function store(): Techdocs | null {
     const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file");
     if (!folder) return null;
-    const root = findEggzibit(folder.uri.fsPath);
-    return new Eggzibit(root ?? folder.uri.fsPath);
+    const root = findTechdocs(folder.uri.fsPath);
+    return new Techdocs(root ?? folder.uri.fsPath);
 }
 
 /* The list: a webview view (a native tree has no room for a filter bar).
- * The host reads the pages and sends them; the view filters and draws.
- *
- * TWO VIEWS, ONE LIST. VS Code fixes a view container's icon in the
- * manifest, so the whole egg and the hatched one are two containers, each
- * with this view under its own id, shown by `eggzibit.hasPages`. One
- * provider serves both, and says whether there are pages. */
+ * The host reads the pages and sends them; the view filters and draws. */
 class Pages implements vscode.WebviewViewProvider {
     private readonly views = new Set<vscode.WebviewView>();
 
@@ -48,7 +43,7 @@ class Pages implements vscode.WebviewViewProvider {
         view.webview.onDidReceiveMessage((m: ToHost) => {
             if (m?.type === "ready") this.refresh();
             else if (m?.type === "open") open(this.ctx, m.id);
-            else if (m?.type === "source") void vscode.commands.executeCommand("eggzibit.openSource", m.id);
+            else if (m?.type === "source") void vscode.commands.executeCommand("techdocs.openSource", m.id);
         });
         view.onDidDispose(() => {
             this.views.delete(view);
@@ -59,7 +54,6 @@ class Pages implements vscode.WebviewViewProvider {
         const s = store();
         const pages = sortForList(s?.list() ?? []).map(({ bytes: _bytes, ...row }) => row);
         const m: ToView = { type: "pages", pages, hasFolder: s !== null };
-        void vscode.commands.executeCommand("setContext", "eggzibit.hasPages", pages.length > 0);
         for (const v of this.views) void v.webview.postMessage(m);
     }
 }
@@ -120,10 +114,10 @@ function open(ctx: vscode.ExtensionContext, id: string): void {
     try {
         title = s!.get(id).page.title;
     } catch {
-        void vscode.window.showWarningMessage(`eggzibit: there is no ${id} any more.`);
+        void vscode.window.showWarningMessage(`techdocs: there is no ${id} any more.`);
         return;
     }
-    const panel = vscode.window.createWebviewPanel("eggzibit.view", title, vscode.ViewColumn.Active, {
+    const panel = vscode.window.createWebviewPanel("techdocs.view", title, vscode.ViewColumn.Active, {
         enableScripts: true,
         localResourceRoots: [],
         retainContextWhenHidden: true,
@@ -164,7 +158,7 @@ async function remove(id: string): Promise<void> {
     }
     const answer = await vscode.window.showWarningMessage(
         `Delete the page “${title}” (${id})?`,
-        { modal: true, detail: "Its HTML and metadata are removed from .eggzibit/. The id is not reused." },
+        { modal: true, detail: "Its HTML and metadata are removed from .techdocs/. The id is not reused." },
         "Delete",
     );
     if (answer !== "Delete") return;
@@ -177,8 +171,7 @@ async function remove(id: string): Promise<void> {
 export function activate(ctx: vscode.ExtensionContext): void {
     const list = new Pages(ctx);
     ctx.subscriptions.push(
-        vscode.window.registerWebviewViewProvider("eggzibit.list", list),
-        vscode.window.registerWebviewViewProvider("eggzibit.listOpen", list),
+        vscode.window.registerWebviewViewProvider("techdocs.list", list),
     );
     /* The icon from the start, before either view is opened. */
     list.refresh();
@@ -191,28 +184,25 @@ export function activate(ctx: vscode.ExtensionContext): void {
             for (const [id, panel] of panels) load(ctx, id, panel);
         }, 150);
     };
-    /* The store, and one from before the rename until its first write moves it. */
-    for (const glob of ["**/.eggzibit/**", "**/.artifact/**"]) {
-        const watcher = vscode.workspace.createFileSystemWatcher(glob);
-        ctx.subscriptions.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
-    }
+    const watcher = vscode.workspace.createFileSystemWatcher("**/.techdocs/**");
+    ctx.subscriptions.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
 
     ctx.subscriptions.push(
-        vscode.commands.registerCommand("eggzibit.open", async (arg?: unknown) => {
+        vscode.commands.registerCommand("techdocs.open", async (arg?: unknown) => {
             const id = idOf(arg) ?? (await pick());
             if (id) open(ctx, id);
         }),
-        vscode.commands.registerCommand("eggzibit.openSource", async (arg?: unknown) => {
+        vscode.commands.registerCommand("techdocs.openSource", async (arg?: unknown) => {
             const id = idOf(arg) ?? (await pick());
             const s = store();
             if (!id || !s) return;
             await vscode.window.showTextDocument(vscode.Uri.file(s.pagePath(id)));
         }),
-        vscode.commands.registerCommand("eggzibit.delete", async (arg?: unknown) => {
+        vscode.commands.registerCommand("techdocs.delete", async (arg?: unknown) => {
             const id = idOf(arg);
             if (id) await remove(id);
         }),
-        vscode.commands.registerCommand("eggzibit.refresh", () => changed()),
+        vscode.commands.registerCommand("techdocs.refresh", () => changed()),
     );
 }
 

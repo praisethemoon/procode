@@ -1,6 +1,6 @@
 /* Copies the two stylesheets a page's frame is built with, and the
  * list's stylesheet and icon font; bundles the list's webview script for the
- * browser, and the extension host with the eggzibit store inlined, so the
+ * browser, and the extension host with the techdocs store inlined, so the
  * .vsix needs no node_modules. The tests run against the unbundled out/ tree,
  * so the host bundle is written beside it as out/extension.js only. */
 

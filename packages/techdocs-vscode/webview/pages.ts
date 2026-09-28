@@ -145,7 +145,7 @@ function rows(): HTMLElement[] {
             el(
                 "p",
                 "pg-empty",
-                "No pages yet. An agent publishes one with the eggzibit_publish tool of the eggzibit MCP server: an HTML page with a title, a description and keywords, saved under .eggzibit/.",
+                "No pages yet. An agent publishes one with the techdocs_publish tool of the techdocs MCP server: an HTML page with a title, a description and keywords, saved under .techdocs/.",
             ),
         ];
     }

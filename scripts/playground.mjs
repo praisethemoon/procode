@@ -1,10 +1,10 @@
 /* Fills .playground/ with a small project to look at in the test window:
  * a board with epics, milestones and tickets, lap sessions linked to those
- * tickets (with real edits), a few kb documents, and two eggzibit pages.
+ * tickets (with real edits), a few kb documents, and two techdocs pages.
  *
  * Each part is seeded only when it is empty, so running this again changes
  * nothing, and work done in the playground is kept. It never deletes
- * anything. Needs the CLIs built and coboard and eggzibit compiled (the "playground" task
+ * anything. Needs the CLIs built and coboard and techdocs compiled (the "playground" task
  * in .vscode/tasks.json does both first).
  *
  *   node scripts/playground.mjs
@@ -21,7 +21,7 @@ const dir = path.join(repo, ".playground");
 const LAP = path.join(repo, "cli/lap-cli/bin/lap");
 const KB = path.join(repo, "cli/kb-cli/bin/kb");
 const { Board } = createRequire(import.meta.url)(path.join(repo, "packages/coboard/out/index.js"));
-const { Eggzibit } = createRequire(import.meta.url)(path.join(repo, "packages/eggzibit/out/index.js"));
+const { Techdocs } = createRequire(import.meta.url)(path.join(repo, "packages/techdocs/out/index.js"));
 
 fs.mkdirSync(dir, { recursive: true });
 const env = { ...process.env, LAP_USER: "claude" };
@@ -41,7 +41,7 @@ if (!fs.existsSync(path.join(dir, ".kb"))) kb(["init"]);
 const ignore = path.join(dir, ".lapignore");
 const ignored = fs.readFileSync(ignore, "utf8");
 if (!ignored.includes(".coboard/")) fs.appendFileSync(ignore, "\n# stores, not source\n.coboard/\n.kb/\n");
-if (!ignored.includes(".eggzibit/")) fs.appendFileSync(ignore, ".eggzibit/\n");
+if (!ignored.includes(".techdocs/")) fs.appendFileSync(ignore, ".techdocs/\n");
 
 /* ----------------------------------------------------------------- board */
 
@@ -153,9 +153,9 @@ if (JSON.parse(kb(["ls", "--json"])).count === 0) {
     console.log("kb: seeded 3 documents");
 }
 
-/* ------------------------------------------------------------- eggzibit */
+/* ------------------------------------------------------------- techdocs */
 
-const pages = new Eggzibit(dir);
+const pages = new Techdocs(dir);
 if (pages.list().length === 0) {
     pages.publish(
         {
@@ -193,7 +193,7 @@ if (pages.list().length === 0) {
 <script>document.getElementById("note").textContent = "Rendered " + new Date().toLocaleString() + " — scripts run inside the sandbox.";</script>
 </body></html>`,
     });
-    console.log("eggzibit: seeded A-1, A-2");
+    console.log("techdocs: seeded A-1, A-2");
 }
 
 console.log(`playground ready: ${dir}`);

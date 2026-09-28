@@ -6,7 +6,7 @@
  * THE KEYWORDS chosen under the chevron keep a page carrying any of them,
  * as a Board chip keeps an item with any of its field's values. */
 
-import type { Page as Stored } from "eggzibit";
+import type { Page as Stored } from "techdocs";
 
 export interface PageFilter {
     readonly text: string;

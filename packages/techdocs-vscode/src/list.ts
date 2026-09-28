@@ -1,6 +1,6 @@
 /* The list's order and its one-word dates. Pure. */
 
-import type { Page } from "eggzibit";
+import type { Page } from "techdocs";
 
 /* Newest update first, ties by id newest first: the order the store gives,
  * restated here so the view does not depend on it. */

@@ -1,8 +1,8 @@
-# eggzibit — specification
+# techdocs — specification
 
 Status: draft.
 
-An eggzibit **page** is a finished piece of work an agent hands to a person: a report, a comparison, a design note, a table of findings, a chart. It
+A techdocs **page** is a finished piece of work an agent hands to a person: a report, a comparison, a design note, a table of findings, a chart. It
 is HTML, written against baukasten's design tokens, published into the
 workspace, and read in VS Code, where it looks like part of the editor in
 whatever theme the person uses.
@@ -11,22 +11,22 @@ Bindings, in the pattern lap, kb and coboard share:
 
 | binding | consumer | notes |
 |---|---|---|
-| `eggzibit` (TypeScript) | the MCP server, the extension | the only code that writes |
+| `techdocs` (TypeScript) | the MCP server, the extension | the only code that writes |
 | MCP tools | agents | §4 |
-| `eggzibit-vscode` | people | the list and the viewer, §5 |
+| `techdocs-vscode` | people | the list and the viewer, §5 |
 
 ---
 
 ## 1. Where pages live
 
-`.eggzibit/` at the workspace root, found by walking up from the working
-directory the way `.git`, `.kb/` and `.coboard/` are. `eggzibit_publish`
+`.techdocs/` at the workspace root, found by walking up from the working
+directory the way `.git`, `.kb/` and `.coboard/` are. `techdocs_publish`
 creates it at the enclosing git repository's root when there is none (the
 working directory outside a repository). Nothing is written
 anywhere else.
 
 ```
-.eggzibit/
+.techdocs/
   A-1/
     index.html       the page
     page.json        its metadata
@@ -34,12 +34,7 @@ anywhere else.
     …
 ```
 
-A workspace from before the rename keeps its pages in `.artifact/`, each with
-an `artifact.json`. They are read there as they are; the first write moves the
-folder to `.eggzibit/` and renames each `artifact.json` to `page.json`, ids
-unchanged. When both folders exist, `.eggzibit/` is used.
-
-`.eggzibit/` belongs in version control: a page is a result, and a result
+`.techdocs/` belongs in version control: a page is a result, and a result
 worth reading is worth keeping with the work it came from.
 
 ## 2. Identity and metadata
@@ -49,7 +44,7 @@ Page { id, title, description, keywords, createdAt, updatedAt, bytes }
 ```
 
 - **`id`** is `A-<n>`: public, prefixed, monotonic, never reused. The next id
-  is past both `.eggzibit/next` (a counter, so an id stays spent after its
+  is past both `.techdocs/next` (a counter, so an id stays spent after its
   page is deleted) and every `A-<n>` directory present, and is claimed by
   creating its directory, which only one writer can do.
 - **`title`** — required, one line, at most 200 characters.
@@ -125,10 +120,10 @@ extension, the workspace or the viewer. Everything a page shows travels in
 
 | tool | does |
 |---|---|
-| `eggzibit_publish` | `{ title, html, description?, keywords?, id? }`. Without `id`, creates the next `A-<n>`. With `id`, replaces that page and its metadata, keeping `createdAt`, and keeping its keywords unless `keywords` is given. Returns the page's metadata and the path of its `index.html`. The server's instructions ask for two to five keywords on every page. |
-| `eggzibit_template` | `{ name? }`: a starting page with every component in place (§3), or without `name` the list of templates. Today there is `report`. |
-| `eggzibit_list` | `{ keyword? }`: every page, newest `updatedAt` first, with its keywords and without its HTML; with `keyword`, only the pages carrying it (compared as keywords are stored, so case does not matter) |
-| `eggzibit_get` | `{ id }`: the metadata (keywords included) and the page |
+| `techdocs_publish` | `{ title, html, description?, keywords?, id? }`. Without `id`, creates the next `A-<n>`. With `id`, replaces that page and its metadata, keeping `createdAt`, and keeping its keywords unless `keywords` is given. Returns the page's metadata and the path of its `index.html`. The server's instructions ask for two to five keywords on every page. |
+| `techdocs_template` | `{ name? }`: a starting page with every component in place (§3), or without `name` the list of templates. Today there is `report`. |
+| `techdocs_list` | `{ keyword? }`: every page, newest `updatedAt` first, with its keywords and without its HTML; with `keyword`, only the pages carrying it (compared as keywords are stored, so case does not matter) |
+| `techdocs_get` | `{ id }`: the metadata (keywords included) and the page |
 
 Refusals are tool results with `isError`, never transport errors:
 
@@ -143,21 +138,20 @@ the editor.
 
 ## 5. The viewer
 
-`eggzibit-vscode`:
+`techdocs-vscode`:
 
-- an **eggzibit** view: every page, newest first, with its id, title,
+- an **techdocs** view: every page, newest first, with its id, title,
   when it was last updated, its description and its keywords; refreshed when
-  `.eggzibit/` changes. It is a webview with the same filter bar as the Board
+  `.techdocs/` changes. It is a webview with the same filter bar as the Board
   and Lap History: the text keeps the pages whose id, title, description or
   keywords hold every word typed, in any case; the chevron opens the
   keywords, each with how many pages carry it, and choosing some keeps the
   pages carrying any of them — as does clicking a keyword on a row. What is
   typed and chosen survives the view being hidden. A row opens its page;
   right-click offers Open, Open HTML Source and Delete;
-- its activity-bar icon is an egg, whole while the workspace has no page and
-  split open once it has one. VS Code fixes a container's icon, so the view
-  sits in two containers under two ids (`eggzibit.list`,
-  `eggzibit.listOpen`), and `eggzibit.hasPages` shows one of them;
+- its activity-bar icon is a sheet falling onto a pile of papers, the same
+  whether or not the workspace has a page; the view is `techdocs.list`, in
+  one container;
 - opening one shows it in an editor tab titled with the page's title. The
   tab builds the frame's document from the page with, in order: a content
   security policy (`default-src 'none'; img-src data:; font-src data:;

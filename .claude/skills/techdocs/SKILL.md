@@ -1,18 +1,18 @@
 ---
-name: eggzibit
-description: Write and publish an eggzibit page — an HTML page the person reads in VS Code — with the eggzibit MCP server (local pages, not to be confused with claude.ai artifacts). Use when a result is worth reading as a document rather than a chat reply (a report, a comparison, findings, a design note, anything with a table or a chart), or when the user asks for an eggzibit page, a report or a page.
-compatibility: Requires the eggzibit MCP server (packages/eggzibit).
+name: techdocs
+description: Write and publish a techdocs page — an HTML page the person reads in VS Code — with the techdocs MCP server (local pages, not to be confused with claude.ai artifacts). Use when a result is worth reading as a document rather than a chat reply (a report, a comparison, findings, a design note, anything with a table or a chart), or when the user asks for a techdocs page, a report or a page.
+compatibility: Requires the techdocs MCP server (packages/techdocs).
 metadata:
   version: "2"
 ---
 
-# eggzibit — pages for people
+# techdocs — pages for people
 
-An eggzibit page is finished work handed over as a page — procode's own,
-not a claude.ai artifact. It lives in the workspace's `.eggzibit/`, the
-person opens it from the eggzibit view — where
+A techdocs page is finished work handed over as a page — procode's own,
+not a claude.ai artifact. It lives in the workspace's `.techdocs/`, the
+person opens it from the techdocs view — where
 they find it by filtering on its id, title, description and keywords, so
-give it good ones — and it renders in their editor theme. The format is in `specs/eggzibit.md`.
+give it good ones — and it renders in their editor theme. The format is in `specs/techdocs.md`.
 
 ## When to make one
 
@@ -24,16 +24,16 @@ chat.
 
 ## How
 
-1. `eggzibit_template {name: "report"}` — start from it for anything longer
+1. `techdocs_template {name: "report"}` — start from it for anything longer
    than a few paragraphs. Every component is in place and the comments say
    what goes where. Delete the comments and every section you do not need.
 2. Write the page. Replace every UPPERCASE placeholder; never leave one.
-3. `eggzibit_publish {title, description, keywords, html}`. The title is the
+3. `techdocs_publish {title, description, keywords, html}`. The title is the
    finding, one line; the description is one or two sentences for the list;
    `keywords` are two to five short words or phrases the page is about —
    the topic, the component, the kind of page — so pages on one topic can
    be found together, e.g. `keywords: ["lap", "merge", "design note"]`.
-   `eggzibit_list {keyword: "merge"}` finds the pages carrying one.
+   `techdocs_list {keyword: "merge"}` finds the pages carrying one.
 4. To revise it, publish again **with its `id`** — never a second page
    for the same work. `createdAt` is kept, and the keywords too unless you
    pass new ones.
@@ -83,7 +83,7 @@ Taken from the first report, which the user liked enough to make the model:
 
 ## Checking it
 
-Read the page back with `eggzibit_get` and look for leftover placeholders,
+Read the page back with `techdocs_get` and look for leftover placeholders,
 numbers that do not match their source, and sections that say nothing. When
 you can render it (headless Chrome over the viewer's frame document, as in
-`packages/eggzibit-vscode`), look at it in a light and a dark theme.
+`packages/techdocs-vscode`), look at it in a light and a dark theme.

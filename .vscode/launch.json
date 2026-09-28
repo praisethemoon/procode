@@ -41,16 +41,16 @@
       "preLaunchTask": "prepare: Board"
     },
     {
-      "name": "Run eggzibit",
+      "name": "Run techdocs",
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/eggzibit-vscode",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/techdocs-vscode",
         "--disable-extensions",
         "${workspaceFolder}/.playground"
       ],
-      "outFiles": ["${workspaceFolder}/packages/eggzibit-vscode/out/**/*.js"],
-      "preLaunchTask": "prepare: eggzibit"
+      "outFiles": ["${workspaceFolder}/packages/techdocs-vscode/out/**/*.js"],
+      "preLaunchTask": "prepare: techdocs"
     },
     {
       "name": "Run All Extensions",
@@ -60,7 +60,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/packages/lap-vscode",
         "--extensionDevelopmentPath=${workspaceFolder}/packages/index-vscode",
         "--extensionDevelopmentPath=${workspaceFolder}/packages/coboard-vscode",
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/eggzibit-vscode",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/techdocs-vscode",
         "--disable-extensions",
         "${workspaceFolder}/.playground"
       ],
@@ -69,7 +69,7 @@
         "${workspaceFolder}/packages/lap-vscode/out/**/*.js",
         "${workspaceFolder}/packages/index-vscode/out/**/*.js",
         "${workspaceFolder}/packages/coboard-vscode/out/**/*.js",
-        "${workspaceFolder}/packages/eggzibit-vscode/out/**/*.js"
+        "${workspaceFolder}/packages/techdocs-vscode/out/**/*.js"
       ],
       "preLaunchTask": "prepare: all extensions"
     }

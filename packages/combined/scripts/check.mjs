@@ -164,7 +164,7 @@ for (const c of manifest.contributes.commands) {
     assert.ok(registered.has(c.command), `${c.command} is contributed and registered`);
 }
 const defs = await mcpProvider.provideMcpServerDefinitions();
-assert.deepEqual(defs.map((d) => d.label), ["coboard: the board", "kb: the knowledge base", "eggzibit: pages agents publish"]);
+assert.deepEqual(defs.map((d) => d.label), ["coboard: the board", "kb: the knowledge base", "techdocs: pages agents publish"]);
 for (const d of defs) {
     assert.equal(d.command, process.execPath);
     assert.ok(fs.existsSync(d.args[0]), `${d.args[0]} exists`);
@@ -202,7 +202,7 @@ const fake = (name) => {
     fs.writeFileSync(f, "#!/bin/sh\n");
     return f;
 };
-const [coboardDef, kbDef, eggzibitDef] = defs;
+const [coboardDef, kbDef, techdocsDef] = defs;
 const resolve = (d) => mcpProvider.resolveMcpServerDefinition(d);
 settings["knowledge.cliPath"] = fake("kb");
 settings["coboard.lapPath"] = fake("lap");
@@ -215,7 +215,7 @@ assert.equal(resolve(kbDef), undefined, "kb's server does not start without kb")
 assert.equal(warnings.length, 1);
 assert.match(warnings[0], /"\/nowhere\/kb" was not found/);
 assert.equal(resolve(coboardDef), coboardDef, "coboard's does not need kb");
-assert.equal(resolve(eggzibitDef), eggzibitDef, "eggzibit's needs no CLI");
+assert.equal(resolve(techdocsDef), techdocsDef, "techdocs's needs no CLI");
 assert.equal(warnings.length, 1, "only the missing CLI is reported");
 // lap missing: coboard's server still starts, with a warning.
 settings["knowledge.cliPath"] = fake("kb");
@@ -233,13 +233,13 @@ assert.equal(ext.resolveCli("/opt/kb", "", (p) => p === "/opt/kb"), "/opt/kb");
 assert.equal(ext.resolveCli("kb", "/w", (p) => p === path.join("/w", "kb.exe"), "win32"), path.join("/w", "kb.exe"));
 
 // The Claude Code command writes our servers and keeps the other one; the
-// artifacts entry an earlier procode wrote, renamed eggzibit, goes.
+// artifacts entry an earlier procode wrote, renamed techdocs, goes.
 const earlier = JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8"));
 earlier.mcpServers.artifacts = { command: "x", args: ["/old/procode/out/mcp/artifacts.js"] };
 fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify(earlier));
 registered.get("procode.setUpClaudeMcp")();
 const written = JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8"));
-assert.deepEqual(Object.keys(written.mcpServers).sort(), ["coboard", "eggzibit", "kb", "other"]);
+assert.deepEqual(Object.keys(written.mcpServers).sort(), ["coboard", "kb", "other", "techdocs"]);
 assert.equal(written.mcpServers.other.command, "x", "an unrelated server is kept as it was");
 assert.equal(written.mcpServers.kb.args[0], defs[1].args[0], "Claude Code runs the same script as VS Code's agent");
 assert.equal(written.mcpServers.coboard.env.COBOARD_AUTHOR, "claude", "Claude Code's board comments are signed");
@@ -258,7 +258,7 @@ assert.equal(registered.has("procode.registerClaudeMcp"), false, "Claude Code is
 // The package carries the skills whole, and the command adds them to the
 // project's .claude/skills only.
 assert.ok(registered.has("procode.addClaudeSkills"), "Add Skills for Claude Code is registered");
-for (const f of ["lap/SKILL.md", "lap/references/branches.md", "tickets/SKILL.md", "eggzibit/SKILL.md"]) {
+for (const f of ["lap/SKILL.md", "lap/references/branches.md", "tickets/SKILL.md", "techdocs/SKILL.md"]) {
     assert.ok(fs.existsSync(path.join(dist, "skills", f)), `skills/${f} is in the package`);
 }
 const skills = path.join(folder, ".claude", "skills");
@@ -276,10 +276,10 @@ const same = (name) => read(path.join(skills, name, "SKILL.md")) === read(path.j
 // No .claude/ yet: it is made, and the ticked skills (not tickets) written.
 assert.equal(fs.existsSync(path.join(folder, ".claude")), false);
 await addSkills();
-assert.ok(same("lap") && same("eggzibit"), "lap and eggzibit are written as shipped");
+assert.ok(same("lap") && same("techdocs"), "lap and techdocs are written as shipped");
 assert.ok(fs.existsSync(path.join(skills, "lap", "references", "branches.md")), "with every file of the folder");
 assert.equal(fs.existsSync(path.join(skills, "tickets")), false, "tickets is not written unless picked");
-assert.match(infos.at(-1), /added eggzibit, lap/);
+assert.match(infos.at(-1), /added lap, techdocs/);
 
 // Another skill and settings in .claude/ are left as they are; tickets goes in when picked.
 fs.mkdirSync(path.join(skills, "other"), { recursive: true });
