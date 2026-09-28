@@ -1007,11 +1007,15 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         printf("branch %s: nothing new to adopt since the last merge\n",
                brec->name);
     } else {
-        printf("%s branch %s (%s): %s %d of %d commit%s%s%s%s\n",
-               dry ? "would merge" : "merged", brec->name, id,
-               dry ? "would adopt" : "adopted", adopted, total,
-               total == 1 ? "" : "s", ids.len ? " (" : "",
-               ids.len ? sb_finish(&ids) : "", ids.len ? ")" : "");
+        if (total == 0) /* only sessions or amendments came */
+            printf("%s branch %s (%s): no commits to adopt\n",
+                   dry ? "would merge" : "merged", brec->name, id);
+        else
+            printf("%s branch %s (%s): %s %d of %d commit%s%s%s%s\n",
+                   dry ? "would merge" : "merged", brec->name, id,
+                   dry ? "would adopt" : "adopted", adopted, total,
+                   total == 1 ? "" : "s", ids.len ? " (" : "",
+                   ids.len ? sb_finish(&ids) : "", ids.len ? ")" : "");
         for (size_t s = 0; s < nstop; s++)
             printf("  stopped: %s at #%.7s (%s)\n", stop_file[s], stop_at[s],
                    stop_why[s]);

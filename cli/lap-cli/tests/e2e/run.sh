@@ -2826,6 +2826,31 @@ PY
 expect_grep '"error":"newer_history"' "$LAP" session end --json
 cd "$WORK"
 
+t "a blank or emptied sealed chunk is blamed alike by verify and writers, and a heal names chunk and line"
+mkdir -p "$WORK/bl1" && cd "$WORK/bl1" && "$LAP" init >/dev/null 2>&1
+i=1
+while [ $i -le 8 ]; do
+    printf 'row %d\n' $i >> rows.txt
+    LAP_TEST_CHUNK_BYTES=400 "$LAP" commit rows.txt --no-session -i "grow the history over chunks" -b "appends row $i" >/dev/null 2>&1
+    i=$((i + 1))
+done
+[ -f .lap/log/main.000004.jsonl ] || fail "the fixture has too few chunks"
+cp -R .lap "$WORK/bl1-lap.bak"
+printf '\n' > .lap/log/main.000003.jsonl
+expect_grep "main.000003.jsonl" "$LAP" verify
+printf 'x\n' >> rows.txt
+expect_grep "sealed chunk main.000003.jsonl holds no record" "$LAP" commit rows.txt --no-session -i "commit on a damaged history" -b "appends x"
+: > .lap/log/main.000003.jsonl
+expect_grep "sealed chunk main.000003.jsonl is empty" "$LAP" verify
+expect_grep "sealed chunk main.000003.jsonl is empty" "$LAP" commit rows.txt --no-session -i "commit on a damaged history" -b "appends x"
+# a malformed record met while a reader heals its state is named by chunk and line
+rm -rf .lap && cp -R "$WORK/bl1-lap.bak" .lap
+C=$(open_chunk)
+printf '{"type":"commit","broken\n' >> "$C"
+rm -f .lap/state.json
+expect_grep "$(basename "$C") line [0-9]*:" "$LAP" log
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"
@@ -2936,6 +2961,13 @@ expect_grep "0 mismatch" "$LAP" verify --deep
 expect_grep "nothing new to adopt" "$LAP" merge b
 [ "$(cat .lap/log/main.*.jsonl | grep -c '"type":"amend"')" = 1 ] ||
     fail "the parent does not hold exactly one amend record"
+# an amendment alone: no commits to adopt, never "0 of 0"
+cd "$BW" && expect_grep "amended (2)" "$LAP" amend "$MAH" --branch b -i "work on the branch" -b "Turns g2 into upper case, on the branch, again."
+git_merge_b || fail "git merge ma, again"
+cd "$BP" && AMM=$("$LAP" merge b)
+echo "$AMM" | grep -q "merged branch b (.*): no commits to adopt" || fail "merge of an amendment alone: $AMM"
+echo "$AMM" | grep -q "amendments carried: 1" || fail "the amendment was not carried: $AMM"
+echo "$AMM" | grep -q "0 of 0" && fail "merge said 0 of 0: $AMM"
 cd "$WORK"
 
 t "a merged branch whose folder now holds another branch leaves the registry on the next write"

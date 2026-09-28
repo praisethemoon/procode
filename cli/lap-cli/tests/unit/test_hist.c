@@ -790,6 +790,26 @@ static void test_check(Arena *a) {
     ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
     ASSERT_TRUE(hist_check(a, &h, true, err, sizeof err)); /* sealed */
 
+    t_begin("hist_check: an emptied sealed chunk, or one holding only a "
+            "blank line, is refused naming it, not the chunk after it");
+    clear_chunks();
+    put_file("main.000001.jsonl", arena_printf(a, "%s\n", l0));
+    put_file("main.000002.jsonl", "");
+    put_file("main.000003.jsonl", arena_printf(a, "%s\n", l1));
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(!hist_check(a, &h, false, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "sealed chunk main.000002.jsonl is empty") != NULL);
+    put_file("main.000002.jsonl", "\n");
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(!hist_check(a, &h, true, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "sealed chunk main.000002.jsonl holds no record") !=
+                NULL);
+    put_file("main.000001.jsonl", "");
+    put_file("main.000002.jsonl", arena_printf(a, "%s\n", l0));
+    put_file("main.000003.jsonl", "");
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(!hist_check(a, &h, false, err, sizeof err)); /* chunk 1 */
+
     t_begin("hist_check: an open chunk holding only a torn line is an empty "
             "chunk with a torn tail, not a broken chain");
     clear_chunks();

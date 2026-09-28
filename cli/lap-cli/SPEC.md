@@ -1076,7 +1076,8 @@ rewritten, and what the folder has past it waits for the next `git merge`. Print
 what was adopted of how many commits, with the new ids, then each stopped
 file with the first commit not adopted and why, then each commit already
 done here, then how many of the branch's amendments were carried and how
-many stayed in the branch (a dry run does not count them); `nothing new to
+many stayed in the branch (a dry run does not count them); `no commits to
+adopt` when only sessions or amendments came; `nothing new to
 adopt` when the branch has nothing after the
 last merge. A branch never merged that has nothing after its branch record
 (no commits, no sessions) is `nothing to adopt: it has no commits`, and its
@@ -1130,8 +1131,9 @@ since the whole history goes with them.
   `log.jsonl` removed) while losing the name it stands on.
 - **Damage is not a crash.** A torn line anywhere but the open chunk's end
   was not made by a crash (lap repairs its own before sealing or merging):
-  a sealed chunk cut or copied short. Every command refuses such a
-  history, naming the chunk. Writers also refuse a chain broken between
+  a sealed chunk cut or copied short. Nor is a sealed chunk that is empty
+  or does not open with a record (a blank line left in it). Every command
+  refuses such a history, naming that chunk, never the one after it. Writers also refuse a chain broken between
   chunks (a stray chunk, one truncated at a line, a wrong `prev`), or
   inside the open chunk they append to (a line repeated or dropped, as a
   union-style git resolution leaves it), naming the line

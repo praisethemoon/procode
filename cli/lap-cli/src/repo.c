@@ -183,21 +183,22 @@ static bool state_heal(Repo *r, bool persist, char *err, size_t errsz) {
     r->active_session_msg[0] = '\0';
     snprintf(r->last_hash, sizeof r->last_hash, "%s", LAP_HASH_ZERO);
     size_t start = 0;
-    int32_t line_no = 0;
     for (size_t i = 0; i < len; i++) {
         if (data[i] != '\n')
             continue;
         size_t n = i - start;
         const char *line = data + start;
         start = i + 1;
-        line_no++;
         if (n == 0)
             continue;
         arena_reset(scratch);
         Rec one;
         char lerr[256];
         if (!rec_decode(scratch, line, n, &one, lerr, sizeof lerr)) {
-            snprintf(err, errsz, "log line %d: %s", line_no, lerr);
+            char where[160]; /* the chunk and its line, as readers name it */
+            hist_where(&r->hist, data, (uint64_t)(line - data), where,
+                       sizeof where);
+            snprintf(err, errsz, "%s: %s", where, lerr);
             arena_free(scratch);
             arena_free(bytes);
             return false;

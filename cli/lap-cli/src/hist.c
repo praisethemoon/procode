@@ -988,6 +988,16 @@ bool hist_check(Arena *a, const Hist *h, bool chain, char *err,
     int32_t prev = -1; /* the last chunk before i that holds records */
     for (int32_t i = 0; i < h->n; i++) {
         const HistChunk *k = &h->v[i];
+        /* a sealed chunk is never empty (an empty open chunk is not sealed
+         * again): one that is was emptied, and it is to blame, not the
+         * chunk after it */
+        if (k->size == 0 && i < h->n - 1 && !h->legacy) {
+            snprintf(err, errsz,
+                     "sealed chunk %s is empty: it was emptied or copied "
+                     "short (lap never writes a sealed chunk)",
+                     k->name);
+            return false;
+        }
         if (k->size == 0)
             continue;
         char path[LAP_PATH_MAX];
@@ -1003,6 +1013,19 @@ bool hist_check(Arena *a, const Hist *h, bool chain, char *err,
                          "sealed chunk %s ends in a torn line: it was cut or "
                          "copied short (lap never writes a sealed chunk)",
                          k->name);
+                return false;
+            }
+            /* and it opens with a record: one that does not (a blank line
+             * left in it) is to blame itself */
+            Rec first;
+            char ferr[256];
+            if (!chunk_first_record(a, path, k->name, k->size, &first, NULL,
+                                    ferr, sizeof ferr)) {
+                snprintf(err, errsz,
+                         "sealed chunk %s holds no record where it starts "
+                         "(%s): it was changed (lap never writes a sealed "
+                         "chunk)",
+                         k->name, ferr);
                 return false;
             }
         }
