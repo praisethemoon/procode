@@ -34,6 +34,10 @@
 
 #define LAP_PATH_MAX 4096
 #define LAP_MAX_FILE_SIZE (64u * 1024u * 1024u) /* refuse files larger than 64 MB */
+/* A new file longer than this is committed in parts (--lines), or whole
+ * only with --whole-file: one message cannot say what a large file's parts
+ * each do. */
+#define LAP_LARGE_CREATE_LINES 50
 
 /* Exit codes: 0 success, 1 user/repo error, 2 internal error (OOM, I/O corruption). */
 #define LAP_EXIT_OK 0

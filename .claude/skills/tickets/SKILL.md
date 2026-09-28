@@ -38,8 +38,10 @@ The lap skill covers lap itself; this is the loop around it.
    `lap status` — then `lap commit <file> -i "<why>" -b "<what it does>"`.
    When a file has several edits, commit `--edit 1` repeatedly, oldest
    first, and **look at `lap status` (or `git diff -U0`) before writing
-   each behavior**, so it lands on the edit it describes. A new file is one
-   commit. `lap commit` prints the new commit's short hash; cite it as
+   each behavior**, so it lands on the edit it describes. A new file is
+   committed in parts: `--lines A-B` creates it with one part, the rest
+   follow as edits (`--whole-file` only for a file that is one piece; over
+   50 lines lap requires one or the other). `lap commit` prints the new commit's short hash; cite it as
    `#<hash>` when a later commit depends on it. A behavior (or intent) that
    landed on the wrong edit, or says something the edit does not do, is
    corrected with `lap amend <commit> [--branch <name>] -i … -b …` (the

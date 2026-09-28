@@ -199,7 +199,16 @@ const char *whole_file_pick_error(const char *op, const char *edit_arg,
         return NULL;
     if (edit_arg)
         return "bad_edit_index";
-    return lines_arg ? "bad_lines" : NULL;
+    return lines_arg && strcmp(op, "delete") == 0 ? "bad_lines" : NULL;
+}
+
+bool create_part(Lines work, int32_t a, int32_t b, Lines *out) {
+    if (a < 1 || b < a || b > work.count)
+        return false;
+    out->lines = work.lines + (a - 1);
+    out->count = b - a + 1;
+    out->eof_nl = b == work.count ? work.eof_nl : true;
+    return true;
 }
 
 int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
@@ -219,6 +228,7 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     const char *edit_arg = flag_value(argc, argv, value_flags, "--edit");
     const char *lines_arg = flag_value(argc, argv, value_flags, "--lines");
     bool no_session = has_flag(argc, argv, value_flags, "--no-session");
+    bool whole_file = has_flag(argc, argv, value_flags, "--whole-file");
 
     if (!file_arg) {
         err_out(json, "usage",
@@ -230,6 +240,11 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         return LAP_EXIT_ERR;
     if (edit_arg && lines_arg) {
         err_out(json, "usage", "--edit and --lines are mutually exclusive");
+        return LAP_EXIT_ERR;
+    }
+    if (whole_file && (edit_arg || lines_arg)) {
+        err_out(json, "usage", "--whole-file commits a new file whole: not with %s",
+                edit_arg ? "--edit" : "--lines");
         return LAP_EXIT_ERR;
     }
 
@@ -298,17 +313,35 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     rec.lineage = repo.hist.parent[0] ? repo.hist.name : LAP_MAIN_LINEAGE;
 
     if (fd.work_exists && !fd.shadow_exists) {
-        /* whole file is one edit (like git: empty history, one big change) */
+        /* The file whole, or with --lines the part named; what is left is
+         * then ordinary pending edits against that part. */
+        Lines part = fd.work;
+        if (lines_arg && !whole_file) {
+            int32_t la, lb;
+            if (!parse_lines_arg(lines_arg, &la, &lb) ||
+                !create_part(fd.work, la, lb, &part)) {
+                err_out(json, "bad_lines",
+                        "--lines %s is not inside %s (lines 1-%d)", lines_arg,
+                        rel, fd.work.count);
+                goto done;
+            }
+        } else if (!whole_file && fd.work.count > LAP_LARGE_CREATE_LINES) {
+            err_out(json, "large_create",
+                    "%s is a new file of %d lines: commit it in parts with "
+                    "--lines A-B, or pass --whole-file",
+                    rel, fd.work.count);
+            goto done;
+        }
         rec.op = "create";
         rec.old_start = 1;
         rec.old_lines = 0;
         rec.new_start = 1;
-        rec.new_lines = fd.work.count;
+        rec.new_lines = part.count;
         rec.old_text = NULL;
         rec.old_n = 0;
-        rec.new_text = fd.work.lines;
-        rec.new_n = fd.work.count;
-        rec.eof_nl = fd.work.eof_nl;
+        rec.new_text = part.lines;
+        rec.new_n = part.count;
+        rec.eof_nl = part.eof_nl;
     } else if (!fd.work_exists && fd.shadow_exists) {
         rec.op = "delete";
         rec.old_start = 1;
@@ -392,6 +425,11 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     if (pick) {
         err_out(json, pick, "%s %s: it is committed whole (no --lines/--edit)",
                 rel, strcmp(rec.op, "create") == 0 ? "is a new file" : "was deleted");
+        goto done;
+    }
+    if (whole_file && strcmp(rec.op, "create") != 0) {
+        err_out(json, "usage", "%s is not a new file: --whole-file is only for creating one",
+                rel);
         goto done;
     }
 

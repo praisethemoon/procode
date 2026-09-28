@@ -100,17 +100,18 @@ void test_help(void) {
     help_flag_sets("commit", &fs);
     const char *values[] = {"-i", "--intent", "-b", "--behavior", "-F", "--edit",
                             "--lines", "--branch"};
-    const char *bools[] = {"--force-message", "--dry-run", "--no-session", "--json"};
+    const char *bools[] = {"--force-message", "--dry-run", "--no-session", "--whole-file",
+                           "--json"};
     int32_t nv = 0, nb = 0;
     while (fs.values[nv])
         nv++;
     while (fs.bools[nb])
         nb++;
     ASSERT_EQ_I(nv, 8);
-    ASSERT_EQ_I(nb, 4);
+    ASSERT_EQ_I(nb, 5);
     for (int32_t i = 0; i < 8; i++)
         ASSERT_TRUE(listed(fs.values, values[i]));
-    for (int32_t i = 0; i < 4; i++)
+    for (int32_t i = 0; i < 5; i++)
         ASSERT_TRUE(listed(fs.bools, bools[i]));
 
     t_begin("help: --help is asked for anywhere but as a flag's value or "

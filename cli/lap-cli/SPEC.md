@@ -896,7 +896,7 @@ is the downward half of the rule every command follows upward: the nearest
 folder got its own `.lap/` stay tracked, as files ignored after they were
 recorded do.
 
-### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B] [--force-message] [--no-session] [--dry-run] [--branch B]`
+### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B | --whole-file] [--force-message] [--no-session] [--dry-run] [--branch B]`
 Records exactly one edit. The message comes from `-i`/`--intent` and
 `-b`/`--behavior` together, or from `-F`, never a mix:
 
@@ -919,11 +919,26 @@ Then, by the number of pending edits in the file:
   one region's range as shown by `lap status`: current-file lines, or
   last-committed lines for pure deletions). Remaining edits stay pending and
   are re-detected (with fresh coordinates) on the next run.
-- New file → `create` (whole content, one edit). Deleted file → `delete`.
-  Either is the file whole, so there is no edit to pick: `--lines` is
-  refused with `bad_lines` and `--edit` with `bad_edit_index` ("f.c is a
-  new file: it is committed whole (no --lines/--edit)"), and nothing is
-  written — never ignored, which would record the whole file under a
+- New file (lap has never recorded it) → `create`:
+  - Without flags, its whole content — up to **50 lines**
+    (`LAP_LARGE_CREATE_LINES`). A longer one is refused with
+    `large_create` ("f.c is a new file of 312 lines: commit it in parts
+    with --lines A-B, or pass --whole-file"); `--whole-file` commits it
+    whole, for files that are one piece (generated files, fixtures, data).
+    `--whole-file` anywhere else — with `--lines`/`--edit`, or on a file
+    that is not new — is refused with `usage`.
+  - With `--lines A-B`, just lines A–B, **any range** inside the file
+    (`bad_lines` otherwise); the create's text is exactly those lines,
+    ending with a newline unless B is the file's last line, where it takes
+    the file's own final-newline state. From then on the file is known:
+    the rest shows as ordinary pending edits against that part (lines
+    above, lines below; blank gap lines join their neighbouring edit), and
+    `--lines` there has its usual meaning.
+  - `--edit N` is refused with `bad_edit_index`: a new file has no pending
+    edits to number.
+- Deleted file → `delete`, the file whole: `--lines` (`bad_lines`) and
+  `--edit` (`bad_edit_index`) are refused. Nothing is written when a flag
+  is refused — never ignored, which would record the whole file under a
   message meant for part of it.
 - A file lap cannot read (as for `lap status`) → error `unreadable`: it is
   never recorded as deleted, nor compared as unchanged.
@@ -1136,10 +1151,10 @@ lap cannot write): the message says which file.
 | `append_failed` | commit, session, amend | *internal*: the record could not be appended |
 | `bad_args` | branch | arguments that do not fit together |
 | `bad_color` | any | `--color=` other than auto, always, never |
-| `bad_edit_index` | commit | `--edit N` names no edit, or the commit is a new or deleted file (whole, nothing to pick) |
+| `bad_edit_index` | commit | `--edit N` names no edit, or the file is new or deleted (no pending edits to number) |
 | `bad_line` | search | `--line` is not a line of the file |
 | `bad_lineage` | branch start | `.lap/lineage` does not hold a branch id |
-| `bad_lines` | commit | `--lines A-B` matches no edit's range, or the commit is a new or deleted file (whole, nothing to pick) |
+| `bad_lines` | commit | `--lines A-B` is malformed, lies outside a new file, or is given for a deleted file |
 | `bad_message_file` | commit, session | a `-F` file that is not the two sections |
 | `bad_meta` | session start | a `--meta` that is not `key=value` |
 | `bad_name` | branch start | a branch name outside the allowed letters, or `main` |
@@ -1161,6 +1176,7 @@ lap cannot write): the message says which file.
 | `init_failed` | init | *internal*: `.lap/` could not be made |
 | `internal` | init | *internal*: an unexpected failure |
 | `io_error` | branch, merge | *internal*: a file lap needed to write |
+| `large_create` | commit | a new file of more than 50 lines committed whole without `--whole-file` |
 | `lines_mismatch` | commit | the range given is not the edit's |
 | `log_unreadable` | most readers, merge, rebuild | the history could not be read or parsed |
 | `merge_in_branch` | merge | the merge target is itself a branch that must merge first |

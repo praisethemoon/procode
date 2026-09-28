@@ -139,12 +139,15 @@ a listed range.
 
 - `"no active session"` → start one, or use `--no-session` only for
   genuinely task-independent commits (e.g. committing `.lapignore` itself).
-- New files commit whole as one edit (`--lines`/`--edit` are refused on a
-  new or deleted file: there is nothing to pick) — but a whole-file commit is only as
-  interpretable as its message. When creating a **large** file, prefer
-  building it in meaningful increments: write the skeleton, commit it,
-  then add each section with its own commit. Reserve one-shot
-  creation for small files or content with a single clear purpose.
+- **A new file is committed in parts.** `lap commit f.c --lines A-B`
+  creates it with just those lines (any range); lap then lists the rest
+  as ordinary pending edits, which you commit with `--edit 1` as usual —
+  each part with its own behavior, sharing the intent. Up to 50 lines
+  may go in whole without flags; a larger new file committed whole is
+  refused (`large_create`) unless you pass `--whole-file`, which is only
+  for a file that is one piece (generated output, a fixture, data — or
+  put it in `.lapignore`). `--edit` is refused on a new file, and both
+  `--edit` and `--lines` on a deleted one: there is nothing to pick.
 - Deleting a file is also a commit:
   `rm` it, then `lap commit <file> -i "why it is gone" -b "what no longer exists"`.
 - **Renaming is two commits**, because lap tracks paths, not file identity.

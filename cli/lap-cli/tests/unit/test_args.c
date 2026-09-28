@@ -50,13 +50,32 @@ void test_args(void) {
     ASSERT_TRUE(!has_flag(3, msg, values, "--json"));
     ASSERT_EQ_S(positional_arg(3, msg, values, 0), "f.txt");
 
-    t_begin("args: a commit that is its file whole refuses --edit and "
-            "--lines rather than ignoring them");
+    t_begin("args: a new or deleted file refuses --edit, and a deleted one "
+            "--lines, rather than ignoring them; --lines on a new file picks "
+            "its part");
     ASSERT_EQ_S(whole_file_pick_error("create", "2", NULL), "bad_edit_index");
-    ASSERT_EQ_S(whole_file_pick_error("create", NULL, "5-7"), "bad_lines");
+    ASSERT_TRUE(whole_file_pick_error("create", NULL, "5-7") == NULL);
     ASSERT_EQ_S(whole_file_pick_error("delete", NULL, "1-3"), "bad_lines");
     ASSERT_TRUE(whole_file_pick_error("create", NULL, NULL) == NULL);
     ASSERT_TRUE(whole_file_pick_error("delete", NULL, NULL) == NULL);
     ASSERT_TRUE(whole_file_pick_error("edit", "2", NULL) == NULL);
     ASSERT_TRUE(whole_file_pick_error("edit", NULL, "5-7") == NULL);
+
+    t_begin("args: create_part takes a new file's lines a..b, ending with a "
+            "newline unless it ends the file");
+    Str text[5] = {{"f1", 2}, {"", 0}, {"f2", 2}, {"", 0}, {"f3", 2}};
+    Lines file = {text, 5, false}; /* no newline after f3 */
+    Lines part;
+    ASSERT_TRUE(create_part(file, 1, 1, &part)); /* the top */
+    ASSERT_TRUE(part.lines == text && part.count == 1 && part.eof_nl);
+    ASSERT_TRUE(create_part(file, 3, 3, &part)); /* the middle */
+    ASSERT_TRUE(part.lines == text + 2 && part.count == 1 && part.eof_nl);
+    ASSERT_TRUE(create_part(file, 4, 5, &part)); /* the end, as the file ends */
+    ASSERT_TRUE(part.lines == text + 3 && part.count == 2 && !part.eof_nl);
+    file.eof_nl = true;
+    ASSERT_TRUE(create_part(file, 5, 5, &part) && part.eof_nl);
+    ASSERT_TRUE(create_part(file, 1, 5, &part) && part.count == 5);
+    ASSERT_TRUE(!create_part(file, 0, 2, &part));
+    ASSERT_TRUE(!create_part(file, 3, 2, &part));
+    ASSERT_TRUE(!create_part(file, 4, 6, &part));
 }

@@ -23,8 +23,14 @@ static const HelpFlag F_COMMIT[] = {
      "read both from Intent:/Behavior: sections of a file\n(- = stdin)"},
     {"--edit", NULL, "<n>",
      "pick the n-th pending edit (lap status numbers them);\n"
-     "refused on a new or deleted file, committed whole"},
-    {"--lines", NULL, "<a>-<b>", "pick the edit covering these lines; refused likewise"},
+     "refused on a new or deleted file, which has none"},
+    {"--lines", NULL, "<a>-<b>",
+     "pick the edit covering these lines; on a new file,\n"
+     "create it with just these lines (any range), the rest\n"
+     "then pending as edits; refused on a deleted file"},
+    {"--whole-file", NULL, NULL,
+     "commit a new file of more than 50 lines whole (otherwise\n"
+     "refused: commit it in parts with --lines)"},
     {"--force-message", NULL, NULL, "skip the repetition checks (not length)"},
     {"--dry-run", NULL, NULL, "show what would be recorded; write nothing"},
     {"--no-session", NULL, NULL, "commit outside any session"},
@@ -139,8 +145,8 @@ const HelpCmd HELP_CMDS[] = {
      F_JSON_ONLY, cmd_status, false},
     {"commit", NULL,
      "commit <file> (-i \"intent\" -b \"behavior\" | -F <file>)\n"
-     "[--edit <n> | --lines <a>-<b>] [--force-message] [--dry-run]\n"
-     "[--no-session] [--branch <name>] [--json]",
+     "[--edit <n> | --lines <a>-<b> | --whole-file] [--force-message]\n"
+     "[--dry-run] [--no-session] [--branch <name>] [--json]",
      "record ONE edit of one file: why it exists, what it makes the code\n"
      "do; prints its id and short hash",
      F_COMMIT, cmd_commit, false},

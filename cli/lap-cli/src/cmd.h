@@ -192,11 +192,16 @@ bool message_args(Arena *a, int32_t argc, char **argv,
                   const char *const *value_flags, bool json,
                   const char **intent, const char **behavior);
 
-/* A commit that is its file whole (op "create" or "delete") has no edit to
- * pick: the error code for an --edit or --lines given anyway
- * ("bad_edit_index", "bad_lines"), or NULL when neither was. */
+/* A new or deleted file has no pending edits to pick: the error code for an
+ * --edit given to either ("bad_edit_index"), or a --lines given to a delete
+ * ("bad_lines"), or NULL. --lines on a create picks its part (create_part). */
 const char *whole_file_pick_error(const char *op, const char *edit_arg,
                                   const char *lines_arg);
+
+/* The part of a new file a create records: lines a..b of work (1-based,
+ * inclusive). It ends with a newline unless it ends the file, where it takes
+ * the file's own state. False when a..b is not inside the file. */
+bool create_part(Lines work, int32_t a, int32_t b, Lines *out);
 
 /* Where a commit reference (SPEC §References) points in a loaded log: an
  * id ("L42"), or a hash or hash prefix of at least 7 hex digits, with or

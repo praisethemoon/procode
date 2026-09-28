@@ -1098,7 +1098,7 @@ mkdir -p "$WORK/many" && cd "$WORK/many"
 i=0
 while [ $i -lt 120 ]; do
     awk -v n=$i 'BEGIN { for (j = 1; j <= 150; j++) print "line " j " of file " n " with some text" }' > f$i.txt
-    "$LAP" commit f$i.txt --no-session -i "baseline file $i for the many-files test" \
+    "$LAP" commit f$i.txt --no-session --whole-file -i "baseline file $i for the many-files test" \
         -b "records all of f$i.txt as its first commit" >/dev/null 2>&1 || fail "baseline f$i.txt"
     i=$((i + 1))
 done
@@ -1563,7 +1563,7 @@ merge_pair() {
     while [ $i -le 60 ]; do printf 'line %d\n' $i >> f.txt; i=$((i + 1)); done
     printf 'g1\ng2\ng3\n' > g.txt
     for f in f.txt g.txt .lapignore .gitignore; do
-        "$LAP" commit "$f" --no-session -i "seed the merge fixture" -b "records $f as the base" >/dev/null 2>&1
+        "$LAP" commit "$f" --no-session --whole-file -i "seed the merge fixture" -b "records $f as the base" >/dev/null 2>&1
     done
     git add -A && git commit -qm base
     git worktree add -q "$WORK/$1-w" -b b
@@ -3277,21 +3277,42 @@ else
     echo "skip: git not found, the branch scenarios did not run"
 fi
 
-t "--edit and --lines on a new or deleted file are refused, and nothing is written"
+t "a new file is committed in parts: --lines creates it with that range, the rest are edits"
 mkdir -p "$WORK/wf" && cd "$WORK/wf" && "$LAP" init >/dev/null 2>&1
 printf 'int f1(void) {\n    return 1;\n}\n\nint f2(void) {\n    return 2;\n}\n\nint f3(void) {\n    return 3;\n}\n' > f.c
+expect_grep "f.c: lines 1-3 (insertion)" "$LAP" commit f.c --lines 5-7 -i "three small functions, one commit each" -b "f2 returns two to its callers" --no-session
+"$LAP" show L1 --json | grep -q '"op":"create"' || fail "the part was not recorded as the create"
+[ "$(cat .lap/shadow/f.c)" = "$(printf 'int f2(void) {\n    return 2;\n}')" ] || fail "the shadow is not f2 alone"
+expect_grep "2 edits" "$LAP" status
+expect_ok "$LAP" commit f.c --edit 1 -i "three small functions, one commit each" -b "f1 returns one to its callers" --no-session
+expect_ok "$LAP" commit f.c --edit 1 -i "three small functions, one commit each" -b "f3 returns three to its callers" --no-session
+expect_not_grep "f.c" "$LAP" status
+expect_grep "chain ok" "$LAP" verify --deep
+[ "$("$LAP" log --json | grep -o '"id":"L[0-9]*"' | wc -l | tr -d ' ')" = 3 ] || fail "not three commits"
+
+t "a range outside a new file, --edit on it, and --lines on a deleted file are refused, and nothing is written"
+printf 'a\nb\n' > g.c
 before=$(history | wc -l)
-expect_grep '"error":"bad_lines","message":"f.c is a new file: it is committed whole' \
-    "$LAP" commit f.c --lines 5-7 -i "add f2 alone" -b "f2 returns two to its callers" --no-session --json
-expect_grep '"error":"bad_edit_index","message":"f.c is a new file' \
-    "$LAP" commit f.c --edit 2 -i "add f2 alone" -b "f2 returns two to its callers" --no-session --json
+expect_grep '"error":"bad_lines","message":"--lines 2-5 is not inside g.c (lines 1-2)' \
+    "$LAP" commit g.c --lines 2-5 -i "two letters" -b "a and b are listed" --no-session --json
+expect_grep '"error":"bad_edit_index","message":"g.c is a new file' \
+    "$LAP" commit g.c --edit 1 -i "two letters" -b "a and b are listed" --no-session --json
 [ "$(history | wc -l)" = "$before" ] || fail "a refused commit wrote to the log"
-expect_ok "$LAP" commit f.c -i "three small functions" -b "f1, f2 and f3 return one, two and three" --no-session
 rm f.c
 expect_grep '"error":"bad_lines","message":"f.c was deleted' \
     "$LAP" commit f.c --lines 1-3 -i "drop the functions" -b "the file and its three functions are gone" --no-session --json
 expect_ok "$LAP" commit f.c -i "drop the functions" -b "the file and its three functions are gone" --no-session
-expect_grep "chain ok" "$LAP" verify
+
+t "a new file of more than 50 lines is refused whole unless --whole-file; 50 lines go through"
+seq 1 51 > big.txt; seq 1 50 > fifty.txt
+expect_grep '"error":"large_create","message":"big.txt is a new file of 51 lines: commit it in parts with --lines A-B, or pass --whole-file"' \
+    "$LAP" commit big.txt -i "numbers to count with" -b "one to fifty-one, a line each" --no-session --json
+expect_ok "$LAP" commit big.txt --whole-file -i "numbers to count with" -b "one to fifty-one, a line each" --no-session
+expect_ok "$LAP" commit fifty.txt -i "fifty numbers to count with" -b "one to fifty, a line each" --no-session
+expect_grep '"error":"usage"' "$LAP" commit g.c --whole-file --lines 1-2 -i "two letters" -b "a and b are listed" --no-session --json
+echo c >> fifty.txt
+expect_grep "not a new file: --whole-file" "$LAP" commit fifty.txt --whole-file -i "a letter after the numbers" -b "c follows fifty" --no-session
+expect_grep "chain ok" "$LAP" verify --deep
 cd "$WORK"
 
 # ------------------------------------------------------------ summary
