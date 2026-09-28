@@ -1,5 +1,6 @@
 #include "hist.h"
 
+#include "branches.h"
 #include "sha256.h"
 
 static bool is_hex_lower(char c) {
@@ -673,6 +674,87 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
     return true;
 }
 
+/* The folder a branch folder's .lap/parent names, "" when it names none. */
+static const char *parent_named(Arena *a, const char *lapdir) {
+    char ppath[LAP_PATH_MAX];
+    snprintf(ppath, sizeof ppath, "%s/%s", lapdir, LAP_PARENT_NAME);
+    char *data;
+    size_t len;
+    if (!plat_is_file(ppath) || !plat_read_file(a, ppath, &data, &len))
+        return "";
+    while (len > 0 && (data[len - 1] == '\n' || data[len - 1] == '\r'))
+        len--;
+    data[len] = '\0';
+    return data;
+}
+
+/* Whether the lineage file at path names `lineage`. */
+static bool lineage_file_is(Arena *a, const char *path, const char *lineage) {
+    char *data;
+    size_t len;
+    if (!plat_is_file(path) || !plat_read_file(a, path, &data, &len))
+        return false;
+    while (len > 0 && (data[len - 1] == '\n' || data[len - 1] == '\r' ||
+                       data[len - 1] == ' '))
+        len--;
+    return len == strlen(lineage) && memcmp(data, lineage, len) == 0;
+}
+
+const char *hist_lineage_leak(Arena *a, const char *lapdir,
+                              const char *lineage) {
+    char root[LAP_PATH_MAX];
+    snprintf(root, sizeof root, "%s", lapdir);
+    size_t rl = strlen(root), dl = strlen("/" LAP_DIR);
+    if (rl > dl && strcmp(root + rl - dl, "/" LAP_DIR) == 0)
+        root[rl - dl] = '\0';
+    const char *parent = parent_named(a, lapdir);
+    if (!parent[0])
+        return NULL;
+    if (plat_same_file(parent, root))
+        return "its parent is this folder itself";
+    char plap[LAP_PATH_MAX], plin[LAP_PATH_MAX];
+    snprintf(plap, sizeof plap, "%s/%s", parent, LAP_DIR);
+    snprintf(plin, sizeof plin, "%s/%s", plap, LAP_LINEAGE_NAME);
+    if (plat_is_dir(parent)) {
+        /* The parent holds the same file: both came from one history
+         * through git. This folder is a checkout of the parent's, unless
+         * the parent's registry places the branch here, or in a folder
+         * that no longer holds it (a branch moved away). */
+        if (!lineage_file_is(a, plin, lineage))
+            return NULL;
+        Branches reg;
+        branches_load(a, plap, &reg);
+        for (int32_t i = 0; i < reg.n; i++) {
+            const BranchEntry *e = &reg.v[i];
+            if (strcmp(e->id, lineage) != 0)
+                continue;
+            char elin[LAP_PATH_MAX];
+            snprintf(elin, sizeof elin, "%s/%s/%s", e->path, LAP_DIR,
+                     LAP_LINEAGE_NAME);
+            if (strcmp(e->path, root) == 0 || plat_same_file(e->path, root) ||
+                !lineage_file_is(a, elin, lineage))
+                return NULL;
+        }
+        return "its parent carries the same lineage file";
+    }
+    /* The parent is gone. A branch folder holds main's chunks up to its
+     * base only; one past it is main's own later history, which a checkout
+     * of the parent's history has and a branch folder never does. */
+    Rec br;
+    char err[256];
+    if (!hist_first_record(a, lapdir, lineage, &br, err, sizeof err) ||
+        br.type != REC_BRANCH || !br.parent ||
+        strcmp(br.parent, LAP_MAIN_LINEAGE) != 0)
+        return NULL;
+    char next[LAP_PATH_MAX];
+    snprintf(next, sizeof next, "%s/%s/%s.%06d.jsonl", lapdir, LAP_LOG_DIR,
+             LAP_MAIN_LINEAGE, br.base_chunk + 1);
+    if (plat_is_file(next))
+        return "its parent is gone and main's history here runs past its "
+               "base";
+    return NULL;
+}
+
 bool hist_folder_lineage(Arena *a, const char *lapdir,
                          char out[HIST_LINEAGE_MAX], char *err, size_t errsz) {
     char path[LAP_PATH_MAX];
@@ -697,33 +779,17 @@ bool hist_folder_lineage(Arena *a, const char *lapdir,
         snprintf(err, errsz, "%s does not hold a branch id", path);
         return false;
     }
-    /* A lineage whose recorded parent is this folder itself came here
-     * through git from its branch (with .lap/parent): this folder is not
-     * that branch, whatever the file says. */
-    char ppath[LAP_PATH_MAX], root[LAP_PATH_MAX];
-    snprintf(ppath, sizeof ppath, "%s/%s", lapdir, LAP_PARENT_NAME);
-    snprintf(root, sizeof root, "%s", lapdir);
-    size_t rl = strlen(root), dl = strlen("/" LAP_DIR);
-    if (rl > dl && strcmp(root + rl - dl, "/" LAP_DIR) == 0)
-        root[rl - dl] = '\0';
-    char *pdata;
-    size_t plen;
-    if (plat_is_file(ppath) && plat_read_file(a, ppath, &pdata, &plen)) {
-        while (plen > 0 && (pdata[plen - 1] == '\n' || pdata[plen - 1] == '\r'))
-            plen--;
-        pdata[plen] = '\0';
-        if (plen > 0 && plat_same_file(pdata, root)) {
-            static bool told; /* once a command */
-            if (!told)
-                fprintf(stderr,
-                        "note: ignoring %s: it names branch %s, whose parent "
-                        "is this folder itself (it came through git?); this "
-                        "folder is main. Remove .lap/lineage and .lap/parent "
-                        "here.\n",
-                        path, out);
-            told = true;
-            snprintf(out, HIST_LINEAGE_MAX, "%s", LAP_MAIN_LINEAGE);
-        }
+    const char *why = hist_lineage_leak(a, lapdir, out);
+    if (why) {
+        static bool told; /* once a command */
+        if (!told)
+            fprintf(stderr,
+                    "note: ignoring %s: it names branch %s, but %s (it came "
+                    "through git?); this folder is main. Remove .lap/lineage "
+                    "and .lap/parent here.\n",
+                    path, out, why);
+        told = true;
+        snprintf(out, HIST_LINEAGE_MAX, "%s", LAP_MAIN_LINEAGE);
     }
     return true;
 }

@@ -1889,6 +1889,29 @@ expect_grep "this folder is main" "$LAP" log -n 1
 printf 'G\n' >> f.txt
 expect_ok "$LAP" commit f.txt --branch main -i "work on main after the leak" -b "appends G to f.txt on main"
 expect_grep "0 mismatch" "$LAP" verify --deep
+"$LAP" session end >/dev/null 2>&1
+# forced into git, the leak reaches a clone of the parent: main there too
+git add -f .lap/lineage .lap/parent && git add -A && git commit -qm "the leak, forced" >/dev/null
+git clone -q "$WORK/m20-p" "$WORK/m20-c" && cd "$WORK/m20-c" || fail "clone m20"
+[ -e .lap/lineage ] || fail "the clone did not get the leaked lineage"
+expect_grep "this folder is main" "$LAP" log -n 1
+expect_ok "$LAP" session start "work in the clone" --branch main
+printf 'C\n' >> f.txt
+expect_ok "$LAP" commit f.txt --branch main -i "work in the clone" -b "appends C to f.txt on main"
+# the branch folder itself, even with its parent carrying the leak, is b
+cd "$WORK/m20-w" && printf 'W\n' >> f.txt
+expect_not_grep "this folder is main" "$LAP" commit f.txt --branch b -i "change f in b" -b "appends W to f.txt in b"
+cd "$WORK"
+
+t "a branch moved away, before and after branch move, is still that branch though its parent carries the leak"
+merge_pair lk1; BP="$WORK/lk1-p"; BW="$WORK/lk1-w"
+cp "$BW/.lap/lineage" "$BW/.lap/parent" "$BP/.lap/"
+cd "$WORK" && mv lk1-w lk1-w2 && BW="$WORK/lk1-w2" && cd "$BW" && printf 'M\n' >> g.txt
+expect_not_grep "this folder is main" "$LAP" commit g.txt --branch b --no-session -i "change g in b" -b "appends M to g.txt after the move"
+cd "$BP" && expect_ok "$LAP" branch move b "$BW"
+cd "$BW" && printf 'N\n' >> g.txt
+expect_not_grep "this folder is main" "$LAP" commit g.txt --branch b --no-session -i "change g in b" -b "appends N to g.txt after branch move"
+expect_grep "chain ok" "$LAP" verify
 cd "$WORK"
 
 t "an older lap reads a newer history as far as it understands it, and never writes to it"

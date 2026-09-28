@@ -558,6 +558,81 @@ void test_branches(void) {
     plat_rmdir(".copy_unit_x2/.lap");
     plat_rmdir(".copy_unit_x2");
 
+    t_begin("hist_lineage_leak: a lineage file is the folder's branch unless "
+            "it plainly came through git");
+    const char *lid = "0123456789ab";
+    char lp[LAP_PATH_MAX], lb[LAP_PATH_MAX], lo[LAP_PATH_MAX];
+    snprintf(lp, sizeof lp, "%s/.leak_unit_p", cwd);
+    snprintf(lb, sizeof lb, "%s/.leak_unit_b", cwd);
+    snprintf(lo, sizeof lo, "%s/.leak_unit_o", cwd);
+    plat_mkdirs(".leak_unit_p/.lap");
+    plat_mkdirs(".leak_unit_b/.lap/log");
+    plat_mkdirs(".leak_unit_o/.lap");
+    hist_write_lineage(".leak_unit_b/.lap", lid);
+    const char *blap = ".leak_unit_b/.lap";
+    /* no parent named: the branch */
+    ASSERT_TRUE(hist_lineage_leak(a, blap, lid) == NULL);
+    /* its parent is itself */
+    plat_write_file_atomic(".leak_unit_b/.lap/parent", lb, strlen(lb));
+    ASSERT_TRUE(hist_lineage_leak(a, blap, lid) != NULL);
+    /* a parent without the same lineage file: the branch */
+    plat_write_file_atomic(".leak_unit_b/.lap/parent", lp, strlen(lp));
+    ASSERT_TRUE(hist_lineage_leak(a, blap, lid) == NULL);
+    /* the parent carries it too, and lists the branch nowhere */
+    hist_write_lineage(".leak_unit_p/.lap", lid);
+    ASSERT_TRUE(hist_lineage_leak(a, blap, lid) != NULL);
+    /* ... lists it in another folder that still is it: a checkout */
+    Branches lreg;
+    memset(&lreg, 0, sizeof lreg);
+    branches_add(a, &lreg, (BranchEntry){lid, "b", lo, "h", "t", NULL});
+    ASSERT_TRUE(branches_save(a, ".leak_unit_p/.lap", &lreg));
+    hist_write_lineage(".leak_unit_o/.lap", lid);
+    ASSERT_TRUE(hist_lineage_leak(a, blap, lid) != NULL);
+    /* ... lists it in a folder no longer it: moved here, the branch */
+    remove(".leak_unit_o/.lap/lineage");
+    ASSERT_TRUE(hist_lineage_leak(a, blap, lid) == NULL);
+    /* ... lists it here: the branch */
+    lreg.v[0].path = lb;
+    ASSERT_TRUE(branches_save(a, ".leak_unit_p/.lap", &lreg));
+    ASSERT_TRUE(hist_lineage_leak(a, blap, lid) == NULL);
+    /* the parent gone: the branch, unless main's chunks here run past its
+     * base */
+    char gone[LAP_PATH_MAX];
+    snprintf(gone, sizeof gone, "%s/.leak_unit_gone", cwd);
+    plat_write_file_atomic(".leak_unit_b/.lap/parent", gone, strlen(gone));
+    Rec brec;
+    memset(&brec, 0, sizeof brec);
+    brec.type = REC_BRANCH;
+    brec.id = lid;
+    brec.name = "b";
+    brec.parent = "main";
+    brec.base = LAP_HASH_ZERO;
+    brec.base_chunk = 1;
+    brec.ts = "t0";
+    brec.prev = LAP_HASH_ZERO;
+    size_t bn;
+    char *bline = arena_printf(a, "%s\n", rec_encode(a, &brec, &bn));
+    plat_write_file_atomic(".leak_unit_b/.lap/log/0123456789ab.000001.jsonl",
+                           bline, strlen(bline));
+    plat_write_file_atomic(".leak_unit_b/.lap/log/main.000001.jsonl", "", 0);
+    ASSERT_TRUE(hist_lineage_leak(a, blap, lid) == NULL);
+    plat_write_file_atomic(".leak_unit_b/.lap/log/main.000002.jsonl", "", 0);
+    ASSERT_TRUE(hist_lineage_leak(a, blap, lid) != NULL);
+    remove(".leak_unit_b/.lap/log/0123456789ab.000001.jsonl");
+    remove(".leak_unit_b/.lap/log/main.000001.jsonl");
+    remove(".leak_unit_b/.lap/log/main.000002.jsonl");
+    remove(".leak_unit_b/.lap/lineage");
+    remove(".leak_unit_b/.lap/parent");
+    remove(".leak_unit_p/.lap/lineage");
+    remove(".leak_unit_p/.lap/" LAP_BRANCHES_NAME);
+    plat_rmdir(".leak_unit_b/.lap/log");
+    plat_rmdir(".leak_unit_b/.lap");
+    plat_rmdir(".leak_unit_b");
+    plat_rmdir(".leak_unit_p/.lap");
+    plat_rmdir(".leak_unit_p");
+    plat_rmdir(".leak_unit_o/.lap");
+    plat_rmdir(".leak_unit_o");
+
     remove(path);
     arena_free(a);
 }

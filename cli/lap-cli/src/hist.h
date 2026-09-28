@@ -70,10 +70,20 @@ bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
                char *err, size_t errsz);
 
 /* The lineage a folder writes: the id in lapdir/lineage, or "main" when
- * there is no such file. False, with a reason, for a file that does not
- * hold a branch id. */
+ * there is no such file, or when that file leaked here through git
+ * (hist_lineage_leak; said once in a note). False, with a reason, for a
+ * file that does not hold a branch id. */
 bool hist_folder_lineage(Arena *a, const char *lapdir,
                          char out[HIST_LINEAGE_MAX], char *err, size_t errsz);
+/* Why lapdir's lineage file, naming `lineage`, leaked through git rather
+ * than making the folder that branch, or NULL when it is the branch: its
+ * .lap/parent is this folder itself; or the parent carries the same
+ * lineage file (this folder is a checkout of the parent's history, which
+ * got it from the branch); or the parent is gone and main's chunks here run
+ * past the branch's base, which a branch folder's never do. A copy of a
+ * branch folder, or one moved away, is still the branch here. */
+const char *hist_lineage_leak(Arena *a, const char *lapdir,
+                              const char *lineage);
 /* Writes lapdir/lineage. */
 bool hist_write_lineage(const char *lapdir, const char *lineage);
 /* Writes chunk `name` into logdir whole, atomically, its temp file in the

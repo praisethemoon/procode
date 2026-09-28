@@ -344,9 +344,15 @@ and a `git merge` of the branch's code brings its chunks as new files.
   the chunks back into git's view under a root `.gitignore` of older docs
   (`.lap/*`, `!.lap/log.jsonl`); lap never runs git, so the conversion
   says to commit `.lap/.gitignore` and `.lap/log/` with the old file's
-  removal. Should a `lineage` arrive anyway, with the `.lap/parent`
-  that names this very folder (compared as a directory on disk), it is
-  ignored with a notice: the folder stays `main`.
+  removal. Should a `lineage` arrive anyway, it is ignored with a notice
+  and the folder stays `main` when it plainly came through git: its
+  `.lap/parent` names this very folder (compared as a directory on disk);
+  or the parent holds the same `lineage` file and its registry places the
+  branch in another folder that still is it, or nowhere (a clone of the
+  parent); or the parent is gone and `main`'s chunks here run past the
+  branch's base, which a branch folder's never do. A branch folder, one
+  moved away (before or after `lap branch move`) and a plain copy (below)
+  keep their lineage.
 - Ids go on from the base: the branch's next `L` and `S` numbers follow
   its parent's at the base, so one folder never shows an id twice. Two
   folders do — the parent goes on from the base too — so text that leaves
