@@ -94,6 +94,8 @@ Artifacts are pages an agent publishes for you to read in the editor:
 reports, comparisons, findings, anything with a table or a chart. They are
 stored in `.artifact/` and published through the `artifacts` MCP server,
 and the extension's **Artifacts** view opens them in your VS Code theme.
+Each page carries a few keywords the agent gives it when publishing, shown
+in the view and used to find pages on one topic (`artifact_list {keyword}`).
 The format is in [specs/artifacts.md](specs/artifacts.md). These are almost
 identical to claude artifacts, except they stay local to your project.
 

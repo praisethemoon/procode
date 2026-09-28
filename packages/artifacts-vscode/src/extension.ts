@@ -14,7 +14,7 @@ import * as vscode from "vscode";
 import { Artifact, Artifacts, findArtifacts } from "artifacts";
 
 import { FrameParts, frameDocument } from "./frame";
-import { describeWhen, sortForList } from "./list";
+import { describeRow, sortForList } from "./list";
 import { viewerHtml } from "./viewer";
 
 const panels = new Map<string, vscode.WebviewPanel>();
@@ -30,10 +30,11 @@ class Item extends vscode.TreeItem {
     constructor(readonly artifact: Artifact) {
         super(artifact.title, vscode.TreeItemCollapsibleState.None);
         this.id = artifact.id;
-        this.description = describeWhen(artifact.updatedAt, Date.now());
+        this.description = describeRow(artifact, Date.now());
         const tip = new vscode.MarkdownString();
         tip.appendMarkdown(`**${artifact.title.replace(/[\\`*_[\]]/g, "\\$&")}**\n\n`);
         if (artifact.description) tip.appendText(`${artifact.description}\n\n`);
+        if (artifact.keywords.length) tip.appendText(`keywords: ${artifact.keywords.join(", ")}\n\n`);
         tip.appendText(`${artifact.id} · created ${artifact.createdAt} · updated ${artifact.updatedAt}`);
         this.tooltip = tip;
         this.iconPath = new vscode.ThemeIcon("preview");

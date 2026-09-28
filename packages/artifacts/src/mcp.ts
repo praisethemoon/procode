@@ -11,7 +11,7 @@
 
 import * as readline from "node:readline";
 
-import { ArtifactError, Artifacts, MAX_DESCRIPTION, MAX_TITLE, defaultRoot, findArtifacts } from "./store";
+import { ArtifactError, Artifacts, MAX_DESCRIPTION, MAX_KEYWORD, MAX_KEYWORDS, MAX_TITLE, defaultRoot, findArtifacts, hasKeyword } from "./store";
 import { TEMPLATES } from "./templates";
 
 const VERSION = "0.1.0";
@@ -30,7 +30,8 @@ Plain elements (headings, paragraphs, lists, tables, code, pre, blockquote, deta
 eyebrow, lede · meta + chip · kpis + kpi (<b>number</b><span>what</span><small>why</small>; kpi.warn, kpi.danger) · callout ok|info|warn|danger (<strong>verdict</strong><p>reason</p>) · cols, panel · tag (ok|warn|danger) · tabs (buttons with aria-pressed) · td.id, td.num · toc · svg.chart with .bar (ok|warn|danger|muted), .grid, .node (accent), .edge (accent|dashed), .arrowhead, text.label.
 For anything longer than a few paragraphs, start from artifact_template {name: "report"}: it has every component in place and says what goes where.
 The page has no network: inline everything (SVG, data: images, scripts). Scripts run sandboxed.
-Republish with the same id to revise a page; its createdAt is kept.`;
+Give every page two to five keywords (short lowercase words or phrases: the topic, the component, the kind of page) so pages about one topic can be found together; artifact_list filters by one.
+Republish with the same id to revise a page; its createdAt is kept, and so are its keywords unless you pass new ones.`;
 
 type Json = Record<string, unknown>;
 
@@ -64,6 +65,11 @@ export const TOOLS: readonly Tool[] = [
                     description: `What the page is and why it exists; shown under the title in the list. At most ${MAX_DESCRIPTION} characters.`,
                 },
                 html: { type: "string", description: "The page: a whole HTML document or a fragment." },
+                keywords: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: `Two to five short words or phrases the page is about, e.g. ["lap", "merge", "design note"]; stored lowercase, at most ${MAX_KEYWORDS}, each at most ${MAX_KEYWORD} characters. With id: given, they replace the page's keywords; omitted, the page keeps its own.`,
+                },
                 id: { type: "string", description: "A-<n>: the artifact to replace. Omit to create a new one." },
             },
             required: ["title", "html"],
@@ -74,6 +80,7 @@ export const TOOLS: readonly Tool[] = [
                 title: args["title"] as string,
                 html: args["html"] as string,
                 description: args["description"] as string | undefined,
+                keywords: args["keywords"] as string[] | undefined,
                 id: args["id"] as string | undefined,
             });
         },
@@ -99,16 +106,23 @@ export const TOOLS: readonly Tool[] = [
     },
     {
         name: "artifact_list",
-        description: "Every artifact in the workspace, most recently updated first, without their pages.",
-        inputSchema: { type: "object", properties: {} },
-        call: (_args, ctx) => {
-            const artifacts = readStore(ctx)?.list() ?? [];
+        description:
+            "Every artifact in the workspace, most recently updated first, with their keywords and without their pages. With keyword, only the pages carrying it.",
+        inputSchema: {
+            type: "object",
+            properties: { keyword: { type: "string", description: "Only the pages carrying this keyword (case does not matter)." } },
+        },
+        call: (args, ctx) => {
+            const keyword = args["keyword"];
+            if (keyword !== undefined && typeof keyword !== "string") throw new ArtifactError("invalid", "keyword must be text");
+            const all = readStore(ctx)?.list() ?? [];
+            const artifacts = keyword === undefined ? all : all.filter((a) => hasKeyword(a, keyword));
             return { artifacts, count: artifacts.length };
         },
     },
     {
         name: "artifact_get",
-        description: "One artifact's metadata and its page.",
+        description: "One artifact's metadata (keywords included) and its page.",
         inputSchema: {
             type: "object",
             properties: { id: { type: "string", description: "A-<n>" } },

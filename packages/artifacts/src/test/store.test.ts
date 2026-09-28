@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { ArtifactError, Artifacts, defaultRoot, findArtifacts, isArtifactId } from "../store";
+import { ArtifactError, Artifacts, MAX_KEYWORD, MAX_KEYWORDS, defaultRoot, findArtifacts, hasKeyword, isArtifactId } from "../store";
 
 function workspace(): string {
     return fs.mkdtempSync(path.join(os.tmpdir(), "artifacts-"));
@@ -28,6 +28,7 @@ test("publishing creates A-1, A-2 … with the page and its metadata", () => {
         id: "A-1",
         title: "IOCP vs io_uring",
         description: "a comparison",
+        keywords: [],
         createdAt: "2026-09-26T10:00:00Z",
         updatedAt: "2026-09-26T10:00:00Z",
     });
@@ -98,4 +99,38 @@ test("a first artifact goes to the repository root, not a subdirectory", () => {
     assert.equal(defaultRoot(path.join(root, "src", "deep")), root);
     const outside = workspace();
     assert.equal(defaultRoot(outside), outside);
+});
+
+test("keywords are saved lowercase, trimmed and once each, within their limits", () => {
+    const root = workspace();
+    const store = new Artifacts(root);
+    const a = store.publish({ title: "t", html: "<p>x</p>", keywords: [" Lap ", "merge", "LAP", "  design   note ", ""] });
+    assert.deepEqual(a.artifact.keywords, ["lap", "merge", "design note"]);
+    const meta = JSON.parse(fs.readFileSync(path.join(root, ".artifact", "A-1", "artifact.json"), "utf8"));
+    assert.deepEqual(meta.keywords, ["lap", "merge", "design note"]);
+    assert.deepEqual(store.get("A-1").artifact.keywords, ["lap", "merge", "design note"]);
+    assert.ok(hasKeyword(a.artifact, " Design Note ") && !hasKeyword(a.artifact, "design"));
+
+    const many = Array.from({ length: MAX_KEYWORDS + 1 }, (_, i) => `k${i}`);
+    assert.throws(() => store.publish({ title: "t", html: "<p>x</p>", keywords: many }), refused("invalid"));
+    assert.throws(() => store.publish({ title: "t", html: "<p>x</p>", keywords: ["x".repeat(MAX_KEYWORD + 1)] }), refused("invalid"));
+    assert.throws(() => store.publish({ title: "t", html: "<p>x</p>", keywords: "lap" as unknown as string[] }), refused("invalid"));
+    assert.throws(() => store.publish({ title: "t", html: "<p>x</p>", keywords: [3 as unknown as string] }), refused("invalid"));
+    assert.equal(store.list().length, 1, "a refused publish wrote nothing");
+});
+
+test("a republish replaces the keywords when given, keeps them when not; an old page has none", () => {
+    const root = workspace();
+    const store = new Artifacts(root);
+    store.publish({ title: "t", html: "<p>1</p>", keywords: ["lap"] });
+    assert.deepEqual(store.publish({ id: "A-1", title: "t", html: "<p>2</p>" }).artifact.keywords, ["lap"]);
+    assert.deepEqual(store.publish({ id: "A-1", title: "t", html: "<p>3</p>", keywords: ["kb"] }).artifact.keywords, ["kb"]);
+    assert.deepEqual(store.publish({ id: "A-1", title: "t", html: "<p>4</p>", keywords: [] }).artifact.keywords, []);
+
+    /* written before keywords existed */
+    fs.mkdirSync(path.join(root, ".artifact", "A-9"));
+    fs.writeFileSync(path.join(root, ".artifact", "A-9", "index.html"), "<p>old</p>");
+    fs.writeFileSync(path.join(root, ".artifact", "A-9", "artifact.json"),
+        JSON.stringify({ id: "A-9", title: "old", description: "", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" }));
+    assert.deepEqual(store.get("A-9").artifact.keywords, []);
 });

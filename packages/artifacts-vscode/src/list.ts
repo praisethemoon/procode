@@ -25,3 +25,9 @@ export function describeWhen(iso: string, now: number): string {
     if (d < 7) return `${d} days ago`;
     return iso.slice(0, 10);
 }
+
+/* A row's description: when it changed, then its keywords, if any. */
+export function describeRow(a: Pick<Artifact, "updatedAt" | "keywords">, now: number): string {
+    const when = describeWhen(a.updatedAt, now);
+    return a.keywords.length ? `${when} · ${a.keywords.join(", ")}` : when;
+}

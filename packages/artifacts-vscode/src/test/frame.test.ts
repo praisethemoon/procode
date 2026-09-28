@@ -68,7 +68,7 @@ test("the viewer escapes the title and carries themeCss as source", () => {
 });
 
 test("the list is newest update first, and dates read as words", () => {
-    const a = (id: string, updatedAt: string) => ({ id, title: id, description: "", createdAt: updatedAt, updatedAt, bytes: 1 });
+    const a = (id: string, updatedAt: string) => ({ id, title: id, description: "", keywords: [], createdAt: updatedAt, updatedAt, bytes: 1 });
     assert.deepEqual(
         sortForList([a("A-1", "2026-01-01T00:00:00Z"), a("A-3", "2026-03-01T00:00:00Z"), a("A-2", "2026-03-01T00:00:00Z")]).map((x) => x.id),
         ["A-3", "A-2", "A-1"],

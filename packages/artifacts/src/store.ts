@@ -3,7 +3,7 @@
  *     .artifact/
  *       next           the next id's number, so a deleted id is never reused
  *       A-1/index.html the page
- *       A-1/artifact.json { id, title, description, createdAt, updatedAt }
+ *       A-1/artifact.json { id, title, description, keywords, createdAt, updatedAt }
  *
  * CLAIMING AN ID IS A mkdir. Creating A-<n> fails when it exists, so two
  * agents publishing at once each end up with their own directory without a
@@ -25,6 +25,8 @@ const NEXT = "next";
 export const MAX_TITLE = 200;
 export const MAX_DESCRIPTION = 2000;
 export const MAX_PAGE_BYTES = 5 * 1024 * 1024;
+export const MAX_KEYWORDS = 10;
+export const MAX_KEYWORD = 40;
 
 export type ArtifactErrorCode = "invalid" | "not_found" | "bad_id";
 
@@ -42,6 +44,8 @@ export interface Artifact {
     readonly id: string;
     readonly title: string;
     readonly description: string;
+    /* Short lowercase words or phrases; [] for a page published without. */
+    readonly keywords: readonly string[];
     readonly createdAt: string;
     readonly updatedAt: string;
     /* The page's size, read from disk, never stored. */
@@ -52,6 +56,9 @@ export interface PublishInput {
     readonly title: string;
     readonly html: string;
     readonly description?: string;
+    /* Present: the page's keywords, replacing any it had. Absent: a new
+     * page has none, a republished one keeps its own. */
+    readonly keywords?: readonly string[];
     /* Present: replace that artifact. Absent: create the next one. */
     readonly id?: string;
 }
@@ -123,6 +130,31 @@ function oneLine(v: unknown, what: string, max: number, required: boolean): stri
     return s;
 }
 
+/* Keywords as stored: each trimmed, lowercased, inner spaces collapsed;
+ * blanks dropped, repeats kept once, in the order given. */
+export function normalizeKeywords(v: unknown): string[] {
+    if (!Array.isArray(v)) throw new ArtifactError("invalid", "keywords must be a list of words or short phrases");
+    const out: string[] = [];
+    for (const k of v) {
+        if (typeof k !== "string") throw new ArtifactError("invalid", "each keyword must be text");
+        const w = k.trim().toLowerCase().replace(/\s+/g, " ");
+        if (w === "") continue;
+        if (w.length > MAX_KEYWORD) {
+            throw new ArtifactError("invalid", `the keyword "${w}" is ${w.length} characters; the most is ${MAX_KEYWORD}`);
+        }
+        if (!out.includes(w)) out.push(w);
+    }
+    if (out.length > MAX_KEYWORDS) {
+        throw new ArtifactError("invalid", `${out.length} keywords; the most is ${MAX_KEYWORDS}`);
+    }
+    return out;
+}
+
+/* Whether a page carries a keyword, compared as normalizeKeywords stores it. */
+export function hasKeyword(a: Artifact, keyword: string): boolean {
+    return a.keywords.includes(keyword.trim().toLowerCase().replace(/\s+/g, " "));
+}
+
 export class Artifacts {
     readonly dir: string;
 
@@ -165,6 +197,7 @@ export class Artifacts {
         const title = oneLine(input.title, "title", MAX_TITLE, true);
         if (/[\r\n]/.test(title)) throw new ArtifactError("invalid", "the title must be one line");
         const description = oneLine(input.description, "description", MAX_DESCRIPTION, false);
+        let keywords = input.keywords === undefined ? null : normalizeKeywords(input.keywords);
         if (typeof input.html !== "string" || input.html.trim() === "") {
             throw new ArtifactError("invalid", "an artifact needs a page: html is empty");
         }
@@ -181,6 +214,7 @@ export class Artifacts {
             if (!existing) throw new ArtifactError("not_found", `no artifact ${input.id}`);
             id = input.id;
             createdAt = existing.createdAt;
+            keywords ??= [...existing.keywords];
         } else {
             id = this.claim();
         }
@@ -188,9 +222,9 @@ export class Artifacts {
         writeAtomic(path.join(dir, PAGE), input.html);
         writeAtomic(
             path.join(dir, META),
-            JSON.stringify({ id, title, description, createdAt, updatedAt: stamp }, null, 2) + "\n",
+            JSON.stringify({ id, title, description, keywords: keywords ?? [], createdAt, updatedAt: stamp }, null, 2) + "\n",
         );
-        const artifact: Artifact = { id, title, description, createdAt, updatedAt: stamp, bytes };
+        const artifact: Artifact = { id, title, description, keywords: keywords ?? [], createdAt, updatedAt: stamp, bytes };
         return { artifact, path: path.join(dir, PAGE) };
     }
 
@@ -210,6 +244,9 @@ export class Artifacts {
                 id,
                 title: s("title"),
                 description: s("description"),
+                keywords: Array.isArray(meta["keywords"])
+                    ? (meta["keywords"] as unknown[]).filter((k): k is string => typeof k === "string")
+                    : [],
                 createdAt: s("createdAt"),
                 updatedAt: s("updatedAt") || s("createdAt"),
                 bytes,

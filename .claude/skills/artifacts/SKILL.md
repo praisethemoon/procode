@@ -24,10 +24,15 @@ chat.
    than a few paragraphs. Every component is in place and the comments say
    what goes where. Delete the comments and every section you do not need.
 2. Write the page. Replace every UPPERCASE placeholder; never leave one.
-3. `artifact_publish {title, description, html}`. The title is the finding,
-   one line; the description is one or two sentences for the list.
+3. `artifact_publish {title, description, keywords, html}`. The title is the
+   finding, one line; the description is one or two sentences for the list;
+   `keywords` are two to five short words or phrases the page is about —
+   the topic, the component, the kind of page — so pages on one topic can
+   be found together, e.g. `keywords: ["lap", "merge", "design note"]`.
+   `artifact_list {keyword: "merge"}` finds the pages carrying one.
 4. To revise it, publish again **with its `id`** — never a second artifact
-   for the same work. `createdAt` is kept.
+   for the same work. `createdAt` is kept, and the keywords too unless you
+   pass new ones.
 
 ## The shape that works
 

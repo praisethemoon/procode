@@ -41,7 +41,7 @@ worth reading is worth keeping with the work it came from.
 ## 2. Identity and metadata
 
 ```
-Artifact { id, title, description, createdAt, updatedAt, bytes }
+Artifact { id, title, description, keywords, createdAt, updatedAt, bytes }
 ```
 
 - **`id`** is `A-<n>`: public, prefixed, monotonic, never reused. The next id
@@ -51,11 +51,18 @@ Artifact { id, title, description, createdAt, updatedAt, bytes }
 - **`title`** — required, one line, at most 200 characters.
 - **`description`** — optional, what the page is and why it exists, at most
   2000 characters. It is what the list shows under the title.
+- **`keywords`** — optional, a list of short words or phrases the page is
+  about, so pages on one topic can be found together. Each is trimmed,
+  lowercased, its inner spaces collapsed; blanks are dropped and repeats kept
+  once, in the order given. At most 10, each at most 40 characters; anything
+  else is refused (`invalid`). A page published without them has none, and
+  a page written before keywords existed reads as none: no migration.
+  Republishing with keywords replaces the list; without, it keeps it.
 - **`createdAt`**, **`updatedAt`** — ISO-8601 UTC. Republishing an artifact
   moves `updatedAt` and keeps `createdAt`.
 - **`bytes`** — the size of `index.html`, reported and never stored.
 
-`artifact.json` holds `{ id, title, description, createdAt, updatedAt }`.
+`artifact.json` holds `{ id, title, description, keywords, createdAt, updatedAt }`.
 The directory name and `id` must agree; a directory that is not `A-<n>`, or
 whose `artifact.json` is missing or unreadable, is not an artifact and is
 skipped.
@@ -114,16 +121,16 @@ extension, the workspace or the viewer. Everything a page shows travels in
 
 | tool | does |
 |---|---|
-| `artifact_publish` | `{ title, html, description?, id? }`. Without `id`, creates the next `A-<n>`. With `id`, replaces that artifact's page and metadata, keeping `createdAt`. Returns the artifact and the path of its page. |
+| `artifact_publish` | `{ title, html, description?, keywords?, id? }`. Without `id`, creates the next `A-<n>`. With `id`, replaces that artifact's page and metadata, keeping `createdAt`, and keeping its keywords unless `keywords` is given. Returns the artifact and the path of its page. The server's instructions ask for two to five keywords on every page. |
 | `artifact_template` | `{ name? }`: a starting page with every component in place (§3), or without `name` the list of templates. Today there is `report`. |
-| `artifact_list` | every artifact, newest `updatedAt` first, without pages |
-| `artifact_get` | `{ id }`: the metadata and the page |
+| `artifact_list` | `{ keyword? }`: every artifact, newest `updatedAt` first, with its keywords and without pages; with `keyword`, only the pages carrying it (compared as keywords are stored, so case does not matter) |
+| `artifact_get` | `{ id }`: the metadata (keywords included) and the page |
 
 Refusals are tool results with `isError`, never transport errors:
 
 | code | when |
 |---|---|
-| `invalid` | a title that is empty, multi-line or too long; a description that is too long; an empty page; a page over 5 MB |
+| `invalid` | a title that is empty, multi-line or too long; a description that is too long; keywords that are not a list of text, or over the limits of §2; an empty page; a page over 5 MB |
 | `not_found` | an `id` that is not an artifact |
 | `bad_id` | an `id` that is not `A-<n>` — including anything that could name a path |
 

@@ -89,3 +89,24 @@ test("every class the template uses is one the viewer styles", () => {
         assert.match(css, new RegExp(`\\.${c}\\b`), `.${c} is used by the template and not styled by the viewer`);
     }
 });
+
+test("keywords: publish with them, list with and without the keyword filter, get", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "artifacts-mcp-"));
+    fs.mkdirSync(path.join(root, ".git"));
+    await call(root, "artifact_publish", { title: "Merge notes", html: "<p>m</p>", keywords: ["lap", "Merge"] });
+    await call(root, "artifact_publish", { title: "Search notes", html: "<p>s</p>", keywords: ["kb"] });
+    await call(root, "artifact_publish", { title: "Plain", html: "<p>p</p>" });
+
+    const all = JSON.parse((await call(root, "artifact_list", {})).text);
+    assert.equal(all.count, 3);
+    assert.deepEqual(all.artifacts.map((a: Json) => a["keywords"]), [[], ["kb"], ["lap", "merge"]]);
+    const merge = JSON.parse((await call(root, "artifact_list", { keyword: "MERGE" })).text);
+    assert.deepEqual(merge.artifacts.map((a: Json) => a["id"]), ["A-1"]);
+    assert.equal(JSON.parse((await call(root, "artifact_list", { keyword: "none" })).text).count, 0);
+    assert.deepEqual(JSON.parse((await call(root, "artifact_get", { id: "A-2" })).text).artifact.keywords, ["kb"]);
+
+    const bad = await call(root, "artifact_publish", { title: "x", html: "<p>x</p>", keywords: "lap" });
+    assert.equal(bad.isError, true);
+    assert.match(bad.text, /^invalid: keywords must be a list/);
+    assert.match(INSTRUCTIONS, /two to five keywords/);
+});
