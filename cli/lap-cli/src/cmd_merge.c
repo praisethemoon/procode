@@ -162,7 +162,8 @@ static bool in_view(const Hist *h, const char *lineage) {
     return false;
 }
 
-int32_t merge_redo_point(const RecLog *log, const StrSet *newer) {
+int32_t merge_redo_point(const RecLog *log, const StrSet *newer,
+                         const StrSet *run_branches) {
     int32_t p0 = -1; /* the interrupted run's first record here */
     for (int32_t i = 0; i < log->count && p0 < 0; i++) {
         if (log->v[i].from && strset_has(newer, log->v[i].from))
@@ -171,7 +172,13 @@ int32_t merge_redo_point(const RecLog *log, const StrSet *newer) {
     if (p0 < 0)
         return log->count - 1;
     for (int32_t i = p0; i < log->count; i++) {
-        if (!log->v[i].from || !strset_has(newer, log->v[i].from))
+        const Rec *r = &log->v[i];
+        /* the interrupted run's own merge records (a chain writes one per
+         * branch) are part of it, not other work */
+        if (r->type == REC_MERGE && run_branches &&
+            strset_has(run_branches, r->branch))
+            continue;
+        if (!r->from || !strset_has(newer, r->from))
             return log->count - 1; /* other work since: no redo */
     }
     return p0 - 1;
@@ -555,7 +562,11 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         if (p->from && strset_has(&newer, p->from))
             map_put(a, &done_from, p->from, p->id);
     }
-    int32_t parent_at = merge_redo_point(&plog, &newer);
+    StrSet run_branches;
+    strset_init(&run_branches, a);
+    for (int32_t k = 0; k < nlin; k++)
+        strset_add(&run_branches, lin[k].id);
+    int32_t parent_at = merge_redo_point(&plog, &newer, &run_branches);
     /* A branch's amendments land on the commits adopted here for the ones
      * they name: branch commit hash -> its copy's hash. An amendment that
      * came here by another route (a branch between) is not carried twice. */

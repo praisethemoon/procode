@@ -114,9 +114,11 @@ bool own_chunks(Arena *a, const char *lapdir, const char *from,
                 char *err, size_t errsz);
 /* Where lap merge takes this folder's files when placing a branch's new
  * records (their hashes in newer): the index in log just before the
- * records an interrupted run of the merge appended (found by their from),
- * when they are the last thing in log; else log's last record. */
-int32_t merge_redo_point(const RecLog *log, const StrSet *newer);
+ * records an interrupted run of the merge appended (found by their from,
+ * with its own merge records of run_branches, the chain's ids, among
+ * them), when they are the last thing in log; else log's last record. */
+int32_t merge_redo_point(const RecLog *log, const StrSet *newer,
+                         const StrSet *run_branches);
 
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);

@@ -499,8 +499,12 @@ folder, `lap merge <branch> [--dry-run]`.
    not a conflict: the parent made the same change. Nothing is adopted for
    it and nothing stops; that change is common ground for the file's later
    commits. A file deleted on both sides, or created on both with the same
-   lines, is this case. Identical means the text, as lap's diff aligns it:
-   a change one line different is a conflict. A rename (delete one path,
+   lines, is this case. So is a change made in several steps: consecutive
+   edits that stay inside one parent change and, taken together, leave the
+   parent's text there are all already done, however the parent's side
+   split it. Identical means the text, as lap's diff aligns it: a change
+   one line different, or steps that stop short of the parent's text, is a
+   conflict. A rename (delete one path,
    create another) is two changes, each judged by itself.
 4. **Appending**, under the lock, in the branch's order:
    - a branch `session_start` not adopted before, as a new session with
@@ -1039,8 +1043,9 @@ segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git`
   bytes per chunk; `lap verify` reads everything.
 - **An interrupted `lap merge`** (a crash, a full disk) leaves some adopted
   records and no merge record; everything else heals as above. Running the
-  same merge again finds those records by their `from` links: when they
-  are the last thing recorded here, it places the branch's commits against
+  same merge again finds those records by their `from` links (and, for a
+  chain, the merge records it wrote for the chain's own branches): when
+  they are the last thing recorded here, it places the branch's commits against
   this folder's history from before them and appends only what they lack,
   so the result is the uninterrupted merge's, ids included. When other
   work was recorded since, their commits come out already done (§Merging,

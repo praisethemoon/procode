@@ -322,5 +322,46 @@ void test_adopt(void) {
     ASSERT_TRUE(p.already[0] && !p.already[1]);
     ASSERT_EQ_S(text(a, p.result), "back\n");
 
+    t_begin("adopt: a change both sides made in several steps is already "
+            "done, and the file's later commits carry on");
+    Lines ten = numbered(a, 10);
+    Rec *step1 = edit(a, ten, 5, 1, "five\n");
+    Lines ten1 = after(a, ten, step1);
+    Rec *step2 = edit(a, ten1, 5, 1, "FIVE\n");
+    Lines ten2 = after(a, ten1, step2);
+    Rec *later = edit(a, ten2, 9, 1, "NINE\n");
+    const Rec *c25[] = {step1, step2, later};
+    adopt_place(a, ten, ten2, true, c25, 3, &p); /* the parent: ten2 */
+    ASSERT_EQ_I(p.placed, 3);
+    ASSERT_TRUE(p.already[0] && p.already[1] && !p.already[2]);
+    ASSERT_TRUE(p.why == NULL);
+    ASSERT_TRUE(str_eq_c(p.result.lines[4], "FIVE"));
+    ASSERT_TRUE(str_eq_c(p.result.lines[8], "NINE"));
+    ASSERT_EQ_I(p.start[2], 9);
+
+    t_begin("adopt: steps that only start like the parent's change, or end "
+            "elsewhere, still conflict");
+    Rec *other2 = edit(a, ten1, 5, 1, "fivex\n");
+    const Rec *c26[] = {step1, other2};
+    adopt_place(a, ten, ten2, true, c26, 2, &p);
+    ASSERT_EQ_I(p.placed, 0);
+    ASSERT_TRUE(!p.already[0] && p.why != NULL);
+    const Rec *c27[] = {step1}; /* only the first step on the branch */
+    adopt_place(a, ten, ten2, true, c27, 1, &p);
+    ASSERT_EQ_I(p.placed, 0);
+    ASSERT_TRUE(p.why != NULL);
+
+    t_begin("adopt: a run of steps may grow the region: an insertion then an "
+            "edit inside it reaching the parent's lines");
+    Rec *grow = edit(a, ten, 5, 1, "5a\n5b\n");
+    Lines g1 = after(a, ten, grow);
+    Rec *fix = edit(a, g1, 6, 1, "5B\n");
+    Lines g2 = after(a, g1, fix);
+    const Rec *c28[] = {grow, fix};
+    adopt_place(a, ten, g2, true, c28, 2, &p);
+    ASSERT_EQ_I(p.placed, 2);
+    ASSERT_TRUE(p.already[0] && p.already[1]);
+    ASSERT_EQ_S(text(a, p.result), text(a, g2));
+
     arena_free(a);
 }

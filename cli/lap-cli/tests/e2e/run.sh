@@ -2317,6 +2317,52 @@ once "B1 edits g1 later"
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "a change both sides made in two steps is already done, and an interrupted run of it finishes"
+merge_pair ms1; BP="$WORK/ms1-p"; BW="$WORK/ms1-w"
+cd "$BW" && "$LAP" session start "two steps" --branch b >/dev/null 2>&1
+in_branch f.txt 's/^line 5$/five/' "rewrites line 5 in words"
+in_branch f.txt 's/^five$/FIVE/' "shouts line 5"
+in_branch g.txt 's/^g1$/G1/' "uppercases g1 on the branch"
+in_parent f.txt 's/^line 5$/five/' "rewrites line 5 in words too"
+in_parent f.txt 's/^five$/FIVE/' "shouts line 5 too"
+git_merge_b || fail "git merge ms1"
+cd "$BP" && cp -R .lap "$WORK/ms1-lap.bak"
+expect_grep '"adopted":1,"left":0,.*"stopped":\[\],"already":\["[0-9a-f]*","[0-9a-f]*"\]' "$LAP" merge b --dry-run --json
+expect_grep "adopted 1 of 3 commits" "$LAP" merge b
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+expect_grep "^b  *merged" "$LAP" branch list
+# the same merge interrupted after two records, other work committed, rerun
+rm -rf .lap && cp -R "$WORK/ms1-lap.bak" .lap
+expect_fail env LAP_TEST_MERGE_FAIL_AFTER=2 "$LAP" merge b
+printf 'other\n' > other.txt
+expect_ok "$LAP" commit other.txt --branch main --no-session -i "other work after the failure" -b "creates other.txt meanwhile"
+expect_ok "$LAP" merge b
+expect_grep '"stopped":\[\]' "$LAP" branch list --json
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
+t "a nested branch's two-step change taken by two routes leaves its parent branch merged"
+nest_trio n6
+cd "$N2" && "$LAP" session start "b2 steps" --branch b2 >/dev/null 2>&1
+edit_commit "$N2" b2 f.txt 's/^line 40$/forty/' "B2 writes line 40 in words"
+edit_commit "$N2" b2 f.txt 's/^forty$/FORTY/' "B2 shouts line 40"
+cd "$N2" && "$LAP" session end >/dev/null 2>&1 && git add -A && git commit -qm "b2 steps" >/dev/null
+cd "$N1" && git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into b"
+expect_ok "$LAP" merge b2
+git add -A && git commit -qm "b took in b2" >/dev/null
+cd "$NP" && git add -A && git commit -qm "main" >/dev/null 2>&1
+git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into main"
+expect_ok "$LAP" merge b2
+git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge b into main"
+expect_ok "$LAP" merge b
+expect_grep "clean" "$LAP" status
+expect_grep "^b  *merged" "$LAP" branch list
+once "B2 shouts line 40"
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

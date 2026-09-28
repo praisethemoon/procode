@@ -122,6 +122,50 @@ void adopt_place(Arena *a, Lines base, Lines parent, bool parent_has,
             continue;
         }
 
+        /* The parent made this change in several steps, and so did the
+         * branch: the commits from here, applied in turn while they stay
+         * within that change's region, may reach the parent's text there.
+         * Then all of them are already done. */
+        if (!del && hits == 1) {
+            int32_t hs = ch[hit].start, hl = ch[hit].len, cur = hl;
+            int32_t want = hl + ch[hit].delta;
+            int32_t hat = hs + offset; /* the change's start in the parent's */
+            Lines tmp = branch;
+            int32_t j = k, reached = -1;
+            for (; j < n && reached < 0; j++) {
+                const Rec *cj = commits[j];
+                int32_t sj = cj->old_start < 1 ? 1 : cj->old_start;
+                if (strcmp(cj->op, "edit") != 0 || sj < hs ||
+                    sj + cj->old_lines > hs + cur)
+                    break; /* leaves the region: no run of steps */
+                tmp = lines_replace(a, tmp, sj, cj->old_lines, cj->new_text,
+                                    cj->new_n, cj->eof_nl);
+                cur += cj->new_n - cj->old_lines;
+                if (cur == want && hs - 1 + want <= tmp.count &&
+                    text_at(mnocr, hat,
+                            lines_without_cr(a, tmp).lines + (hs - 1), want) &&
+                    (tmp.eof_nl == branch.eof_nl ||
+                     tmp.eof_nl == merged.eof_nl))
+                    reached = j;
+            }
+            if (reached >= 0) {
+                for (int32_t i = 0; i < pr.count; i++) {
+                    if (i != hit && ch[i].len >= 0 && ch[i].start > hs)
+                        ch[i].start += cur - hl;
+                }
+                ch[hit].len = -1;
+                branch = tmp;
+                for (int32_t q = k; q <= reached; q++) {
+                    out->already[q] = true;
+                    out->start[q] = hat;
+                    out->eof_nl[q] = merged.eof_nl;
+                }
+                out->placed = reached + 1;
+                k = reached;
+                continue;
+            }
+        }
+
         const char *why = NULL;
         if (hits > 0)
             why = ch[hit].len == 0 && c->old_lines == 0 && ch[hit].start == s

@@ -300,14 +300,27 @@ void test_branches(void) {
     rlog.count = 4;
     StrSet nw;
     strset_init(&nw, a);
-    ASSERT_EQ_I(merge_redo_point(&rlog, &nw), 3);
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw, NULL), 3);
     strset_add(&nw, "h1");
     strset_add(&nw, "h2");
-    ASSERT_EQ_I(merge_redo_point(&rlog, &nw), 1);
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw, NULL), 1);
     rl[3].from = NULL; /* work recorded after the run's first copy */
-    ASSERT_EQ_I(merge_redo_point(&rlog, &nw), 3);
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw, NULL), 3);
     rl[3].from = "elsewhere";
-    ASSERT_EQ_I(merge_redo_point(&rlog, &nw), 3);
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw, NULL), 3);
+
+    t_begin("merge_redo_point: the run's own merge records, written between "
+            "its branches, are part of the run");
+    rl[3].from = NULL;
+    rl[3].type = REC_MERGE;
+    rl[3].branch = "0123456789ab";
+    StrSet runb;
+    strset_init(&runb, a);
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw, &runb), 3);
+    strset_add(&runb, "0123456789ab");
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw, &runb), 1);
+    rl[3].branch = "ffffffffffff"; /* another branch's merge: other work */
+    ASSERT_EQ_I(merge_redo_point(&rlog, &nw, &runb), 3);
 
     t_begin("own_chunks: this folder's copy wins, and the branch folder is "
             "not read unless it may fill in");
