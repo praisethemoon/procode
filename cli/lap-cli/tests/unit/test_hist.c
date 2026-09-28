@@ -925,6 +925,53 @@ static void test_lineages(Arena *a) {
     clear_chunks();
 }
 
+/* A branch record of id, started from parent at its chunk base_chunk. */
+static char *lost_branch_line(Arena *a, const char *id, const char *parent,
+                         int32_t base_chunk) {
+    Rec br;
+    memset(&br, 0, sizeof br);
+    br.type = REC_BRANCH;
+    br.id = id;
+    br.name = id;
+    br.parent = parent;
+    br.base = LAP_HASH_ZERO;
+    br.base_chunk = base_chunk;
+    br.ts = "t0";
+    br.prev = LAP_HASH_ZERO;
+    size_t n;
+    return arena_printf(a, "%s\n", rec_encode(a, &br, &n));
+}
+
+static void test_lost_lineage(Arena *a) {
+    t_begin("hist_lost_lineage: a folder with a branch's chunks and its "
+            "parent's up to the base only, but no lineage file, is that "
+            "branch's; the parent's own folder, past the base, is not");
+    clear_chunks();
+    put_file("main.000001.jsonl", "m\n");
+    put_file("0123456789ab.000001.jsonl",
+             lost_branch_line(a, "0123456789ab", "main", 1));
+    const char *lost = hist_lost_lineage(a, T_LAPDIR);
+    ASSERT_TRUE(lost && strcmp(lost, "0123456789ab") == 0);
+    put_file("main.000002.jsonl", ""); /* the parent sealed and went on */
+    ASSERT_TRUE(hist_lost_lineage(a, T_LAPDIR) == NULL);
+
+    t_begin("hist_lost_lineage: of a branch of a branch, the deepest; "
+            "nothing when the lineage file is there");
+    clear_chunks();
+    put_file("main.000001.jsonl", "m\n");
+    put_file("0123456789ab.000001.jsonl",
+             lost_branch_line(a, "0123456789ab", "main", 1));
+    put_file("ba9876543210.000001.jsonl",
+             lost_branch_line(a, "ba9876543210", "0123456789ab", 1));
+    lost = hist_lost_lineage(a, T_LAPDIR);
+    ASSERT_TRUE(lost && strcmp(lost, "ba9876543210") == 0);
+    char lpath[256];
+    snprintf(lpath, sizeof lpath, "%s/%s", T_LAPDIR, LAP_LINEAGE_NAME);
+    plat_write_file_atomic(lpath, "ba9876543210\n", 13);
+    ASSERT_TRUE(hist_lost_lineage(a, T_LAPDIR) == NULL);
+    clear_chunks();
+}
+
 void test_hist(void) {
     Arena *a = arena_new(0);
     test_names();
@@ -937,6 +984,7 @@ void test_hist(void) {
     test_check(a);
     test_index_match(a);
     test_lineages(a);
+    test_lost_lineage(a);
     test_tmp_files(a);
     arena_free(a);
 }

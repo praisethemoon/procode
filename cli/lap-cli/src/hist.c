@@ -1233,3 +1233,39 @@ bool hist_scan(Arena *a, const Hist *h, HistScan *out, char *err,
     arena_free(ra);
     return ok;
 }
+
+const char *hist_lost_lineage(Arena *a, const char *lapdir) {
+    char path[LAP_PATH_MAX], err[256];
+    snprintf(path, sizeof path, "%s/%s", lapdir, LAP_LINEAGE_NAME);
+    if (plat_is_file(path))
+        return NULL;
+    const char **ids;
+    int32_t n = hist_lineages(a, lapdir, &ids);
+    const char **found = (const char **)arena_alloc(
+        a, (size_t)(n ? n : 1) * sizeof(char *));
+    const char **parent = (const char **)arena_alloc(
+        a, (size_t)(n ? n : 1) * sizeof(char *));
+    int32_t nf = 0;
+    for (int32_t i = 0; i < n; i++) {
+        Rec br;
+        Hist ph;
+        /* a branch folder holds its parent's chunks up to the base only;
+         * the parent itself sealed that chunk and went on to the next */
+        if (!hist_first_record(a, lapdir, ids[i], &br, err, sizeof err) ||
+            br.type != REC_BRANCH || !br.parent ||
+            !list_chunks(a, lapdir, br.parent, &ph, err, sizeof err) ||
+            ph.n != br.base_chunk)
+            continue;
+        parent[nf] = br.parent;
+        found[nf++] = ids[i];
+    }
+    /* of a chain of them (a branch of a branch), the deepest */
+    for (int32_t i = 0; i < nf; i++) {
+        bool is_parent = false;
+        for (int32_t j = 0; j < nf && !is_parent; j++)
+            is_parent = strcmp(parent[j], found[i]) == 0;
+        if (!is_parent)
+            return found[i];
+    }
+    return NULL;
+}

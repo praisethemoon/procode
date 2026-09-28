@@ -210,7 +210,12 @@ walks only the file's own history), byte-budgeted content snapshots that
 bound replay cost, the shadow store (each file as last committed), and a
 stat cache that lets `lap status` skip files whose size and mtime have not
 changed. Delete any of it, `lap rebuild` restores it; reads stay correct
-(slower) even without it. `rebuild` and `verify` read the history a chunk
+(slower) even without it. Three files are not caches but this machine's
+state, never rebuilt and never put in git: `.lap/lineage` (what makes a
+folder a branch: delete it and the folder takes itself for main, which
+writers and `rebuild` warn of), `.lap/parent` (where a branch folder's
+parent is, for other tools) and `.lap/branches.json` (the branches
+started here, and where their folders are). `rebuild` and `verify` read the history a chunk
 at a time, so their memory stays near one file's state, not the history's.
 
 lap reads CRLF as LF, as git stores text: a working file's `\r\n` endings

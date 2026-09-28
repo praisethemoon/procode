@@ -56,9 +56,18 @@ intent and what it does; git keeps its normal human-scale history.
 ```
 
 - Commands find the repository by walking upward from the cwd (like git).
-- **The cache contract:** everything in `.lap/` except `log/` is a
-  derived, disposable cache. Any of it may be deleted at any time; the next
-  writing command (or `lap rebuild`) reconstructs it from the log. Cache
+- **The cache contract:** everything in `.lap/` except `log/` and the
+  three machine-local files below is a derived, disposable cache. Any of it
+  may be deleted at any time; the next writing command (or `lap rebuild`)
+  reconstructs it from the log. **Machine-local state** is not derived and
+  not rebuilt, and never goes through git: `lineage` makes the folder a
+  branch — deleted, the folder takes itself for `main` (writers and
+  `rebuild` then warn when its chunks show it was a branch, naming the id
+  to restore); `parent` is a hint for other tools, and a branch folder
+  without it cannot be told from a copy or a clone of its parent's
+  checkout; `branches.json` lists this folder's branches — deleted, they
+  are known only by their chunks here, and their folders are no longer
+  found or tended from here. Cache
   formats may change between versions with no migrations — an unrecognized
   or stale cache is rebuilt. Caches are native-endian and single-machine:
   transport a repo as its `log/` (plus working tree) and rebuild on arrival.

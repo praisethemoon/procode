@@ -239,6 +239,9 @@ lap branch start parser --from ../proj         # its own line of history
 `lap verify` checks the log's hash chain; `lap verify --deep` also replays
 history against the shadow store and snapshot cache. `lap rebuild`
 reconstructs every cache from the log — run it after copying a repo by its
-log alone, deleting anything under `.lap/` other than `log/`, or when
-a cache looks wrong. Truth lives in the log; everything else is
-regenerable.
+log alone, deleting a cache under `.lap/`, or when a cache looks wrong.
+Truth lives in the log; the caches are regenerable. Three files are not
+caches and are never rebuilt: `.lap/lineage` (what makes a folder a
+branch — never delete it, or the folder takes itself for main),
+`.lap/parent` and `.lap/branches.json` (this machine's record of where a
+branch's parent and branches are).

@@ -2661,6 +2661,26 @@ expect_grep "$FID.000001.jsonl" "$LAP" verify
 expect_grep '"ok":false,.*"chain_ok":false,"chain_error":"[^"]*'"$FID"'.000001.jsonl' "$LAP" verify --json
 cd "$WORK"
 
+t "a branch folder that lost .lap/lineage is warned of by rebuild and writers, never silently main"
+mkdir -p "$WORK/ll1-main" && cd "$WORK/ll1-main" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+for f in a.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+cp -R "$WORK/ll1-main" "$WORK/ll1-b1" && cd "$WORK/ll1-b1" &&
+    "$LAP" branch start b1 --from ../ll1-main >/dev/null 2>&1 || fail "start b1"
+printf 'x\n' >> a.txt
+"$LAP" commit a.txt --branch b1 --no-session -i "branch work" -b "appends x to a.txt" >/dev/null 2>&1
+ID=$(cat .lap/lineage)
+mkdir -p "$WORK/ll1-aside" && mv .lap/lineage "$WORK/ll1-aside/"
+expect_grep "warning: this folder holds branch b1 ($ID)" "$LAP" rebuild
+expect_grep "printf '$ID\\\\n' > .lap/lineage" "$LAP" rebuild
+expect_grep "holds branch b1" "$LAP" session end # any writer says it
+cp "$WORK/ll1-aside/lineage" .lap/lineage
+expect_not_grep "warning" "$LAP" rebuild
+cd "$WORK/ll1-main" && expect_not_grep "warning" "$LAP" rebuild
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

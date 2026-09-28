@@ -477,6 +477,26 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
     open_code = "no_repo";
     if (for_write && !newer_check(a, r, err, errsz))
         return false;
+    /* a branch folder that lost .lap/lineage takes itself for main: say
+     * so before anything is written as main's */
+    const char *lost = for_write && !r->hist.parent[0]
+                           ? hist_lost_lineage(a, r->lapdir)
+                           : NULL;
+    if (lost) {
+        Rec br;
+        char berr[256];
+        const char *bname =
+            hist_first_record(a, r->lapdir, lost, &br, berr, sizeof berr)
+                ? br.name
+                : lost;
+        fprintf(stderr,
+                "warning: this folder holds branch %s (%s) as its own folder "
+                "does, main's history here ending at its base, but has no "
+                ".lap/lineage, so it records to main. If it is that "
+                "branch's folder, restore the file: printf '%s\\n' > "
+                ".lap/lineage\n",
+                bname, lost, lost);
+    }
     /* two folders never append to one lineage: a plain copy of a branch
      * folder records nothing until it starts a branch of its own */
     const char *original;
