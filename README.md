@@ -190,6 +190,12 @@ run the CLIs from `PATH`.
    not started (all of its tools need `kb`), while coboard's still starts
    (only its lap sessions need `lap`).
 
+   procode keeps `lap` and `kb` in `~/.procode/bin`, the path its skills
+   tell agents to use: copies of the ones a platform package ships, or
+   links to yours (a setting's, else the one on `PATH`). It refreshes them
+   when VS Code starts, and never deletes anything there: after
+   uninstalling procode, delete `~/.procode` yourself if you like.
+
    Some package tests drive the real CLIs. They use `$LAP_BIN` and
    `$KB_BIN` when set, else the ones built under `build/` (or by `make`),
    else the ones on `PATH`, and skip when there are none.

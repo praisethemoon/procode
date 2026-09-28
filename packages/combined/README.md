@@ -81,6 +81,12 @@ the `kb` CLI. Build both with CMake from the procode repository
 procode finds them on PATH, or wherever the settings **Board › Lap Path** and
 **Knowledge › Cli Path** point. techdocs needs neither.
 
+procode keeps `lap` and `kb` in `~/.procode/bin`, the path its skills tell
+agents to use: copies of the ones it ships, or links to yours when a setting
+names them. It refreshes them when VS Code starts, and never deletes
+anything there: after uninstalling procode, delete `~/.procode` yourself if
+you like.
+
 ## Set up Claude Code in a project
 
 VS Code's own agent should get procode's MCP servers without any setup. For Claude
