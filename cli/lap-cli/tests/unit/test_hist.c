@@ -389,6 +389,20 @@ static void test_legacy(Arena *a) {
     ASSERT_TRUE(hist_read(a, &h, 5, 4, &data));
     ASSERT_EQ_S(data, "bbbb");
 
+    t_begin("hist: an old log beside chunks is read, flagged as differing "
+            "only when the chunks are neither all of it nor a start of it");
+    clear_chunks();
+    put_file("main.000001.jsonl", "aaaa\n");
+    put_legacy("aaaa\nbbbb\n"); /* an interrupted conversion's start */
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(h.legacy && !h.differ);
+    put_legacy("xxxx\nbbbb\n"); /* chunks of another history */
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(h.legacy && h.differ);
+    put_legacy("aaaa\n"); /* the chunks hold all of it */
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(!h.legacy && !h.differ);
+
     t_begin("hist: a conversion publishing between the reader's two looks "
             "is read from its chunks, never as no history");
     clear_chunks();

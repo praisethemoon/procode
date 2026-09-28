@@ -466,6 +466,16 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
     open_code = "history_broken";
     if (!hist_open_folder(a, r->lapdir, &r->hist, err, errsz))
         return false;
+    if (r->hist.differ) { /* read from the old file; a writer refuses it */
+        static bool told; /* once a command */
+        if (!told)
+            fprintf(stderr,
+                    "note: both %s/%s and %s hold history, and they differ; "
+                    "this reads the old file. Keep the one that is right and "
+                    "move the other away (lap verify says so too)\n",
+                    r->lapdir, LAP_LOG_NAME, r->hist.dir);
+        told = true;
+    }
     if (r->hist.n == 0) {
         snprintf(err, errsz, "no history in %s (expected %s/%s.000001.jsonl)",
                  r->hist.dir, LAP_LOG_DIR, LAP_MAIN_LINEAGE);

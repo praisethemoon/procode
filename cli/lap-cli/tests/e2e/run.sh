@@ -1306,6 +1306,15 @@ t "a single-file log that differs from the chunks is refused, both kept"
 printf '{"type":"init","version":1,"ts":"2026-01-01T00:00:00Z","prev":"x"}\n' > .lap/log.jsonl
 expect_grep "hold history, and they differ" "$LAP" session start "x y z"
 [ -e .lap/log.jsonl ] || fail "the differing log was removed"
+expect_fail "$LAP" verify
+expect_grep "HISTORY IN TWO SHAPES: both .*log.jsonl and .*log hold history, and they differ" "$LAP" verify
+expect_grep '"ok":false,.*"history_error":"both ' "$LAP" verify --json
+expect_grep "note: both .* hold history, and they differ" "$LAP" log
+# the old file whole within the chunks (a conversion finished, the file
+# left) is fine
+history | head -n 3 > .lap/log.jsonl
+expect_ok "$LAP" verify
+expect_not_grep "TWO SHAPES" "$LAP" verify
 rm .lap/log.jsonl
 expect_ok "$LAP" status
 cd "$WORK"

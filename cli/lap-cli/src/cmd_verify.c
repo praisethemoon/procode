@@ -524,7 +524,16 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
                       olog.unknown_type);
     }
 
-    bool ok = log.chain_ok && mismatched == 0 && others_ok;
+    /* what a writer refuses: an old single-file log beside chunks that
+     * differ from it (readers read the old file) */
+    const char *shapes = NULL;
+    if (repo.hist.differ)
+        shapes = arena_printf(a,
+                              "both %s/%s and %s hold history, and they "
+                              "differ: keep the one that is right and move "
+                              "the other away",
+                              repo.lapdir, LAP_LOG_NAME, repo.hist.dir);
+    bool ok = log.chain_ok && mismatched == 0 && others_ok && !shapes;
     if (json) {
         StrBuf sb;
         sb_init(&sb, a);
@@ -535,6 +544,10 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         if (!log.chain_ok) {
             sb_puts(&sb, ",\"chain_error\":");
             json_escape_c(&sb, log.chain_err);
+        }
+        if (shapes) {
+            sb_puts(&sb, ",\"history_error\":");
+            json_escape_c(&sb, shapes);
         }
         if (log.torn_tail)
             sb_printf(&sb, ",\"torn_tail_bytes\":%llu",
@@ -564,6 +577,9 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
             printf("%sCHAIN BROKEN%s: %s\n", sgr(S_REMOVED), sgr_off(),
                    log.chain_err);
         fputs(others_text.len ? sb_finish(&others_text) : "", stdout);
+        if (shapes)
+            printf("%sHISTORY IN TWO SHAPES%s: %s\n", sgr(S_REMOVED),
+                   sgr_off(), shapes);
         if (log.torn_tail)
             printf("note: torn trailing record ignored (%llu bytes from an "
                    "interrupted append; the next commit repairs it)\n",

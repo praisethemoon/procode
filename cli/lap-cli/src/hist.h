@@ -40,6 +40,10 @@ typedef struct {
     uint64_t size; /* bytes in the whole history */
     uint64_t limit; /* the chunk limit appends seal at; hist_chunk_limit() */
     bool legacy; /* read from the single-file log.jsonl of before chunks */
+    /* legacy, though chunks are beside the old file: they differ from it
+     * (neither holds all of it nor is a start of it), which a writer
+     * refuses and verify reports */
+    bool differ;
     /* that file's bytes, read once when opened: a conversion may remove it
      * before this reader is done (readers take no lock) */
     const char *mem;

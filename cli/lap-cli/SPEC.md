@@ -323,7 +323,10 @@ The log is kept as chunk files in `.lap/log/`, read in order as one stream:
   first); only then is the old file removed. So a reader finds the old file
   or all the chunks, never some — and a reader finding both reads the old
   file unless the chunks hold all of it, and reads it whole when it opens
-  it, since a conversion may remove it meanwhile. A writer finding both
+  it, since a conversion may remove it meanwhile. When the chunks are not
+  a start of the old file either, the two differ: readers say so in a
+  note, and `lap verify` fails naming both (`history_error` in JSON), as
+  a writer refuses them. A writer finding both
   finishes a split whose chunks are a prefix of the old file, removes an
   old file that is a prefix of the chunks when what follows it continues
   its chain (records appended since), splits it again when what follows

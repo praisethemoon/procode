@@ -150,7 +150,13 @@ bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
             hist_read(a, h, 0, old_len, &have) &&
             memcmp(have, old, old_len) == 0)
             return true;
+        /* chunks that are a start of the old file are an interrupted
+         * conversion; any others differ from it */
+        bool differ = !(h->size <= old_len &&
+                        hist_read(a, h, 0, (size_t)h->size, &have) &&
+                        memcmp(have, old, (size_t)h->size) == 0);
         memset(h, 0, sizeof *h);
+        h->differ = differ;
         snprintf(h->dir, sizeof h->dir, "%s/%s", lapdir, LAP_LOG_DIR);
         snprintf(h->lineage, sizeof h->lineage, "%s", lineage);
         h->limit = hist_chunk_limit();
