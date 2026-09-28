@@ -503,22 +503,115 @@ bool branch_check(Arena *a, const Repo *r, const char *given, bool json) {
     return false;
 }
 
-const char *branch_find(Arena *a, const Repo *r, const Branches *reg,
-                        const char *key) {
-    const BranchEntry *e = branches_find(reg, key);
-    if (e)
-        return e->id;
-    const char **ids;
-    int32_t n = hist_lineages(a, r->lapdir, &ids);
-    for (int32_t i = 0; i < n; i++) {
+int32_t branch_find_all(Arena *a, const Repo *r, const Branches *reg,
+                        const char *key, const char ***ids) {
+    const char **lins;
+    int32_t nl = hist_lineages(a, r->lapdir, &lins);
+    const char **names = (const char **)arena_alloc0(
+        a, (size_t)(nl ? nl : 1) * sizeof(char *));
+    for (int32_t i = 0; i < nl; i++) {
         Rec br;
         char err[256];
-        if (hist_first_record(a, r->lapdir, ids[i], &br, err, sizeof err) &&
-            br.type == REC_BRANCH &&
-            (strcmp(br.id, key) == 0 || strcmp(br.name, key) == 0))
-            return ids[i];
+        if (hist_first_record(a, r->lapdir, lins[i], &br, err, sizeof err) &&
+            br.type == REC_BRANCH)
+            names[i] = br.name;
+    }
+    const char **out = (const char **)arena_alloc(
+        a, (size_t)(reg->n + nl + 1) * sizeof(char *));
+    *ids = out;
+    /* an id names one branch */
+    for (int32_t i = 0; i < reg->n; i++) {
+        if (strcmp(reg->v[i].id, key) == 0) {
+            out[0] = reg->v[i].id;
+            return 1;
+        }
+    }
+    for (int32_t i = 0; i < nl; i++) {
+        if (names[i] && strcmp(lins[i], key) == 0) {
+            out[0] = lins[i];
+            return 1;
+        }
+    }
+    int32_t n = 0;
+    for (int32_t i = 0; i < reg->n + nl; i++) {
+        const char *id = i < reg->n ? reg->v[i].id : lins[i - reg->n];
+        const char *name = i < reg->n ? reg->v[i].name : names[i - reg->n];
+        if (!name || strcmp(name, key) != 0)
+            continue;
+        bool seen = false;
+        for (int32_t j = 0; j < n && !seen; j++)
+            seen = strcmp(out[j], id) == 0;
+        if (!seen)
+            out[n++] = id;
+    }
+    return n;
+}
+
+const char *branch_find(Arena *a, const Repo *r, const Branches *reg,
+                        const char *key, const char **several) {
+    const char **ids;
+    int32_t n = branch_find_all(a, r, reg, key, &ids);
+    if (several)
+        *several = NULL;
+    if (n == 1)
+        return ids[0];
+    if (n > 1 && several) {
+        StrBuf sb;
+        sb_init(&sb, a);
+        for (int32_t i = 0; i < n; i++)
+            sb_printf(&sb, "%s%s", i ? ", " : "", ids[i]);
+        *several = sb_finish(&sb);
     }
     return NULL;
+}
+
+/* Whether folder root's own history, branches or merges know `name`. */
+static bool name_used_in(Arena *a, const char *root, const char *name) {
+    Repo r;
+    char err[512];
+    if (!repo_open_at(a, &r, root, false, err, sizeof err))
+        return false;
+    Branches reg;
+    branches_load_deep(a, r.lapdir, &reg);
+    const char **ids;
+    bool used = branch_find_all(a, &r, &reg, name, &ids) > 0;
+    RecLog log;
+    if (!used && repo_log_load(a, &r, &log, err, sizeof err)) {
+        for (int32_t i = 0; i < log.count && !used; i++)
+            used = log.v[i].type == REC_MERGE && log.v[i].name &&
+                   strcmp(log.v[i].name, name) == 0;
+    }
+    if (!used && r.hist.parent[0])
+        used = strcmp(r.hist.name, name) == 0;
+    repo_close(&r);
+    return used;
+}
+
+bool branch_name_used(Arena *a, const char *from, const char *name) {
+    char at[LAP_PATH_MAX];
+    snprintf(at, sizeof at, "%s", from);
+    for (int32_t depth = 0; depth < 32; depth++) {
+        if (name_used_in(a, at, name))
+            return true;
+        /* up to the folder this one is a branch of, while it is one */
+        char lapdir[LAP_PATH_MAX], ppath[LAP_PATH_MAX];
+        char lineage[HIST_LINEAGE_MAX], err[256];
+        snprintf(lapdir, sizeof lapdir, "%s/%s", at, LAP_DIR);
+        snprintf(ppath, sizeof ppath, "%s/%s", lapdir, LAP_PARENT_NAME);
+        char *data;
+        size_t len;
+        if (!hist_folder_lineage(a, lapdir, lineage, err, sizeof err) ||
+            strcmp(lineage, LAP_MAIN_LINEAGE) == 0 ||
+            !plat_read_file(a, ppath, &data, &len))
+            return false;
+        while (len > 0 && (data[len - 1] == '\n' || data[len - 1] == '\r'))
+            len--;
+        if (len == 0 || len >= sizeof at)
+            return false;
+        memcpy(at, data, len);
+        at[len] = '\0';
+    }
+    return false;
 }
 
 bool branch_folder_is(Arena *a, const char *path, const char *id) {
@@ -545,8 +638,15 @@ bool repo_view_branch(Arena *a, Repo *r, const char *name, bool json) {
     } else {
         Branches reg;
         branches_load_deep(a, r->lapdir, &reg);
-        const char *id = branch_find(a, r, &reg, name);
+        const char *several;
+        const char *id = branch_find(a, r, &reg, name, &several);
         const BranchEntry *e = id ? branches_find(&reg, id) : NULL;
+        if (several) {
+            err_out(json, "ambiguous_branch",
+                    "%s names more than one branch (%s): name it by its id",
+                    name, several);
+            return false;
+        }
         if (!id) {
             err_out(json, "unknown_branch",
                     "no branch %s here: not in this folder's registry, and "

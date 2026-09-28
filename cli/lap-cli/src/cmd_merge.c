@@ -300,9 +300,16 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     /* The branch, and where its history is. */
     Branches reg;
     branches_load_deep(a, repo.lapdir, &reg);
-    const char *id = branch_find(a, &repo, &reg, key);
+    const char *several;
+    const char *id = branch_find(a, &repo, &reg, key, &several);
     const BranchEntry *ent = id ? branches_find(&reg, id) : NULL;
     bool reachable = ent && branch_folder_is(a, ent->path, id);
+    if (several) {
+        err_out(json, "ambiguous_branch",
+                "%s names more than one branch (%s): name it by its id", key,
+                several);
+        goto done;
+    }
     if (!id) {
         err_out(json, "branch_not_found",
                 "no branch %s here: it is not in this folder's registry, and "

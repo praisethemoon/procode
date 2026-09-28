@@ -63,10 +63,22 @@ bool branch_check(Arena *a, const Repo *r, const char *given, bool json);
 /* --branch's value, else $LAP_BRANCH, else NULL. */
 const char *branch_given(int32_t argc, char **argv,
                          const char *const *value_flags);
-/* The branch `key` (a name or an id) names, found in the registry reg or
- * among the branch chunks in this folder: its id, or NULL. */
+/* The branches `key` (a name or an id) names, found in the registry reg or
+ * among the branch chunks in this folder: their distinct ids in *ids, and
+ * how many. An id names one branch; a name names one too, except where two
+ * branches were given it before names were checked across nested
+ * branches. */
+int32_t branch_find_all(Arena *a, const Repo *r, const Branches *reg,
+                        const char *key, const char ***ids);
+/* The one branch key names: its id. NULL when it names none, or several —
+ * then *several (when given) lists their ids, else it is set to NULL. */
 const char *branch_find(Arena *a, const Repo *r, const Branches *reg,
-                        const char *key);
+                        const char *key, const char **several);
+/* Whether a branch start may not use `name` from folder `from`: it is
+ * taken wherever main can see it. Going up from `from` through each
+ * folder's .lap/parent to the top, a folder's branches, nested ones
+ * included, its branch chunks and the names its merges recorded. */
+bool branch_name_used(Arena *a, const char *from, const char *name);
 /* True when folder `path` is still branch `id`: its .lap names it. */
 bool branch_folder_is(Arena *a, const char *path, const char *id);
 /* A reader's --branch: shows `name`'s history instead of this folder's —

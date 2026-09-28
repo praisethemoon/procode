@@ -113,9 +113,15 @@ export async function ticketSessions(root: string, ticket: string): Promise<LapR
     try {
         const list = await run(root, ["branch", "list"]);
         const rows = (list["branches"] as Record<string, unknown>[]) ?? [];
-        const names = new Map(rows.map((b) => [String(b["id"] ?? ""), String(b["name"] ?? "")]));
+        /* a name two branches share (given before lap checked names across
+         * nested branches) reads neither: each is named by its id */
+        const count = new Map<string, number>();
+        for (const b of rows) count.set(String(b["name"] ?? ""), (count.get(String(b["name"] ?? "")) ?? 0) + 1);
+        const ref = (b: Record<string, unknown>): string =>
+            (count.get(String(b["name"] ?? "")) ?? 0) > 1 ? String(b["id"] ?? "") : String(b["name"] ?? "");
+        const names = new Map(rows.map((b) => [String(b["id"] ?? ""), ref(b)]));
         for (const b of rows) {
-            const name = String(b["name"] ?? "");
+            const name = ref(b);
             const stops = Array.isArray(b["stops"]) ? (b["stops"] as { file: string; at: string }[]) : [];
             const via = typeof b["via"] === "string" ? names.get(b["via"]) : undefined;
             const more = via ? { via } : {};

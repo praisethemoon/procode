@@ -2403,6 +2403,26 @@ expect_ok "$LAP" commit a.txt --no-session -i "write after an upgrade" -b "appen
 [ "$(tail -n 1 .lap/.gitignore)" = "# mine" ] || fail "the conversion rewrote .lap/.gitignore"
 cd "$WORK"
 
+t "a branch name is unique across nested branches, as main sees them"
+merge_pair u1; UP="$WORK/u1-p"; UB="$WORK/u1-w"
+cd "$UP" && git worktree add -q "$WORK/u1-x" -b xb
+cd "$WORK/u1-x" && expect_ok "$LAP" branch start x --from ../u1-p
+cd "$UB" && git worktree add -q "$WORK/u1-bx" -b bx
+cd "$WORK/u1-bx" && expect_grep '"error":"name_taken"' "$LAP" branch start x --from ../u1-w --json
+[ -e .lap/lineage ] && fail "the refused start made this folder a branch"
+cd "$UB" && git worktree add -q "$WORK/u1-by" -b by
+cd "$WORK/u1-by" && expect_ok "$LAP" branch start y --from ../u1-w
+# two branches given one name before names were checked across folders
+sed 's/"name": *"y"/"name":"x"/' "$UB/.lap/branches.json" > "$WORK/u1-reg" &&
+    mv "$WORK/u1-reg" "$UB/.lap/branches.json"
+grep -q '"name":"x"' "$UB/.lap/branches.json" || fail "the registry was not edited"
+cd "$UP"
+expect_grep '"error":"ambiguous_branch"' "$LAP" log --branch x --json
+expect_fail "$LAP" merge x --dry-run
+YID=$(cat "$WORK/u1-by/.lap/lineage")
+expect_ok "$LAP" log --branch "$YID"
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

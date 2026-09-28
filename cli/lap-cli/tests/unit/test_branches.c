@@ -438,6 +438,79 @@ void test_branches(void) {
     plat_rmdir(".live_unit_child");
     plat_rmdir(".live_unit_other");
 
+    t_begin("branch_find_all: an id names one branch; a name every branch "
+            "given it, which branch_find lists instead of picking one");
+    Repo fr;
+    memset(&fr, 0, sizeof fr);
+    snprintf(fr.lapdir, sizeof fr.lapdir, "%s", T_REGDIR);
+    Branches dup;
+    memset(&dup, 0, sizeof dup);
+    branches_add(a, &dup, (BranchEntry){"0123456789ab", "x", "/w/x", "h",
+                                        "t", NULL});
+    branches_add(a, &dup, (BranchEntry){"ba9876543210", "x", "/w/xn", "h",
+                                        "t", "0123456789ab"});
+    const char **fids;
+    ASSERT_EQ_I(branch_find_all(a, &fr, &dup, "x", &fids), 2);
+    ASSERT_EQ_I(branch_find_all(a, &fr, &dup, "ba9876543210", &fids), 1);
+    ASSERT_EQ_S(fids[0], "ba9876543210");
+    ASSERT_EQ_I(branch_find_all(a, &fr, &dup, "y", &fids), 0);
+    const char *several;
+    ASSERT_TRUE(branch_find(a, &fr, &dup, "x", &several) == NULL);
+    ASSERT_EQ_S(several, "0123456789ab, ba9876543210");
+    ASSERT_EQ_S(branch_find(a, &fr, &dup, "0123456789ab", &several),
+                "0123456789ab");
+    ASSERT_TRUE(several == NULL);
+
+    t_begin("branch_name_used: from a nested branch's folder, the walk goes "
+            "up through .lap/parent and sees every branch main sees");
+    char topdir[LAP_PATH_MAX], b1dir[LAP_PATH_MAX];
+    ASSERT_TRUE(plat_getcwd(topdir, sizeof topdir));
+    snprintf(b1dir, sizeof b1dir, "%s/.name_unit_b1", topdir);
+    snprintf(topdir + strlen(topdir), sizeof topdir - strlen(topdir),
+             "/.name_unit_top");
+    plat_mkdirs(".name_unit_top/.lap/log");
+    plat_mkdirs(".name_unit_b1/.lap");
+    Rec irec;
+    memset(&irec, 0, sizeof irec);
+    irec.type = REC_INIT;
+    irec.version = 1;
+    irec.ts = "t0";
+    irec.prev = LAP_HASH_ZERO;
+    size_t initn;
+    char *initl = rec_encode(a, &irec, &initn);
+    char *initline = arena_printf(a, "%s\n", initl);
+    plat_write_file_atomic(".name_unit_top/.lap/log/main.000001.jsonl",
+                           initline, strlen(initline));
+    Branches treg, breg;
+    memset(&treg, 0, sizeof treg);
+    memset(&breg, 0, sizeof breg);
+    branches_add(a, &treg, (BranchEntry){"0123456789ab", "b1", b1dir, "h",
+                                         "t", NULL});
+    branches_add(a, &breg, (BranchEntry){"ba9876543210", "nx", "/w/nx", "h",
+                                         "t", NULL});
+    ASSERT_TRUE(branches_save(a, ".name_unit_top/.lap", &treg));
+    ASSERT_TRUE(branches_save(a, ".name_unit_b1/.lap", &breg));
+    hist_write_lineage(".name_unit_b1/.lap", "0123456789ab");
+    plat_write_file_atomic(".name_unit_b1/.lap/parent", topdir,
+                           strlen(topdir));
+    ASSERT_TRUE(branch_name_used(a, b1dir, "b1"));
+    ASSERT_TRUE(branch_name_used(a, b1dir, "nx"));
+    ASSERT_TRUE(branch_name_used(a, topdir, "nx")); /* nested, from main */
+    ASSERT_TRUE(!branch_name_used(a, b1dir, "fresh"));
+    ASSERT_TRUE(!branch_name_used(a, topdir, "fresh"));
+    /* a folder that is no longer a branch is not climbed out of */
+    remove(".name_unit_b1/.lap/lineage");
+    ASSERT_TRUE(!branch_name_used(a, b1dir, "b1"));
+    remove(".name_unit_b1/.lap/parent");
+    remove(".name_unit_b1/.lap/" LAP_BRANCHES_NAME);
+    remove(".name_unit_top/.lap/" LAP_BRANCHES_NAME);
+    remove(".name_unit_top/.lap/log/main.000001.jsonl");
+    plat_rmdir(".name_unit_top/.lap/log");
+    plat_rmdir(".name_unit_top/.lap");
+    plat_rmdir(".name_unit_top");
+    plat_rmdir(".name_unit_b1/.lap");
+    plat_rmdir(".name_unit_b1");
+
     remove(path);
     arena_free(a);
 }

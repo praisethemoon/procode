@@ -193,3 +193,36 @@ test("board_sessions: a branch's session and the parent's with the same id each 
         else process.env["LAP_BIN"] = saved;
     }
 });
+
+test("ticketSessions: two branches sharing a name are each read by their id", { skip: !LAP && noCli("lap") }, async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-sessions-")));
+    const parent = path.join(root, "proj");
+    fs.mkdirSync(parent);
+    const saved = process.env["LAP_BIN"];
+    process.env["LAP_BIN"] = LAP;
+    const lap = (cwd: string, ...args: string[]) => execFileSync(LAP, args, { cwd, env: { ...process.env, LAP_USER: "tester" } });
+    try {
+        lap(parent, "init");
+        fs.writeFileSync(path.join(parent, "a.txt"), "one\n");
+        for (const f of ["a.txt", ".lapignore"]) lap(parent, "commit", f, "--no-session", "-i", "Seed the project files", "-b", `Records ${f} as it starts`);
+        for (const b of ["x", "y"]) {
+            const dir = path.join(root, b);
+            fs.cpSync(parent, dir, { recursive: true });
+            lap(dir, "branch", "start", b, "--from", parent);
+            lap(dir, "session", "start", `T-1: work in ${b}`, "--meta", "ticket=T-1", "--branch", b);
+        }
+        // a name given twice, as lap allowed before it checked nested branches
+        const reg = path.join(parent, ".lap", "branches.json");
+        fs.writeFileSync(reg, fs.readFileSync(reg, "utf8").replace(/"name": *"y"/, '"name":"x"'));
+        const ids = ["x", "y"].map((b) => fs.readFileSync(path.join(root, b, ".lap", "lineage"), "utf8").trim());
+        const r = await ticketSessions(parent, "T-1");
+        assert.equal(r.ok, true, r.error);
+        assert.deepEqual(r.value.map((x) => `${x.branch}:${x.msg}`).sort(), [
+            `${ids[0]}:T-1: work in x`,
+            `${ids[1]}:T-1: work in y`,
+        ].sort());
+    } finally {
+        if (saved === undefined) delete process.env["LAP_BIN"];
+        else process.env["LAP_BIN"] = saved;
+    }
+});

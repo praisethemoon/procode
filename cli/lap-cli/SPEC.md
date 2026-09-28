@@ -394,8 +394,8 @@ holding the parent's lock throughout:
 
 The id is the first 12 hex digits of SHA-256 over the base, the name, the
 time and a nonce, so two copies of one folder never make the same one. The
-name is 1–64 letters, digits, `.`, `_` or `-`, not `main`, unique among the
-parent's branches (`name_taken`); it defaults to the id.
+name is 1–64 letters, digits, `.`, `_` or `-`, not `main`, unique among
+the branches main can see (`name_taken`, below); it defaults to the id.
 
 **The recommended layout** keeps the first folder quiet: agents work in
 branch folders, and the first folder only merges. A branch then always
@@ -596,9 +596,15 @@ once it leaves its folder — in a ticket comment, say. **`<branch>/S<n>`**
   which its history holds but which is its parent's: `<branch>/S<n>` names
   only the branch's own sessions, after its branch record.
 - A branch name names one branch for good: `lap branch start` refuses a
-  name any branch here ever had (`name_taken`) — in the registry, among
-  the branch chunks here, or in a merge record — so a name in an old
-  ticket comment never comes to mean another branch.
+  name any branch main can see ever had (`name_taken`). It goes up from
+  the parent through each folder's `.lap/parent` to the top, and in each
+  folder looks in the registry and those of its branches, nested ones
+  included, among the branch chunks there, and in its merge records — so
+  a name in an old ticket comment never comes to mean another branch, and
+  a nested branch never shares a name with one main reads.
+- Two branches that share a name all the same (given before this check
+  covered nested branches) are named by their ids: a reader given the name
+  is `ambiguous_branch`, its message listing the ids, never one picked.
 
 ### Reading another branch
 
@@ -607,7 +613,8 @@ branch's history instead of this folder's: a registered branch from its
 folder when that is reachable, else from its chunks here (a `git merge`
 brought them, or `lap merge` copied them). In a branch folder, `--branch
 main` reads the parent's history up to the base. Naming this folder's own
-branch changes nothing; a name found nowhere is `unknown_branch`. It is a
+branch changes nothing; a name found nowhere is `unknown_branch`, and one
+two branches share is `ambiguous_branch` (as for `lap merge`). It is a
 reader's flag: `LAP_BRANCH` does not set it.
 
 `lap show <hash>` without `--branch` also looks, when this history lacks

@@ -269,26 +269,15 @@ static int32_t start_locked(Arena *a, bool json, const char *name,
 
     Branches reg;
     branches_load(a, pr.lapdir, &reg);
-    /* A name stays taken once used here — in the registry, by a branch
-     * whose chunks are here, or by one a merge recorded — so a name names
-     * one branch for good. */
-    bool taken = name && (branches_find(&reg, name) ||
-                          branch_find(a, &pr, &reg, name));
-    if (name && !taken) {
-        RecLog plog;
-        char perr[256];
-        if (rec_log_parse(a, theirs, theirs_len, NULL, NULL, &plog, perr,
-                          sizeof perr)) {
-            for (int32_t i = 0; i < plog.count && !taken; i++)
-                taken = plog.v[i].type == REC_MERGE &&
-                        strcmp(plog.v[i].name, name) == 0;
-        }
-    }
-    if (taken) {
+    /* A name stays taken once used anywhere main can see — in a registry,
+     * nested ones included, by a branch whose chunks are there, or by one a
+     * merge recorded — so a name names one branch for good. */
+    if (name && branch_name_used(a, there, name)) {
         err_out(json, "name_taken",
-                "%s already has, or had, a branch named %s: a name stays "
+                "a branch named %s already is, or was, among %s's branches "
+                "or those of the folders it is a branch of: a name stays "
                 "with one branch for good; pick another name",
-                there, name);
+                name, there);
         repo_close(&pr);
         return LAP_EXIT_ERR;
     }
