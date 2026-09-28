@@ -2564,6 +2564,22 @@ git clone -q "$WORK/cl1" "$WORK/cl1-clone" && cd "$WORK/cl1-clone" || fail "clon
 [ "$("$LAP" status)" = "$WITH" ] || fail "status differs in a fresh clone"
 cd "$WORK"
 
+t "a writer refuses a chain broken inside the open chunk and writes nothing"
+mkdir -p "$WORK/cb1" && cd "$WORK/cb1" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+for f in a.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+C=$(open_chunk) && tail -n 1 "$C" >> "$C" # a union-style resolution repeats a line
+expect_grep "CHAIN BROKEN: hash chain broken at main.000001.jsonl line 4" "$LAP" verify
+SUM=$(cat .lap/log/*.jsonl | cksum)
+printf 'b\n' >> a.txt
+expect_grep '"error":"history_broken".*hash chain broken at main.000001.jsonl line 4' \
+    "$LAP" commit a.txt --no-session -i "commit on a broken chain" -b "appends b to a.txt" --json
+expect_fail "$LAP" session start "work on a broken chain"
+[ "$(cat .lap/log/*.jsonl | cksum)" = "$SUM" ] || fail "a refused writer wrote history"
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

@@ -731,6 +731,26 @@ static void test_check(Arena *a) {
     ASSERT_TRUE(strstr(err, "main.000002.jsonl does not continue "
                             "main.000001.jsonl") != NULL);
 
+    t_begin("hist_check: with chain, the open chunk's own chain is checked, "
+            "naming the line; a sealed chunk's is left to verify");
+    clear_chunks();
+    put_file("main.000001.jsonl", arena_printf(a, "%s\n%s\n%s\n{\"torn",
+                                               l0, l1, l2));
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(hist_check(a, &h, true, err, sizeof err));
+    /* a line repeated, as a union-style git resolution leaves it */
+    put_file("main.000001.jsonl", arena_printf(a, "%s\n%s\n%s\n%s\n", l0, l1,
+                                               l2, l2));
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(hist_check(a, &h, false, err, sizeof err));
+    ASSERT_TRUE(!hist_check(a, &h, true, err, sizeof err));
+    ASSERT_TRUE(strstr(err, "hash chain broken at main.000001.jsonl line 4") !=
+                NULL);
+    put_file("main.000001.jsonl", arena_printf(a, "%s\n%s\n", l0, l0));
+    put_file("main.000002.jsonl", "");
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    ASSERT_TRUE(hist_check(a, &h, true, err, sizeof err)); /* sealed */
+
     t_begin("hist_check: an open chunk holding only a torn line is an empty "
             "chunk with a torn tail, not a broken chain");
     clear_chunks();

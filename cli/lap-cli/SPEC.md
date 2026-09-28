@@ -1080,9 +1080,12 @@ segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git`
   was not made by a crash (lap repairs its own before sealing or merging):
   a sealed chunk cut or copied short. Every command refuses such a
   history, naming the chunk. Writers also refuse a chain broken between
-  chunks (a stray chunk, one truncated at a line, a wrong `prev`): lap
-  never builds on a history it cannot vouch for. Both checks read a few
-  bytes per chunk; `lap verify` reads everything.
+  chunks (a stray chunk, one truncated at a line, a wrong `prev`), or
+  inside the open chunk they append to (a line repeated or dropped, as a
+  union-style git resolution leaves it), naming the line
+  (`history_broken`): lap never builds on a history it cannot vouch for.
+  The checks read a few bytes per sealed chunk and hash the open one (at
+  most its 4 MB, about 20 ms); `lap verify` reads everything.
 - **An interrupted `lap merge`** (a crash, a full disk) leaves some adopted
   records and no merge record; everything else heals as above. Running the
   same merge again finds those records by their `from` links (and, for a

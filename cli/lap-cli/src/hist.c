@@ -882,6 +882,56 @@ bool hist_first_record(Arena *a, const char *lapdir, const char *lineage,
     return chunk_first_record(a, path, name, size, out, NULL, err, errsz);
 }
 
+/* Whether each record of the chunk at path (named name) after its first
+ * names the one before it as prev; a torn final line is not a record.
+ * False, naming the line, at the first that does not. */
+static bool chain_within(const char *path, const char *name, uint64_t size,
+                         char *err, size_t errsz) {
+    Arena *ca = arena_new(1 << 16), *ra = arena_new(1 << 16);
+    char *data;
+    bool ok = plat_read_range(ca, path, 0, (size_t)size, &data);
+    if (!ok)
+        snprintf(err, errsz, "cannot read %s", path);
+    char prev[65] = "";
+    int32_t line = 0;
+    for (size_t start = 0; ok && start < size;) {
+        const char *nl = memchr(data + start, '\n', (size_t)size - start);
+        if (!nl)
+            break; /* a torn tail: the writer cuts it */
+        size_t n = (size_t)(nl - (data + start));
+        const char *ln = data + start;
+        line++;
+        /* lap writes prev last: read it there, and parse only a line that
+         * is shaped otherwise, or one that breaks the chain (to name it) */
+        const char *tail = n >= 76 ? ln + n - 74 : NULL;
+        bool quick = tail && (tail[-1] == ',' || tail[-1] == '{') &&
+                     memcmp(tail, "\"prev\":\"", 8) == 0 &&
+                     memcmp(tail + 72, "\"}", 2) == 0;
+        if (n > 0 && quick && (!prev[0] || memcmp(tail + 8, prev, 64) == 0)) {
+            sha256_hex(ln, n, prev);
+        } else if (n > 0) {
+            arena_reset(ra);
+            Rec rec;
+            char derr[128];
+            if (!rec_decode(ra, ln, n, &rec, derr, sizeof derr)) {
+                snprintf(err, errsz, "%s line %d: %s", name, line, derr);
+                ok = false;
+            } else if (prev[0] && strcmp(rec.prev, prev) != 0) {
+                snprintf(err, errsz,
+                         "hash chain broken at %s line %d (record %s)", name,
+                         line, rec.id ? rec.id : "?");
+                ok = false;
+            } else {
+                snprintf(prev, sizeof prev, "%s", rec.hash);
+            }
+        }
+        start += n + 1;
+    }
+    arena_free(ca);
+    arena_free(ra);
+    return ok;
+}
+
 bool hist_check(Arena *a, const Hist *h, bool chain, char *err,
                 size_t errsz) {
     int32_t prev = -1; /* the last chunk before i that holds records */
@@ -926,6 +976,11 @@ bool hist_check(Arena *a, const Hist *h, bool chain, char *err,
                 return false;
             }
         }
+        /* the chunk a writer appends to: its own chain too, since what it
+         * appends builds on every record there */
+        if (chain && i == h->n - 1 &&
+            !chain_within(path, k->name, k->size, err, errsz))
+            return false;
         prev = i;
     }
     return true;
