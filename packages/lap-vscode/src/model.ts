@@ -57,6 +57,8 @@ export interface SessionRec {
     /* adopted by lap merge: the hash of the branch's session_start */
     from: string | null;
     msg: string;
+    /* the ticket it was started for (--meta ticket=T-n), or null */
+    ticket: string | null;
     ts: string;
     endTs: string | null;
     commits: CommitRec[];
@@ -187,6 +189,7 @@ function foldLine(r: LogReader, line: string): void {
             recIndex,
             from: typeof rec["from"] === "string" ? (rec["from"] as string) : null,
             msg: String(rec["msg"] ?? ""),
+            ticket: ticketOf(rec["meta"]),
             ts: String(rec["ts"] ?? ""),
             endTs: null,
             commits: [],
@@ -294,6 +297,12 @@ export function localTime(iso: string): string {
 /* A hash's short form: its first 7 hex digits. */
 export function shortHash(hash: string): string {
     return hash.slice(0, 7);
+}
+
+/* The ticket in a session_start's meta: a non-empty string, else null. */
+export function ticketOf(meta: unknown): string | null {
+    const t = meta && typeof meta === "object" ? (meta as Record<string, unknown>)["ticket"] : undefined;
+    return typeof t === "string" && t.trim() !== "" ? t.trim() : null;
 }
 
 /* First line of a (possibly multiline) message. */

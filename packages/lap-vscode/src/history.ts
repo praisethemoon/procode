@@ -131,6 +131,11 @@ export interface SessionRow {
     readonly id: string | null;
     readonly summary: string;
     readonly msg: string;
+    /* The ticket it was started for, or null. */
+    readonly ticket: string | null;
+    /* The branch it was recorded in, for a branch folder's own session;
+     * null for this folder's (or its parent's) sessions. */
+    readonly branch: string | null;
     readonly ts: string;
     readonly endTs: string | null;
     readonly state: SessionState;
@@ -197,7 +202,7 @@ function commitText(c: CommitRec, t: Text): boolean {
 function sessionText(s: SessionRec, t: Text): boolean {
     if (t.q === "") return false;
     if (t.exact) return idMatches(s.id, t);
-    return idMatches(s.id, t) || s.msg.toLowerCase().includes(t.q);
+    return idMatches(s.id, t) || s.msg.toLowerCase().includes(t.q) || (s.ticket?.toLowerCase().includes(t.q) ?? false);
 }
 
 function time(ts: string): number {
@@ -226,6 +231,39 @@ export function row(c: CommitRec): CommitRow {
         from: c.from,
         session: c.session,
         user: c.user,
+    };
+}
+
+/* A session row as the view lays it out: what leads (its ticket, else its
+ * session id), the title, what sits at the far end, and the tooltip. A
+ * branch folder's own session is named `<branch>/S<n>`. The title drops a
+ * leading `T-<n>: ` that only repeats the ticket already leading the row. */
+export interface SessionLineParts {
+    readonly lead: string | null;
+    readonly leadIsTicket: boolean;
+    readonly title: string;
+    readonly end: string;
+    readonly tooltip: string;
+}
+
+export function sessionLine(s: SessionRow, filtering: boolean): SessionLineParts {
+    const id = s.id === null ? null : s.branch ? `${s.branch}/${s.id}` : s.id;
+    const shown = s.commits.length;
+    const count = filtering && shown < s.total ? `${shown} of ${s.total} commits` : `${s.total} commit${s.total === 1 ? "" : "s"}`;
+    let title = s.summary;
+    if (s.ticket) {
+        const repeat = new RegExp(`^${s.ticket.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*`, "i");
+        const rest = title.replace(repeat, "");
+        if (rest.trim() !== "") title = rest;
+    }
+    const end = [s.ticket ? id : null, count, s.state === "active" ? "active" : null].filter((x) => x !== null).join(" · ");
+    const times = `started ${s.ts}${s.endTs ? `, ended ${s.endTs}` : s.state === "active" ? " · active" : ""}`;
+    return {
+        lead: s.ticket ?? id,
+        leadIsTicket: s.ticket !== null,
+        title,
+        end,
+        tooltip: `${id ?? "no session"} · ${s.msg}\n\n${times}`,
     };
 }
 
@@ -302,6 +340,8 @@ function matching(log: LapLog, filter: HistoryFilter, options: { grouped: boolea
             id: s.id,
             summary: summaryLine(s.msg),
             msg: s.msg,
+            ticket: s.ticket,
+            branch: log.branchAt !== null && s.recIndex > log.branchAt ? log.branchName : null,
             ts: s.ts,
             endTs: s.endTs,
             state,
@@ -318,6 +358,8 @@ function matching(log: LapLog, filter: HistoryFilter, options: { grouped: boolea
                 id: null,
                 summary: "no session",
                 msg: "Commits recorded with --no-session",
+                ticket: null,
+                branch: null,
                 ts: last.ts,
                 endTs: null,
                 state: "none",

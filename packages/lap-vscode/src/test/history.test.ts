@@ -4,7 +4,7 @@ import * as assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 
-import { EMPTY_FILTER, HistoryFilter, PAGE_SIZE, fieldCount, isFiltering, pageOf, query, rangeStart, treeRowKey } from "../history";
+import { EMPTY_FILTER, HistoryFilter, PAGE_SIZE, fieldCount, isFiltering, pageOf, query, rangeStart, sessionLine, treeRowKey } from "../history";
 import { parseLog } from "../model";
 
 const sha = (line: string) => createHash("sha256").update(line, "utf8").digest("hex");
@@ -193,4 +193,80 @@ test("a tree row's keys: Enter toggles, ArrowRight opens, ArrowLeft closes, and 
     assert.equal(treeRowKey("ArrowRight", true), true, "already open: stays so");
     assert.equal(treeRowKey("Enter", true), false);
     assert.equal(treeRowKey("Enter", false), true);
+});
+
+/* Session rows as the view lays them out. */
+const started = (id: string, msg: string, ticket?: string) =>
+    JSON.stringify({ type: "session_start", id, msg, ...(ticket ? { meta: { ticket } } : {}), ts: "2026-09-26T08:00:00Z" });
+const lineOf = (lines: string[], id: string, filtering = false) => {
+    const s = query(log(...lines), ALL, { grouped: true, page: 0, now: NOW }).sessions.find((r) => r.id === id);
+    assert.ok(s, `${id} is shown`);
+    return sessionLine(s, filtering);
+};
+
+test("a session with a ticket leads with it; the purpose drops the prefix that repeats it; the session id moves to the far end", () => {
+    const lines = [
+        started("S3", "T-1: declare time() on Windows\nand the rest", "T-1"),
+        commit("L1", "S3", "a.c", "one", "2026-09-26T08:01:00Z"),
+        commit("L2", "S3", "a.c", "two", "2026-09-26T08:02:00Z"),
+    ];
+    const p = lineOf(lines, "S3");
+    assert.equal(p.lead, "T-1");
+    assert.equal(p.leadIsTicket, true);
+    assert.equal(p.title, "declare time() on Windows");
+    assert.equal(p.end, "S3 · 2 commits · active");
+    assert.equal(p.tooltip, "S3 · T-1: declare time() on Windows\nand the rest\n\nstarted 2026-09-26T08:00:00Z · active");
+});
+
+test("a purpose that does not repeat the ticket is kept whole", () => {
+    const p = lineOf([started("S4", "tidy the parser (T-12 follow-up)", "T-12"), end("S4", "2026-09-26T09:00:00Z")], "S4");
+    assert.equal(p.lead, "T-12");
+    assert.equal(p.title, "tidy the parser (T-12 follow-up)");
+    assert.equal(p.end, "S4 · 0 commits");
+    assert.equal(lineOf([started("S5", "T-12: x", "T-1")], "S5").title, "T-12: x", "T-1 is not a prefix of T-12");
+    assert.equal(lineOf([started("S6", "T-7:", "T-7")], "S6").title, "T-7:", "nothing left after the prefix: the purpose stays");
+});
+
+test("a session without a ticket leads with its id as before, and does not repeat it at the far end", () => {
+    const p = lineOf([started("S2", "T-9: fix the parser"), commit("L1", "S2", "p.ts", "x", "2026-09-26T08:01:00Z"), end("S2", "2026-09-26T09:00:00Z")], "S2");
+    assert.equal(p.lead, "S2");
+    assert.equal(p.leadIsTicket, false);
+    assert.equal(p.title, "T-9: fix the parser");
+    assert.equal(p.end, "1 commit");
+    assert.equal(p.tooltip, "S2 · T-9: fix the parser\n\nstarted 2026-09-26T08:00:00Z, ended 2026-09-26T09:00:00Z");
+});
+
+test("a branch folder's own session is named <branch>/S<n>; the parent's sessions before the branch are not", () => {
+    const lines = [
+        started("S1", "parent work", "T-3"),
+        end("S1", "2026-09-26T08:30:00Z"),
+        JSON.stringify({ type: "branch", id: "0123456789ab", name: "feat", parent: "main", base: "b", base_chunk: 1, ts: "2026-09-26T09:00:00Z" }),
+        started("S2", "T-5: branch work", "T-5"),
+        commit("L1", "S2", "a.c", "one", "2026-09-26T09:01:00Z"),
+    ];
+    const own = lineOf(lines, "S2");
+    assert.equal(own.lead, "T-5");
+    assert.equal(own.end, "feat/S2 · 1 commit · active");
+    assert.ok(own.tooltip.startsWith("feat/S2 · "));
+    assert.equal(lineOf(lines, "S1").end, "S1 · 0 commits");
+    const bare = lineOf([...lines.slice(0, 3), started("S2", "no ticket here")], "S2");
+    assert.equal(bare.lead, "feat/S2");
+});
+
+test("the count says how many of a session's commits a filter shows; the no-session group has no lead", () => {
+    const lines = [
+        started("S3", "T-1: a", "T-1"),
+        commit("L1", "S3", "a.c", "alpha", "2026-09-26T08:01:00Z"),
+        commit("L2", "S3", "a.c", "beta", "2026-09-26T08:02:00Z"),
+        commit("L3", null, "n.md", "loose", "2026-09-26T08:03:00Z"),
+    ];
+    const s = query(log(...lines), f({ text: "beta" }), { grouped: true, page: 0, now: NOW }).sessions[0];
+    assert.equal(sessionLine(s, true).end, "S3 · 1 of 2 commits · active");
+    const none = query(log(...lines), ALL, { grouped: true, page: 0, now: NOW }).sessions.find((r) => r.id === null)!;
+    assert.deepEqual([sessionLine(none, false).lead, sessionLine(none, false).end], [null, "1 commit"]);
+});
+
+test("the filter finds a session by its ticket even when the purpose does not name it", () => {
+    const lines = [started("S1", "polish the sidebar", "T-44"), started("S2", "other", "T-45")];
+    assert.deepEqual(ids(query(log(...lines), f({ text: "t-44" }), { grouped: true, page: 0, now: NOW })), ["S1:"]);
 });

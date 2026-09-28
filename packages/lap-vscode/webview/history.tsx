@@ -36,6 +36,7 @@ import {
     SessionRow,
     fieldCount,
     isFiltering,
+    sessionLine,
     treeRowKey,
 } from "../src/history";
 import type { BranchState, BranchView } from "../src/branches";
@@ -350,8 +351,7 @@ function SessionLine(props: { s: SessionRow; open: boolean; filtering: boolean; 
     const { s } = props;
     const depth = props.depth ?? 0;
     const shown = s.commits.length;
-    const count =
-        props.filtering && shown < s.total ? `${shown} of ${s.total} commits` : `${s.total} commit${s.total === 1 ? "" : "s"}`;
+    const line = sessionLine(s, props.filtering);
     const icon = s.state === "active" ? "play-circle" : s.state === "none" ? "circle-slash" : "milestone";
     const hasKids = shown > 0;
     return (
@@ -363,7 +363,7 @@ function SessionLine(props: { s: SessionRow; open: boolean; filtering: boolean; 
                 aria-expanded={hasKids ? props.open : undefined}
                 aria-level={depth + 1}
                 tabIndex={0}
-                title={`${s.id ?? "no session"} · ${s.msg}\n\nstarted ${s.ts}${s.endTs ? `, ended ${s.endTs}` : s.state === "active" ? " · active" : ""}`}
+                title={line.tooltip}
                 onClick={() => hasKids && props.onToggle()}
                 onKeyDown={(e) => {
                     const next = hasKids ? treeRowKey(e.key, props.open) : null;
@@ -372,12 +372,9 @@ function SessionLine(props: { s: SessionRow; open: boolean; filtering: boolean; 
             >
                 <span className="lh-twistie">{hasKids ? <Codicon name={props.open ? "chevron-down" : "chevron-right"} /> : null}</span>
                 <Codicon name={icon} className={`lh-icon${s.state === "active" ? " lh-active" : ""}`} />
-                {s.id ? <span className="lh-id">{s.id}</span> : null}
-                <span className="lh-title">{s.summary}</span>
-                <span className="lh-desc">
-                    {count}
-                    {s.state === "active" ? " · active" : ""}
-                </span>
+                {line.lead ? <span className="lh-id">{line.lead}</span> : null}
+                <span className="lh-title">{line.title}</span>
+                <span className="lh-desc lh-end">{line.end}</span>
             </div>
             {props.open ? s.commits.map((c) => <CommitLine key={c.id} c={c} depth={depth + 1} showSession={false} state={props.commits} />) : null}
         </>

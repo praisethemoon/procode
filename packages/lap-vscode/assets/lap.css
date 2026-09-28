@@ -251,6 +251,11 @@ body {
     color: var(--bk-color-foreground-muted);
     font-size: 0.92em;
 }
+/* A session row's session id, count and state, pushed to the far end. */
+.lh-desc.lh-end {
+    margin-left: auto;
+    padding-left: 8px;
+}
 
 /* A commit opened to its detail: the intent, then the behavior, each after
  * a muted inline label and wrapped from the left edge rather than truncated. */
