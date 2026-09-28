@@ -133,6 +133,13 @@ bool own_chunks(Arena *a, const char *lapdir, const char *from,
  * them), when they are the last thing in log; else log's last record. */
 int32_t merge_redo_point(const RecLog *log, const StrSet *newer,
                          const StrSet *run_branches);
+/* Whether a merge that finds nothing to adopt (start, the first record of
+ * the branch's stream not taken in yet, is count) still records itself:
+ * when the branch (heads[0], its last merged head) was never merged — one
+ * with no commits at all. unmerged[k] marks each branch of the chain with
+ * no merge yet, which gets a merge record of its own. */
+bool merge_nothing_yet(int32_t start, int32_t count,
+                       const char *const *heads, int32_t n, bool *unmerged);
 /* The records of a type this lap does not know among those a merge would
  * adopt (lof[i] >= 0: record i belongs to a branch of the chain; a record
  * of this folder's own part, -1, is not counted): how many, and the first

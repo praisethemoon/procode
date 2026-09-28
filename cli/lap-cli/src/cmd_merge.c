@@ -162,6 +162,13 @@ static bool in_view(const Hist *h, const char *lineage) {
     return false;
 }
 
+bool merge_nothing_yet(int32_t start, int32_t count,
+                       const char *const *heads, int32_t n, bool *unmerged) {
+    for (int32_t k = 0; k < n; k++)
+        unmerged[k] = heads[k] == NULL;
+    return start >= count && n > 0 && heads[0] == NULL;
+}
+
 int32_t merge_unknown_records(const RecLog *log, const int32_t *lof,
                               const char **type) {
     int32_t n = 0;
@@ -935,6 +942,38 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         caches_sync_warn(a, &repo);
     }
 
+    /* A branch never merged with nothing past its branch record: its merge
+     * is recorded all the same, so it counts as merged and, its folder
+     * gone, is pruned like any other. */
+    const char **heads =
+        (const char **)arena_alloc(a, (size_t)nlin * sizeof(char *));
+    bool *unmerged = (bool *)arena_alloc0(a, (size_t)nlin * sizeof(bool));
+    for (int32_t k = 0; k < nlin; k++)
+        heads[k] = lin[k].head;
+    bool empty = merge_nothing_yet(start, blog.count, heads, nlin, unmerged);
+    if (empty && !dry) {
+        for (int32_t k = 0; k < nlin; k++) {
+            if (!unmerged[k])
+                continue;
+            Rec m;
+            memset(&m, 0, sizeof m);
+            m.type = REC_MERGE;
+            m.branch = lin[k].id;
+            m.name = lin[k].name;
+            m.head = blog.v[lin[k].last].hash;
+            m.user = repo_user(&repo);
+            if (!repo_append(&repo, &m, err, sizeof err)) {
+                err_out(json, "io_error", "%s", err);
+                goto done;
+            }
+        }
+        if (!repo_state_save(&repo, err, sizeof err)) {
+            err_out(json, "io_error", "%s", err);
+            goto done;
+        }
+        caches_sync_warn(a, &repo);
+    }
+
     /* The report. */
     int32_t total = adopted + left + (int32_t)nalready;
     if (json) {
@@ -961,6 +1000,9 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                   amends_carried, amends_left);
         sb_printf(&sb, ",\"commits\":[%s]}", ids.len ? sb_finish(&ids) : "");
         puts(sb_finish(&sb));
+    } else if (empty) {
+        printf("%s branch %s (%s): nothing to adopt: it has no commits\n",
+               dry ? "would merge" : "merged", brec->name, id);
     } else if (start >= blog.count) {
         printf("branch %s: nothing new to adopt since the last merge\n",
                brec->name);

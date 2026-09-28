@@ -1060,7 +1060,10 @@ file with the first commit not adopted and why, then each commit already
 done here, then how many of the branch's amendments were carried and how
 many stayed in the branch (a dry run does not count them); `nothing new to
 adopt` when the branch has nothing after the
-last merge. `--json` returns `dry_run`, `branch`, `name`, `new`, `adopted`,
+last merge. A branch never merged that has nothing after its branch record
+(no commits, no sessions) is `nothing to adopt: it has no commits`, and its
+merge is recorded all the same (adopted 0), so it counts as merged and is
+pruned from the registry once its folder is gone. `--json` returns `dry_run`, `branch`, `name`, `new`, `adopted`,
 `left`, `head`, `stopped` (`[{file, at, why}]`), `already` (hashes),
 `amendments` (`{carried, left}`) and
 `commits` (`[{id, from}]`: the ids given to adopted commits, so empty in a

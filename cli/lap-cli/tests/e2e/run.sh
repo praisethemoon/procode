@@ -2698,6 +2698,20 @@ if [ "$(id -u)" != 0 ]; then
 fi
 cd "$WORK"
 
+t "merging a branch with no commits records the merge, so it can be pruned"
+merge_pair nc1; BP="$WORK/nc1-p"; BW="$WORK/nc1-w"
+git_merge_b || fail "git merge nc1"
+cd "$BP"
+expect_grep "would merge branch b (.*): nothing to adopt: it has no commits" "$LAP" merge b --dry-run
+expect_grep "merged branch b (.*): nothing to adopt: it has no commits" "$LAP" merge b
+expect_grep '"name":"b","state":"merged"' "$LAP" branch list --json
+expect_grep "nothing new to adopt since the last merge" "$LAP" merge b
+git worktree remove --force "$BW" >/dev/null 2>&1 || fail "remove b's folder"
+expect_ok "$LAP" session start "after the empty branch"
+expect_not_grep '"registered":true' "$LAP" branch list --json
+expect_not_grep "missing" "$LAP" branch list
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

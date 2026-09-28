@@ -352,6 +352,17 @@ void test_branches(void) {
     rl[3].branch = "ffffffffffff"; /* another branch's merge: other work */
     ASSERT_EQ_I(merge_redo_point(&rlog, &nw, &runb), 3);
 
+    t_begin("merge_nothing_yet: a merge finding nothing records itself only "
+            "for a branch never merged, marking each unmerged in its chain");
+    const char *mh[2] = {NULL, "hash-of-b1"};
+    bool mu[2];
+    ASSERT_TRUE(merge_nothing_yet(5, 5, mh, 2, mu));
+    ASSERT_TRUE(mu[0] && !mu[1]);
+    ASSERT_TRUE(!merge_nothing_yet(4, 5, mh, 2, mu)); /* something new */
+    mh[0] = "hash-of-b2"; /* merged before: nothing new since */
+    ASSERT_TRUE(!merge_nothing_yet(5, 5, mh, 2, mu));
+    ASSERT_TRUE(!mu[0] && !mu[1]);
+
     t_begin("merge_unknown_records: a newer lap's records count in the part "
             "a merge would adopt, not in this folder's own");
     Rec ul[4];
