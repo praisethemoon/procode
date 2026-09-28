@@ -364,6 +364,15 @@ static void test_listing(Arena *a) {
     clear_chunks();
 }
 
+/* A conversion publishing its chunk and removing the old file, as it
+ * would between hist_open's two looks. */
+static void publish_between(void) {
+    put_file("main.000001.jsonl", "pub1\n");
+    char path[256];
+    snprintf(path, sizeof path, "%s/%s", T_LAPDIR, LAP_LOG_NAME);
+    remove(path);
+}
+
 static void test_legacy(Arena *a) {
     char err[256];
     Hist h;
@@ -379,6 +388,20 @@ static void test_legacy(Arena *a) {
     char *data;
     ASSERT_TRUE(hist_read(a, &h, 5, 4, &data));
     ASSERT_EQ_S(data, "bbbb");
+
+    t_begin("hist: a conversion publishing between the reader's two looks "
+            "is read from its chunks, never as no history");
+    clear_chunks();
+    put_legacy("pub1\n");
+    hist_open_between = publish_between;
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
+    hist_open_between = NULL;
+    ASSERT_TRUE(!h.legacy);
+    ASSERT_EQ_I(h.n, 1);
+    ASSERT_EQ_S(read_history(a), "pub1\n");
+    clear_chunks();
+    put_legacy("aaaa\nbbbb\ncccc\n");
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));
 
     t_begin("hist: conversion splits at record boundaries and removes the "
             "old file");

@@ -66,6 +66,9 @@ uint64_t hist_chunk_limit(void);
  * numbers must run 1, 2, ... without a gap, else false with a reason.
  * With no main chunk, a log.jsonl of before chunks is read as the one chunk
  * of a legacy history; readers never convert it. */
+/* Tests only: run by hist_open between listing the chunks and looking for
+ * the old single-file log, where a conversion can publish its chunks. */
+extern void (*hist_open_between)(void);
 bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
                char *err, size_t errsz);
 

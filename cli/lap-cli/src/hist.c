@@ -115,17 +115,24 @@ static bool list_chunks(Arena *a, const char *lapdir, const char *lineage,
     return true;
 }
 
+void (*hist_open_between)(void);
+
 bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
                char *err, size_t errsz) {
     if (!list_chunks(a, lapdir, lineage, h, err, errsz))
         return false;
     if (strcmp(lineage, LAP_MAIN_LINEAGE) != 0)
         return true;
+    if (hist_open_between)
+        hist_open_between();
     char legacy[LAP_PATH_MAX];
     snprintf(legacy, sizeof legacy, "%s/%s", lapdir, LAP_LOG_NAME);
     uint64_t size;
-    if (!plat_file_size(legacy, &size))
-        return true;
+    if (!plat_file_size(legacy, &size)) {
+        /* no chunks listed and no old file now: a conversion published its
+         * chunks in between, so they are listed again */
+        return h->n > 0 || list_chunks(a, lapdir, lineage, h, err, errsz);
+    }
     /* Both shapes: a conversion between publishing its chunks and removing
      * the old file (they hold all of it), or an older lap's interrupted
      * one (they do not). The old file is read unless the chunks hold all
