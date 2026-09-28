@@ -19,7 +19,7 @@ file is committed in parts too (`--lines` picks the first part), so a large
 one never lands as a single unexplained blob.
 
 `lap` is available as a CLI and as an agent skill that teaches the agent
-how to use it. To install the skills (`lap`, `tickets` and `techdocs`) in a
+how to use it. To install the skills (`lap`, `kb`, `tickets` and `techdocs`) in a
 project, run **procode: Add Skills for Claude Code** in VS Code: it adds the
 ones you pick to the project's `.claude/skills/`, never touching other
 skills and asking before it replaces a copy of its own that differs. Or copy
@@ -215,7 +215,7 @@ run the CLIs from `PATH`.
       servers.
    3. Run **procode: Add Skills for Claude Code** the same way. It adds the
       skills that teach Claude to use the tools to the project's
-      `.claude/skills/`: lap and techdocs are ticked; tickets is this
+      `.claude/skills/`: lap, kb and techdocs are ticked; tickets is this
       repository's workflow, so it is left for you to pick.
    4. Start Claude Code in the project, or restart it (or run `/mcp`), and
       approve the project's servers when it asks.
@@ -306,7 +306,7 @@ for yours, renames are two commits) are in
 | **techdocs** | [packages/techdocs/](packages/techdocs/) | The `.techdocs/` store and its MCP server. [Format](specs/techdocs.md) |
 | **kb-js**, **kb-mcp** | [packages/kb-js/](packages/kb-js/), [packages/kb-mcp/](packages/kb-mcp/) | A typed client for the kb CLI, and kb as MCP tools. |
 | **procode** | [packages/combined/](packages/combined/) | The VS Code extension: Lap History, Knowledge, the Board and techdocs, with the coboard, kb and techdocs MCP servers inside. It is built from `packages/*-vscode`. |
-| **skills** | [.claude/skills/](.claude/skills/) | How agents work here: `lap`, `tickets` (board, lap and git together) and `techdocs`. Copy them into your own `.claude/skills/` to use them elsewhere. |
+| **skills** | [.claude/skills/](.claude/skills/) | How agents work here: `lap`, `kb`, `tickets` (board, lap and git together) and `techdocs`. Copy them into your own `.claude/skills/` to use them elsewhere. |
 
 ## License
 

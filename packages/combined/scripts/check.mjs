@@ -348,10 +348,10 @@ const same = (name) => read(path.join(skills, name, "SKILL.md")) === read(path.j
 // No .claude/ yet: it is made, and the ticked skills (not tickets) written.
 assert.equal(fs.existsSync(path.join(folder, ".claude")), false);
 await addSkills();
-assert.ok(same("lap") && same("techdocs"), "lap and techdocs are written as shipped");
+assert.ok(same("kb") && same("lap") && same("techdocs"), "kb, lap and techdocs are written as shipped");
 assert.ok(fs.existsSync(path.join(skills, "lap", "references", "branches.md")), "with every file of the folder");
 assert.equal(fs.existsSync(path.join(skills, "tickets")), false, "tickets is not written unless picked");
-assert.match(infos.at(-1), /added lap, techdocs/);
+assert.match(infos.at(-1), /added kb, lap, techdocs/);
 
 // Another skill and settings in .claude/ are left as they are; tickets goes in when picked.
 fs.mkdirSync(path.join(skills, "other"), { recursive: true });

@@ -99,7 +99,7 @@ Code, once per project:
    `techdocs` servers to the project's `.mcp.json` and keeps any others there.
 3. Run **procode: Add Skills for Claude Code**. It adds the skills that teach
    Claude to use the tools to the project's `.claude/skills/`: pick the ones
-   you want (`lap` and `techdocs` are ticked; `tickets` is procode's own
+   you want (`lap`, `kb` and `techdocs` are ticked; `tickets` is procode's own
    workflow for board, lap and git together).
 4. Start Claude Code in the project, or restart it if it is running, and
    approve the project's MCP servers when it asks.
