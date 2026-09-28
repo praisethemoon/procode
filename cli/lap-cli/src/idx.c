@@ -120,6 +120,11 @@ static bool tail_matches(Arena *a, const Repo *r, const IdxHeader *h) {
            memcmp(now, h->tail, 32) == 0;
 }
 
+bool idx_header_trusted(Arena *a, const Repo *r, IdxHeader *out) {
+    return idx_header(a, r, out) && out->covered <= r->hist.size &&
+           tail_matches(a, r, out);
+}
+
 Idx *idx_ready(Arena *a, const Repo *r) {
     if (r->foreign) /* the index covers this folder's history only */
         return NULL;

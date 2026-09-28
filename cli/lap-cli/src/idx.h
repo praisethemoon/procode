@@ -82,6 +82,10 @@ typedef struct Idx {
 /* The index's header, read only (it may cover less than the history now):
  * false when there is no usable index. */
 bool idx_header(Arena *a, const Repo *r, IdxHeader *out);
+/* idx_header, only when what it describes is still the history: it covers
+ * no more than there is, and the last record it covers is still the one it
+ * hashed (a record rewritten in place at the same size is not). */
+bool idx_header_trusted(Arena *a, const Repo *r, IdxHeader *out);
 /* Loaded and covering the whole log, else NULL (readers then full-scan). */
 Idx *idx_ready(Arena *a, const Repo *r);
 /* Writer-side (lock held): index the log bytes not yet covered; a damaged

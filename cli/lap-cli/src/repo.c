@@ -348,13 +348,14 @@ const char *repo_error_code(void) {
 /* A writer never builds on records it does not understand: what they mean
  * (a merge's, an amendment's) could make its own write wrong. Read only,
  * before anything is repaired or healed: the index's count, then the
- * history past what the index covers (all of it without an index). */
+ * history past what the index covers (all of it without an index, or with
+ * one whose last covered record is no longer what it hashed). */
 static bool newer_check(Arena *a, Repo *r, char *err, size_t errsz) {
     int32_t unknown = 0;
     const char *type = NULL;
     uint64_t from = 0; /* history bytes not yet looked at */
     IdxHeader h;
-    if (idx_header(a, r, &h) && h.covered <= r->hist.size) {
+    if (idx_header_trusted(a, r, &h)) {
         unknown = (int32_t)h.unknown;
         from = h.covered;
     }

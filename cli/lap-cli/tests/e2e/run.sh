@@ -2796,6 +2796,27 @@ mkdir -p "$WORK/bp9-plain"
 expect_grep '"error":"no_parent"' "$LAP" branch start b --from ../bp9-plain --json
 cd "$WORK"
 
+t "the newer-history check trusts the index only while its last covered record is unchanged"
+mkdir -p "$WORK/nh2" && cd "$WORK/nh2" && "$LAP" init >/dev/null 2>&1
+"$LAP" session start "work" >/dev/null 2>&1
+printf 'a\n' > a.txt
+"$LAP" commit a.txt -i "seed the fixture" -b "records a.txt as the base" >/dev/null 2>&1
+"$LAP" status >/dev/null 2>&1
+# the last record rewritten in place, at the same size, as a newer lap's
+python3 - "$(open_chunk)" <<'PY'
+import hashlib, json, sys
+p = sys.argv[1]
+lines = open(p, 'rb').read().decode().splitlines()
+prev = json.loads(lines[-1])["prev"]
+rec = {"type": "future_op", "pad": "", "ts": "2026-09-28T00:00:00Z", "prev": prev}
+base = len(json.dumps(rec, separators=(",", ":")))
+rec["pad"] = "x" * (len(lines[-1]) - base)
+lines[-1] = json.dumps(rec, separators=(",", ":"))
+open(p, 'w').write("\n".join(lines) + "\n")
+PY
+expect_grep '"error":"newer_history"' "$LAP" session end --json
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"
