@@ -937,9 +937,14 @@ which may itself be a branch folder. Prints the name, the id, the parent
 and the base's short hash; `--json` returns `id`, `name`, `parent`,
 `base`, `base_chunk` and `parent_file`: false when `.lap/parent` (the hint
 the board follows to the parent's board) could not be written, which the
-text output also warns of — the start itself stands, lap never reads it. Errors: `missing_from`, `bad_name`, `same_folder`,
-`already_branch`, `no_parent`, `unrelated_history`, `not_clean`,
-`name_taken`, `parent_read_only`. `same_folder` is the folder itself under
+text output also warns of — the start itself stands, lap never reads it.
+Errors: `missing_from`, `bad_name`, `same_folder`, `already_branch`,
+`has_branches`, `no_parent`, `unrelated_history`, `not_clean`,
+`name_taken`, `parent_read_only`. `has_branches`: this folder's registry
+lists a live branch of it (its folder is that branch and its `.lap/parent`
+names this folder) — a parent cannot become a branch, above all of its own
+child; a registry that came along with a copied folder names another
+folder's branches and is dropped as before. `same_folder` is the folder itself under
 any spelling — another case, a symlink, a `..` path — told by the
 directory on disk (device and inode; volume and file id on Windows), not by
 the path's text. The start holds this folder's lock throughout (making

@@ -184,3 +184,28 @@ const BranchEntry *branches_find(const Branches *b, const char *key) {
     }
     return NULL;
 }
+
+const BranchEntry *branches_live_of(Arena *a, const Branches *b,
+                                    const char *folder) {
+    for (int32_t i = 0; i < b->n; i++) {
+        const BranchEntry *e = &b->v[i];
+        char elap[LAP_PATH_MAX], lineage[HIST_LINEAGE_MAX], err[256];
+        char ppath[LAP_PATH_MAX];
+        snprintf(elap, sizeof elap, "%s/%s", e->path, LAP_DIR);
+        if (!plat_is_dir(elap) ||
+            !hist_folder_lineage(a, elap, lineage, err, sizeof err) ||
+            strcmp(lineage, e->id) != 0)
+            continue;
+        snprintf(ppath, sizeof ppath, "%s/%s", elap, LAP_PARENT_NAME);
+        char *data;
+        size_t len;
+        if (!plat_read_file(a, ppath, &data, &len))
+            continue;
+        while (len > 0 && (data[len - 1] == '\n' || data[len - 1] == '\r'))
+            len--;
+        char *parent = arena_strndup(a, data, len);
+        if (strcmp(parent, folder) == 0 || plat_same_file(parent, folder))
+            return e;
+    }
+    return NULL;
+}

@@ -364,6 +364,37 @@ void test_branches(void) {
     remove(there_c1);
     remove(there_c2);
 
+    t_begin("branches_live_of: an entry whose folder is that branch and "
+            "names this folder its parent is live");
+    plat_mkdirs(".live_unit_child/.lap");
+    plat_mkdirs(".live_unit_other");
+    plat_write_file_atomic(".live_unit_child/.lap/lineage", "0123456789ab\n",
+                           13);
+    plat_write_file_atomic(".live_unit_child/.lap/parent",
+                           ".live_unit_parent\n", 18);
+    Branches lr;
+    memset(&lr, 0, sizeof lr);
+    branches_add(a, &lr, (BranchEntry){"0123456789ab", "feat",
+                                       ".live_unit_child", "b", "t", NULL});
+    const BranchEntry *le = branches_live_of(a, &lr, ".live_unit_parent");
+    ASSERT_TRUE(le != NULL);
+    ASSERT_EQ_S(le->name, "feat");
+
+    t_begin("branches_live_of: a registry copied from another folder, or "
+            "naming a folder that is not that branch, is not live");
+    ASSERT_TRUE(branches_live_of(a, &lr, ".live_unit_other") == NULL);
+    plat_write_file_atomic(".live_unit_child/.lap/lineage", "ba9876543210\n",
+                           13);
+    ASSERT_TRUE(branches_live_of(a, &lr, ".live_unit_parent") == NULL);
+    plat_write_file_atomic(".live_unit_child/.lap/lineage", "0123456789ab\n",
+                           13);
+    remove(".live_unit_child/.lap/parent");
+    ASSERT_TRUE(branches_live_of(a, &lr, ".live_unit_parent") == NULL);
+    remove(".live_unit_child/.lap/lineage");
+    plat_rmdir(".live_unit_child/.lap");
+    plat_rmdir(".live_unit_child");
+    plat_rmdir(".live_unit_other");
+
     remove(path);
     arena_free(a);
 }

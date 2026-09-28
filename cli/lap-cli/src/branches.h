@@ -41,6 +41,12 @@ bool branches_save(Arena *a, const char *lapdir, const Branches *b);
 /* The entry whose id or name is key, or NULL. */
 const BranchEntry *branches_find(const Branches *b, const char *key);
 void branches_add(Arena *a, Branches *b, BranchEntry e);
+/* The first entry of b that is a live branch of folder: its folder is
+ * still that branch and its .lap/parent names folder (however spelled).
+ * NULL when there is none — b is then a copy of another folder's registry
+ * (brought by copying the folder), not folder's own. */
+const BranchEntry *branches_live_of(Arena *a, const Branches *b,
+                                    const char *folder);
 
 /* What the parent knows of one registered branch. An entry is checked,
  * never trusted: its folder counts only while it exists and its .lap is

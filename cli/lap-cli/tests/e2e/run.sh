@@ -1410,6 +1410,20 @@ expect_grep "L5 " "$LAP" commit f.txt --branch copied -i "extend in the copy" -b
 expect_grep "0 mismatch" "$LAP" verify --deep
 grep -q '"name":"copied"' "$WORK/bp/.lap/branches.json" || fail "the parent does not list the copy"
 
+t "a folder with live branches cannot become a branch of one of them"
+mkdir -p "$WORK/sw-main" && cd "$WORK/sw-main" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+for f in .lapignore a.txt; do "$LAP" commit "$f" --no-session -i "seed the swap fixture" -b "records $f as it starts" >/dev/null 2>&1; done
+cp -R "$WORK/sw-main" "$WORK/sw-wt" && cd "$WORK/sw-wt" && "$LAP" branch start feat --from ../sw-main >/dev/null 2>&1 || fail "the branch did not start"
+SWSUM=$(cd "$WORK" && find sw-main/.lap sw-wt/.lap -type f ! -name lock | LC_ALL=C sort | xargs shasum)
+# the folders swapped by mistake: main started from its own branch
+cd "$WORK/sw-main" && expect_grep '"error":"has_branches"' "$LAP" branch start oops --from ../sw-wt --json
+expect_grep "has branches of its own (feat" "$LAP" branch start oops --from ../sw-wt
+[ "$(cd "$WORK" && find sw-main/.lap sw-wt/.lap -type f ! -name lock | LC_ALL=C sort | xargs shasum)" = "$SWSUM" ] ||
+    fail "a refused start changed a folder"
+expect_grep '"name":"feat"' "$LAP" branch list --json
+cd "$WORK"
+
 t "branch start refuses what it cannot make a branch of"
 cd "$WORK/bp" || exit 1
 mkdir -p "$WORK/bx" && cp f.txt g.txt .lapignore .gitignore "$WORK/bx/" && cd "$WORK/bx" || exit 1

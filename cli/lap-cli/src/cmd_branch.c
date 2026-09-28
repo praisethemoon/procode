@@ -154,6 +154,19 @@ static int32_t start_locked(Arena *a, bool json, const char *name,
                 lineage);
         return LAP_EXIT_ERR;
     }
+    /* A folder whose own branches are live (not a registry copied along
+     * with the folder) is a parent: making it a branch would drop them. */
+    Branches own;
+    branches_load(a, here_lap, &own);
+    const BranchEntry *live = branches_live_of(a, &own, here);
+    if (live) {
+        err_out(json, "has_branches",
+                "%s has branches of its own (%s, in %s): a folder with "
+                "branches cannot become a branch — run this in the new "
+                "folder, with --from naming this one",
+                here, live->name, live->path);
+        return LAP_EXIT_ERR;
+    }
 
     /* A start writes to the parent (its lock, a sealed chunk, the registry):
      * one it could not write to is refused before any of that, so a refusal
