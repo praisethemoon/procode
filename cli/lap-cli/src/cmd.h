@@ -184,6 +184,8 @@ typedef struct {
     bool work_exists;
     bool shadow_exists;
     bool binary;
+    bool unreadable; /* file_diff_load failed: the working file may be there
+                        but cannot be read (no permission, or too large) */
     Lines work;
     Lines shadow;
     Regions regions;

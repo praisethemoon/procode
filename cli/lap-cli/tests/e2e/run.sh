@@ -2475,6 +2475,36 @@ expect_ok "$LAP" commit a.txt --branch b1 --no-session -i "record after a move" 
 expect_grep "chain ok" "$LAP" verify
 cd "$WORK"
 
+t "unreadable files and folders are reported as such, never as deleted or clean"
+mkdir -p "$WORK/ur1/d" && cd "$WORK/ur1" || exit 1
+"$LAP" init >/dev/null 2>&1
+printf 'q\n' > d/q.txt && printf '10\n' > a.txt
+for f in d/q.txt a.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+if [ "$(id -u)" != 0 ]; then
+    SUM=$(cat .lap/log/*.jsonl | cksum)
+    chmod 000 d
+    expect_grep "unreadable  d/q.txt" "$LAP" status
+    expect_grep "unreadable  d/ " "$LAP" status
+    expect_not_grep "deleted" "$LAP" status
+    expect_grep '"error":"unreadable"' "$LAP" commit d/q.txt --no-session \
+        -i "commit what cannot be read" -b "would delete d/q.txt" --json
+    expect_fail "$LAP" commit d/q.txt --no-session -i "commit what cannot be read" \
+        -b "would delete d/q.txt" --dry-run
+    chmod 755 d
+    printf '11\n' >> a.txt
+    chmod 000 a.txt
+    expect_grep '"path":"a.txt","state":"unreadable"' "$LAP" status --json
+    expect_not_grep "^clean" "$LAP" status
+    expect_grep '"error":"unreadable"' "$LAP" commit a.txt --no-session \
+        -i "commit what cannot be read" -b "would record a.txt" --json
+    chmod 644 a.txt
+    [ "$(cat .lap/log/*.jsonl | cksum)" = "$SUM" ] || fail "a refused commit wrote history"
+    expect_grep "modified  a.txt" "$LAP" status
+fi
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

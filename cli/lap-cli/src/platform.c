@@ -48,6 +48,21 @@ bool plat_is_file(const char *path) {
 #endif
 }
 
+bool plat_is_unreachable(const char *path) {
+#ifdef _WIN32
+    char wb[LAP_PATH_MAX];
+    if (GetFileAttributesA(winpath(wb, sizeof wb, path)) !=
+        INVALID_FILE_ATTRIBUTES)
+        return false;
+    DWORD e = GetLastError();
+    return e != ERROR_FILE_NOT_FOUND && e != ERROR_PATH_NOT_FOUND &&
+           e != ERROR_INVALID_NAME;
+#else
+    struct stat st;
+    return lstat(path, &st) != 0 && errno != ENOENT && errno != ENOTDIR;
+#endif
+}
+
 #ifdef _WIN32
 /* FILETIME counts 100 ns ticks from 1601; the stat cache wants the epoch. */
 static void filetime_to(PlatStat *out, FILETIME ft, DWORD hi, DWORD lo) {
@@ -671,8 +686,14 @@ static int entry_cmp(const void *pa, const void *pb) {
     return strcmp(((const Entry *)pa)->name, ((const Entry *)pb)->name);
 }
 
+/* Folders the walk could not open, when the caller asked for them. */
+typedef struct {
+    const char **v;
+    size_t n, cap;
+} WalkReport;
+
 static bool walk_dir(Arena *a, const char *root, const char *rel, WalkFn fn,
-                     void *ud) {
+                     void *ud, WalkReport *rep) {
     char full[LAP_PATH_MAX];
     if (rel[0])
         snprintf(full, sizeof full, "%s/%s", root, rel);
@@ -687,8 +708,14 @@ static bool walk_dir(Arena *a, const char *root, const char *rel, WalkFn fn,
     snprintf(pattern, sizeof pattern, "%s/*", full);
     WIN32_FIND_DATAA fd;
     HANDLE h = FindFirstFileA(winpath(wb, sizeof wb, pattern), &fd);
-    if (h == INVALID_HANDLE_VALUE)
-        return true; /* unreadable dir: skip quietly */
+    if (h == INVALID_HANDLE_VALUE) {
+        DWORD e = GetLastError();
+        if (rep && e != ERROR_FILE_NOT_FOUND && e != ERROR_PATH_NOT_FOUND) {
+            ARENA_GROW(a, rep->v, rep->n, rep->cap, const char *);
+            rep->v[rep->n++] = arena_strdup(a, rel);
+        }
+        return true; /* skipped; reported when asked */
+    }
     do {
         const char *name = fd.cFileName;
         if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
@@ -706,8 +733,13 @@ static bool walk_dir(Arena *a, const char *root, const char *rel, WalkFn fn,
     FindClose(h);
 #else
     DIR *d = opendir(full);
-    if (!d)
-        return true; /* unreadable dir: skip quietly */
+    if (!d) {
+        if (rep && errno != ENOENT && errno != ENOTDIR) {
+            ARENA_GROW(a, rep->v, rep->n, rep->cap, const char *);
+            rep->v[rep->n++] = arena_strdup(a, rel);
+        }
+        return true; /* skipped; reported when asked */
+    }
     struct dirent *de;
     while ((de = readdir(d)) != NULL) {
         const char *name = de->d_name;
@@ -744,7 +776,7 @@ static bool walk_dir(Arena *a, const char *root, const char *rel, WalkFn fn,
             WalkAction act = fn(childrel, true, &el.v[i].st, ud);
             if (act == WALK_SKIP_DIR)
                 continue;
-            if (!walk_dir(a, root, childrel, fn, ud))
+            if (!walk_dir(a, root, childrel, fn, ud, rep))
                 return false;
         } else {
             fn(childrel, false, &el.v[i].st, ud);
@@ -754,7 +786,16 @@ static bool walk_dir(Arena *a, const char *root, const char *rel, WalkFn fn,
 }
 
 bool plat_walk(Arena *a, const char *root, WalkFn fn, void *ud) {
-    return walk_dir(a, root, "", fn, ud);
+    return walk_dir(a, root, "", fn, ud, NULL);
+}
+
+bool plat_walk_report(Arena *a, const char *root, WalkFn fn, void *ud,
+                      const char ***unreadable, size_t *n) {
+    WalkReport rep = {NULL, 0, 0};
+    bool ok = walk_dir(a, root, "", fn, ud, &rep);
+    *unreadable = rep.v;
+    *n = rep.n;
+    return ok;
 }
 
 /* ---- locking ---- */

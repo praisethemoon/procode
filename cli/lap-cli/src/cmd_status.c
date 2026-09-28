@@ -132,7 +132,9 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
     sw.a = a;
     sw.repo = &repo;
     sw.ig = ignore_load(a, repo.root);
-    plat_walk(a, repo.root, on_entry, &sw);
+    const char **undirs; /* folders the walk could not open */
+    size_t nundirs;
+    plat_walk_report(a, repo.root, on_entry, &sw, &undirs, &nundirs);
     if (sw.files.n > 1)
         qsort(sw.files.v, sw.files.n, sizeof(Seen), cmp_seen);
     sw.walked_n = sw.files.n;
@@ -214,11 +216,14 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         }
 
         FileDiff fd;
-        if (!file_diff_load(fa, &repo, rel, &fd, err, sizeof err))
+        bool loaded = file_diff_load(fa, &repo, rel, &fd, err, sizeof err);
+        if (!loaded && !fd.unreadable)
             continue;
 
         const char *state = NULL;
-        if (fd.binary) {
+        if (!loaded) {
+            state = "unreadable"; /* never taken for deleted, or clean */
+        } else if (fd.binary) {
             state = fd.shadow_exists ? "binary" : NULL; /* untracked binary:
                                                            silently skipped */
             if (!state)
@@ -288,12 +293,32 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
                           fd.work.count == 1 ? "" : "s");
             } else if (strcmp(state, "deleted") == 0) {
                 sb_putc(&sb, 0x0a);
+            } else if (strcmp(state, "unreadable") == 0) {
+                sb_puts(&sb, "  (cannot be read: fix its permissions)\n");
             } else {
                 sb_puts(&sb, "  (unsupported, ignored)\n");
             }
         }
     }
     arena_free(fa);
+    /* a folder it cannot open hides what is in it: named, never skipped */
+    for (size_t i = 0; i < nundirs; i++) {
+        dirty++;
+        const char *d = undirs[i][0] ? undirs[i] : ".";
+        if (json) {
+            if (dirty > 1)
+                sb_putc(&sb, ',');
+            sb_puts(&sb, "{\"path\":");
+            json_escape_c(&sb, arena_printf(a, "%s/", d));
+            sb_puts(&sb, ",\"state\":\"unreadable\"}");
+        } else {
+            sb_puts(&sb, "  ");
+            sb_field(&sb, S_MUTED, "unreadable", 8);
+            sb_printf(&sb, "  %s/  (a folder lap cannot open: what is in it "
+                           "is unknown)\n",
+                      d);
+        }
+    }
 
     /* status is a reader, and this is the one cache a reader writes: only
      * when it changed, only under a lock that happens to be free, and

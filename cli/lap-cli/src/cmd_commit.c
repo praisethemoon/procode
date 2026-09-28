@@ -262,7 +262,8 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
 
     FileDiff fd;
     if (!file_diff_load(a, &repo, rel, &fd, err, sizeof err)) {
-        err_out(json, "read_failed", "%s", err);
+        err_out(json, fd.unreadable ? "unreadable" : "read_failed", "%s",
+                err);
         goto done;
     }
     if (fd.binary) {

@@ -9,6 +9,10 @@
 
 bool plat_is_file(const char *path);
 bool plat_is_dir(const char *path);
+/* True when path may exist but cannot be looked at: its stat fails for a
+ * reason other than its absence (no permission on a folder above it). Such
+ * a path is neither there nor gone as far as this process can tell. */
+bool plat_is_unreachable(const char *path);
 /* A folder this process may create, rename and remove files in. */
 bool plat_is_writable_dir(const char *path);
 /* True when both paths reach one file or directory, however spelled:
@@ -93,6 +97,11 @@ typedef struct {
 typedef WalkAction (*WalkFn)(const char *rel, bool is_dir, const PlatStat *st,
                              void *ud);
 bool plat_walk(Arena *a, const char *root, WalkFn fn, void *ud);
+/* plat_walk, also listing in *unreadable (n of them) each folder it could
+ * not open for a reason other than its absence, relative to root ("" for
+ * root itself): what is in one is unknown, never taken for missing. */
+bool plat_walk_report(Arena *a, const char *root, WalkFn fn, void *ud,
+                      const char ***unreadable, size_t *n);
 /* A regular file's stat, as the walk takes it; false for anything else. */
 bool plat_stat(const char *path, PlatStat *out);
 /* Seconds since the epoch, now. */

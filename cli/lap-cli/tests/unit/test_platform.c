@@ -10,6 +10,17 @@
 
 #define T_PLATDIR ".platform_unit_test"
 
+static size_t nfiles;
+
+static WalkAction count_files(const char *rel, bool is_dir,
+                              const PlatStat *st, void *ud) {
+    (void)rel;
+    (void)st;
+    if (!is_dir)
+        (*(size_t *)ud)++;
+    return WALK_CONT;
+}
+
 void test_platform(void) {
     plat_mkdirs(T_PLATDIR "/sub");
     plat_mkdirs(T_PLATDIR "/other");
@@ -83,4 +94,39 @@ void test_platform(void) {
     ASSERT_TRUE(plat_is_writable_dir(T_PLATDIR "/other") == (getuid() == 0));
     chmod(T_PLATDIR "/other", 0755);
 #endif
+
+    t_begin("plat_is_unreachable: a missing path is gone, not unreachable; "
+            "an existing one is neither");
+    ASSERT_TRUE(!plat_is_unreachable(T_PLATDIR "/nothing"));
+    ASSERT_TRUE(!plat_is_unreachable(T_PLATDIR "/nothing/deeper"));
+    ASSERT_TRUE(!plat_is_unreachable(T_PLATDIR "/sub"));
+
+    t_begin("plat_walk_report: every file walked, and no folder reported "
+            "when all open");
+    plat_write_file_atomic(T_PLATDIR "/other/g.txt", "g", 1);
+    Arena *wa = arena_new(0);
+    const char **undirs;
+    size_t nundirs = 99;
+    ASSERT_TRUE(plat_walk_report(wa, T_PLATDIR, count_files, &nfiles,
+                                 &undirs, &nundirs));
+    ASSERT_EQ_I((int32_t)nfiles, 1);
+    ASSERT_EQ_I((int32_t)nundirs, 0);
+#ifndef _WIN32
+    if (getuid() != 0) {
+        t_begin("plat_walk_report: a folder it cannot open is reported, its "
+                "files are not walked, and a path in it is unreachable");
+        ASSERT_TRUE(chmod(T_PLATDIR "/other", 0) == 0);
+        nfiles = 0;
+        ASSERT_TRUE(plat_walk_report(wa, T_PLATDIR, count_files, &nfiles,
+                                     &undirs, &nundirs));
+        ASSERT_EQ_I((int32_t)nfiles, 0);
+        ASSERT_EQ_I((int32_t)nundirs, 1);
+        ASSERT_EQ_S(undirs[0], "other");
+        ASSERT_TRUE(plat_is_unreachable(T_PLATDIR "/other/g.txt"));
+        ASSERT_TRUE(!plat_is_file(T_PLATDIR "/other/g.txt"));
+        chmod(T_PLATDIR "/other", 0755);
+    }
+#endif
+    remove(T_PLATDIR "/other/g.txt");
+    arena_free(wa);
 }

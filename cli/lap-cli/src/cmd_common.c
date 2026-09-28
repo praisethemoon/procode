@@ -417,8 +417,16 @@ bool file_diff_load(Arena *a, Repo *r, const char *rel, FileDiff *out,
     size_t wlen = 0, slen = 0;
 
     out->work_exists = plat_is_file(wpath);
+    if (!out->work_exists && plat_is_unreachable(wpath)) {
+        /* not known to be gone: a folder above it cannot be searched */
+        out->unreadable = true;
+        snprintf(err, errsz, "cannot read %s (no permission to reach it)",
+                 rel);
+        return false;
+    }
     if (out->work_exists) {
         if (!plat_read_file(a, wpath, &wdata, &wlen)) {
+            out->unreadable = true;
             snprintf(err, errsz, "cannot read %s (too large or unreadable)",
                      rel);
             return false;

@@ -838,6 +838,10 @@ Creates `.lap/` in the cwd plus a starter `.lapignore` (kept if present):
 ### `lap status`
 Active session, then every file with pending changes: `new` (line count),
 `modified` (numbered edit list with line ranges), `deleted`, or `binary`.
+A file lap cannot read — no permission on it, or on a folder above it — is
+`unreadable`, never `deleted` or clean, and so is a folder it cannot open
+(listed as `<folder>/`, since what is in it is unknown). Only a path that
+is not there is deleted.
 
 ### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B] [--force-message] [--no-session] [--dry-run] [--branch B]`
 Records exactly one edit. The message comes from `-i`/`--intent` and
@@ -863,6 +867,8 @@ Then, by the number of pending edits in the file:
   last-committed lines for pure deletions). Remaining edits stay pending and
   are re-detected (with fresh coordinates) on the next run.
 - New file → `create` (whole content, one edit). Deleted file → `delete`.
+- A file lap cannot read (as for `lap status`) → error `unreadable`: it is
+  never recorded as deleted, nor compared as unchanged.
 
 On success it prints the new commit's id and short hash (`L42 fa9cebd`);
 `--json` returns the id and the full `hash`. This is how an agent learns
