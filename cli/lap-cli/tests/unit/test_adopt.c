@@ -389,5 +389,25 @@ void test_adopt(void) {
     ASSERT_TRUE(p.why == NULL);
     ASSERT_TRUE(str_eq_c(p.result.lines[7], "EIGHT"));
 
+    t_begin("adopt: at the file's last line, already done needs the same "
+            "final newline; a different one is a conflict");
+    Lines tn = numbered(a, 10);
+    Rec *lastnl = edit(a, tn, 10, 1, "TEN\n"); /* keeps the final newline */
+    Lines nonl = lines_replace(a, tn, 10, 1, L(a, "TEN\n").lines, 1, false);
+    const Rec *c32[] = {lastnl};
+    adopt_place(a, tn, nonl, true, c32, 1, &p);
+    ASSERT_EQ_I(p.placed, 0);
+    ASSERT_TRUE(p.why != NULL && !p.already[0]);
+    Lines withnl = lines_replace(a, tn, 10, 1, L(a, "TEN\n").lines, 1, true);
+    adopt_place(a, tn, withnl, true, c32, 1, &p);
+    ASSERT_EQ_I(p.placed, 1);
+    ASSERT_TRUE(p.already[0] && p.why == NULL);
+    /* away from the end, the final newline is not the change's */
+    Rec *mid = edit(a, tn, 5, 1, "FIVE\n");
+    Lines midp = lines_replace(a, tn, 5, 1, L(a, "FIVE\n").lines, 1, false);
+    const Rec *c33[] = {mid};
+    adopt_place(a, tn, midp, true, c33, 1, &p);
+    ASSERT_TRUE(p.already[0] && p.why == NULL);
+
     arena_free(a);
 }

@@ -23,6 +23,14 @@ static bool text_at(Lines a, int32_t at, const Str *want, int32_t n) {
     return true;
 }
 
+/* Whether a change's final newline (eof) lets it count as the parent's
+ * same change. Reaching the file's last line (at_end), the newline is part
+ * of the change: it must be the parent's. Elsewhere it is not the change's,
+ * and either side's will do. */
+static bool same_eof(bool eof, bool at_end, bool branch_eof, bool parent_eof) {
+    return at_end ? eof == parent_eof : eof == branch_eof || eof == parent_eof;
+}
+
 static Str *strip_text(Arena *a, const Str *v, int32_t n) {
     Lines l = {(Str *)v, n, true};
     return lines_without_cr(a, l).lines;
@@ -107,7 +115,8 @@ void adopt_place(Arena *a, Lines base, Lines parent, bool parent_has,
             ch[hit].delta == c->new_n - c->old_lines &&
             text_at(mnocr, at, strip_text(a, c->new_text, c->new_n),
                     c->new_n) &&
-            (c->eof_nl == branch.eof_nl || c->eof_nl == merged.eof_nl)) {
+            same_eof(c->eof_nl, e > branch.count, branch.eof_nl,
+                     merged.eof_nl)) {
             branch = lines_replace(a, branch, s, c->old_lines, c->new_text,
                                    c->new_n, c->eof_nl);
             for (int32_t i = 0; i < pr.count; i++) {
@@ -147,8 +156,8 @@ void adopt_place(Arena *a, Lines base, Lines parent, bool parent_has,
                 if (cur == want && hs - 1 + want <= tmp.count &&
                     text_at(mnocr, hat,
                             lines_without_cr(a, tmp).lines + (hs - 1), want) &&
-                    (tmp.eof_nl == branch.eof_nl ||
-                     tmp.eof_nl == merged.eof_nl))
+                    same_eof(tmp.eof_nl, hs - 1 + want == tmp.count,
+                             branch.eof_nl, merged.eof_nl))
                     reached = j;
             }
             if (reached >= 0) {

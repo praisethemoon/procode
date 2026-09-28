@@ -530,8 +530,9 @@ folder, `lap merge <branch> [--dry-run]`.
 
    **Identical changes are already done.** A commit that overlaps exactly
    one parent change, of exactly its region and size, and lands where the
-   parent's text already is its new text (with the same final newline) is
-   not a conflict: the parent made the same change. Nothing is adopted for
+   parent's text already is its new text (and, when it reaches the file's
+   last line, with the parent's final newline: a different one is a
+   conflict) is not a conflict: the parent made the same change. Nothing is adopted for
    it and nothing stops. That change still counts as the parent's for the
    file's later commits: one that overlaps or touches it (the branch undoing
    its copy, say) is a conflict like any other, and the parent's text there
