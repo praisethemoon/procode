@@ -472,7 +472,7 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
     sb_init(&others_text, a);
     bool others_ok = true;
     const char **lineages;
-    int32_t nl = hist_lineages(a, repo.lapdir, &lineages);
+    int32_t nl = hist_lineages_any(a, repo.lapdir, &lineages);
     for (int32_t i = 0; i < nl; i++) {
         if (strcmp(lineages[i], repo.hist.lineage) == 0)
             continue;

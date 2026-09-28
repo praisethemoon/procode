@@ -985,7 +985,8 @@ the hunks, in both the human and JSON shapes. Read-only.
 
 ### `lap verify [--deep]`
 Walks the hash chain across every chunk, naming a modified sealed chunk
-(§Chunks), then the chain of every other branch whose chunks are here, one
+(§Chunks), then the chain of every other branch with any chunk here (one
+whose first chunk is missing is broken, naming it, never left out), one
 line each (`branch b: chain ok: 8 records`; in JSON, `branches:
 [{branch, records, chain_ok, chain_error?, unknown_records?,
 unknown_type?}]`). A broken one fails the command. `--deep` also replays

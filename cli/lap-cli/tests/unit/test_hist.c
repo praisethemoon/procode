@@ -906,6 +906,25 @@ static void test_index_match(Arena *a) {
     clear_chunks();
 }
 
+static void test_lineages(Arena *a) {
+    t_begin("hist_lineages: branches by their first chunk; "
+            "hist_lineages_any: every branch with a chunk here, once");
+    clear_chunks();
+    put_file("main.000001.jsonl", "m\n");
+    put_file("0123456789ab.000002.jsonl", "x\n"); /* its chunk 1 is gone */
+    put_file("ba9876543210.000001.jsonl", "y\n");
+    put_file("notes.txt", "n\n");
+    const char **ids;
+    ASSERT_EQ_I(hist_lineages(a, T_LAPDIR, &ids), 1);
+    ASSERT_EQ_S(ids[0], "ba9876543210");
+    ASSERT_EQ_I(hist_lineages_any(a, T_LAPDIR, &ids), 2);
+    ASSERT_EQ_S(ids[0], "0123456789ab");
+    ASSERT_EQ_S(ids[1], "ba9876543210");
+    put_file("0123456789ab.000001.jsonl", "w\n");
+    ASSERT_EQ_I(hist_lineages_any(a, T_LAPDIR, &ids), 2); /* not twice */
+    clear_chunks();
+}
+
 void test_hist(void) {
     Arena *a = arena_new(0);
     test_names();
@@ -917,6 +936,7 @@ void test_hist(void) {
     test_nested_history(a);
     test_check(a);
     test_index_match(a);
+    test_lineages(a);
     test_tmp_files(a);
     arena_free(a);
 }

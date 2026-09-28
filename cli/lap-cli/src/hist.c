@@ -1088,6 +1088,7 @@ typedef struct {
     Arena *a;
     const char **v;
     int32_t n, cap;
+    bool any; /* every lineage with a chunk here, not only a chunk 1 */
 } LineageList;
 
 static WalkAction on_first_chunk(const char *rel, bool is_dir,
@@ -1098,22 +1099,34 @@ static WalkAction on_first_chunk(const char *rel, bool is_dir,
     int32_t n;
     if (is_dir)
         return WALK_SKIP_DIR;
-    if (!hist_parse_name(rel, lineage, &n) || n != 1 ||
+    if (!hist_parse_name(rel, lineage, &n) || (n != 1 && !l->any) ||
         strcmp(lineage, LAP_MAIN_LINEAGE) == 0)
+        return WALK_CONT;
+    /* names come sorted, so a lineage's chunks are next to each other */
+    if (l->n > 0 && strcmp(l->v[l->n - 1], lineage) == 0)
         return WALK_CONT;
     ARENA_GROW(l->a, l->v, l->n, l->cap, const char *);
     l->v[l->n++] = arena_strdup(l->a, lineage);
     return WALK_CONT;
 }
 
-int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out) {
+static int32_t lineages(Arena *a, const char *lapdir, bool any,
+                        const char ***out) {
     char dir[LAP_PATH_MAX];
     snprintf(dir, sizeof dir, "%s/%s", lapdir, LAP_LOG_DIR);
-    LineageList l = {a, NULL, 0, 0};
+    LineageList l = {a, NULL, 0, 0, any};
     if (plat_is_dir(dir))
         plat_walk(a, dir, on_first_chunk, &l);
     *out = l.v;
     return l.n;
+}
+
+int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out) {
+    return lineages(a, lapdir, false, out);
+}
+
+int32_t hist_lineages_any(Arena *a, const char *lapdir, const char ***out) {
+    return lineages(a, lapdir, true, out);
 }
 
 void hist_name_break(const Hist *h, const char *data, RecLog *log) {

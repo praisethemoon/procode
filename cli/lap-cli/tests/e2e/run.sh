@@ -2642,6 +2642,25 @@ expect_grep "uppercases g1 on the branch" "$LAP" log --json
 expect_not_grep "not in git yet" "$LAP" log --json
 cd "$WORK"
 
+t "verify reports a branch whose first chunk is missing, instead of leaving it out"
+merge_pair fc1; BP="$WORK/fc1-p"; BW="$WORK/fc1-w"
+cd "$BW" && "$LAP" session start "branch work" --branch b >/dev/null 2>&1
+export LAP_TEST_CHUNK_BYTES=500
+in_branch g.txt 's/^g1$/G1/' "uppercases g1 on the branch"
+in_branch g.txt 's/^g2$/G2/' "uppercases g2 on the branch"
+in_branch g.txt 's/^g3$/G3/' "uppercases g3 on the branch"
+unset LAP_TEST_CHUNK_BYTES
+FID=$(cat "$BW/.lap/lineage")
+[ -f "$BW/.lap/log/$FID.000003.jsonl" ] || fail "the branch wrote too few chunks"
+git_merge_b || fail "git merge fc1"
+cd "$BP" && git worktree remove --force "$BW" >/dev/null 2>&1 || fail "remove b's folder"
+expect_grep '"branch":"b"' "$LAP" verify --json
+rm ".lap/log/$FID.000001.jsonl"
+expect_fail "$LAP" verify
+expect_grep "$FID.000001.jsonl" "$LAP" verify
+expect_grep '"ok":false,.*"chain_ok":false,"chain_error":"[^"]*'"$FID"'.000001.jsonl' "$LAP" verify --json
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

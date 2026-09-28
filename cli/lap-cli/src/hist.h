@@ -114,6 +114,9 @@ bool hist_open_view(Arena *a, const char *lapdir, const char *lineage,
                     int32_t upto, Hist *h, char *err, size_t errsz);
 /* The branch lineages whose first chunk is in lapdir/log, as ids. */
 int32_t hist_lineages(Arena *a, const char *lapdir, const char ***out);
+/* The branch lineages with any chunk in lapdir/log, as ids: those whose
+ * first chunk is missing too, which a history check must not pass over. */
+int32_t hist_lineages_any(Arena *a, const char *lapdir, const char ***out);
 
 /* The first record of a lineage's chunk 1, which for a branch is its
  * branch record. False when there is none or it does not parse. */
