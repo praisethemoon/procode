@@ -1,7 +1,7 @@
 {
   "id": "A-4",
-  "title": "Board icon: twenty options to replace the square spiral",
-  "description": "Twenty candidate activity bar icons for the Board view (coboard), in the set's 2px-stroke style, each shown large, at 48/24/16px, dimmed, and in the bar beside lap, eggzibit and Knowledge's new Linked notes. Recommendation: 1. Lanes or 3. Ticket.",
+  "title": "Board icon: twenty options to replace the square spiral (round 2)",
+  "description": "A second set of twenty activity bar icons for the Board view (coboard), none repeating the first round, each shown large, at 48/24/16px, dimmed, and in the bar beside lap, eggzibit and Knowledge's Linked notes. Recommendation: 1. Pushpin or 16. Honeycomb.",
   "keywords": [
     "coboard",
     "board",
@@ -10,5 +10,5 @@
     "activity bar"
   ],
   "createdAt": "2026-09-28T20:18:11Z",
-  "updatedAt": "2026-09-28T20:18:11Z"
+  "updatedAt": "2026-09-28T20:22:26Z"
 }
