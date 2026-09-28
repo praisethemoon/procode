@@ -19,6 +19,7 @@ import { createRoot } from "react-dom/client";
 import type { Summary } from "coboard";
 import { EMPTY, FIELDS, FIELD_LABELS, Filter, clear, counts, fieldCount, hasQuery, isActive, options, toggle, visible } from "../src/filter";
 import type { SidebarToHost, SidebarToView } from "../src/protocol";
+import { rowParts } from "../src/row";
 
 declare function acquireVsCodeApi(): {
     postMessage(m: unknown): void;
@@ -42,21 +43,6 @@ function restore(): Saved {
             ? { text: f.text, fields: { ...EMPTY.fields, ...f.fields }, openOnly: f.openOnly === true, archived: f.archived === true }
             : EMPTY;
     return { filter, collapsed: Array.isArray(s?.collapsed) ? s!.collapsed : [] };
-}
-
-const STATUS_ICON: Record<string, string> = {
-    todo: "circle-large-outline",
-    doing: "play-circle",
-    blocked: "error",
-    review: "eye",
-    done: "pass-filled",
-    open: "circle-large-outline",
-};
-
-function iconOf(s: Summary): string {
-    if (s.kind === "epic") return s.status === "done" ? "pass" : "project";
-    if (s.kind === "milestone") return s.status === "done" ? "pass" : "milestone";
-    return STATUS_ICON[s.status] ?? "circle-large-outline";
 }
 
 function Codicon(props: { name: string; className?: string }): JSX.Element {
@@ -219,6 +205,7 @@ function Row(props: {
         preventDefaultContextMenuItems: true,
     });
     const dim = filtering && !matched.has(s.id);
+    const p = rowParts(s);
     return (
         <>
             <div
@@ -229,7 +216,7 @@ function Row(props: {
                 aria-level={depth + 1}
                 tabIndex={0}
                 data-vscode-context={context}
-                title={`${s.id} — ${s.title}\n${s.kind}, ${s.status}${s.archived ? ", archived" : ""}`}
+                title={p.tooltip}
                 onClick={() => send({ type: "open", id: s.id })}
                 onKeyDown={(e) => {
                     if (e.key === "Enter") send({ type: "open", id: s.id });
@@ -247,10 +234,10 @@ function Row(props: {
                 >
                     {hasKids ? <Codicon name={expanded ? "chevron-down" : "chevron-right"} /> : null}
                 </span>
-                <Codicon name={iconOf(s)} className={`sb-icon sb-${s.kind === "ticket" ? s.status : s.kind}`} />
-                <span className="sb-title">{s.title}</span>
-                {s.archived ? <Codicon name="archive" className="sb-archived" /> : null}
-                <span className="sb-desc">{s.kind === "ticket" ? `${s.id} · ${s.status}` : s.id}</span>
+                <Codicon name={p.icon} className={`sb-icon sb-${p.tone}`} />
+                <span className="sb-desc sb-id">{p.id}</span>
+                <span className="sb-title">{p.title}</span>
+                {p.archived ? <Codicon name="archive" className="sb-archived" /> : null}
                 <span className="sb-actions">
                     {s.kind === "epic" ? (
                         <button
