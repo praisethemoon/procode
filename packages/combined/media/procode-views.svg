@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- The activity-bar icon of procode's one view container: procode.svg's p
+       without its tile, in the view icons' 2px round stroke and mid gray.
+       Rendered by VS Code as an alpha mask: only the silhouette matters. -->
+  <path d="M15 9 A3 3 0 1 0 9 9 A5 5 0 1 0 19 9 A7 7 0 1 0 5 9 V22"
+        stroke="#808080" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

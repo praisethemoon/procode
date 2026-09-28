@@ -15,7 +15,8 @@
  *   out/pdfjs/         pdf.js, which Knowledge imports at runtime to read PDFs
  *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/techdocs.js
  *                      the MCP servers, one file each
- *   media/             the parts' activity-bar icons
+ *   media/             the parts' view icons, and procode-views.svg for the
+ *                      one activity-bar container that holds their views
  *   skills/            the repository's .claude/skills, every file, for
  *                      procode: Add Skills for Claude Code
  *   icon.png           procode's own icon, from packages/combined/media
@@ -93,6 +94,17 @@ contributes.commands.push(
 );
 contributes.mcpServerDefinitionProviders = [{ id: "procode.mcp", label: "procode" }];
 
+/* One activity-bar icon for the whole extension. Each part brings its own
+ * container for when it runs alone; here their views move, in the parts'
+ * order, into procode's, and each keeps its part's icon for when someone
+ * drags it out into a container of its own. */
+const partContainers = contributes.viewsContainers.activitybar;
+contributes.viewsContainers.activitybar = [{ id: "procode", title: "procode", icon: "media/procode-views.svg" }];
+contributes.views = {
+    ...Object.fromEntries(Object.entries(contributes.views).filter(([k]) => !partContainers.some((c) => c.id === k))),
+    procode: partContainers.flatMap((c) => (contributes.views[c.id] ?? []).map((v) => ({ ...v, icon: v.icon ?? c.icon }))),
+};
+
 const ids = [
     ...contributes.commands.map((c) => `command ${c.command}`),
     ...Object.values(contributes.views ?? {}).flat().map((v) => `view ${v.id}`),
@@ -141,6 +153,9 @@ for (const part of PARTS) {
         fs.copyFileSync(path.join(media, f), to);
     }
 }
+// procode's own container icon, beside the parts' view icons.
+if (fs.existsSync(path.join(dist, "media", "procode-views.svg"))) throw new Error("a part ships media/procode-views.svg");
+fs.copyFileSync(path.join(here, "media", "procode-views.svg"), path.join(dist, "media", "procode-views.svg"));
 // pdf.js, beside the bundle where Knowledge imports it from (index-vscode/src/pdf.ts).
 fs.cpSync(path.join(repo, "packages", "index-vscode", "out", "pdfjs"), path.join(dist, "out", "pdfjs"), { recursive: true });
 fs.copyFileSync(path.join(repo, "LICENSE"), path.join(dist, "LICENSE"));
