@@ -11,7 +11,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { LapSession, mergeSessions, ticketSessions } from "../lap";
+import { branchArgs, LapSession, mergeSessions, startSession, ticketSessions } from "../lap";
 import { handle } from "../mcp";
 import { Board } from "../store";
 import { cliBin, noCli } from "./cli-bin";
@@ -224,5 +224,50 @@ test("ticketSessions: two branches sharing a name are each read by their id", { 
     } finally {
         if (saved === undefined) delete process.env["LAP_BIN"];
         else process.env["LAP_BIN"] = saved;
+    }
+});
+
+test("startSession: records where lap says this folder does — main despite a leaked lineage, a branch folder's branch, main among branches", { skip: !LAP && noCli("lap") }, async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-sessions-")));
+    const parent = path.join(root, "proj");
+    const feat = path.join(root, "feat");
+    fs.mkdirSync(parent);
+    const saved = process.env["LAP_BIN"];
+    const savedBranch = process.env["LAP_BRANCH"];
+    process.env["LAP_BIN"] = LAP;
+    delete process.env["LAP_BRANCH"];
+    const lap = (cwd: string, ...args: string[]) => execFileSync(LAP, args, { cwd, env: { ...process.env, LAP_USER: "tester" } });
+    const current = (cwd: string) => JSON.parse(String(lap(cwd, "session", "current", "--json"))) as { session: { ref?: string; id: string } | null };
+    try {
+        lap(parent, "init");
+        fs.writeFileSync(path.join(parent, "a.txt"), "one\n");
+        for (const f of ["a.txt", ".lapignore"]) lap(parent, "commit", f, "--no-session", "-i", "Seed the project files", "-b", `Records ${f} as it starts`);
+        // no branches: nothing to say, and the session starts
+        assert.deepEqual(await branchArgs(parent), []);
+        await startSession(parent, "T-1", "T-1: before branches");
+        lap(parent, "session", "end");
+        fs.cpSync(parent, feat, { recursive: true });
+        lap(feat, "branch", "start", "feat", "--from", parent);
+        const id = fs.readFileSync(path.join(feat, ".lap", "lineage"), "utf8").trim();
+        // the branch folder records to its branch
+        assert.deepEqual(await branchArgs(feat), ["--branch", id]);
+        await startSession(feat, "T-2", "T-2: in the branch");
+        assert.match(current(feat).session?.ref ?? "", /^feat\//);
+        // the parent, with branches, records to main
+        assert.deepEqual(await branchArgs(parent), ["--branch", "main"]);
+        // ... and still does once the branch's lineage leaked into it
+        fs.copyFileSync(path.join(feat, ".lap", "lineage"), path.join(parent, ".lap", "lineage"));
+        fs.copyFileSync(path.join(feat, ".lap", "parent"), path.join(parent, ".lap", "parent"));
+        assert.deepEqual(await branchArgs(parent), ["--branch", "main"]);
+        await startSession(parent, "T-3", "T-3: on main after the leak");
+        assert.match(current(parent).session?.ref ?? "", /^S\d+$/, "a main session");
+        // LAP_BRANCH already says it
+        process.env["LAP_BRANCH"] = "feat";
+        assert.deepEqual(await branchArgs(feat), []);
+    } finally {
+        if (saved === undefined) delete process.env["LAP_BIN"];
+        else process.env["LAP_BIN"] = saved;
+        if (savedBranch === undefined) delete process.env["LAP_BRANCH"];
+        else process.env["LAP_BRANCH"] = savedBranch;
     }
 });

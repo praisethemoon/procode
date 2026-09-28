@@ -10,7 +10,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { branchArgs } from "../lap";
 import { handle } from "../mcp";
 import { Board, locateBoard } from "../store";
 
@@ -185,27 +184,6 @@ for (let i = 0; i < 25; i++) b.create({ kind: "ticket", title: "${tag} " + i, ep
     const tickets = new Board(parent).all().filter((i) => i.kind === "ticket");
     assert.equal(tickets.length, 50);
     assert.equal(new Set(tickets.map((t) => t.id)).size, 50, "no id was handed out twice");
-});
-
-test("branchArgs: the branch id in a branch folder, main where branches exist, else nothing", () => {
-    const { parent, branch } = project();
-    const saved = process.env["LAP_BRANCH"];
-    delete process.env["LAP_BRANCH"];
-    try {
-        assert.deepEqual(branchArgs(path.join(branch, "src")), ["--branch", "0123456789ab"]);
-        fs.mkdirSync(path.join(parent, ".lap"), { recursive: true });
-        assert.deepEqual(branchArgs(parent), []);
-        fs.writeFileSync(path.join(parent, ".lap", "branches.json"), "[]\n");
-        assert.deepEqual(branchArgs(parent), []);
-        fs.writeFileSync(path.join(parent, ".lap", "branches.json"), '[{"id":"0123456789ab"}]\n');
-        assert.deepEqual(branchArgs(parent), ["--branch", "main"]);
-        assert.deepEqual(branchArgs(tmp()), []);
-        process.env["LAP_BRANCH"] = "feat";
-        assert.deepEqual(branchArgs(branch), [], "LAP_BRANCH already says it");
-    } finally {
-        if (saved === undefined) delete process.env["LAP_BRANCH"];
-        else process.env["LAP_BRANCH"] = saved;
-    }
 });
 
 test("a board whose folder cannot be written fails at once, as a refusal, never waiting", { skip: process.getuid?.() === 0 }, async () => {

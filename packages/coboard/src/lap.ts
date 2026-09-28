@@ -12,8 +12,6 @@
  */
 
 import { execFile } from "node:child_process";
-import * as fs from "node:fs";
-import * as path from "node:path";
 
 export interface LapSession {
     readonly id: string;
@@ -328,41 +326,28 @@ export async function commitDiff(root: string, commit: string): Promise<LapDiff>
  * is its parent's). Fails when lap does, e.g. because another session is
  * already active. */
 export async function startSession(cwd: string, ticket: string, purpose: string): Promise<string> {
-    const p = await run(cwd, ["session", "start", purpose, "--meta", `ticket=${ticket}`, ...branchArgs(cwd)]);
+    const p = await run(cwd, ["session", "start", purpose, "--meta", `ticket=${ticket}`, ...(await branchArgs(cwd))]);
     return String(p["id"]);
 }
 
 /* What lap needs to hear on a session start where branches exist: the
- * branch folder's id (lap takes it for the name), or main in a folder with
- * branches. Nothing where there are none, so a lap from before branches
- * still works, and nothing when LAP_BRANCH already says it. */
-export function branchArgs(cwd: string): string[] {
+ * line this folder records to, as lap itself decides it (lap branch list's
+ * self: a branch folder's id, which lap takes for the name; a lineage file
+ * that leaked here through git is not one), or main in a folder with
+ * branches. Nothing where there are none, or where lap cannot say (a lap
+ * from before branches), and nothing when LAP_BRANCH already says it. */
+export async function branchArgs(cwd: string): Promise<string[]> {
     if (process.env["LAP_BRANCH"]) {
         return [];
     }
-    let dir = path.resolve(cwd);
-    for (;;) {
-        const lapDir = path.join(dir, ".lap");
-        if (fs.existsSync(lapDir)) {
-            try {
-                const id = fs.readFileSync(path.join(lapDir, "lineage"), "utf8").trim();
-                if (id) return ["--branch", id];
-            } catch {
-                /* not a branch folder */
-            }
-            try {
-                const reg: unknown = JSON.parse(fs.readFileSync(path.join(lapDir, "branches.json"), "utf8"));
-                if (Array.isArray(reg) && reg.length > 0) return ["--branch", "main"];
-            } catch {
-                /* no branches, or a registry lap would read as none */
-            }
-            return [];
-        }
-        const up = path.dirname(dir);
-        if (up === dir) {
-            return [];
-        }
-        dir = up;
+    try {
+        const list = await run(cwd, ["branch", "list"]);
+        const self = list["self"] as Record<string, unknown> | null | undefined;
+        if (self && typeof self["id"] === "string") return ["--branch", self["id"]];
+        const rows = list["branches"];
+        return Array.isArray(rows) && rows.length > 0 ? ["--branch", "main"] : [];
+    } catch {
+        return [];
     }
 }
 
