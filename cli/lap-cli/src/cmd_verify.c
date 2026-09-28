@@ -363,6 +363,11 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         return LAP_EXIT_ERR;
     }
     Idx *ix = deep && scan.chain_ok ? idx_ready(a, &repo) : NULL;
+    /* verification never trusts a cache it checks: the index leads the
+     * replay only once it matches the history, else the whole log does */
+    char ixwhy[512] = "";
+    if (ix && !idx_matches_log(a, &repo, ix, ixwhy, sizeof ixwhy))
+        ix = NULL;
     bool whole = !scan.chain_ok || (deep && !ix);
     RecLog log;
     memset(&log, 0, sizeof log);
@@ -446,6 +451,17 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         plat_walk(a, snapdir, on_snapshot_file, &sc);
         checked = dc.checked;
         mismatched = dc.mismatched;
+    }
+    if (ixwhy[0]) { /* the index itself is one of the caches checked */
+        checked++;
+        mismatched++;
+        if (json) {
+            if (mismatched > 1)
+                sb_putc(&deep_out, ',');
+            json_escape_c(&deep_out, ".lap/index");
+        } else {
+            sb_printf(&deep_out, "  %s\n", ixwhy);
+        }
     }
 
     /* Other branches whose chunks are here (git merge brought them, or lap

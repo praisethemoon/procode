@@ -521,3 +521,118 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
     arena_free(scratch);
     return sync_write(r, &s, covered, err, errsz);
 }
+
+/* The entry kind the index gives a record of type t. */
+static uint8_t kind_of(RecType t) {
+    switch (t) {
+    case REC_INIT: return IDX_INIT;
+    case REC_COMMIT: return IDX_COMMIT;
+    case REC_SESSION_START: return IDX_SESSION_START;
+    case REC_SESSION_END: return IDX_SESSION_END;
+    case REC_BRANCH: return IDX_BRANCH;
+    case REC_MERGE: return IDX_MERGE;
+    case REC_AMEND: return IDX_AMEND;
+    case REC_UNKNOWN: break;
+    }
+    return IDX_UNKNOWN;
+}
+
+bool idx_matches_log(Arena *a, const Repo *r, const Idx *idx, char *why,
+                     size_t whysz) {
+    const Hist *h = &r->hist;
+    int64_t *last = (int64_t *)arena_alloc(
+        a, (size_t)(idx->npaths ? idx->npaths : 1) * sizeof(int64_t));
+    for (int32_t f = 0; f < idx->npaths; f++)
+        last[f] = -1;
+    Arena *ca = arena_new(1 << 16), *ra = arena_new(1 << 16);
+    bool ok = true;
+    int64_t n = 0; /* records seen, so the entry each should have */
+    for (int32_t k = 0; ok && k < h->n; k++) {
+        if (h->v[k].size == 0)
+            continue;
+        arena_reset(ca);
+        char *data;
+        size_t len = (size_t)h->v[k].size;
+        if (!hist_read(ca, h, h->v[k].start, len, &data)) {
+            snprintf(why, whysz, "cannot read %s", h->v[k].name);
+            ok = false;
+            break;
+        }
+        for (size_t start = 0; ok && start < len;) {
+            const char *nl = memchr(data + start, '\n', len - start);
+            if (!nl)
+                break; /* a torn tail: not covered */
+            size_t ln = (size_t)(nl - (data + start));
+            uint64_t off = h->v[k].start + start;
+            start += ln + 1;
+            if (ln == 0)
+                continue;
+            arena_reset(ra);
+            Rec rec;
+            char derr[128];
+            if (!rec_decode(ra, data + off - h->v[k].start, ln, &rec, derr,
+                            sizeof derr)) {
+                snprintf(why, whysz, "%s: %s", h->v[k].name, derr);
+                ok = false;
+                break;
+            }
+            const char *rid = rec.id ? rec.id : "a record";
+            if ((uint64_t)n >= idx->h.count) {
+                snprintf(why, whysz, "index: %s has no entry", rid);
+                ok = false;
+                break;
+            }
+            const IdxEntry *e = &idx->v[n];
+            if (e->off != off || e->len != (uint32_t)ln ||
+                e->kind != kind_of(rec.type)) {
+                snprintf(why, whysz,
+                         "index: entry %lld does not describe %s where the "
+                         "history has it",
+                         (long long)n, rid);
+                ok = false;
+                break;
+            }
+            if (rec.type == REC_COMMIT) {
+                uint8_t op = strcmp(rec.op, "create") == 0   ? IDX_OP_CREATE
+                             : strcmp(rec.op, "delete") == 0 ? IDX_OP_DELETE
+                                                             : IDX_OP_EDIT;
+                if (e->file_id >= (uint32_t)idx->npaths ||
+                    strcmp(idx->paths[e->file_id], rec.file) != 0 ||
+                    e->op != op) {
+                    snprintf(why, whysz,
+                             "index: entry %lld is not %s's commit to %s",
+                             (long long)n, rid, rec.file);
+                    ok = false;
+                    break;
+                }
+                if (e->prev_same_file != last[e->file_id]) {
+                    snprintf(why, whysz,
+                             "index: %s's chain of commits is not the "
+                             "history's at %s",
+                             rec.file, rid);
+                    ok = false;
+                    break;
+                }
+                last[e->file_id] = n;
+            }
+            n++;
+        }
+    }
+    arena_free(ca);
+    arena_free(ra);
+    if (ok && (uint64_t)n != idx->h.count) {
+        snprintf(why, whysz, "index: %llu entries for %lld records",
+                 (unsigned long long)idx->h.count, (long long)n);
+        ok = false;
+    }
+    for (int32_t f = 0; ok && f < idx->npaths; f++) {
+        if (idx->heads[f].head != last[f]) {
+            snprintf(why, whysz,
+                     "index: the last commit it gives %s is not the "
+                     "history's",
+                     idx->paths[f]);
+            ok = false;
+        }
+    }
+    return ok;
+}

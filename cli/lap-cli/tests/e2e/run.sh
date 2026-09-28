@@ -2580,6 +2580,34 @@ expect_fail "$LAP" session start "work on a broken chain"
 [ "$(cat .lap/log/*.jsonl | cksum)" = "$SUM" ] || fail "a refused writer wrote history"
 cd "$WORK"
 
+t "verify --deep checks the index it walks, and names it when it is wrong"
+mkdir -p "$WORK/vi1" && cd "$WORK/vi1" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt && printf 'b\n' > b.txt
+for f in a.txt b.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+expect_grep "0 mismatches" "$LAP" verify --deep
+# the index loses a.txt's head, and a.txt's shadow is gone: a damaged index
+# must not hide the missing shadow
+python3 - <<'PY'
+import struct
+names = open('.lap/paths').read().splitlines()
+fid = names.index('a.txt')
+b = bytearray(open('.lap/heads', 'rb').read())
+b[fid * 32:fid * 32 + 8] = struct.pack('=q', -1)
+open('.lap/heads', 'wb').write(b)
+PY
+mkdir -p "$WORK/vi1-aside" && mv .lap/shadow/a.txt "$WORK/vi1-aside/"
+expect_grep "index: the last commit it gives a.txt is not the history's" "$LAP" verify --deep
+expect_grep "missing shadow: a.txt" "$LAP" verify --deep
+expect_grep '"mismatched_files":\["a.txt",".lap/index"\]' "$LAP" verify --deep --json
+expect_fail "$LAP" verify --deep
+# without the index the missing shadow is found the same way
+mv .lap/index .lap/heads .lap/paths "$WORK/vi1-aside/"
+expect_grep "missing shadow: a.txt" "$LAP" verify --deep
+expect_not_grep "index:" "$LAP" verify --deep
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

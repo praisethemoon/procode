@@ -4,6 +4,7 @@
 #endif
 
 #include "hist.h"
+#include "idx.h"
 #include "rec.h"
 #include "sha256.h"
 #include "test.h"
@@ -811,6 +812,100 @@ static void test_tmp_files(Arena *a) {
     clear_chunks();
 }
 
+/* A commit of rel, chained after prev, for the index check. */
+static char *commit_line(Arena *a, const char *id, const char *rel,
+                         const char *op, const char *prev, Rec *out) {
+    memset(out, 0, sizeof *out);
+    out->type = REC_COMMIT;
+    out->id = id;
+    out->file = rel;
+    out->op = op;
+    out->intent = "check the index";
+    out->behavior = "a commit for the index check";
+    out->ts = "t1";
+    out->eof_nl = true;
+    out->prev = prev;
+    size_t n;
+    return rec_encode(a, out, &n);
+}
+
+static void test_index_match(Arena *a) {
+    char why[256], err[256];
+    Rec r0, c1, c2, c3;
+    memset(&r0, 0, sizeof r0);
+    r0.type = REC_INIT;
+    r0.version = 1;
+    r0.ts = "t0";
+    r0.prev = LAP_HASH_ZERO;
+    size_t n0;
+    char *l0 = rec_encode(a, &r0, &n0);
+    char *l1 = commit_line(a, "L1", "a.txt", "create", r0.hash, &c1);
+    char *l2 = commit_line(a, "L2", "b.txt", "create", c1.hash, &c2);
+    char *l3 = commit_line(a, "L3", "a.txt", "edit", c2.hash, &c3);
+    clear_chunks();
+    put_file("main.000001.jsonl",
+             arena_printf(a, "%s\n%s\n%s\n%s\n", l0, l1, l2, l3));
+    Repo r;
+    memset(&r, 0, sizeof r);
+    ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &r.hist, err, sizeof err));
+    /* the index a rebuild would make */
+    IdxEntry v[4];
+    memset(v, 0, sizeof v);
+    uint64_t off = 0;
+    const char *lines[] = {l0, l1, l2, l3};
+    for (int32_t i = 0; i < 4; i++) {
+        v[i].off = off;
+        v[i].len = (uint32_t)strlen(lines[i]);
+        v[i].kind = i == 0 ? IDX_INIT : IDX_COMMIT;
+        v[i].file_id = UINT32_MAX;
+        v[i].prev_same_file = -1;
+        off += v[i].len + 1;
+    }
+    v[1].file_id = 0, v[1].op = IDX_OP_CREATE;
+    v[2].file_id = 1, v[2].op = IDX_OP_CREATE;
+    v[3].file_id = 0, v[3].op = IDX_OP_EDIT, v[3].prev_same_file = 1;
+    char *paths[] = {"a.txt", "b.txt"};
+    FileHead heads[2];
+    memset(heads, 0, sizeof heads);
+    heads[0].head = 3;
+    heads[1].head = 2;
+    Idx ix;
+    memset(&ix, 0, sizeof ix);
+    ix.h.count = 4;
+    ix.v = v;
+    ix.paths = paths;
+    ix.heads = heads;
+    ix.npaths = 2;
+
+    t_begin("idx_matches_log: an index as a rebuild makes it matches");
+    ASSERT_TRUE(idx_matches_log(a, &r, &ix, why, sizeof why));
+
+    t_begin("idx_matches_log: a wrong head, chain, file, place or count is "
+            "named");
+    heads[0].head = -1;
+    ASSERT_TRUE(!idx_matches_log(a, &r, &ix, why, sizeof why));
+    ASSERT_TRUE(strstr(why, "index: the last commit it gives a.txt") !=
+                NULL);
+    heads[0].head = 3;
+    v[3].prev_same_file = -1;
+    ASSERT_TRUE(!idx_matches_log(a, &r, &ix, why, sizeof why));
+    ASSERT_TRUE(strstr(why, "a.txt's chain") != NULL);
+    v[3].prev_same_file = 1;
+    v[2].file_id = 0;
+    ASSERT_TRUE(!idx_matches_log(a, &r, &ix, why, sizeof why));
+    ASSERT_TRUE(strstr(why, "L2's commit to b.txt") != NULL);
+    v[2].file_id = 1;
+    v[2].off += 1;
+    ASSERT_TRUE(!idx_matches_log(a, &r, &ix, why, sizeof why));
+    v[2].off -= 1;
+    ix.h.count = 3;
+    ASSERT_TRUE(!idx_matches_log(a, &r, &ix, why, sizeof why));
+    ASSERT_TRUE(strstr(why, "L3 has no entry") != NULL);
+    ix.h.count = 4;
+    ASSERT_TRUE(idx_matches_log(a, &r, &ix, why, sizeof why));
+    clear_chunks();
+}
+
 void test_hist(void) {
     Arena *a = arena_new(0);
     test_names();
@@ -821,6 +916,7 @@ void test_hist(void) {
     test_branch_history(a);
     test_nested_history(a);
     test_check(a);
+    test_index_match(a);
     test_tmp_files(a);
     arena_free(a);
 }

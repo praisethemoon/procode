@@ -979,10 +979,16 @@ the hunks, in both the human and JSON shapes. Read-only.
 Walks the hash chain across every chunk, naming a modified sealed chunk
 (§Chunks), then the chain of every other branch whose chunks are here, one
 line each (`branch b: chain ok: 8 records`; in JSON, `branches:
-[{branch, records, chain_ok, chain_error?}]`). A broken one fails the
-command. `--deep` also replays every file's history from
-birth and compares the result byte-for-byte with the shadow store and
-every snapshot. Verification never uses the caches it is checking.
+[{branch, records, chain_ok, chain_error?, unknown_records?,
+unknown_type?}]`). A broken one fails the command. `--deep` also replays
+every file's history from birth and compares the result byte-for-byte with
+the shadow store and every snapshot. Verification never uses the caches it
+is checking: the index leads the replay (one file at a time) only after one
+pass over the history finds it as a rebuild would make it — each record's
+entry, each commit's file and the file's commit before it, each file's
+last. An index that differs is a mismatch of its own (`index: …`; in JSON,
+`.lap/index` among `mismatched_files`), and the whole history is replayed
+instead.
 
 ### `lap branch start [name] --from <folder>`
 Makes the current folder a branch of `<folder>` (§Branches → Starting one),

@@ -88,6 +88,14 @@ Idx *idx_ready(Arena *a, const Repo *r);
  * or missing index becomes a full rebuild. */
 bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz);
 
+/* Whether idx describes r's history as a rebuild would: an entry for each
+ * record where it lies, of its kind, and for a commit its file, op and the
+ * file's commit before it; each file's last commit its head. One pass a
+ * chunk at a time, so memory is a chunk's plus a slot per file. False with
+ * the first difference in why ("index: ..."). */
+bool idx_matches_log(Arena *a, const Repo *r, const Idx *idx, char *why,
+                     size_t whysz);
+
 /* ISO-8601 UTC -> epoch seconds; 0 when unparseable. */
 uint64_t idx_epoch(const char *ts);
 
