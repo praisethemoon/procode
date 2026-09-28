@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { LapMessage } from "coboard/lap";
+import { summaryParts, type LapSummary } from "coboard/summary";
 import type { Counts } from "coboard/model";
 import { TICKET_STATUSES } from "coboard/model";
 import { shortHash } from "../src/commits";
@@ -55,6 +56,26 @@ export function CommitText(props: { text: string }): JSX.Element {
                 ),
             )}
         </>
+    );
+}
+
+/* How a lap session ended, when it ended with a summary: Done, Decided and
+ * Left, each part given, as plain text whose commit names are links.
+ * Nothing at all for a session without one. */
+export function SessionSummary(props: { summary: LapSummary | null | undefined }): JSX.Element | null {
+    const parts = summaryParts(props.summary);
+    if (parts.length === 0) return null;
+    return (
+        <dl className="cb-summary">
+            {parts.map((p) => (
+                <div key={p.label} className="cb-summary-part">
+                    <dt>{p.label}</dt>
+                    <dd>
+                        <CommitText text={p.text} />
+                    </dd>
+                </div>
+            ))}
+        </dl>
     );
 }
 

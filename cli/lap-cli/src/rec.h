@@ -60,6 +60,10 @@ typedef struct {
     /* commit, session_start, session_end: the hash of the branch record
      * this one adopted (lap merge); NULL for the folder's own work. */
     const char *from;
+    /* session_end only: the summary the session ended with, each part
+     * optional (NULL, and absent from the line, when not given) — what was
+     * done, what was decided and why, what was left. */
+    const char *sum_done, *sum_decided, *sum_left;
     /* merge only: branch is the adopted branch's id (name its name), head
      * the hash of its last record adopted, adopted and left the commits
      * placed and not, stopped the files a conflict stopped with the hash
@@ -182,6 +186,15 @@ const char *rec_meta(const Rec *rec, const char *key);
 /* Emits `,"meta":{...}` for a session_start record — `{}` when it has none —
  * so JSON readers always find the key. */
 void rec_meta_json(StrBuf *sb, const Rec *rec);
+
+/* Whether a session_end record (NULL: the session is open) carries any
+ * part of a summary. */
+bool rec_has_summary(const Rec *end);
+
+/* Emits `,"summary":{"done":…,"decided":…,"left":…}` for a session's end
+ * record, each part null when not given, and `,"summary":null` when the
+ * session is open or ended without one. */
+void rec_summary_json(StrBuf *sb, const Rec *end);
 
 /* `key=value` from a command line to a metadata pair. The key must be an
  * identifier ([A-Za-z_][A-Za-z0-9_]*). The value becomes a JSON number when it

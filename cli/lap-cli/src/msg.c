@@ -149,17 +149,30 @@ void msg_trim(char *s) {
     s[len] = '\0';
 }
 
-/* A header line: exactly "Intent:" or "Behavior:", trailing blanks and a
- * CR allowed. */
-static int header_of(const char *line, size_t len) {
+/* A header line: exactly "<name>:" for one of names, trailing blanks and a
+ * CR allowed. Returns its index + 1, or 0. */
+static int32_t header_of(const char *line, size_t len,
+                         const char *const *names, int32_t n) {
     while (len > 0 && (line[len - 1] == '\r' || line[len - 1] == ' ' ||
                        line[len - 1] == '\t'))
         len--;
-    if (len == 7 && memcmp(line, "Intent:", 7) == 0)
-        return 1;
-    if (len == 9 && memcmp(line, "Behavior:", 9) == 0)
-        return 2;
+    for (int32_t i = 0; i < n; i++) {
+        size_t k = strlen(names[i]);
+        if (len == k + 1 && memcmp(line, names[i], k) == 0 && line[k] == ':')
+            return i + 1;
+    }
     return 0;
+}
+
+/* "Intent: or Behavior:", "Done:, Decided: or Left:". */
+static const char *header_list(Arena *a, const char *const *names,
+                               int32_t n) {
+    StrBuf sb;
+    sb_init(&sb, a);
+    for (int32_t i = 0; i < n; i++)
+        sb_printf(&sb, "%s%s:", i == 0 ? "" : i == n - 1 ? " or " : ", ",
+                  names[i]);
+    return sb_finish(&sb);
 }
 
 static bool blank(const char *s, size_t len) {
@@ -170,20 +183,28 @@ static bool blank(const char *s, size_t len) {
     return true;
 }
 
-bool msg_parse_file(Arena *a, const char *text, const char **intent,
-                    const char **behavior, char *err, size_t errsz) {
-    const char *start[3] = {NULL, NULL, NULL}; /* section text begins */
-    const char *end[3] = {NULL, NULL, NULL};
+#define MSG_MAX_SECTIONS 8
+
+bool msg_parse_sections(Arena *a, const char *text, const char *const *names,
+                        int32_t n, bool required, const char **out, char *err,
+                        size_t errsz) {
+    if (n < 1 || n > MSG_MAX_SECTIONS) {
+        snprintf(err, errsz, "between 1 and %d sections", MSG_MAX_SECTIONS);
+        return false;
+    }
+    /* where each section's text begins and ends, by header index + 1 */
+    const char *start[MSG_MAX_SECTIONS + 1] = {NULL};
+    const char *end[MSG_MAX_SECTIONS + 1] = {NULL};
     int32_t cur = 0;
     const char *p = text;
     while (*p) {
         const char *nl = strchr(p, '\n');
         size_t len = nl ? (size_t)(nl - p) : strlen(p);
-        int h = header_of(p, len);
+        int32_t h = header_of(p, len, names, n);
         if (h) {
             if (start[h]) {
                 snprintf(err, errsz, "the %s: section appears twice",
-                         h == 1 ? "Intent" : "Behavior");
+                         names[h - 1]);
                 return false;
             }
             if (cur)
@@ -191,20 +212,27 @@ bool msg_parse_file(Arena *a, const char *text, const char **intent,
             cur = h;
             start[h] = nl ? nl + 1 : p + len;
         } else if (!cur && !blank(p, len)) {
-            snprintf(err, errsz,
-                     "text before the first Intent: or Behavior: line");
+            snprintf(err, errsz, "text before the first %s line",
+                     header_list(a, names, n));
             return false;
         }
         p = nl ? nl + 1 : p + len;
     }
     if (cur)
         end[cur] = p;
-    const char **out[3] = {NULL, intent, behavior};
-    for (int h = 1; h <= 2; h++) {
-        const char *name = h == 1 ? "Intent" : "Behavior";
+    if (!cur) {
+        snprintf(err, errsz, required ? "no %s: section" : "no %s section",
+                 required ? names[0] : header_list(a, names, n));
+        return false;
+    }
+    for (int32_t h = 1; h <= n; h++) {
+        out[h - 1] = NULL;
         if (!start[h]) {
-            snprintf(err, errsz, "no %s: section", name);
-            return false;
+            if (required) {
+                snprintf(err, errsz, "no %s: section", names[h - 1]);
+                return false;
+            }
+            continue;
         }
         const char *s = start[h];
         while (s < end[h] && (*s == '\n' || *s == '\r' || *s == ' ' ||
@@ -213,10 +241,34 @@ bool msg_parse_file(Arena *a, const char *text, const char **intent,
         char *t = arena_strndup(a, s, (size_t)(end[h] - s));
         msg_trim(t);
         if (!t[0]) {
-            snprintf(err, errsz, "the %s: section is empty", name);
+            snprintf(err, errsz, "the %s: section is empty", names[h - 1]);
             return false;
         }
-        *out[h] = t;
+        out[h - 1] = t;
     }
+    return true;
+}
+
+bool msg_parse_file(Arena *a, const char *text, const char **intent,
+                    const char **behavior, char *err, size_t errsz) {
+    static const char *const names[] = {"Intent", "Behavior"};
+    const char *out[2];
+    if (!msg_parse_sections(a, text, names, 2, true, out, err, errsz))
+        return false;
+    *intent = out[0];
+    *behavior = out[1];
+    return true;
+}
+
+bool msg_parse_summary(Arena *a, const char *text, const char **done,
+                       const char **decided, const char **left, char *err,
+                       size_t errsz) {
+    static const char *const names[] = {"Done", "Decided", "Left"};
+    const char *out[3];
+    if (!msg_parse_sections(a, text, names, 3, false, out, err, errsz))
+        return false;
+    *done = out[0];
+    *decided = out[1];
+    *left = out[2];
     return true;
 }

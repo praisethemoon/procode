@@ -273,6 +273,17 @@ body {
 .lh-field {
     margin-top: 2px;
 }
+/* How an expanded session ended, above its commits: laid out as a commit's
+ * detail is, each part keeping its own line breaks. */
+.lh-summary {
+    padding: 2px 10px 6px 0;
+    line-height: 1.4;
+    user-select: text;
+}
+.lh-summary .lh-field {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
 .lh-label {
     color: var(--bk-color-foreground-muted);
 }

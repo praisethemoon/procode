@@ -18,6 +18,8 @@ typedef struct {
     int32_t first, last; /* indices into the log, inclusive */
     const char *title;   /* the session's purpose, when there is one */
     const char *label;
+    const Rec *end;      /* the session's end record: NULL when open, or
+                            for a range of commits */
 } Range;
 
 static bool range_from_session(const RecLog *log, uint32_t sess, Range *out) {
@@ -27,6 +29,8 @@ static bool range_from_session(const RecLog *log, uint32_t sess, Range *out) {
         const Rec *rec = &log->v[i];
         if (rec->type == REC_SESSION_START && rec_session_no(rec->id) == sess)
             out->title = rec->msg;
+        if (rec->type == REC_SESSION_END && rec_session_no(rec->id) == sess)
+            out->end = rec;
         if (rec->type != REC_COMMIT || rec_session_no(rec->session) != sess)
             continue;
         if (out->first < 0)
@@ -51,6 +55,30 @@ static bool range_from_refs(const RecLog *log, const char *from,
         return false;
     }
     return out->first <= out->last;
+}
+
+/* The summary a session ended with, first thing under the heading: each part
+ * given, labelled, its later lines indented under its first. */
+static void render_summary(StrBuf *sb, const Rec *end) {
+    const char *const label[3] = {"done:    ", "decided: ", "left:    "};
+    const char *const val[3] = {end->sum_done, end->sum_decided,
+                                end->sum_left};
+    sb_putc(sb, '\n');
+    for (int32_t i = 0; i < 3; i++) {
+        if (!val[i])
+            continue;
+        sb_puts(sb, "\n  ");
+        sb_field(sb, S_MUTED, label[i], 0);
+        for (const char *p = val[i];;) {
+            const char *nl = strchr(p, '\n');
+            size_t len = nl ? (size_t)(nl - p) : strlen(p);
+            sb_text(sb, p, len);
+            if (!nl)
+                break;
+            sb_puts(sb, "\n           ");
+            p = nl + 1;
+        }
+    }
 }
 
 /* Renders the net change of one file as a unified-style diff. */
@@ -178,6 +206,7 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
         json_escape_c(&sb, label);
         sb_puts(&sb, ",\"purpose\":");
         json_escape_c(&sb, rng.title ? rng.title : "");
+        rec_summary_json(&sb, rng.end);
         sb_printf(&sb, ",\"commits\":%d,\"from\":\"%s\",\"to\":\"%s\"",
                   ncommits, log.v[rng.first].ts, log.v[rng.last].ts);
         sb_puts(&sb, ",\"trajectory\":[");
@@ -198,6 +227,8 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
         sb_printf(&sb, "\n  %d commit%s · ", ncommits,
                   ncommits == 1 ? "" : "s");
         sb_field(&sb, S_MUTED, span, 0);
+        if (rec_has_summary(rng.end))
+            render_summary(&sb, rng.end);
         sb_puts(&sb, "\n\ntrajectory:\n");
     }
 

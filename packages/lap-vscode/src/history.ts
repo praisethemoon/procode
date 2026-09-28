@@ -18,7 +18,7 @@
  * recent commit first. Commits made outside any session are one group, last.
  */
 
-import { CommitRec, EarlierText, LapLog, SessionRec, regionLabel, summaryLine } from "./model";
+import { CommitRec, EarlierText, LapLog, SessionRec, SessionSummary, regionLabel, summaryLine } from "./model";
 
 export const RANGES = ["recent", "today", "3d", "week", "30d", "all"] as const;
 export type Range = (typeof RANGES)[number];
@@ -138,6 +138,8 @@ export interface SessionRow {
     readonly branch: string | null;
     readonly ts: string;
     readonly endTs: string | null;
+    /* How it ended (Done / Decided / Left), or null. */
+    readonly endSummary: SessionSummary | null;
     readonly state: SessionState;
     /* The commits shown, newest first, and how many the session has in all. */
     readonly commits: readonly CommitRow[];
@@ -246,6 +248,17 @@ export interface SessionLineParts {
     readonly tooltip: string;
 }
 
+/* The parts a session ended with, in order and labelled; none without a summary. */
+export function endSummaryParts(s: SessionSummary | null): { readonly label: string; readonly text: string }[] {
+    if (!s) return [];
+    const parts: [string, string | null][] = [
+        ["Done", s.done],
+        ["Decided", s.decided],
+        ["Left", s.left],
+    ];
+    return parts.filter((p): p is [string, string] => p[1] !== null && p[1] !== "").map(([label, text]) => ({ label, text }));
+}
+
 export function sessionLine(s: SessionRow, filtering: boolean): SessionLineParts {
     const id = s.id === null ? null : s.branch ? `${s.branch}/${s.id}` : s.id;
     const shown = s.commits.length;
@@ -263,7 +276,7 @@ export function sessionLine(s: SessionRow, filtering: boolean): SessionLineParts
         leadIsTicket: s.ticket !== null,
         title,
         end,
-        tooltip: `${id ?? "no session"} · ${s.msg}\n\n${times}`,
+        tooltip: [`${id ?? "no session"} · ${s.msg}`, ...endSummaryParts(s.endSummary).map((p) => `${p.label}: ${p.text}`), times].join("\n\n"),
     };
 }
 
@@ -344,6 +357,7 @@ function matching(log: LapLog, filter: HistoryFilter, options: { grouped: boolea
             branch: log.branchAt !== null && s.recIndex > log.branchAt ? log.branchName : null,
             ts: s.ts,
             endTs: s.endTs,
+            endSummary: s.summary,
             state,
             commits: shown.map(row),
             total: s.commits.length,
@@ -362,6 +376,7 @@ function matching(log: LapLog, filter: HistoryFilter, options: { grouped: boolea
                 branch: null,
                 ts: last.ts,
                 endTs: null,
+                endSummary: null,
                 state: "none",
                 commits: shown.map(row),
                 total: log.noSession.length,

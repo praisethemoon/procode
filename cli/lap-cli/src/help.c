@@ -81,7 +81,14 @@ static const HelpFlag F_SEARCH[] = {
     END};
 
 static const HelpFlag F_SESSION[] = {
-    {"-F", NULL, "<file>", "on start: read the purpose from a file (- = stdin)"},
+    {"-F", NULL, "<file>",
+     "on start: read the purpose from a file (- = stdin); on end: the\n"
+     "summary, as Done:, Decided: and Left: sections"},
+    {"--done", NULL, "\"text\"", "on end: what the session achieved"},
+    {"--decided", NULL, "\"text\"",
+     "on end: choices made along the way, and why"},
+    {"--left", NULL, "\"text\"",
+     "on end: what is unfinished, broken or deliberately not done"},
     {"--meta", NULL, "key=value",
      "on start: tag the session (repeatable), e.g. --meta\n"
      "ticket=T-12; on list: keep the sessions carrying it"},
@@ -95,6 +102,19 @@ static const HelpFlag F_SESSION_START[] = {
     {"--meta", NULL, "key=value",
      "tag the session (repeatable), e.g. --meta ticket=T-12"},
     BRANCH_WRITE,
+    JSON_FLAG,
+    END};
+
+static const HelpFlag F_SESSION_END[] = {
+    {"--done", NULL, "\"text\"",
+     "what the session achieved (the purpose was the plan)"},
+    {"--decided", NULL, "\"text\"",
+     "choices made along the way that someone may question, and why"},
+    {"--left", NULL, "\"text\"",
+     "what is unfinished, known broken, or deliberately not done"},
+    {"-F", NULL, "<file>",
+     "the summary from a file (- = stdin): Done:, Decided: and Left:\n"
+     "sections, each optional"},
     JSON_FLAG,
     END};
 
@@ -182,8 +202,11 @@ const HelpCmd HELP_CMDS[] = {
      "[--branch <name>] [--json]",
      "open a session for one piece of work",
      F_SESSION_START, NULL, false},
-    {"session end", NULL, "session end [--json]", "close the active session",
-     F_JSON_ONLY, NULL, false},
+    {"session end", NULL,
+     "session end [--done \"…\"] [--decided \"…\"] [--left \"…\"] [-F <file|->]\n"
+     "[--json]",
+     "close the active session, with an optional summary of how it went",
+     F_SESSION_END, NULL, false},
     {"session list", NULL,
      "session list [--meta key=value]... [--branch <name>] [--json]",
      "every session with its commit count",

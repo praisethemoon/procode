@@ -82,6 +82,44 @@ void test_msg(void) {
                                 &behavior, err, sizeof err));
     ASSERT_TRUE(!msg_parse_file(a, "intent: lower case is not a header\n",
                                 &intent, &behavior, err, sizeof err));
+    ASSERT_TRUE(!msg_parse_file(a, "Intent:\ni\nIntent:\nj\nBehavior:\nb",
+                                &intent, &behavior, err, sizeof err));
+    ASSERT_EQ_S(err, "the Intent: section appears twice");
+    ASSERT_TRUE(!msg_parse_file(a, "x\nIntent:\ni\nBehavior:\nb", &intent,
+                                &behavior, err, sizeof err));
+    ASSERT_EQ_S(err, "text before the first Intent: or Behavior: line");
+    ASSERT_TRUE(!msg_parse_file(a, "", &intent, &behavior, err, sizeof err));
+    ASSERT_EQ_S(err, "no Intent: section");
+
+    t_begin("msg: a session's end summary, every section optional");
+    const char *done, *decided, *left;
+    ASSERT_TRUE(msg_parse_summary(a,
+                                  "Left:\nthe icons, unchecked\n"
+                                  "Done:\n  renamed everything\n\n",
+                                  &done, &decided, &left, err, sizeof err));
+    ASSERT_EQ_S(done, "renamed everything");
+    ASSERT_TRUE(decided == NULL);
+    ASSERT_EQ_S(left, "the icons, unchecked");
+    ASSERT_TRUE(msg_parse_summary(a, "Decided:\nids stay A-<n>", &done,
+                                  &decided, &left, err, sizeof err));
+    ASSERT_TRUE(done == NULL && left == NULL);
+    ASSERT_EQ_S(decided, "ids stay A-<n>");
+
+    t_begin("msg: summaries that are refused");
+    ASSERT_TRUE(!msg_parse_summary(a, "", &done, &decided, &left, err,
+                                   sizeof err));
+    ASSERT_EQ_S(err, "no Done:, Decided: or Left: section");
+    ASSERT_TRUE(!msg_parse_summary(a, "all went well\nDone:\nx", &done,
+                                   &decided, &left, err, sizeof err));
+    ASSERT_EQ_S(err, "text before the first Done:, Decided: or Left: line");
+    ASSERT_TRUE(!msg_parse_summary(a, "Done:\n\nLeft:\nx", &done, &decided,
+                                   &left, err, sizeof err));
+    ASSERT_EQ_S(err, "the Done: section is empty");
+    ASSERT_TRUE(!msg_parse_summary(a, "Left:\nx\nLeft:\ny", &done, &decided,
+                                   &left, err, sizeof err));
+    ASSERT_EQ_S(err, "the Left: section appears twice");
+    ASSERT_TRUE(!msg_parse_summary(a, "Intent:\nx", &done, &decided, &left,
+                                   err, sizeof err));
 
     arena_free(a);
 }

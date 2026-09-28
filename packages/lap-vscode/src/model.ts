@@ -61,7 +61,16 @@ export interface SessionRec {
     ticket: string | null;
     ts: string;
     endTs: string | null;
+    /* how it ended (lap session end --done/--decided/--left), each part
+     * null when not given; null when open or ended without one */
+    summary: SessionSummary | null;
     commits: CommitRec[];
+}
+
+export interface SessionSummary {
+    readonly done: string | null;
+    readonly decided: string | null;
+    readonly left: string | null;
 }
 
 /* What one lap merge adopted of a branch. */
@@ -192,6 +201,7 @@ function foldLine(r: LogReader, line: string): void {
             ticket: ticketOf(rec["meta"]),
             ts: String(rec["ts"] ?? ""),
             endTs: null,
+            summary: null,
             commits: [],
         };
         log.sessions.push(s);
@@ -204,6 +214,9 @@ function foldLine(r: LogReader, line: string): void {
         const s = r.byId.get(String(rec["id"] ?? ""));
         if (s) {
             s.endTs = String(rec["ts"] ?? "");
+            const part = (k: string) => (typeof rec[k] === "string" ? (rec[k] as string) : null);
+            const summary = { done: part("done"), decided: part("decided"), left: part("left") };
+            s.summary = summary.done ?? summary.decided ?? summary.left ? summary : null;
         }
         if (typeof rec["from"] !== "string") {
             log.activeSessionId = null; /* matches the CLI: any end closes */

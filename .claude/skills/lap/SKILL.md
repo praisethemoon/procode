@@ -3,7 +3,7 @@ name: lap
 description: Record fine-grained edit history with the lap CLI while coding. Use whenever a lap repository (.lap directory) exists in the project, or the user asks to track edits with lap. Teaches the session -> edit -> commit cadence, one-edit-per-commit recovery, and history search.
 compatibility: Requires the lap CLI (cli/lap-cli) on PATH.
 metadata:
-  version: "1"
+  version: "2"
 ---
 
 # lap — fine-grained edit recording
@@ -31,7 +31,19 @@ lap falls back to `git config user.name`, then the OS username.
    It prints the new commit's id and short hash: `[L42 fa9cebd] ...`.
    One edit tool call ≈ one lap commit. Do not batch several unrelated
    edits and commit later — that is exactly what lap rejects.
-3. **When the task is done**: `lap session end`.
+3. **When the task is done**: `lap session end`, with a summary when the
+   session did more than its purpose says:
+   ```
+   lap session end --done "<what it achieved>" \
+       --decided "<choices someone may question, and why>" \
+       --left "<what is unfinished, broken or deliberately not done>"
+   ```
+   Every part is optional; give the ones that say something. **Done** is
+   the outcome (the purpose was the plan). **Decided** is what no single
+   commit shows: a choice between approaches, a scope cut, with the
+   reason. **Left** is what the next person must know is not there. Keep
+   each to a sentence or three of facts, not a narrative. Or `-F <file|->`
+   with `Done:`, `Decided:` and `Left:` sections. `lap rr` shows it first.
 
 ## Commit messages: intent and behavior
 

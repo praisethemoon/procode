@@ -117,8 +117,16 @@ lap session start "add retry handling"      # name the task before you begin
 # ... edit src/fetch.c ...
 lap commit src/fetch.c -i "retry on 429: staging returns it under load" \
     -b "calls retry() when send() answers 429"
-lap session end
+lap session end --done "fetch retries on 429" \
+    --decided "no backoff cap: staging never exceeded 3 tries" \
+    --left "the 503 path still fails fast"
 ```
+
+The summary at `session end` is optional, and each of its three parts is
+too. **Done** is what the session achieved (the purpose was the plan),
+**Decided** the choices someone might question later, with why, and **Left**
+what is unfinished or deliberately not done. `lap rr` shows it first; `-F`
+takes a file with `Done:`, `Decided:` and `Left:` sections instead.
 
 The cadence that matters is **one edit, one commit, immediately** — not a
 batch at the end. If you changed two separate places, lap refuses and shows

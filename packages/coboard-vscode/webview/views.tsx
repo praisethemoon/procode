@@ -11,7 +11,7 @@ import { CommitGroup, groupCommits, splitPath } from "../src/commits";
 import { ViewMode, columns, moves } from "../src/kanban";
 import { sessionKey } from "../src/protocol";
 import type { Choices, Fields, Sessions } from "../src/protocol";
-import { CommitLine, CommitText, Description, IdLink, InlineText, Markdown, Pick, Progress, QuickAdd, StatusBadge } from "./parts";
+import { CommitLine, CommitText, Description, IdLink, InlineText, Markdown, Pick, Progress, QuickAdd, SessionSummary, StatusBadge } from "./parts";
 import { send } from "./rpc";
 
 const opts = (xs: readonly string[]) => xs.map((x) => ({ value: x, label: x }));
@@ -426,6 +426,7 @@ function SessionsSection(props: { ticket: string; sessions: Sessions | null; com
                                         </Button>
                                     </span>
                                 </div>
+                                {expanded && <SessionSummary summary={x.summary} />}
                                 {expanded && (
                                     <ul className="cb-commits">
                                         {commits === undefined ? (

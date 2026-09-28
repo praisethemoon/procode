@@ -45,6 +45,21 @@ const char *msg_check(Arena *a, const MsgInput *in, char *why, size_t whysz);
 bool msg_parse_file(Arena *a, const char *text, const char **intent,
                     const char **behavior, char *err, size_t errsz);
 
+/* Splits text into the sections named (a header line is exactly "<name>:"),
+ * each trimmed; out[i] is NULL for a section that is not there. With
+ * required, every section must be there; without, at least one must. A
+ * section named twice, an empty one, or text before the first header is
+ * refused, with a reason in err. */
+bool msg_parse_sections(Arena *a, const char *text, const char *const *names,
+                        int32_t n, bool required, const char **out, char *err,
+                        size_t errsz);
+
+/* A session's end summary from a -F file: its Done:, Decided: and Left:
+ * sections, each optional (NULL when absent), at least one given. */
+bool msg_parse_summary(Arena *a, const char *text, const char **done,
+                       const char **decided, const char **left, char *err,
+                       size_t errsz);
+
 /* Trailing spaces, tabs and line ends removed, in place. */
 void msg_trim(char *s);
 

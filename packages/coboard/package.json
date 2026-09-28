@@ -28,6 +28,10 @@
     "./lap": {
       "types": "./out/lap.d.ts",
       "default": "./out/lap.js"
+    },
+    "./summary": {
+      "types": "./out/summary.d.ts",
+      "default": "./out/summary.js"
     }
   },
   "typesVersions": {

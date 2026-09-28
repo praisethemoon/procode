@@ -13,6 +13,11 @@
 
 import { execFile } from "node:child_process";
 
+import type { LapSummary } from "./summary";
+
+export { summaryParts } from "./summary";
+export type { LapSummary } from "./summary";
+
 export interface LapSession {
     readonly id: string;
     readonly msg: string;
@@ -21,6 +26,8 @@ export interface LapSession {
     readonly commits: number;
     readonly active: boolean;
     readonly user?: string;
+    /* How it ended; absent from a lap before summaries. */
+    readonly summary?: LapSummary | null;
     /* The hash of its session_start record, and when lap merge adopted it,
      * the hash of the branch's own session_start it came from. */
     readonly hash?: string;
@@ -221,6 +228,7 @@ export interface LapReviewFile {
 export interface LapReview {
     readonly range: string;
     readonly purpose: string;
+    readonly summary: LapSummary | null;
     readonly commits: number;
     readonly from: string;
     readonly to: string;
@@ -236,6 +244,7 @@ export async function sessionReview(root: string, session: string, branch?: stri
             value: {
                 range: String(p["range"] ?? session),
                 purpose: String(p["purpose"] ?? ""),
+                summary: (p["summary"] as LapSummary | null | undefined) ?? null,
                 commits: Number(p["commits"] ?? 0),
                 from: String(p["from"] ?? ""),
                 to: String(p["to"] ?? ""),

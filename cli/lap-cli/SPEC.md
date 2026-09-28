@@ -167,7 +167,9 @@ Record types:
 
 {"type":"session_start","id":"S2","user":"jane","msg":"purpose",
  "meta":{"ticket":"T-12"},"ts":"...","prev":"..."}   // meta: optional
-{"type":"session_end","id":"S2","ts":"...","prev":"..."}
+{"type":"session_end","id":"S2",
+ "done":"...","decided":"...","left":"...",    // each present only when given
+ "ts":"...","prev":"..."}
 
 {"type":"branch","id":"7c1e9a02d4b8","name":"parser-fix", // §Branches
  "parent":"main","base":"<parent head>","base_chunk":3,
@@ -1002,7 +1004,7 @@ Asks the history questions; criteria AND together:
 - `--msg STR` — substring of the intent or the behavior.
 - `--session S`, `--since TS`, `--until TS`, `--limit N`.
 
-### `lap session [start "purpose" | end | list | current] [--meta key=value]...`
+### `lap session [start "purpose" | end [--done/--decided/--left "…" | -F <file|->] | list | current] [--meta key=value]...`
 One active session at a time; `start` requires a purpose, given as its
 argument or read with `-F <file|->` (the whole text); a crashed
 session simply stays open. `list` shows every session with commit counts.
@@ -1020,6 +1022,31 @@ carrying every given pair, and `list --json` / `current --json` always carry
 a `meta` object. This is how other tools link work to a session: coboard
 starts sessions with `--meta ticket=T-12` and finds a ticket's sessions with
 `lap session list --meta ticket=T-12`.
+
+**The end summary.** `end` may say how the session went, in three parts,
+each optional — ending with none is fine, and is written as before:
+
+- `--done "…"` — what the session actually achieved (the purpose at `start`
+  was the plan; this is the outcome);
+- `--decided "…"` — choices made along the way that someone may question
+  later, with the reason: what no single commit shows;
+- `--left "…"` — what is unfinished, known broken, or deliberately not done.
+
+Or `-F <file|->` with `Done:`, `Decided:` and `Left:` sections, as a
+commit's `-F` has `Intent:` and `Behavior:` (§Messages): a header is the
+whole line, sections come in any order, each trimmed; text before the first
+header, a section named twice, an empty one, or a file with none is
+refused (`bad_message_file`), and so are the flags together with `-F`, or a
+blank flag (`usage`). The parts go on the `session_end` record as `done`,
+`decided` and `left`, each present only when given. There is no free-form
+summary. Only one session is active at a time and `end` closes it, so a
+summary always belongs to the session just before it. `lap merge` carries a
+branch session's summary onto the adopted session's end.
+
+`list --json` and `rr --json` give each session its `summary`:
+`{"done":…,"decided":…,"left":…}` with `null` for a part not given, or
+`null` when the session is open or ended without one. `rr` prints the parts,
+labelled, under its heading and before the trajectory.
 
 `list --json` gives each session its `hash` (its `session_start` record's)
 and, for one `lap merge` adopted, its `from`. `list --branch <name>` lists

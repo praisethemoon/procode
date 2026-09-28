@@ -34,6 +34,7 @@ import {
     STATES,
     STATE_LABELS,
     SessionRow,
+    endSummaryParts,
     fieldCount,
     isFiltering,
     sessionLine,
@@ -376,6 +377,15 @@ function SessionLine(props: { s: SessionRow; open: boolean; filtering: boolean; 
                 <span className="lh-title">{line.title}</span>
                 <span className="lh-desc lh-end">{line.end}</span>
             </div>
+            {props.open && s.endSummary ? (
+                <div className="lh-summary" style={{ paddingLeft: `calc(${depth + 1} * var(--lh-indent) + 24px)` }}>
+                    {endSummaryParts(s.endSummary).map((p) => (
+                        <div key={p.label} className="lh-field">
+                            <span className="lh-label">{p.label}:</span> <Linked text={p.text} />
+                        </div>
+                    ))}
+                </div>
+            ) : null}
             {props.open ? s.commits.map((c) => <CommitLine key={c.id} c={c} depth={depth + 1} showSession={false} state={props.commits} />) : null}
         </>
     );

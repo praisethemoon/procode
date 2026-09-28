@@ -11,7 +11,7 @@ import { useState } from "react";
 import type { LapReview, LapReviewFile, LapReviewStep } from "coboard/lap";
 import { splitPath } from "../src/commits";
 import { TimelineItem, gapLabel, linesOf, timeline } from "../src/timeline";
-import { CommitLine, CommitText, IdLink } from "./parts";
+import { CommitLine, CommitText, IdLink, SessionSummary } from "./parts";
 import { send } from "./rpc";
 
 function when(iso: string): string {
@@ -138,6 +138,13 @@ export function Review(props: {
                     <span className="cb-plus">+{added}</span> <span className="cb-minus">−{removed}</span> · {when(r.from)} → {when(r.to)}
                 </p>
             </header>
+
+            {r.summary ? (
+                <section className="cb-section">
+                    <h3>How it ended</h3>
+                    <SessionSummary summary={r.summary} />
+                </section>
+            ) : null}
 
             <section className="cb-section">
                 <h3>What changed</h3>

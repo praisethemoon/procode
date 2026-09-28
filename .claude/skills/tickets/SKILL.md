@@ -3,7 +3,7 @@ name: tickets
 description: The workflow for working a ticket in this repository — coboard board, lap session, git — from picking it up to closing it. Use whenever you start, continue or finish work on a board ticket (T-<n>), or the user asks you to work on tickets.
 compatibility: Requires the coboard MCP server, the lap CLI (cli/lap-cli) and git.
 metadata:
-  version: "1"
+  version: "2"
 ---
 
 # tickets — one ticket, start to finish
@@ -63,7 +63,10 @@ The lap skill covers lap itself; this is the loop around it.
 6. **Nothing pending, then end.** `lap status` must show no edits of
    yours before `lap session end`. If you end with fragments pending,
    start a follow-up session tagged with the same ticket and commit them,
-   each with its intent and behavior.
+   each with its intent and behavior. End with the session's summary —
+   `--done`, `--decided`, `--left`, each when it says something (the lap
+   skill says what goes in each): it is the short factual record the
+   ticket's session review shows first.
 7. **git.** Stage by path — never `git add -A` or `.` — including
    `.lap/log/` and `.coboard/log.jsonl`. One commit:
    `git commit -m "<what changed> (T-<n>)"`. **No `Co-Authored-By` or any
@@ -71,7 +74,9 @@ The lap skill covers lap itself; this is the loop around it.
 8. **Close it.** `board_comment T-<n>` with: the lap session (as
    `<branch>/S<n>` when the work was in a branch folder) and git hash,
    what changed (as the reader needs it, not a diff), what was decided and
-   why, test counts, and anything not verified. Then
+   why, test counts, and anything not verified. It may quote the session's
+   summary, and adds what only the board needs: the git hash, the test
+   counts, what was not verified. Then
    `board_update T-<n> status=done`. Close a milestone or epic when its
    last ticket closes.
 

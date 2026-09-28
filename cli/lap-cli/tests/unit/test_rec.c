@@ -129,6 +129,31 @@ void test_rec(void) {
     ASSERT_TRUE(rec_meta(&back, "milestone") == NULL);
     ASSERT_EQ_S(back.hash, s.hash);
 
+    t_begin("rec: a session end's summary round-trips, and is absent when none");
+    Rec e;
+    memset(&e, 0, sizeof e);
+    e.type = REC_SESSION_END;
+    e.id = "S9";
+    e.ts = "2026-09-20T11:00:00Z";
+    e.prev = LAP_HASH_ZERO;
+    line = rec_encode(a, &e, &len);
+    ASSERT_EQ_S(line, "{\"type\":\"session_end\",\"id\":\"S9\","
+                      "\"ts\":\"2026-09-20T11:00:00Z\",\"prev\":\"" LAP_HASH_ZERO
+                      "\"}");
+    ASSERT_TRUE(rec_decode(a, line, len, &back, err, sizeof err));
+    ASSERT_TRUE(back.sum_done == NULL && back.sum_decided == NULL &&
+                back.sum_left == NULL);
+    e.sum_done = "fixed the \"flaky\" test\nand its twin";
+    e.sum_left = "the Windows run";
+    line = rec_encode(a, &e, &len);
+    ASSERT_TRUE(strstr(line, "\"decided\"") == NULL);
+    ASSERT_TRUE(rec_decode(a, line, len, &back, err, sizeof err));
+    ASSERT_TRUE(back.type == REC_SESSION_END);
+    ASSERT_EQ_S(back.sum_done, "fixed the \"flaky\" test\nand its twin");
+    ASSERT_TRUE(back.sum_decided == NULL);
+    ASSERT_EQ_S(back.sum_left, "the Windows run");
+    ASSERT_EQ_S(back.hash, e.hash);
+
     t_begin("rec: a command-line value is typed the way JSON would read it");
     const char *key, *val;
     ASSERT_TRUE(rec_meta_parse(a, "xyz=1", &key, &val, err, sizeof err));

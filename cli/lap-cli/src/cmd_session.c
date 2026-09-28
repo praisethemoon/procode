@@ -77,11 +77,13 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
         if (!meta_match(st, filter))
             continue;
         const char *end_ts = NULL;
+        const Rec *end_rec = NULL;
         int32_t commits = 0;
         for (int32_t j = i + 1; j < log.count; j++) {
             if (log.v[j].type == REC_SESSION_END &&
                 strcmp(log.v[j].id, st->id) == 0) {
                 end_ts = log.v[j].ts;
+                end_rec = &log.v[j];
                 break;
             }
             if (log.v[j].type == REC_COMMIT && log.v[j].session &&
@@ -111,6 +113,7 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
             sb_printf(&sb, ",\"commits\":%d,\"active\":%s", commits,
                       active ? "true" : "false");
             rec_meta_json(&sb, st);
+            rec_summary_json(&sb, end_rec);
             sb_putc(&sb, '}');
         } else {
             sb_field(&sb, active ? S_ACTIVE : S_SESSION,
@@ -305,10 +308,43 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
             err_out(json, "no_active_session", "no active session to end");
             goto done;
         }
+        /* the optional summary: flags, or a -F file with their sections */
+        const char *done_t = flag_value(argc, argv, value_flags, "--done");
+        const char *decided_t =
+            flag_value(argc, argv, value_flags, "--decided");
+        const char *left_t = flag_value(argc, argv, value_flags, "--left");
+        const char *file = flag_value(argc, argv, value_flags, "-F");
+        if (file && (done_t || decided_t || left_t)) {
+            err_out(json, "usage",
+                    "give the summary as --done/--decided/--left or with -F, "
+                    "not both");
+            goto done;
+        }
+        if (file) {
+            char *text;
+            if (!read_text_arg(a, file, &text, err, sizeof err) ||
+                !msg_parse_summary(a, text, &done_t, &decided_t, &left_t, err,
+                                   sizeof err)) {
+                err_out(json, "bad_message_file", "%s", err);
+                goto done;
+            }
+        }
+        const char *const given[3] = {done_t, decided_t, left_t};
+        const char *const flag[3] = {"--done", "--decided", "--left"};
+        for (int32_t i = 0; i < 3; i++) {
+            if (given[i] && !given[i][strspn(given[i], " \t\r\n")]) {
+                err_out(json, "usage", "%s is empty; leave it out instead",
+                        flag[i]);
+                goto done;
+            }
+        }
         Rec rec;
         memset(&rec, 0, sizeof rec);
         rec.type = REC_SESSION_END;
         rec.id = arena_strdup(a, repo.active_session);
+        rec.sum_done = done_t;
+        rec.sum_decided = decided_t;
+        rec.sum_left = left_t;
         repo.active_session[0] = '\0';
         repo.active_session_msg[0] = '\0';
         if (!repo_append(&repo, &rec, err, sizeof err) ||

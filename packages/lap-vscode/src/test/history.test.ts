@@ -4,7 +4,7 @@ import * as assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 
-import { EMPTY_FILTER, HistoryFilter, PAGE_SIZE, fieldCount, isFiltering, pageOf, query, rangeStart, sessionLine, treeRowKey } from "../history";
+import { EMPTY_FILTER, HistoryFilter, PAGE_SIZE, endSummaryParts, fieldCount, isFiltering, pageOf, query, rangeStart, sessionLine, treeRowKey } from "../history";
 import { parseLog } from "../model";
 
 const sha = (line: string) => createHash("sha256").update(line, "utf8").digest("hex");
@@ -234,6 +234,24 @@ test("a session without a ticket leads with its id as before, and does not repea
     assert.equal(p.title, "T-9: fix the parser");
     assert.equal(p.end, "1 commit");
     assert.equal(p.tooltip, "S2 · T-9: fix the parser\n\nstarted 2026-09-26T08:00:00Z, ended 2026-09-26T09:00:00Z");
+});
+
+test("a session ended with a summary carries it: first in the tooltip after the purpose, and as labelled parts", () => {
+    const ended = JSON.stringify({ type: "session_end", id: "S2", done: "the parser takes #1a2b3c4's input", left: "error recovery\nand the fuzz run", ts: "2026-09-26T09:00:00Z" });
+    const lines = [started("S2", "T-9: fix the parser", "T-9"), commit("L1", "S2", "p.ts", "x", "2026-09-26T08:01:00Z"), ended];
+    const row = query(log(...lines), ALL, { grouped: true, page: 0, now: NOW }).sessions.find((r) => r.id === "S2");
+    assert.deepEqual(row?.endSummary, { done: "the parser takes #1a2b3c4's input", decided: null, left: "error recovery\nand the fuzz run" });
+    assert.deepEqual(endSummaryParts(row!.endSummary), [
+        { label: "Done", text: "the parser takes #1a2b3c4's input" },
+        { label: "Left", text: "error recovery\nand the fuzz run" },
+    ]);
+    assert.equal(
+        sessionLine(row!, false).tooltip,
+        "S2 · T-9: fix the parser\n\nDone: the parser takes #1a2b3c4's input\n\nLeft: error recovery\nand the fuzz run\n\nstarted 2026-09-26T08:00:00Z, ended 2026-09-26T09:00:00Z",
+    );
+    const plain = query(log(started("S3", "no summary"), end("S3", "2026-09-26T09:00:00Z")), ALL, { grouped: true, page: 0, now: NOW }).sessions[0];
+    assert.equal(plain.endSummary, null);
+    assert.deepEqual(endSummaryParts(plain.endSummary), []);
 });
 
 test("a branch folder's own session is named <branch>/S<n>; the parent's sessions before the branch are not", () => {

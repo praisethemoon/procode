@@ -3338,6 +3338,48 @@ has_line "$out" "       behavior: the test file lists g1 then g2"
 has_line "$("$LAP" log --behavior-only)" "       the test file lists g1 then g2 (amended)"
 cd "$WORK"
 
+# ------------------------------------------------ a session's end summary
+t "a session ends with an optional Done / Decided / Left summary"
+mkdir "$WORK/summary" && cd "$WORK/summary" || exit 1
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "greet the user" >/dev/null 2>&1
+printf 'hello\n' > greet.txt
+"$LAP" commit greet.txt -i "the app should greet its user" -b "greet.txt says hello" >/dev/null 2>&1
+expect_grep '"error":"usage"' "$LAP" session end --done "x" -F - --json
+expect_grep '"error":"usage"' "$LAP" session end --left "  " --json
+printf 'preamble\nDone:\nx\n' > bad-summary.txt
+expect_grep '"error":"bad_message_file"' "$LAP" session end -F bad-summary.txt --json
+expect_grep "S1" "$LAP" session current
+expect_ok "$LAP" session end --done "greets the user" --decided "plain text: it is one word
+and needs no markup" --left "no translations"
+history | tail -1 | grep -q '"type":"session_end","id":"S1","done":"greets the user","decided":"plain text: it is one word\\nand needs no markup","left":"no translations"' ||
+    fail "the summary is not on the session_end line: $(history | tail -1)"
+out=$("$LAP" rr S1 --no-diff 2>&1)
+has_line "$out" "  done:    greets the user"
+has_line "$out" "  decided: plain text: it is one word"
+has_line "$out" "           and needs no markup"
+has_line "$out" "  left:    no translations"
+printf '%s\n' "$out" | awk '/done:/{d=NR} /trajectory:/{t=NR} END{exit !(d && t && d < t)}' ||
+    fail "the summary is not above the trajectory: $out"
+expect_grep '"purpose":"greet the user","summary":{"done":"greets the user","decided":"plain text: it is one word\\nand needs no markup","left":"no translations"}' "$LAP" rr S1 --json
+expect_grep '"summary":{"done":"greets the user"' "$LAP" session list --json
+
+t "a summary from -F, with only some sections; none at all reads as before"
+"$LAP" session start "second pass" >/dev/null 2>&1
+printf 'hello, you\n' > greet.txt
+"$LAP" commit greet.txt -i "the greeting should name its reader" -b "greet.txt says hello, you" >/dev/null 2>&1
+printf 'Left:\nthe name is not the real one yet\n\nDone:\nthe greeting has a reader\n' | "$LAP" session end -F - >/dev/null 2>&1
+expect_grep '"summary":{"done":"the greeting has a reader","decided":null,"left":"the name is not the real one yet"}' "$LAP" rr S2 --json
+"$LAP" session start "third pass" >/dev/null 2>&1
+printf 'hello, reader\n' > greet.txt
+"$LAP" commit greet.txt -i "the reader has a name now" -b "greet.txt says hello, reader" >/dev/null 2>&1
+"$LAP" session end >/dev/null 2>&1
+history | tail -1 | grep -q '^{"type":"session_end","id":"S3","ts":' || fail "an end without a summary changed shape: $(history | tail -1)"
+expect_grep '"summary":null' "$LAP" rr S3 --json
+expect_not_grep "done:" "$LAP" rr S3 --no-diff
+expect_grep "chain ok" "$LAP" verify
+cd "$WORK"
+
 # ------------------------------------------------------------ summary
 echo "e2e: $TESTS scenarios, $FAILED failure(s)"
 [ "$FAILED" -eq 0 ] || exit 1

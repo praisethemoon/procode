@@ -11,7 +11,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { branchArgs, LapSession, mergeSessions, startSession, ticketSessions } from "../lap";
+import { branchArgs, LapSession, mergeSessions, sessionReview, startSession, summaryParts, ticketSessions } from "../lap";
 import { handle } from "../mcp";
 import { Board } from "../store";
 import { cliBin, noCli } from "./cli-bin";
@@ -75,6 +75,46 @@ test("mergeSessions: sessions come out oldest first, and with no branches, as th
 });
 
 const LAP = cliBin("lap");
+
+test("summaryParts: the parts a session ended with, in order and labelled; none without a summary", () => {
+    assert.deepEqual(summaryParts({ done: "renamed it", decided: null, left: "the icons" }), [
+        { label: "Done", text: "renamed it" },
+        { label: "Left", text: "the icons" },
+    ]);
+    assert.deepEqual(summaryParts({ done: null, decided: "ids stay", left: null }), [{ label: "Decided", text: "ids stay" }]);
+    assert.deepEqual(summaryParts(null), []);
+    assert.deepEqual(summaryParts(undefined), [], "a lap from before summaries gives none");
+});
+
+test("ticketSessions and sessionReview: through lap, a session's end summary comes with it", { skip: !LAP && noCli("lap") }, async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-summary-")));
+    const saved = process.env["LAP_BIN"];
+    process.env["LAP_BIN"] = LAP;
+    const lap = (...args: string[]) => execFileSync(LAP, args, { cwd: root, env: { ...process.env, LAP_USER: "tester" } });
+    try {
+        lap("init");
+        fs.writeFileSync(path.join(root, "a.txt"), "a\n");
+        lap("session", "start", "T-2: the first file", "--meta", "ticket=T-2");
+        lap("commit", "a.txt", "-i", "Seed the project file", "-b", "Records a.txt as it starts");
+        lap("session", "end", "--done", "a.txt is recorded", "--left", "b.txt");
+        lap("session", "start", "T-2: nothing to say", "--meta", "ticket=T-2");
+        fs.writeFileSync(path.join(root, "a.txt"), "a\nb\n");
+        lap("commit", "a.txt", "-i", "The file needs a second line", "-b", "a.txt gains b");
+        lap("session", "end");
+        const sessions = await ticketSessions(root, "T-2");
+        assert.ok(sessions.ok, sessions.error);
+        assert.deepEqual(
+            sessions.value.map((x) => x.summary),
+            [{ done: "a.txt is recorded", decided: null, left: "b.txt" }, null],
+        );
+        const review = await sessionReview(root, "S1");
+        assert.deepEqual(review.value?.summary, { done: "a.txt is recorded", decided: null, left: "b.txt" });
+        assert.equal((await sessionReview(root, "S2")).value?.summary, null);
+    } finally {
+        if (saved === undefined) delete process.env["LAP_BIN"];
+        else process.env["LAP_BIN"] = saved;
+    }
+});
 
 test("ticketSessions: through lap, before a merge, after it, and partly merged", { skip: !LAP && noCli("lap") }, async () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-sessions-")));

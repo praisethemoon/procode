@@ -101,6 +101,19 @@ char *rec_encode(Arena *a, Rec *rec, size_t *out_len) {
         break;
     case REC_SESSION_END:
         sb_printf(&sb, ",\"id\":\"%s\"", rec->id);
+        /* each part only when given: a line with none reads as before */
+        if (rec->sum_done) {
+            sb_puts(&sb, ",\"done\":");
+            json_escape_c(&sb, rec->sum_done);
+        }
+        if (rec->sum_decided) {
+            sb_puts(&sb, ",\"decided\":");
+            json_escape_c(&sb, rec->sum_decided);
+        }
+        if (rec->sum_left) {
+            sb_puts(&sb, ",\"left\":");
+            json_escape_c(&sb, rec->sum_left);
+        }
         if (rec->from)
             sb_printf(&sb, ",\"from\":\"%s\"", rec->from);
         break;
@@ -282,6 +295,9 @@ bool rec_decode(Arena *a, const char *line, size_t len, Rec *out, char *err,
     } else if (strcmp(type, "session_end") == 0) {
         out->type = REC_SESSION_END;
         out->id = jobj_str(v, "id");
+        out->sum_done = jobj_str(v, "done");
+        out->sum_decided = jobj_str(v, "decided");
+        out->sum_left = jobj_str(v, "left");
         out->from = jobj_str(v, "from");
         if (!out->id) {
             snprintf(err, errsz, "session_end record missing id");
@@ -586,6 +602,29 @@ void rec_meta_json(StrBuf *sb, const Rec *rec) {
         json_escape_c(sb, rec->meta_keys[i]);
         sb_putc(sb, ':');
         sb_puts(sb, rec->meta_vals[i]); /* already JSON text */
+    }
+    sb_putc(sb, '}');
+}
+
+bool rec_has_summary(const Rec *end) {
+    return end && (end->sum_done || end->sum_decided || end->sum_left);
+}
+
+void rec_summary_json(StrBuf *sb, const Rec *end) {
+    if (!rec_has_summary(end)) {
+        sb_puts(sb, ",\"summary\":null");
+        return;
+    }
+    const char *const key[3] = {"done", "decided", "left"};
+    const char *const val[3] = {end->sum_done, end->sum_decided,
+                                end->sum_left};
+    sb_puts(sb, ",\"summary\":{");
+    for (int32_t i = 0; i < 3; i++) {
+        sb_printf(sb, "%s\"%s\":", i ? "," : "", key[i]);
+        if (val[i])
+            json_escape_c(sb, val[i]);
+        else
+            sb_puts(sb, "null");
     }
     sb_putc(sb, '}');
 }

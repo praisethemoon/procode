@@ -932,6 +932,9 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 rec.type = REC_SESSION_END;
                 rec.id = ours;
                 rec.user = NULL;
+                rec.sum_done = b->sum_done; /* the summary comes along */
+                rec.sum_decided = b->sum_decided;
+                rec.sum_left = b->sum_left;
             } else if (b->type == REC_COMMIT && at[i] > 0) {
                 const char *had = map_get(&done_from, b->hash);
                 if (had) { /* appended by an interrupted run of this merge */
