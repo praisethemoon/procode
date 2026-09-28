@@ -2522,6 +2522,22 @@ expect_grep "clean" "$LAP" status
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "lap merge refuses a branch history holding a newer lap's records, and verify names them under the branch"
+merge_pair nw1; BP="$WORK/nw1-p"; BW="$WORK/nw1-w"
+cd "$BW" && "$LAP" session start "branch work" --branch b >/dev/null 2>&1
+in_branch g.txt 's/^g1$/G1/' "uppercases g1 on the branch"
+cd "$BW" && CHB=$(ls .lap/log/"$(cat .lap/lineage)".*.jsonl | tail -n 1)
+PREVB=$(tail -n 1 "$CHB" | tr -d '\n' | shasum -a 256 | cut -d' ' -f1)
+printf '{"type":"annotate","of":"x","intent":"better","behavior":"clearer","ts":"2026-09-27T00:00:00Z","prev":"%s"}\n' "$PREVB" >> "$CHB"
+git_merge_b || fail "git merge nw1"
+cd "$BP" && SUM=$(cat .lap/log/*.jsonl | cksum)
+expect_grep '"error":"newer_history"' "$LAP" merge b --dry-run --json
+expect_grep 'branch b.s history holds 1 record of a type this lap does not know ("annotate")' "$LAP" merge b
+[ "$(cat .lap/log/*.jsonl | cksum)" = "$SUM" ] || fail "the refused merge wrote history"
+expect_grep 'note: branch b holds 1 record of a type this lap does not know ("annotate")' "$LAP" verify
+expect_grep '"branch":"b",[^}]*"unknown_records":1,"unknown_type":"annotate"' "$LAP" verify --json
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

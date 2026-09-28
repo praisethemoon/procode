@@ -131,6 +131,12 @@ bool own_chunks(Arena *a, const char *lapdir, const char *from,
  * them), when they are the last thing in log; else log's last record. */
 int32_t merge_redo_point(const RecLog *log, const StrSet *newer,
                          const StrSet *run_branches);
+/* The records of a type this lap does not know among those a merge would
+ * adopt (lof[i] >= 0: record i belongs to a branch of the chain; a record
+ * of this folder's own part, -1, is not counted): how many, and the first
+ * one's type in *type (NULL when none). */
+int32_t merge_unknown_records(const RecLog *log, const int32_t *lof,
+                              const char **type);
 
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);

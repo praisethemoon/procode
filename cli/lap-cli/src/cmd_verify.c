@@ -470,6 +470,8 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         if (read && oscan.chain_ok) {
             olog.count = oscan.records;
             olog.chain_ok = true;
+            olog.unknown_n = oscan.unknown_n;
+            olog.unknown_type = oscan.unknown_type;
         } else if (read) { /* the whole branch only to name its break */
             read = repo_log_load(a, &other, &olog, err, sizeof err);
         }
@@ -485,6 +487,11 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
             sb_puts(&others_json, ",\"chain_error\":");
             json_escape_c(&others_json, why);
         }
+        if (read && olog.unknown_n > 0) {
+            sb_printf(&others_json, ",\"unknown_records\":%d,\"unknown_type\":",
+                      olog.unknown_n);
+            json_escape_c(&others_json, olog.unknown_type);
+        }
         sb_putc(&others_json, '}');
         if (chain)
             sb_printf(&others_text, "%sbranch %s: chain ok%s: %d records\n",
@@ -492,6 +499,13 @@ int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
         else
             sb_printf(&others_text, "%sbranch %s: CHAIN BROKEN%s: %s\n",
                       sgr(S_REMOVED), name, sgr_off(), why);
+        if (read && olog.unknown_n > 0)
+            sb_printf(&others_text,
+                      "note: branch %s holds %d record%s of a type this lap "
+                      "does not know (\"%s\"): not interpreted, and lap merge "
+                      "refuses it\n",
+                      name, olog.unknown_n, olog.unknown_n == 1 ? "" : "s",
+                      olog.unknown_type);
     }
 
     bool ok = log.chain_ok && mismatched == 0 && others_ok;

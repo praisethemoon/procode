@@ -352,6 +352,30 @@ void test_branches(void) {
     rl[3].branch = "ffffffffffff"; /* another branch's merge: other work */
     ASSERT_EQ_I(merge_redo_point(&rlog, &nw, &runb), 3);
 
+    t_begin("merge_unknown_records: a newer lap's records count in the part "
+            "a merge would adopt, not in this folder's own");
+    Rec ul[4];
+    memset(ul, 0, sizeof ul);
+    for (int32_t i = 0; i < 4; i++)
+        ul[i].type = REC_COMMIT;
+    RecLog ulog;
+    memset(&ulog, 0, sizeof ulog);
+    ulog.v = ul;
+    ulog.count = 4;
+    int32_t ulof[4] = {-1, -1, 0, 0};
+    const char *utype = "x";
+    ASSERT_EQ_I(merge_unknown_records(&ulog, ulof, &utype), 0);
+    ASSERT_TRUE(utype == NULL);
+    ul[1].type = REC_UNKNOWN; /* this folder's own: its writers refuse it */
+    ul[1].name = "older";
+    ASSERT_EQ_I(merge_unknown_records(&ulog, ulof, &utype), 0);
+    ul[2].type = REC_UNKNOWN;
+    ul[2].name = "annotate";
+    ul[3].type = REC_UNKNOWN;
+    ul[3].name = "other";
+    ASSERT_EQ_I(merge_unknown_records(&ulog, ulof, &utype), 2);
+    ASSERT_EQ_S(utype, "annotate");
+
     t_begin("own_chunks: this folder's copy wins, and the branch folder is "
             "not read unless it may fill in");
     const char *oid = "0123456789ab";

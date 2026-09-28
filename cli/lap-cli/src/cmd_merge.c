@@ -162,6 +162,17 @@ static bool in_view(const Hist *h, const char *lineage) {
     return false;
 }
 
+int32_t merge_unknown_records(const RecLog *log, const int32_t *lof,
+                              const char **type) {
+    int32_t n = 0;
+    *type = NULL;
+    for (int32_t i = 0; i < log->count; i++) {
+        if (lof[i] >= 0 && log->v[i].type == REC_UNKNOWN && n++ == 0)
+            *type = log->v[i].name;
+    }
+    return n;
+}
+
 int32_t merge_redo_point(const RecLog *log, const StrSet *newer,
                          const StrSet *run_branches) {
     int32_t p0 = -1; /* the interrupted run's first record here */
@@ -462,6 +473,20 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                     key, lin[k].name);
             goto done;
         }
+    }
+    /* A writer never builds on records it does not understand: not in
+     * this folder's history, nor in the branch part it would adopt. */
+    const char *utype;
+    int32_t nunknown = merge_unknown_records(&blog, lof, &utype);
+    if (nunknown > 0) {
+        err_out(json, "newer_history",
+                "branch %s's history holds %d record%s of a type this lap "
+                "does not know%s%s%s: a newer lap wrote %s. Update lap "
+                "before merging it (reading still works)",
+                key, nunknown, nunknown == 1 ? "" : "s", utype ? " (\"" : "",
+                utype ? utype : "", utype ? "\")" : "",
+                nunknown == 1 ? "it" : "them");
+        goto done;
     }
     int32_t bi = lin[0].first;
     const Rec *brec = &blog.v[lin[nlin - 1].first];

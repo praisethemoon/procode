@@ -236,9 +236,12 @@ not know is kept in the chain (its `prev`, `ts` and hash are checked like
 any record's) and otherwise skipped, with one notice per command: *"this
 history has records of a newer type ("annotate") … Update lap to see them"*.
 `verify` checks their chain and reports them (`unknown_records`,
-`unknown_type` in JSON). A **writer refuses** such a history
+`unknown_type` in JSON), for this folder's history and for each branch's
+whose chunks are here. A **writer refuses** such a history
 (`newer_history`) before it repairs, heals or writes anything: what those
 records mean — a merge's, an amendment's — could make its write wrong.
+`lap merge` (and its dry run) refuses the same way when the branch part
+it would adopt holds them.
 The rule protects the versions from this one on; an older lap refuses the
 whole history, as it always did.
 
