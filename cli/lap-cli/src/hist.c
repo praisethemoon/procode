@@ -808,19 +808,51 @@ bool hist_write_chunk(const char *logdir, const char *name, const void *data,
            plat_fsync_dir(logdir);
 }
 
-void hist_clear_tmp(Arena *a, const char *lapdir) {
-    char dir[LAP_PATH_MAX];
-    snprintf(dir, sizeof dir, "%s/%s", lapdir, LAP_LOG_DIR);
+/* A temp file's name at any depth of a walk, for clear_tmp_in. */
+static WalkAction on_tmp_deep(const char *rel, bool is_dir,
+                              const PlatStat *st, void *ud) {
+    (void)st;
+    Names *ns = (Names *)ud;
+    if (!is_dir && plat_is_tmp_name(rel)) {
+        ARENA_GROW(ns->a, ns->v, ns->n, ns->cap, const char *);
+        ns->v[ns->n++] = arena_strdup(ns->a, rel);
+    }
+    return WALK_CONT;
+}
+
+/* Removes the atomic-write temp files in dir: directly in it, or at any
+ * depth when deep. */
+static void clear_tmp_in(Arena *a, const char *dir, bool deep) {
     if (!plat_is_dir(dir))
         return;
     Names ns = {a, NULL, 0, 0};
-    plat_walk(a, dir, on_name, &ns);
+    plat_walk(a, dir, deep ? on_tmp_deep : on_name, &ns);
     for (int32_t i = 0; i < ns.n; i++) {
         if (!plat_is_tmp_name(ns.v[i]))
             continue;
         char path[LAP_PATH_MAX];
         snprintf(path, sizeof path, "%s/%s", dir, ns.v[i]);
         plat_remove_file(path);
+    }
+}
+
+void hist_clear_tmp(Arena *a, const char *lapdir) {
+    char dir[LAP_PATH_MAX];
+    snprintf(dir, sizeof dir, "%s/%s", lapdir, LAP_LOG_DIR);
+    clear_tmp_in(a, dir, false);
+    /* chunk temps are written in .lap/ itself, and a shadow's next to it */
+    clear_tmp_in(a, lapdir, false);
+    snprintf(dir, sizeof dir, "%s/%s", lapdir, LAP_SHADOW_NAME);
+    clear_tmp_in(a, dir, true);
+    /* a conversion that finished (its old file gone) left nothing it still
+     * needs aside: what a crash left there goes */
+    char legacy[LAP_PATH_MAX];
+    snprintf(legacy, sizeof legacy, "%s/%s", lapdir, LAP_LOG_NAME);
+    if (!plat_is_file(legacy)) {
+        snprintf(dir, sizeof dir, "%s/log.converting", lapdir);
+        clear_dir(a, dir);
+        snprintf(dir, sizeof dir, "%s/log.replaced", lapdir);
+        clear_dir(a, dir);
     }
 }
 

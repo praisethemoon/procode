@@ -800,6 +800,33 @@ static void test_tmp_files(Arena *a) {
     ASSERT_TRUE(!plat_is_file(left));
     ASSERT_EQ_S(read_history(a), "aaaa\n");
 
+    t_begin("hist: leftovers outside log/ go too: a chunk temp in .lap/, a "
+            "shadow temp at any depth, a finished conversion's folders");
+    char ctmp[256], stmp[256], skeep[256], conv[256], repl[256], rfile[256];
+    snprintf(ctmp, sizeof ctmp, "%s/main.000002.jsonl.tmp.4243", T_LAPDIR);
+    snprintf(stmp, sizeof stmp, "%s/shadow/d/f.txt.tmp.4244", T_LAPDIR);
+    snprintf(skeep, sizeof skeep, "%s/shadow/d/f.txt", T_LAPDIR);
+    snprintf(conv, sizeof conv, "%s/log.converting", T_LAPDIR);
+    snprintf(repl, sizeof repl, "%s/log.replaced", T_LAPDIR);
+    snprintf(rfile, sizeof rfile, "%s/log.replaced/main.000001.jsonl",
+             T_LAPDIR);
+    plat_mkdirs(T_LAPDIR "/shadow/d");
+    plat_mkdirs(conv);
+    plat_mkdirs(repl);
+    plat_write_file_atomic(ctmp, "x", 1);
+    plat_write_file_atomic(stmp, "x", 1);
+    plat_write_file_atomic(skeep, "kept", 4);
+    plat_write_file_atomic(rfile, "old\n", 4);
+    hist_clear_tmp(a, T_LAPDIR);
+    ASSERT_TRUE(!plat_is_file(ctmp));
+    ASSERT_TRUE(!plat_is_file(stmp));
+    ASSERT_TRUE(plat_is_file(skeep));
+    ASSERT_TRUE(!plat_is_dir(conv) && !plat_is_dir(repl));
+    ASSERT_EQ_S(read_history(a), "aaaa\n");
+    remove(skeep);
+    plat_rmdir(T_LAPDIR "/shadow/d");
+    plat_rmdir(T_LAPDIR "/shadow");
+
     t_begin("hist: past the last chunk number nothing is created, and the "
             "history says so");
     Hist full;

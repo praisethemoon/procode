@@ -90,8 +90,11 @@ bool hist_write_lineage(const char *lapdir, const char *lineage);
  * folder above (.lap/) so none is ever in log/. */
 bool hist_write_chunk(const char *logdir, const char *name, const void *data,
                       size_t len);
-/* Removes the temp files in lapdir/log: under the lock every one is a
- * leftover (of a crash, or of a lap that wrote them there). */
+/* Removes the temp files in lapdir/log, directly in lapdir (where chunk
+ * temps are written) and anywhere in the shadow store, and, once no old
+ * single-file log is left, a conversion's log.converting/ and
+ * log.replaced/: under the lock every one is a leftover (of a crash, or of
+ * a lap that wrote them there). */
 void hist_clear_tmp(Arena *a, const char *lapdir);
 
 /* A folder's whole history: for main, hist_open's; for a branch, the

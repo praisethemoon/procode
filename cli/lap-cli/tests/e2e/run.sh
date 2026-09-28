@@ -2754,6 +2754,31 @@ expect_grep '"error":"not_a_commit"' "$LAP" amend S1 -i "a new intent here" -b "
 expect_ok "$LAP" amend L1 -i "a new intent here" -b "a new behavior here"
 cd "$WORK"
 
+t "leftovers outside .lap/log are cleared by a commit and by rebuild"
+mkdir -p "$WORK/lo1" && cd "$WORK/lo1" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+"$LAP" commit a.txt --no-session -i "seed the fixture" -b "records a.txt as the base" >/dev/null 2>&1
+leftovers() {
+    printf 'x' > .lap/main.000130.jsonl.tmp.4243
+    printf 'x' > .lap/shadow/a.txt.tmp.4244
+    mkdir -p .lap/log.replaced .lap/log.converting
+    printf 'old\n' > .lap/log.replaced/main.000001.jsonl
+}
+gone() {
+    for f in .lap/main.000130.jsonl.tmp.4243 .lap/shadow/a.txt.tmp.4244 .lap/log.replaced .lap/log.converting; do
+        [ -e "$f" ] && fail "$1 left $f"
+    done
+}
+leftovers
+printf 'b\n' >> a.txt
+expect_ok "$LAP" commit a.txt --no-session -i "commit over leftovers" -b "appends b to a.txt"
+gone "a commit"
+leftovers
+expect_ok "$LAP" rebuild
+gone "rebuild"
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"
