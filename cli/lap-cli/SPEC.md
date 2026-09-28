@@ -868,6 +868,16 @@ is not there is deleted. A tracked file is one whose last commit is not a delete
 index says or, without it (a fresh clone's `.lap/` holds only `log/`), as
 the history says: the output is the same with every cache or none.
 
+**A folder holding its own `.lap/` is another repository**, as git skips a
+nested repository: a branch folder put inside this one (`git worktree add
+sub`, a tool's `.claude/worktrees/`), or an unrelated lap repository. The
+walk of the working tree (status, a branch start's check) does not enter
+it, and `lap commit` refuses a path in it as outside this repository. It
+is the downward half of the rule every command follows upward: the nearest
+`.lap/` owns a file. Files this repository recorded there before that
+folder got its own `.lap/` stay tracked, as files ignored after they were
+recorded do.
+
 ### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B] [--force-message] [--no-session] [--dry-run] [--branch B]`
 Records exactly one edit. The message comes from `-i`/`--intent` and
 `-b`/`--behavior` together, or from `-F`, never a mix:

@@ -43,6 +43,7 @@ typedef struct {
     StrSet *seen;
     const char ***v;
     size_t *n, *cap;
+    const char *root; /* the folder walked, for nested repositories */
 } Collect;
 
 static void collect_push(Collect *c, const char *rel) {
@@ -58,6 +59,8 @@ static WalkAction on_work_entry(const char *rel, bool is_dir,
     Collect *c = (Collect *)ud;
     if (ignore_match(c->ig, rel, is_dir))
         return is_dir ? WALK_SKIP_DIR : WALK_CONT;
+    if (is_dir && c->root && repo_nested(c->root, rel))
+        return WALK_SKIP_DIR; /* another repository's files */
     if (!is_dir)
         collect_push(c, rel);
     return WALK_CONT;
@@ -91,8 +94,9 @@ static int32_t pending_against(Arena *a, Repo *parent, const char *work,
     strset_init(&seen, a);
     const char **v = NULL;
     size_t n = 0, cap = 0;
-    Collect c = {a, ignore_load(a, work), &seen, &v, &n, &cap};
+    Collect c = {a, ignore_load(a, work), &seen, &v, &n, &cap, work};
     plat_walk(a, work, on_work_entry, &c);
+    c.root = NULL; /* the shadow store has no nested repositories */
     char shadow_root[LAP_PATH_MAX];
     snprintf(shadow_root, sizeof shadow_root, "%s/%s", parent->lapdir,
              LAP_SHADOW_NAME);

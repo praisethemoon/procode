@@ -101,10 +101,16 @@ bool repo_append(Repo *r, Rec *rec, char *err, size_t errsz);
 bool repo_state_save(Repo *r, char *err, size_t errsz);
 
 /* Converts a user-supplied path (relative to cwd or absolute) into a
- * repo-relative '/' path. Fails when the path escapes the repo.
+ * repo-relative '/' path. Fails when the path escapes the repo, or lies in
+ * a folder of it that holds a .lap/ of its own (another repository).
  */
 bool repo_relpath(Repo *r, const char *user_path, char *out, size_t outsz,
                   char *err, size_t errsz);
+/* True when folder rel_dir of the repository at root holds its own .lap/:
+ * another repository nested in this one (a branch folder, a worktree git
+ * put inside it), whose files are never this one's, as git skips a
+ * nested repository. Walks of the working tree do not enter it. */
+bool repo_nested(const char *root, const char *rel_dir);
 
 /* Shadow store: content of a file as of its last commit. shadow_read reads
  * into a, the caller's arena. */

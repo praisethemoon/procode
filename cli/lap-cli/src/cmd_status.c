@@ -40,6 +40,8 @@ static WalkAction on_entry(const char *rel, bool is_dir, const PlatStat *st,
     StatusWalk *sw = (StatusWalk *)ud;
     if (ignore_match(sw->ig, rel, is_dir))
         return is_dir ? WALK_SKIP_DIR : WALK_CONT;
+    if (is_dir && repo_nested(sw->repo->root, rel))
+        return WALK_SKIP_DIR; /* another repository's files */
     if (!is_dir)
         seen_push(sw->a, &sw->files, rel, st, -1);
     return WALK_CONT;

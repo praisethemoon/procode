@@ -704,6 +704,14 @@ bool repo_state_save(Repo *r, char *err, size_t errsz) {
     return state_write(r, err, errsz);
 }
 
+bool repo_nested(const char *root, const char *rel_dir) {
+    char lapdir[LAP_PATH_MAX];
+    if (snprintf(lapdir, sizeof lapdir, "%s/%s/%s", root, rel_dir, LAP_DIR) >=
+        (int)sizeof lapdir)
+        return false;
+    return plat_is_dir(lapdir);
+}
+
 bool repo_relpath(Repo *r, const char *user_path, char *out, size_t outsz,
                   char *err, size_t errsz) {
     char absbuf[LAP_PATH_MAX];
@@ -744,6 +752,22 @@ bool repo_relpath(Repo *r, const char *user_path, char *out, size_t outsz,
         return false;
     }
     snprintf(out, outsz, "%s", norm + rootlen + 1);
+    /* a folder on the way with its own .lap/ is another repository's (a
+     * branch folder inside this one, say): its files are never this one's */
+    char dir[LAP_PATH_MAX];
+    snprintf(dir, sizeof dir, "%s", out);
+    for (char *slash = strchr(dir, '/'); slash; slash = strchr(slash + 1, '/')) {
+        *slash = '\0';
+        bool nested = repo_nested(r->root, dir);
+        if (nested) {
+            snprintf(err, errsz,
+                     "path %s is outside this repository: %s has its own "
+                     ".lap/, so its files are that repository's",
+                     user_path, dir);
+            return false;
+        }
+        *slash = '/';
+    }
     return true;
 }
 

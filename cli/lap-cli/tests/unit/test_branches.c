@@ -733,6 +733,34 @@ void test_branches(void) {
     plat_rmdir(".leak_unit_o/.lap");
     plat_rmdir(".leak_unit_o");
 
+    t_begin("repo_nested: a folder holding its own .lap/ is another "
+            "repository, and a path into it is none of this one's");
+    char nroot[LAP_PATH_MAX], npath[LAP_PATH_MAX], nrel[LAP_PATH_MAX];
+    char nerr[512];
+    snprintf(nroot, sizeof nroot, "%s/.nested_unit", cwd);
+    plat_mkdirs(".nested_unit/sub/.lap");
+    plat_mkdirs(".nested_unit/plain/deeper");
+    ASSERT_TRUE(repo_nested(nroot, "sub"));
+    ASSERT_TRUE(!repo_nested(nroot, "plain"));
+    ASSERT_TRUE(!repo_nested(nroot, "plain/deeper"));
+    ASSERT_TRUE(!repo_nested(nroot, "nothing"));
+    Repo nr;
+    memset(&nr, 0, sizeof nr);
+    snprintf(nr.root, sizeof nr.root, "%s", nroot);
+    snprintf(npath, sizeof npath, "%s/sub/a.txt", nroot);
+    ASSERT_TRUE(!repo_relpath(&nr, npath, nrel, sizeof nrel, nerr,
+                              sizeof nerr));
+    ASSERT_TRUE(strstr(nerr, "sub has its own .lap/") != NULL);
+    snprintf(npath, sizeof npath, "%s/plain/deeper/b.txt", nroot);
+    ASSERT_TRUE(repo_relpath(&nr, npath, nrel, sizeof nrel, nerr,
+                             sizeof nerr));
+    ASSERT_EQ_S(nrel, "plain/deeper/b.txt");
+    plat_rmdir(".nested_unit/sub/.lap");
+    plat_rmdir(".nested_unit/sub");
+    plat_rmdir(".nested_unit/plain/deeper");
+    plat_rmdir(".nested_unit/plain");
+    plat_rmdir(".nested_unit");
+
     remove(path);
     arena_free(a);
 }

@@ -2722,6 +2722,26 @@ expect_grep '"error":"usage","message":"--branch needs a value"' "$LAP" log --br
 expect_grep '"error":"usage","message":"--branch needs a value"' "$LAP" session start "work" --branch= --json
 cd "$WORK"
 
+t "a branch folder inside the repository is skipped by the parent, as git skips a nested repository"
+mkdir -p "$WORK/ns1" && cd "$WORK/ns1" || exit 1
+git init -q . && git config user.name e2e && git config user.email e2e@lap
+"$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+for f in a.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+git add -A && git commit -qm base
+git worktree add -q sub -b sub
+cd "$WORK/ns1/sub" && expect_ok "$LAP" branch start sub --from ..
+printf 'b\n' >> a.txt
+cd "$WORK/ns1"
+expect_not_grep "sub/" "$LAP" status
+expect_grep "clean" "$LAP" status
+expect_grep "outside this repository: sub has its own .lap/" "$LAP" commit sub/a.txt --no-session --branch main \
+    -i "commit a branch file from main" -b "would record sub/a.txt"
+cd "$WORK/ns1/sub" && expect_grep "modified  a.txt" "$LAP" status
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"
