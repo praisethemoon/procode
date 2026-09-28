@@ -5,6 +5,9 @@
  *
  *   npm run build   --workspace combined     dist/ only
  *   npm run package --workspace combined     dist/ and procode-<version>.vsix
+ *   npm run package --workspace combined -- --target darwin-arm64 --bin <dir>
+ *       one platform's procode-<version>-<target>.vsix, carrying the lap
+ *       and kb found in <dir> (relative to where npm was run)
  *
  * dist/ holds:
  *   package.json   generated: the four extensions' contributions merged, plus
@@ -27,12 +30,24 @@ import * as esbuild from "esbuild";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { prebuilt } from "./binaries.mjs";
 
 const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repo = path.resolve(here, "..", "..");
 const dist = path.join(here, "dist");
 const VERSION = JSON.parse(fs.readFileSync(path.join(here, "package.json"), "utf8")).version;
 const PARTS = ["lap-vscode", "index-vscode", "coboard-vscode", "techdocs-vscode"];
+
+/* A platform package: --target and --bin go together, and the CLIs are
+ * checked against the target before anything is built. */
+const flag = (name) => {
+    const i = process.argv.indexOf(name);
+    return i < 0 ? undefined : process.argv[i + 1];
+};
+const TARGET = flag("--target");
+const BIN = flag("--bin");
+if ((TARGET === undefined) !== (BIN === undefined)) throw new Error("--target and --bin go together");
+const CLIS = TARGET ? prebuilt(path.resolve(process.env.INIT_CWD ?? process.cwd(), BIN), TARGET) : [];
 
 /* npm, tsc and vsce all run as JavaScript on this Node. Their commands on
  * PATH are .cmd wrappers on Windows, which execFileSync cannot start without
@@ -169,6 +184,15 @@ for (const part of PARTS) {
 // procode's own container icon, beside the parts' view icons.
 if (fs.existsSync(path.join(dist, "media", "procode-views.svg"))) throw new Error("a part ships media/procode-views.svg");
 fs.copyFileSync(path.join(here, "media", "procode-views.svg"), path.join(dist, "media", "procode-views.svg"));
+// A platform package's CLIs, executable, in bin/.
+if (TARGET) {
+    fs.mkdirSync(path.join(dist, "bin"));
+    for (const { file } of CLIS) {
+        const to = path.join(dist, "bin", path.basename(file));
+        fs.copyFileSync(file, to);
+        fs.chmodSync(to, 0o755);
+    }
+}
 // pdf.js, beside the bundle where Knowledge imports it from (index-vscode/src/pdf.ts).
 fs.cpSync(path.join(repo, "packages", "index-vscode", "out", "pdfjs"), path.join(dist, "out", "pdfjs"), { recursive: true });
 fs.copyFileSync(path.join(repo, "LICENSE"), path.join(dist, "LICENSE"));
@@ -221,8 +245,10 @@ console.log(`combined: built ${dist}`);
 
 if (process.argv.includes("--package")) {
     // A .vsix that would fail to start is not worth producing.
-    execFileSync(process.execPath, [path.join(here, "scripts", "check.mjs")], { cwd: here, stdio: "inherit" });
-    const out = path.join(here, `procode-${VERSION}.vsix`);
-    node(bin("@vscode", "vsce", "vsce"), ["package", "--no-dependencies", "--out", out], dist);
+    const checked = TARGET ? ["--target", TARGET] : [];
+    execFileSync(process.execPath, [path.join(here, "scripts", "check.mjs"), ...checked], { cwd: here, stdio: "inherit" });
+    const out = path.join(here, TARGET ? `procode-${VERSION}-${TARGET}.vsix` : `procode-${VERSION}.vsix`);
+    const target = TARGET ? ["--target", TARGET] : [];
+    node(bin("@vscode", "vsce", "vsce"), ["package", "--no-dependencies", ...target, "--out", out], dist);
     console.log(`combined: packaged ${out}`);
 }

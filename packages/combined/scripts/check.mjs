@@ -4,12 +4,14 @@
  *   - every command the generated manifest contributes is registered
  *   - every icon a view container or view names as a file is in dist/
  *   - the MCP definitions run files that exist in dist/, with the CLIs the
- *     settings name, and dist/ ships no native binary
+ *     settings name; dist/ ships no native binary, or with --target exactly
+ *     that platform's lap and kb, executable
  *   - "Set Up MCP for Claude Code" writes .mcp.json and keeps other servers
  *   - user-scope registration asks a stand-in `claude` on PATH, never the real
  *     one: the first time, after an update, and not again once current
  *
  *   node scripts/check.mjs      (after npm run build --workspace combined)
+ *   node scripts/check.mjs --target <vsce target>   (after a platform build)
  *
  * Works only in a directory under the system temp dir, and deletes nothing. */
 
@@ -19,6 +21,7 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { CLIS, exe } from "./binaries.mjs";
 
 const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(here, "dist");
@@ -192,7 +195,16 @@ for (const fn of configListeners) fn(changeOf("editor.fontSize"));
 assert.equal(asked, before, "an unrelated setting does not");
 for (const fn of folderListeners) fn({ added: [], removed: [] });
 assert.equal(asked, before + 1, "a change of workspace folders asks again, once");
-assert.equal(fs.existsSync(path.join(dist, "bin")), false, "the package carries no CLI");
+const target = process.argv.includes("--target") ? process.argv[process.argv.indexOf("--target") + 1] : undefined;
+if (target === undefined) {
+    assert.equal(fs.existsSync(path.join(dist, "bin")), false, "the package carries no CLI");
+} else {
+    const want = CLIS.map((cli) => exe(cli, target)).sort();
+    assert.deepEqual(fs.readdirSync(path.join(dist, "bin")).sort(), want, `the ${target} package carries exactly ${want.join(" and ")}`);
+    if (process.platform !== "win32") {
+        for (const f of want) assert.ok(fs.statSync(path.join(dist, "bin", f)).mode & 0o111, `bin/${f} is executable`);
+    }
+}
 
 // Just before a server starts, its CLI is looked for. With both found, every
 // server starts as defined and nothing is said.

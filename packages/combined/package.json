@@ -8,7 +8,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "package": "node scripts/build.mjs --package",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "test": "node --test scripts/binaries.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
