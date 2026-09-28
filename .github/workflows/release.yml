@@ -1,0 +1,172 @@
+# A version tag (v0.2.0) builds lap and kb for every platform, packages one
+# .vsix per platform with them inside (packages/combined/scripts/build.mjs
+# --target/--bin), plus the one for every platform without CLIs, and
+# attaches them all to a GitHub release for the tag. Run by hand, it builds
+# and keeps the packages as the run's artifacts, releasing nothing.
+#
+# The CLIs are built so they run anywhere their platform does:
+#   macOS    one universal binary (arm64 and x86_64), for both darwin targets
+#   Linux    static against musl, in an Alpine container: no glibc to match,
+#            so the same binary serves the linux and alpine targets
+#   Windows  MSVC with the C runtime linked in: no redistributable needed
+# The arm64 Linux and Windows runners are only offered to public
+# repositories, so a private one builds the other targets and skips those.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        name: Check the tag and choose the builds
+        env:
+          PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          version=$(node -p 'require("./packages/combined/package.json").version')
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the extension's version $version"
+            exit 1
+          fi
+          builds='{"build":"darwin","runner":"macos-latest"},{"build":"linux-x64","runner":"ubuntu-latest"},{"build":"win32-x64","runner":"windows-latest"}'
+          if [[ "$PRIVATE" != "true" ]]; then
+            builds="$builds"',{"build":"linux-arm64","runner":"ubuntu-24.04-arm"},{"build":"win32-arm64","runner":"windows-11-arm"}'
+          else
+            echo "::notice::private repository: linux-arm64 and win32-arm64 are skipped"
+          fi
+          echo "matrix={\"include\":[$builds]}" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  clis:
+    needs: plan
+    name: clis (${{ matrix.build }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and test (macOS, universal)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+          mkdir out && cp build/cli/lap-cli/lap build/cli/kb-cli/kb out/
+          lipo -info out/lap out/kb
+
+      - name: Build and test (Linux, static musl)
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src alpine:3.20 sh -euc '
+            apk add --no-cache build-base cmake git bash file
+            git config --global user.name ci && git config --global user.email ci@example.invalid
+            cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS=-static
+            cmake --build build --parallel
+            ctest --test-dir build --output-on-failure
+            mkdir out && cp build/cli/lap-cli/lap build/cli/kb-cli/kb out/ && strip out/lap out/kb
+            file out/lap out/kb'
+
+      - name: Build and test (Windows, static runtime)
+        if: runner.os == 'Windows'
+        run: |
+          arch=x64; [[ "${{ matrix.build }}" == win32-arm64 ]] && arch=ARM64
+          cmake -B build -A "$arch" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          cmake --build build --config Release --parallel
+          ctest --test-dir build -C Release --output-on-failure
+          mkdir out && cp build/cli/lap-cli/Release/lap.exe build/cli/kb-cli/Release/kb.exe out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clis-${{ matrix.build }}
+          path: out/
+          if-no-files-found: error
+
+  package:
+    needs: [plan, clis]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: clis-*
+          path: clis
+
+      - name: Package every platform
+        run: |
+          # Each build's CLIs serve these vsce targets.
+          declare -A targets=(
+            [darwin]="darwin-arm64 darwin-x64"
+            [linux-x64]="linux-x64 alpine-x64"
+            [linux-arm64]="linux-arm64 alpine-arm64"
+            [win32-x64]="win32-x64"
+            [win32-arm64]="win32-arm64"
+          )
+          for dir in clis/clis-*; do
+            build=${dir#clis/clis-}
+            for target in ${targets[$build]}; do
+              npm run package --workspace combined -- --target "$target" --bin "$dir"
+            done
+          done
+          # The package for every platform, without CLIs.
+          npm run package --workspace combined
+          mkdir vsix && mv packages/combined/procode-*.vsix vsix/
+          ls -l vsix
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: vsix/
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [plan, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: vsix
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          cat > notes.md <<EOF
+          Install the .vsix for your platform with **Extensions: Install from VSIX…**:
+          \`darwin-arm64\` (Apple silicon), \`darwin-x64\` (Intel Mac), \`linux-x64\` / \`linux-arm64\`,
+          \`alpine-x64\` / \`alpine-arm64\`, \`win32-x64\` / \`win32-arm64\`. Each carries the lap and kb
+          CLIs, which procode keeps in \`~/.procode/bin\`.
+
+          \`procode-$VERSION.vsix\` carries no CLIs, for any other platform: build lap and kb
+          yourself (see Build and install in the README).
+          EOF
+          gh release create "$GITHUB_REF_NAME" vsix/*.vsix \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "procode $VERSION" \
+            --notes-file notes.md

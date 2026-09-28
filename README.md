@@ -254,6 +254,35 @@ inside the project:
 }
 ```
 
+## Releasing
+
+Every push to `master` and every pull request is built and tested on macOS,
+Linux and Windows ([ci.yml](.github/workflows/ci.yml)): both CLIs with
+CMake and `ctest`, then every package with `npm test`.
+
+A release is a version tag. Set `version` in
+`packages/combined/package.json`, commit, then tag and push it:
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+[release.yml](.github/workflows/release.yml) then builds lap and kb for
+every platform (macOS as one universal binary; Linux static against musl,
+which also serves Alpine; Windows with the C runtime linked in), packages
+one `.vsix` per platform with them inside, plus `procode-<version>.vsix`
+without CLIs, and attaches them all to a GitHub release. The tag must match
+the version, or nothing is released. The arm64 Linux and Windows builds
+need GitHub's arm64 runners, which only public repositories get: a private
+one releases without them. Run by hand (Actions → release → Run workflow),
+it builds the packages as the run's artifacts and releases nothing.
+
+One platform's package, locally, from CLIs you built:
+
+```sh
+npm run package --workspace combined -- --target darwin-arm64 --bin <folder with lap and kb>
+```
+
 ## How the pieces meet
 
 A ticket's work is a lap session tagged with it:
