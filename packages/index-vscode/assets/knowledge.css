@@ -274,6 +274,33 @@ html, body {
 /* "Load more" at the foot of a list, the next page's rows drawn above it. */
 .kb-more { padding: 6px 8px 10px; text-align: center; }
 
+/* A collection filed from a folder, as the Explorer draws one: no dividers
+ * between rows, depth as indentation (set on each row), a chevron on folders
+ * and the file count after the name. */
+.kb-tree .kb-tree-folder,
+.kb-tree .kb-tree-file { border-bottom: none; padding-top: 2px; padding-bottom: 2px; }
+.kb-tree .kb-row-head { align-items: center; gap: 6px; }
+.kb-tree .kb-row-head .kb-row-title { flex: 0 1 auto; font-weight: normal; }
+.kb-tree-count,
+.kb-tree-meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--bk-color-foreground-muted);
+  font-size: var(--bk-font-size-xs, 11px);
+  font-variant-numeric: tabular-nums;
+}
+.kb-tree-root {
+  padding: 4px 8px;
+  font-size: var(--bk-font-size-xs, 11px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-tree .kb-rail-head { margin-top: 6px; border-top: 1px solid var(--bk-color-divider); }
+
 .kb-count {
   padding: var(--bk-padding-sm);
   color: var(--bk-color-foreground-muted);

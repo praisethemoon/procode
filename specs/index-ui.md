@@ -47,6 +47,29 @@ collection's documents come a page at a time from `GET /documents` with its
 cursor (index-api §2, `after`, newest first with `reverse`); the collections
 come whole from `GET /collections` and are shown a page at a time.
 
+**A collection filed from a folder is drawn as that folder.** When a
+document on the collection's first page has a `path` (index-api §1.2, set by
+`add --dir`), the collection is a **tree of folders and files**, as VS Code's
+Explorer draws one:
+
+- folders first, then files, each in natural order ignoring case;
+- a folder row has a chevron, its name and the number of files under it, and
+  opens and closes on click; top-level folders start open, deeper ones
+  closed, and what the reader opens or closes is kept while the sidebar stays
+  open;
+- a chain of folders that each hold only one folder is one row
+  (`tests/fixtures/syntax`), and the folder every path shares is not a row:
+  it is said once above the tree (`in kb-cli/`);
+- a file row shows the file name, not the path, with its size, type and
+  fetched date; the full path is on hover, and it opens the document;
+- documents without a `path` (web pages, papers) follow the tree under
+  **Documents without a path**, newest first, a page at a time.
+
+A tree cannot page newest first — files would land in half-built folders — so
+such a collection is listed whole (`GET /documents` without `limit`) before it
+is drawn, and **Load more** is left to the documents without a path. A search
+inside it stays a flat list of results, each with its path.
+
 **With a query**, the list is search results (`GET /search`, hybrid) — across
 the store from the collections, within the open collection from inside it.
 Search runs debounced as the reader types; a local hybrid search is fast

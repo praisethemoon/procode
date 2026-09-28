@@ -5,7 +5,8 @@
  * WITH NO QUERY THE SIDEBAR SHOWS THE COLLECTIONS, each with its document
  * count, size and oldest fetch; a collection opens its documents in the
  * sidebar, newest first, and a back control returns. Both lists end in "Load
- * more" rather than stopping at a limit (`view/rail.ts`). Rename and delete
+ * more" rather than stopping at a limit (`view/rail.ts`). A collection filed
+ * from a folder is drawn as that folder's tree instead (`view/tree.ts`). Rename and delete
  * are not here: one mis-click from losing a topic, they stay on the
  * Collections page (§4), a link at the top of the list.
  *
@@ -34,7 +35,8 @@ import {
     unembeddedNote,
 } from "../src/view/rows";
 import { formatBytes, formatDate } from "../src/view/facts";
-import { HOME, Place, collectionsShown, cut, documentRow, documentsQuery, openCollection, searchScope } from "../src/view/rail";
+import { HOME, PAGE, Place, collectionsShown, cut, documentRow, documentsQuery, openCollection, searchScope } from "../src/view/rail";
+import { FolderNode, buildTree, folderOpen, showsTree } from "../src/view/tree";
 import { Codicon, Resolved, StaleBadge, useDebounced, useQuery } from "./parts";
 import { finishEmbedding, onHostEvent, open, tag } from "./rpc";
 
@@ -175,8 +177,16 @@ function LoadMore(props: { onClick: () => void }): JSX.Element {
     );
 }
 
+/* The folders the reader opened or closed, by path, in one collection. */
+type Chosen = ReadonlyMap<string, boolean>;
+
 /* One collection's documents: a back control, then its pages. */
-function CollectionView(props: { name: string; onBack: () => void }): JSX.Element {
+function CollectionView(props: {
+    name: string;
+    onBack: () => void;
+    chosen: Chosen;
+    onChoose: (path: string, open: boolean) => void;
+}): JSX.Element {
     return (
         <div className="kb-list">
             <div className="kb-rail-head">
@@ -185,19 +195,29 @@ function CollectionView(props: { name: string; onBack: () => void }): JSX.Elemen
                 </button>
                 <span className="kb-row-title">{props.name}</span>
             </div>
-            <DocumentsPage collection={props.name} after={null} />
+            <DocumentsPage collection={props.name} after={null} chosen={props.chosen} onChoose={props.onChoose} />
         </div>
     );
 }
 
 /* A page of a collection's documents, newest first; Load more draws the
- * next page after this one's last row. */
-function DocumentsPage(props: { collection: string; after: string | null }): JSX.Element {
+ * next page after this one's last row. The first page decides whether the
+ * collection is a tree instead (`showsTree`; a search is SearchList's, never
+ * drawn here). */
+function DocumentsPage(props: {
+    collection: string;
+    after: string | null;
+    chosen: Chosen;
+    onChoose: (path: string, open: boolean) => void;
+}): JSX.Element {
     const [more, setMore] = useState(false);
     const { state } = useQuery<KbDocument[]>("ls", documentsQuery(props.collection, props.after));
     return (
         <Resolved state={state} loading="Reading the documents…">
             {(page) => {
+                if (props.after === null && showsTree(false, page)) {
+                    return <CollectionTree collection={props.collection} chosen={props.chosen} onChoose={props.onChoose} />;
+                }
                 const { shown, next } = cut(page);
                 if (shown.length === 0 && props.after === null) {
                     return <div className="kb-empty">Nothing in {props.collection} yet.</div>;
@@ -208,7 +228,7 @@ function DocumentsPage(props: { collection: string; after: string | null }): JSX
                             <DocumentLine key={d.id} d={d} />
                         ))}
                         {next === null ? null : more ? (
-                            <DocumentsPage collection={props.collection} after={next} />
+                            <DocumentsPage collection={props.collection} after={next} chosen={props.chosen} onChoose={props.onChoose} />
                         ) : (
                             <LoadMore onClick={() => setMore(true)} />
                         )}
@@ -251,6 +271,117 @@ function DocumentLine(props: { d: KbDocument }): JSX.Element {
                 </span>
             </div>
         </div>
+    );
+}
+
+/* A collection filed from a folder, drawn as that folder (`view/tree.ts`).
+ * A tree cannot page newest first — files would land in half-built folders
+ * — so the whole collection is listed in one `kb ls`, then drawn. Documents
+ * without a path follow under their own heading, a page at a time. */
+function CollectionTree(props: {
+    collection: string;
+    chosen: Chosen;
+    onChoose: (path: string, open: boolean) => void;
+}): JSX.Element {
+    const [pages, setPages] = useState(1);
+    const { state } = useQuery<KbDocument[]>("ls", { collection: props.collection, reverse: true });
+    return (
+        <Resolved state={state} loading="Reading the documents…">
+            {(all) => {
+                const tree = buildTree(all);
+                const loose = tree.loose.slice(0, PAGE * pages);
+                return (
+                    <div className="kb-tree">
+                        {tree.root !== "" ? (
+                            <div className="kb-tree-root kb-muted" title={tree.root}>
+                                in {tree.root}
+                            </div>
+                        ) : null}
+                        <FolderRows folder={tree.top} depth={0} chosen={props.chosen} onChoose={props.onChoose} />
+                        {tree.loose.length > 0 ? (
+                            <>
+                                <div className="kb-rail-head kb-muted">Documents without a path</div>
+                                {loose.map((d) => (
+                                    <DocumentLine key={d.id} d={d} />
+                                ))}
+                                {loose.length < tree.loose.length ? <LoadMore onClick={() => setPages(pages + 1)} /> : null}
+                            </>
+                        ) : null}
+                    </div>
+                );
+            }}
+        </Resolved>
+    );
+}
+
+/* A folder's rows: its folders, each with what it holds when open, then its files. */
+function FolderRows(props: {
+    folder: FolderNode;
+    depth: number;
+    chosen: Chosen;
+    onChoose: (path: string, open: boolean) => void;
+}): JSX.Element {
+    const indent = (extra: number) => ({ paddingLeft: `${8 + props.depth * 12 + extra}px` });
+    return (
+        <>
+            {props.folder.folders.map((f) => {
+                const isOpen = folderOpen(props.chosen, f.path, props.depth);
+                const toggle = () => props.onChoose(f.path, !isOpen);
+                return (
+                    <div key={`d:${f.path}`}>
+                        <div
+                            className="kb-row kb-tree-folder"
+                            style={indent(0)}
+                            role="button"
+                            aria-expanded={isOpen}
+                            tabIndex={0}
+                            title={f.path}
+                            onClick={toggle}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    toggle();
+                                }
+                            }}
+                        >
+                            <div className="kb-row-head">
+                                <Codicon name={isOpen ? "chevron-down" : "chevron-right"} />
+                                <span className="kb-row-title">{f.name}</span>
+                                <span className="kb-muted kb-tree-count">{f.count}</span>
+                            </div>
+                        </div>
+                        {isOpen ? <FolderRows folder={f} depth={props.depth + 1} chosen={props.chosen} onChoose={props.onChoose} /> : null}
+                    </div>
+                );
+            })}
+            {props.folder.files.map((f) => {
+                const row = documentRow(f.doc);
+                return (
+                    <div
+                        key={`f:${f.doc.id}`}
+                        className="kb-row kb-tree-file"
+                        style={indent(20)}
+                        role="button"
+                        tabIndex={0}
+                        title={f.path}
+                        onClick={() => open(row.reference, null)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                open(row.reference, null);
+                            }
+                        }}
+                    >
+                        <div className="kb-row-head">
+                            <span className="kb-row-title">{f.name}</span>
+                            <span className="kb-tree-meta">
+                                {formatBytes(row.bytes)} · {row.mime} · {formatDate(row.fetchedAt)}
+                            </span>
+                        </div>
+                    </div>
+                );
+            })}
+        </>
     );
 }
 
@@ -313,6 +444,11 @@ function List(props: { rows: readonly Row[] }): JSX.Element {
 export function Sidebar(): JSX.Element {
     const [q, setQ] = useState("");
     const [place, setPlace] = useState<Place>(HOME);
+    /* The folders opened and closed in each collection, kept while the
+     * sidebar is open, so going back and returning finds them as they were. */
+    const [folds, setFolds] = useState<ReadonlyMap<string, Chosen>>(new Map());
+    const choose = (collection: string) => (path: string, isOpen: boolean) =>
+        setFolds((all) => new Map(all).set(collection, new Map(all.get(collection) ?? []).set(path, isOpen)));
     const settled = useDebounced(q, DEBOUNCE_MS);
     const status = useQuery<KbStatus>("status");
 
@@ -405,7 +541,12 @@ export function Sidebar(): JSX.Element {
                                         staleDays={tag.staleAfterDays}
                                     />
                                 ) : place.kind === "collection" ? (
-                                    <CollectionView name={place.name} onBack={() => setPlace(HOME)} />
+                                    <CollectionView
+                                        name={place.name}
+                                        onBack={() => setPlace(HOME)}
+                                        chosen={folds.get(place.name) ?? new Map()}
+                                        onChoose={choose(place.name)}
+                                    />
                                 ) : (
                                     <CollectionsList onOpen={(name) => setPlace(openCollection(name))} />
                                 )}
