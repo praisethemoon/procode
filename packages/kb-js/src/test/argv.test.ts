@@ -42,6 +42,20 @@ test("an unfiltered list asks for nothing it was not asked for", () => {
     assert.deepEqual(lsArgv({ collection: "  ", source: "", mime: null, since: undefined }), ["ls"]);
 });
 
+test("the next page is --after the last document seen, newest first with --reverse", () => {
+    assert.deepEqual(lsArgv({ collection: "c", limit: 25, after: " D-41 ", reverse: true }), [
+        "ls",
+        "--collection",
+        "c",
+        "--limit",
+        "25",
+        "--after",
+        "D-41",
+        "--reverse",
+    ]);
+    assert.deepEqual(lsArgv({ after: "", reverse: false }), ["ls"], "no cursor and forwards ask for nothing");
+});
+
 test("every filter §2 names is a flag, and the value is trimmed", () => {
     assert.deepEqual(
         lsArgv({

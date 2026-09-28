@@ -100,39 +100,8 @@ html, body {
   flex: 0 0 auto;
 }
 
-/* A fixed, narrow column for the scope `Select`. Fixed rather than
- * shrink-to-fit so the field beside it keeps the width it gains and loses as
- * the rail is resized, and so a control whose longest option is three
- * characters does not become a three-character control. `max-width` is what
- * stops the column itself becoming the overflow in a pane too narrow to hold
- * even one of them. */
-.kb-narrow { flex: 0 0 auto; width: 7rem; max-width: 100%; }
-
-/* The scope `Select` at Lap History's size (24px, 12px text) beside a bar of
- * the same height. baukasten sizes it in rem, and this view's root is 13px
- * where Lap History's is 16px, so left alone it would be a size smaller. */
-.kb-narrow [role="combobox"] { height: 24px; font-size: 12px; }
-
-/* THE RAIL'S HORIZONTAL OVERFLOW, AT ITS CAUSE.
- *
- * baukasten's `Select` puts `min-width: calc(var(--bk-spacing-20) * 2.5)` on
- * its own root — 12.5rem, which is 162.5px at the root size `html` is given
- * above, wider than a VSCode sidebar at its narrowest. `fullWidth` adds
- * `width: 100%` beside it and LOSES: a min-width clamps a width from below. So
- * the control's box stays 162.5px wide in a 170px rail whatever slot it is put
- * in, and everything past the slot's edge is horizontal scrollbar. `Input`
- * carries no such floor, which is why the box beside it never shows it.
- *
- * The floor has to be lifted off the CONTROL and not off the wrapper:
- * `min-width: 0` on the wrapper only lets the wrapper shrink, and the child
- * overflows it just the same.
- *
- * NOT `overflow: hidden` ON THE BAR. That would hide the overhang rather than
- * fix it, leave the control unreachable, and clip an open dropdown with it. It
- * is also unnecessary: the `Select` portals its open panel to `document.body`
- * and positions it absolutely, so there is nothing inside the bar to clip and
- * nothing in the document at all while the control is closed. */
-.kb-narrow > *,
+/* The field may shrink with the rail: nothing inside the bar sets a floor
+ * wider than a sidebar at its narrowest. */
 .kb-bar > .kb-grow > * { min-width: 0; }
 
 /* The box and the cross inside it. `position: relative` here is what the cross
@@ -286,6 +255,24 @@ html, body {
 
 .kb-match-keyword { color: var(--bk-color-info); border-color: var(--bk-color-info); }
 .kb-match-semantic { color: var(--bk-color-success); border-color: var(--bk-color-success); }
+
+/* Above a list in the rail: where it is (and the way back), and on the
+ * collections, the link to the page where they are renamed and deleted. */
+.kb-rail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--bk-gap-sm, 8px);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--bk-color-divider);
+}
+.kb-rail-head .kb-action:last-child:not(.kb-back) { margin-left: auto; }
+.kb-back { display: inline-flex; align-items: center; gap: 4px; }
+.kb-collection-row .kb-row-head { gap: 6px; }
+.kb-collection-row .kb-row-meta { padding-left: 22px; }
+.kb-row-line-description { color: var(--bk-color-foreground-muted); }
+
+/* "Load more" at the foot of a list, the next page's rows drawn above it. */
+.kb-more { padding: 6px 8px 10px; text-align: center; }
 
 .kb-count {
   padding: var(--bk-padding-sm);

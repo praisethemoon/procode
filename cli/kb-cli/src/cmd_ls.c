@@ -2,7 +2,13 @@
 #include "help.h"
 
 /* GET /documents (§2) with its ?collection=&source=&mime=&q=&since=
- * filters, and meta (§1.2's "filterable"). */
+ * filters, and meta (§1.2's "filterable").
+ *
+ * THE ORDER IS THE STORE'S, which is the documents' id order: ids only grow,
+ * a new document goes at the end and a forgotten one leaves its place.
+ * --reverse reads it newest first. --after D-n continues a list after that
+ * document — by its number, so a cursor whose document was forgotten since
+ * still continues where it was. */
 
 /* The flags kb ls accepts: the ones its --help lists (help.c). */
 #define VALUE_FLAGS help_values("ls")
@@ -21,6 +27,13 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
         err_out(json, "usage", "%s", err);
         return KB_EXIT_ERR;
     }
+    const char *after_s = flag_value(argc, argv, VALUE_FLAGS, "--after");
+    int64_t after = after_s ? kb_id_num(after_s, 'D') : 0;
+    if (after_s && after <= 0) {
+        err_out(json, "usage", "--after expects a document id, e.g. D-241");
+        return KB_EXIT_ERR;
+    }
+    const bool reverse = has_flag(argc, argv, VALUE_FLAGS, "--reverse");
     const char *limit_s = flag_value(argc, argv, VALUE_FLAGS, "--limit");
     int64_t limit = limit_s ? strtoll(limit_s, NULL, 10) : 0;
     if (limit_s && limit <= 0) {
@@ -53,8 +66,13 @@ int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
         err_out(json, code, "%s", err);
         return KB_EXIT_ERR;
     }
-    for (size_t i = 0; i < s.documents.n; i++) {
-        const Document *d = &s.documents.v[i];
+    for (size_t k = 0; k < s.documents.n; k++) {
+        const Document *d = &s.documents.v[reverse ? s.documents.n - 1 - k : k];
+        if (after) {
+            int64_t num = kb_id_num(d->id, 'D');
+            if (reverse ? num >= after : num <= after)
+                continue;
+        }
         const Source *src = src_by_id(&s.sources, d->source);
         if (!docquery_keep(a, &f, d, src))
             continue;

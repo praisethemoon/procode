@@ -168,7 +168,7 @@ than in the log, so re-ingesting an unchanged page writes nothing.
 | `GET /sources/{id}` | full, with document count and fetch history |
 | `POST /sources/{id}/refresh` | refetch, compare by hash, re-embed only what changed. A `file` source is read again, a `dir` source walked again (§2.1); a `url` one is re-filed through `POST /documents` while §12.2 keeps HTTP out of the binary |
 | `DELETE /sources/{id}` | forget it and every document under it |
-| `GET /documents` | rows. `?collection=&source=&mime=&q=&since=&meta=`. `collection` is a comma list as in §4; `since` a timestamp or a date; `meta` a JSON object whose every key must match, an array value matching any one element |
+| `GET /documents` | rows, in the store's order (the documents' id order, oldest first). `?collection=&source=&mime=&q=&since=&meta=&limit=&after=&reverse=`. `collection` is a comma list as in §4; `since` a timestamp or a date; `meta` a JSON object whose every key must match, an array value matching any one element. **Paging**: `limit` rows, then `after=D-n` continues after that document — by its number, so a cursor whose document was forgotten since still continues where it was; `reverse` reads newest first, and `after` then continues backwards. CLI: `kb ls --limit N --after D-n --reverse` |
 | `GET /documents/{id}` | metadata. `?include=text,chunks,links` |
 | `DELETE /documents/{id}` | forget one |
 

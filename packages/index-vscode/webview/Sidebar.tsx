@@ -1,14 +1,16 @@
-/* index-ui.md §2: a search bar at the top — the same bar as the Board's and
- * Lap History's filter — a collection `Select` beside it, and a list below.
+/* index-ui.md §2: the search bar at the top — the same bar as the Board's and
+ * Lap History's filter — and below it the collections, or one collection's
+ * documents.
  *
- * WITH NO QUERY THE LIST IS EVERY DOCUMENT IN SCOPE, NEWEST FIRST. §2 says so
- * and says why: "browsing is the default state, not an empty prompt — the store
- * is worth looking through even when there is no question." This is the
- * property most likely to regress into a "type to search" placeholder, so the
- * branch is `isSearching(q)` from `view/rows.ts`, which has a test, and the two
- * lists are two operations rather than one with an optional argument.
+ * WITH NO QUERY THE SIDEBAR SHOWS THE COLLECTIONS, each with its document
+ * count, size and oldest fetch; a collection opens its documents in the
+ * sidebar, newest first, and a back control returns. Both lists end in "Load
+ * more" rather than stopping at a limit (`view/rail.ts`). Rename and delete
+ * are not here: one mis-click from losing a topic, they stay on the
+ * Collections page (§4), a link at the top of the list.
  *
- * WITH A QUERY IT IS SEARCH RESULTS, DEBOUNCED, WITH NO SUBMIT BUTTON. The
+ * WITH A QUERY IT IS SEARCH RESULTS, DEBOUNCED, WITH NO SUBMIT BUTTON — across
+ * the store from the collections, within the collection from inside it. The
  * debounce is `useDebounced` and the query is keyed on its settled value, so a
  * keystroke does not spawn a process and an in-flight answer for a prefix
  * cannot replace the answer for what is on screen.
@@ -16,26 +18,14 @@
  * ROWS ARE NOT HIGHLIGHTED AND MATCHES ARE NOT MARKED UP. §2 is explicit. The
  * row's line is a string from `oneLine` and there is no shape here for a
  * `<mark>` to be inserted into.
- *
- * THE SELECT'S OWN WIDTH FLOOR IS CANCELLED IN THE STYLESHEET AND NOT HERE.
- * baukasten's `Select` carries `min-width: calc(var(--bk-spacing-20) * 2.5)` on
- * its own root — 162.5px, wider than a VSCode sidebar at its narrowest — and
- * `fullWidth` loses to it, because a min-width clamps a width from below. The
- * cancel has to land on the CONTROL rather than on the wrapper, and it must not
- * be `overflow: hidden`, which would clip the open dropdown.
  */
 
 import { useEffect, useState } from "react";
-import { Select } from "baukasten-ui/core";
 
 import { KbCollection, KbDocument, KbHit, KbStatus } from "kb-js/pure";
 
 import {
-    BROWSE_LIMIT,
     Row,
-    browseCut,
-    browseQuery,
-    browseRows,
     isSearching,
     leftToEmbed,
     pendingLine,
@@ -43,7 +33,8 @@ import {
     searchRows,
     unembeddedNote,
 } from "../src/view/rows";
-import { formatDate } from "../src/view/facts";
+import { formatBytes, formatDate } from "../src/view/facts";
+import { HOME, Place, collectionsShown, cut, documentRow, documentsQuery, openCollection, searchScope } from "../src/view/rail";
 import { Codicon, Resolved, StaleBadge, useDebounced, useQuery } from "./parts";
 import { finishEmbedding, onHostEvent, open, tag } from "./rpc";
 
@@ -114,39 +105,152 @@ function KnowledgeRow(props: { row: Row }): JSX.Element {
 
 /* ---------------------------------------------------------- the two lists */
 
-function BrowseList(props: { collection: string; staleDays: number }): JSX.Element {
-    const [all, setAll] = useState(false);
-    useEffect(() => setAll(false), [props.collection]);
-    const { state } = useQuery<KbDocument[]>("ls", browseQuery(props.collection, all));
+/* §2's default: the collections, a page at a time, each opening in place. */
+function CollectionsList(props: { onOpen: (name: string) => void }): JSX.Element {
+    const [pages, setPages] = useState(1);
+    const { state } = useQuery<KbCollection[]>("collections");
     return (
         <Resolved state={state} loading="Reading the store…">
-            {(documents) => {
-                const { shown, more } = browseCut(documents);
-                const rows = browseRows(all ? documents : shown, Date.now(), props.staleDays);
-                if (rows.length === 0) {
-                    return (
-                        <div className="kb-empty">
-                            {props.collection === ""
-                                ? NOTHING_INDEXED
-                                : `Nothing in ${props.collection} yet.`}
+            {(collections) => {
+                if (collections.length === 0) {
+                    return <div className="kb-empty">{NOTHING_INDEXED}</div>;
+                }
+                const { shown, more } = collectionsShown(collections, pages);
+                return (
+                    <div className="kb-list">
+                        <div className="kb-rail-head">
+                            <span className="kb-muted">Collections</span>
+                            {/* §4: rename and delete live on that page and nowhere else. */}
+                            <button type="button" className="kb-action" onClick={() => open("collections")}>
+                                Manage collections…
+                            </button>
                         </div>
-                    );
+                        {shown.map((c) => (
+                            <div
+                                key={c.name}
+                                className="kb-row kb-collection-row"
+                                role="button"
+                                tabIndex={0}
+                                title={`Open ${c.name}`}
+                                onClick={() => props.onOpen(c.name)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        props.onOpen(c.name);
+                                    }
+                                }}
+                            >
+                                <div className="kb-row-head">
+                                    <Codicon name="folder" />
+                                    <span className="kb-row-title">{c.name}</span>
+                                </div>
+                                <div className="kb-row-meta">
+                                    <span>
+                                        {c.documents} document{c.documents === 1 ? "" : "s"}
+                                    </span>
+                                    <span>{formatBytes(c.bytes)}</span>
+                                    {c.oldestFetchedAt ? (
+                                        <span className="kb-when" title={`oldest fetch ${c.oldestFetchedAt}`}>
+                                            since {formatDate(c.oldestFetchedAt)}
+                                        </span>
+                                    ) : null}
+                                </div>
+                            </div>
+                        ))}
+                        {more ? <LoadMore onClick={() => setPages(pages + 1)} /> : null}
+                    </div>
+                );
+            }}
+        </Resolved>
+    );
+}
+
+function LoadMore(props: { onClick: () => void }): JSX.Element {
+    return (
+        <div className="kb-more">
+            <button type="button" className="kb-action" onClick={props.onClick}>
+                Load more
+            </button>
+        </div>
+    );
+}
+
+/* One collection's documents: a back control, then its pages. */
+function CollectionView(props: { name: string; onBack: () => void }): JSX.Element {
+    return (
+        <div className="kb-list">
+            <div className="kb-rail-head">
+                <button type="button" className="kb-action kb-back" title="Back to the collections" onClick={props.onBack}>
+                    <Codicon name="arrow-left" /> Collections
+                </button>
+                <span className="kb-row-title">{props.name}</span>
+            </div>
+            <DocumentsPage collection={props.name} after={null} />
+        </div>
+    );
+}
+
+/* A page of a collection's documents, newest first; Load more draws the
+ * next page after this one's last row. */
+function DocumentsPage(props: { collection: string; after: string | null }): JSX.Element {
+    const [more, setMore] = useState(false);
+    const { state } = useQuery<KbDocument[]>("ls", documentsQuery(props.collection, props.after));
+    return (
+        <Resolved state={state} loading="Reading the documents…">
+            {(page) => {
+                const { shown, next } = cut(page);
+                if (shown.length === 0 && props.after === null) {
+                    return <div className="kb-empty">Nothing in {props.collection} yet.</div>;
                 }
                 return (
                     <>
-                        <List rows={rows} />
-                        {more && !all ? (
-                            <div className="kb-empty kb-more">
-                                Only the first {BROWSE_LIMIT} documents are listed; there are more.{" "}
-                                <button type="button" className="kb-action" onClick={() => setAll(true)}>
-                                    Show all
-                                </button>
-                            </div>
-                        ) : null}
+                        {shown.map((d) => (
+                            <DocumentLine key={d.id} d={d} />
+                        ))}
+                        {next === null ? null : more ? (
+                            <DocumentsPage collection={props.collection} after={next} />
+                        ) : (
+                            <LoadMore onClick={() => setMore(true)} />
+                        )}
                     </>
                 );
             }}
         </Resolved>
+    );
+}
+
+function DocumentLine(props: { d: KbDocument }): JSX.Element {
+    const row = documentRow(props.d);
+    return (
+        <div
+            className="kb-row"
+            role="button"
+            tabIndex={0}
+            title={`${row.reference} · ${row.title}`}
+            onClick={() => open(row.reference, null)}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    open(row.reference, null);
+                }
+            }}
+        >
+            <div className="kb-row-head">
+                <span className="kb-row-title">{row.title}</span>
+            </div>
+            {row.description !== null ? (
+                <div className="kb-row-line kb-row-line-description" title={row.description}>
+                    {row.description}
+                </div>
+            ) : null}
+            <div className="kb-row-meta">
+                <span>{formatBytes(row.bytes)}</span>
+                <span>{row.mime}</span>
+                <span className="kb-when" title={row.fetchedAt}>
+                    {formatDate(row.fetchedAt)}
+                </span>
+            </div>
+        </div>
     );
 }
 
@@ -208,10 +312,9 @@ function List(props: { rows: readonly Row[] }): JSX.Element {
 
 export function Sidebar(): JSX.Element {
     const [q, setQ] = useState("");
-    const [collection, setCollection] = useState("");
+    const [place, setPlace] = useState<Place>(HOME);
     const settled = useDebounced(q, DEBOUNCE_MS);
     const status = useQuery<KbStatus>("status");
-    const collections = useQuery<KbCollection[]>("collections");
 
     /* §4: "a collection row opens the sidebar scoped to it." The host reveals
      * this view and then says which one. */
@@ -219,17 +322,12 @@ export function Sidebar(): JSX.Element {
         () =>
             onHostEvent((r) => {
                 if (r.kind === "scope") {
-                    setCollection(r.collection);
+                    setPlace(r.collection === "" ? HOME : openCollection(r.collection));
                     setQ("");
                 }
             }),
         [],
     );
-
-    const names =
-        collections.state.status === "ok"
-            ? [...new Set(collections.state.value.map((c) => c.name))].sort()
-            : [];
 
     return (
         <div className="kb-view">
@@ -239,7 +337,7 @@ export function Sidebar(): JSX.Element {
                         className="kb-search-input"
                         type="text"
                         value={q}
-                        placeholder="Search"
+                        placeholder={place.kind === "collection" ? `Search ${place.name}` : "Search"}
                         spellCheck={false}
                         aria-label="Search the knowledge base"
                         onChange={(e) => setQ(e.currentTarget.value)}
@@ -265,30 +363,6 @@ export function Sidebar(): JSX.Element {
                             <Codicon name="close" />
                         </button>
                     ) : null}
-                </span>
-                <span className="kb-narrow">
-                    {/* baukasten's `Select` takes an `id` and no `aria-label`,
-                      * so the name comes from a real label associated with it.
-                      * The label is off-screen rather than absent: the rail is
-                      * one control wide and a visible one would take the width
-                      * the box beside it is there for, but a control with no
-                      * name at all is a control nothing that is not a pair of
-                      * eyes can use. */}
-                    <label className="kb-sr-only" htmlFor="kb-collection">
-                        Collection
-                    </label>
-                    <Select<string>
-                        id="kb-collection"
-                        size="sm"
-                        fullWidth
-                        value={collection}
-                        options={[
-                            { value: "", label: "All" },
-                            ...names.map((n) => ({ value: n, label: n })),
-                        ]}
-                        placeholder="All"
-                        onChange={(next) => setCollection(typeof next === "string" ? next : "")}
-                    />
                 </span>
             </div>
             <div className="kb-scroll">
@@ -327,11 +401,13 @@ export function Sidebar(): JSX.Element {
                                 {isSearching(settled) ? (
                                     <SearchList
                                         q={settled.trim()}
-                                        collection={collection}
+                                        collection={searchScope(place)}
                                         staleDays={tag.staleAfterDays}
                                     />
+                                ) : place.kind === "collection" ? (
+                                    <CollectionView name={place.name} onBack={() => setPlace(HOME)} />
                                 ) : (
-                                    <BrowseList collection={collection} staleDays={tag.staleAfterDays} />
+                                    <CollectionsList onOpen={(name) => setPlace(openCollection(name))} />
                                 )}
                             </>
                         );

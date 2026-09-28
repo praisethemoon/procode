@@ -9,7 +9,6 @@
  */
 
 import * as assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
@@ -565,129 +564,15 @@ function rules(): { selector: string; body: string }[] {
     return out;
 }
 
-/* A length written as `calc(var(--bk-spacing-N) * F)` or as a bare `Xrem`, in
- * rem. Anything else answers null, so the caller fails loudly rather than
- * comparing against a number it invented. */
-function rem(value: string, tokens: Map<string, string>): number | null {
-    const bare = /^\s*([0-9.]+)rem\s*$/.exec(value);
-    if (bare !== null) {
-        return Number(bare[1]);
-    }
-    const scaled = /^\s*calc\(\s*var\((--bk-[a-z0-9-]+)\)\s*\*\s*([0-9.]+)\s*\)\s*$/.exec(value);
-    if (scaled === null) {
-        return null;
-    }
-    const token = tokens.get(scaled[1]);
-    if (token === undefined) {
-        return null;
-    }
-    const base = /^\s*([0-9.]+)rem\s*$/.exec(token);
-    return base === null ? null : Number(base[1]) * Number(scaled[2]);
-}
-
-test("the rail cancels the width floor baukasten's Select brings into it", () => {
-    /* baukasten's `Select` puts `min-width: calc(var(--bk-spacing-20) * 2.5)`
-     * on its own ROOT — 12.5rem, 162.5px at a 13px root size, wider than a
-     * VSCode sidebar at its narrowest — and `fullWidth` only adds
-     * `width: 100%`, which loses: a min-width clamps a width from below. The
-     * control's box therefore stays 162.5px in a 170px rail whatever slot it is
-     * put in, and everything past the slot's edge is horizontal scrollbar.
-     * `Input` carries no such floor, which is why the box beside it never shows
-     * the problem.
-     *
-     * This test is about the FLOOR and not about the scrollbar. It reads the
-     * floor out of the installed package rather than from a number written
-     * here, which buys the two failures that matter: a baukasten that RAISES it
-     * still passes, because the cancel still works; a baukasten that DROPS it
-     * fails, and whoever reads this can delete a rule that is now working
-     * around nothing.
-     *
-     * The root's classes come from RENDERING the installed Select, not from
-     * reading its bundle: which chunk a bundler puts a component in changes
-     * from release to release, and the element `fullWidth` widens is simply
-     * the outermost one. It renders in a child process because the package is
-     * only whole as ES modules. */
-    const dist = baukastenDist();
-    const markup = execFileSync(
-        process.execPath,
-        [
-            "--input-type=module",
-            "-e",
-            `import { createRequire } from "node:module";
-             const require = createRequire(${JSON.stringify(path.join(ROOT, "package.json"))});
-             const React = require("react");
-             const { renderToStaticMarkup } = require("react-dom/server");
-             const { Select } = await import(${JSON.stringify(path.join(dist, "core.mjs"))});
-             process.stdout.write(renderToStaticMarkup(React.createElement(Select, {
-                 fullWidth: true, options: [{ value: "a", label: "A" }], value: "a", onChange: () => {},
-             })));`,
-        ],
-        { encoding: "utf8" },
-    );
-    const outer = /^<[a-z]+ class="([^"]+)"/.exec(markup);
-    assert.ok(outer !== null, `baukasten's Select rendered no classed root: ${markup.slice(0, 200)}`);
-    const root = outer[1].split(/\s+/);
-
-    const base = fs.readFileSync(path.join(dist, "baukasten-base.css"), "utf8");
-    const tokens = new Map(
-        [
-            ...fs
-                .readFileSync(path.join(dist, "baukasten-vscode.css"), "utf8")
-                .matchAll(/(--bk-[a-z0-9-]+)\s*:\s*([^;}]+)/g),
-        ].map((m) => [m[1], m[2].trim()]),
-    );
-    const floors: number[] = [];
-    for (const cls of root) {
-        const rule = new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(base);
-        if (rule === null) {
-            continue;
-        }
-        const declared = /(?:^|;)\s*min-width:([^;]+)/.exec(rule[1]);
-        if (declared === null) {
-            continue;
-        }
-        const value = rem(declared[1], tokens);
-        assert.ok(
-            value !== null,
-            `baukasten's Select root declares min-width: ${declared[1]}, which this test cannot resolve — re-read it`,
-        );
-        floors.push(value);
-    }
-    assert.ok(
-        floors.length > 0,
-        "baukasten's Select root no longer carries a min-width, so the rules in knowledge.css that cancel it are working around nothing and should go",
-    );
-
-    /* The slot the rail puts it in. The floor being WIDER than the slot is the
-     * whole of the bug: a control that cannot be narrower than 12.5rem inside a
-     * 7rem column overhangs it by the difference, whatever the pane does. */
-    const narrow = rules().find((r) => r.selector === ".kb-narrow");
-    assert.ok(narrow !== undefined, ".kb-narrow has no rule, so the scope Select has no column");
-    const width = /(?:^|;)\s*width:([^;]+)/.exec(narrow.body);
-    assert.ok(width !== null, ".kb-narrow no longer declares a width");
-    const slot = rem(width[1], tokens);
-    assert.ok(slot !== null, `.kb-narrow's width is ${width[1]}, which this test cannot resolve`);
-    assert.ok(
-        Math.max(...floors) > slot,
-        `baukasten's floor (${Math.max(...floors)}rem) no longer exceeds .kb-narrow's column (${slot}rem); the cancel below is dead code`,
-    );
-
-    /* And the cancel, ON THE CONTROL. `min-width: 0` on the wrapper alone does
-     * not do it — that only lets the WRAPPER shrink, and the child overflows it
-     * just the same. */
-    const cancelled = new Set<string>();
-    for (const r of rules()) {
-        if (!/(?:^|;)\s*min-width:\s*0/.test(r.body)) {
-            continue;
-        }
-        for (const selector of r.selector.split(",")) {
-            cancelled.add(selector.replace(/\s+/g, " ").trim());
-        }
-    }
-    assert.ok(
-        cancelled.has(".kb-narrow > *"),
-        ".kb-narrow > * does not cancel the control's own minimum width, so a Select placed there overhangs the rail",
-    );
+test("the rail holds no Select, so nothing in it has a width floor wider than a sidebar", () => {
+    /* baukasten's `Select` puts a 12.5rem min-width on its own root, wider
+     * than a VSCode sidebar at its narrowest, and `fullWidth` cannot beat it.
+     * The rail had one for the collection scope, and needed a rule on the
+     * control to cancel the floor. Opening a collection now scopes the search
+     * (index-ui §2), so the rail has no Select — and if one comes back, this
+     * says why it needs that cancel again. */
+    const sidebar = fs.readFileSync(path.join(ROOT, "webview", "Sidebar.tsx"), "utf8");
+    assert.ok(!/<Select\b/.test(sidebar) && !/\bSelect\b.*from "baukasten-ui/.test(sidebar), "a Select is back in the rail: it brings a 12.5rem width floor that must be cancelled on the control");
 });
 
 test("the bar stacks when it will not fit, and nothing on the rail clips it", () => {
@@ -738,40 +623,31 @@ test("§2's clamp is a CSS rule as well as a function", () => {
 
 /* ---------------------------------------- the two list states, in the bundle */
 
-test("the sidebar shows every document when the query is empty, and says so in what ships", () => {
-    /* §2: "with no query, the list is every document in scope, newest first.
-     * Browsing is the default state, not an empty prompt." This is the property
-     * most likely to regress into a "type to search" placeholder, and a source
-     * scan alone would miss a build that never reached the browse path.
-     *
-     * Pinned three ways because each catches a different mutation: the branch
-     * exists in the source, the empty state is the one §2 writes rather than a
-     * prompt, and both survived into the bundle. */
+test("the sidebar shows the collections when the query is empty, and a collection's documents inside it, in what ships", () => {
+    /* §2: with no query the sidebar shows the collections; a collection opens
+     * its documents, with a way back; a query searches. The browse state is
+     * not an empty prompt — the property most likely to regress into a "type
+     * to search" placeholder — so the branch is pinned in the source, the
+     * empty store says §2's sentence, and both reached the bundle. */
     const sidebar = fs.readFileSync(path.join(ROOT, "webview", "Sidebar.tsx"), "utf8");
     assert.match(
         sidebar,
-        /isSearching\(settled\)\s*\?\s*\(\s*<SearchList/,
-        "the sidebar no longer branches on whether there is a query, which is where §2's browse state lives",
+        /isSearching\(settled\)\s*\?\s*\(\s*<SearchList[\s\S]*?\)\s*:\s*place\.kind === "collection"\s*\?\s*\(\s*<CollectionView[\s\S]*?\)\s*:\s*\(\s*<CollectionsList/,
+        "the sidebar no longer branches: a query searches, else a collection's documents, else the collections",
     );
-    assert.match(sidebar, /<BrowseList/, "the sidebar has no browse list at all");
 
     const NOTHING = "Nothing indexed yet. Research lands here when an agent files what it read.";
     assert.ok(sidebar.includes(NOTHING), "§2's empty state is not the sentence §2 writes");
 
     const text = bundle();
-    assert.ok(
-        text.includes(NOTHING),
-        "the shipped bundle does not carry §2's empty state, so the build is stale or the branch is gone",
-    );
-    assert.ok(
-        !/type to search/i.test(text),
-        "the shipped bundle prompts the reader to type, which is the empty prompt §2 refuses",
-    );
-    /* And the browse path actually asks for documents rather than searching
-     * with an empty string, which would answer a refusal and look like an
-     * empty store. */
-    assert.ok(text.includes('"ls"'), "the bundle never calls the ls operation");
-    assert.ok(text.includes('"search"'), "the bundle never calls the search operation");
+    assert.ok(text.includes(NOTHING), "the shipped bundle does not carry §2's empty state, so the build is stale or the branch is gone");
+    assert.ok(text.includes("Load more"), "the shipped lists do not page with Load more");
+    assert.ok(text.includes("Manage collections"), "the collections list does not lead to the page where they are renamed and deleted");
+    assert.ok(!/type to search/i.test(text), "the shipped bundle prompts the reader to type, which is the empty prompt §2 refuses");
+    /* And each state asks the store what it needs. */
+    for (const op of ['"collections"', '"ls"', '"search"']) {
+        assert.ok(text.includes(op), `the bundle never calls the ${op} operation`);
+    }
 });
 
 test("a snippet is clamped and never carries markup, in what ships", () => {

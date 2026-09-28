@@ -28,17 +28,31 @@ cannot carry a search field and per-row metadata.
 
 ## 2. Sidebar
 
-A search `Input` at the top, a collection `Select` beside it, and a list below.
+The search bar at the top — the same bar as the Board's and Lap History's
+filter — and below it the collections, or one collection's documents.
 
-**With no query**, the list is every document in scope, newest first. Browsing
-is the default state, not an empty prompt — the store is worth looking through
-even when there is no question.
+**With no query**, the sidebar shows **the collections**, by name, each with
+its document count, byte size and oldest fetch date, and a **Manage
+collections…** link to `kb:/collections` (§4). Browsing is the default state,
+not an empty prompt — the store is worth looking through even when there is
+no question. A collection row **opens that collection in the sidebar**: its
+documents, newest first, under a back control that returns to the
+collections. A document row there carries its title, a description when its
+`meta` has one (`description`, then `abstract`, then `summary`: documents have
+no description field of their own), its size, its type and its fetched date;
+it opens the document.
 
-**With a query**, the list is search results (`GET /search`, hybrid). Search
-runs debounced as the reader types; a local hybrid search is fast enough that
-submitting is unnecessary ceremony.
+**Paging.** Both lists end in **Load more** rather than stopping: a
+collection's documents come a page at a time from `GET /documents` with its
+cursor (index-api §2, `after`, newest first with `reverse`); the collections
+come whole from `GET /collections` and are shown a page at a time.
 
-A row carries:
+**With a query**, the list is search results (`GET /search`, hybrid) — across
+the store from the collections, within the open collection from inside it.
+Search runs debounced as the reader types; a local hybrid search is fast
+enough that submitting is unnecessary ceremony.
+
+A search row carries:
 
 - the document title
 - the collection
@@ -94,9 +108,12 @@ the content hash meaningless and the provenance a lie.
 ## 4. Collections
 
 `kb:/collections` lists every collection with its document count, byte size and
-oldest fetch date. Rename and delete live here and nowhere else.
+oldest fetch date. Rename and delete live here and nowhere else: the
+sidebar's collection rows open a collection and do nothing else, one
+mis-click from losing a topic being one too many. The sidebar's list links
+here (**Manage collections…**).
 
-A collection row opens the sidebar scoped to it.
+A collection row opens that collection in the sidebar (§2).
 
 ## 5. Quick open
 

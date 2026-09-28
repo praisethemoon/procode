@@ -89,7 +89,7 @@ test("every flag this package spells for an implemented command is one the CLI n
      * separately, below, and only once they turn up — so the day they land,
      * this suite starts checking their flags without anybody editing it. */
     const argvs = [
-        lsArgv({ collection: "c", source: "S-1", mime: "m", since: "s", limit: 1 }),
+        lsArgv({ collection: "c", source: "S-1", mime: "m", since: "s", limit: 1, after: "D-1", reverse: true }),
         ["get", "D-1", "--include", "text,chunks"],
         ["collections"],
         ["status"],

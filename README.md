@@ -88,8 +88,10 @@ your machine.
 
 Agents use it through the `kb` MCP server: research filed once is searched
 from disk the next time, instead of fetched again. You browse and search it
-in the extension's **Knowledge** view, and see how documents link to each
-other in its graph.
+in the extension's **Knowledge** view — it opens on the collections, a
+collection opens its documents (a page at a time, with their size, type,
+fetch date and description), and the search bar searches the store or the
+open collection — and see how documents link to each other in its graph.
 
 ![kb-vscode](assets/kb-vscode.webp)
 

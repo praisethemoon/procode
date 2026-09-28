@@ -177,6 +177,8 @@ async function perform(kb: Kb, op: Operation, raw: unknown, settings: Settings):
                 mime: text("mime"),
                 since: text("since"),
                 limit: count("limit"),
+                after: text("after"),
+                reverse: input["reverse"] === true,
             });
         case "search":
             /* `rerank` is the reader's setting and not the webview's to ask

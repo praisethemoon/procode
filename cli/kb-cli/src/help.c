@@ -43,6 +43,8 @@ static const HelpFlag F_LS[] = {
     {"--q", NULL, "<text>", "title or source location contains this text"},
     {"--meta", NULL, "<json>", "metadata carries every pair of this JSON object"},
     {"--limit", NULL, "<N>", "at most N documents"},
+    {"--after", NULL, "<D-n>", "continue after that document, for the next page"},
+    {"--reverse", NULL, NULL, "newest first (the store's order backwards)"},
     OLDER_THAN,
     JSON_FLAG,
     END};
@@ -133,8 +135,11 @@ const HelpCmd HELP_CMDS[] = {
      F_ADD, cmd_add, false, NULL},
     {"ls",
      "ls [--collection a,b] [--source S-n] [--mime M] [--since <date>]\n"
-     "[--q text] [--meta <json>] [--limit N] [--older-than 90d] [--json]",
-     "the documents, newest first", F_LS, cmd_ls, false, NULL},
+     "[--q text] [--meta <json>] [--limit N] [--after D-n] [--reverse]\n"
+     "[--older-than 90d] [--json]",
+     "the documents, in the store's order (oldest first; --reverse for\n"
+     "newest first), a page at a time with --limit and --after",
+     F_LS, cmd_ls, false, NULL},
     {"get", "get <D-n> [--include text,chunks,links] [--older-than 90d] [--json]",
      "one document", F_GET, cmd_get, false, NULL},
     {"search",

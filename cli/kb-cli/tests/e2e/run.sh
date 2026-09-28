@@ -2140,6 +2140,32 @@ n=$(ls -a .lap | wc -l | tr -d ' ')
 n=$(ls -a .coboard | wc -l | tr -d ' ')
 [ "$n" = "3" ] || fail ".coboard gained entries"
 
+# ------------------------------------------------------------------ paging
+t "kb ls pages with --limit and --after, in the store's order, and backwards with --reverse"
+mkdir -p "$WORK/paged" && (
+    cd "$WORK/paged" || exit 1
+    "$KB" init >/dev/null 2>&1
+    for n in 1 2 3 4 5; do
+        printf 'page %s\n' "$n" > "p$n.md"
+        "$KB" add --title "page $n" --collection pages --file "p$n.md" --embed-budget 0 >/dev/null 2>&1 || echo "add $n failed"
+    done
+) | while read -r line; do fail "$line"; done
+ids() { (cd "$WORK/paged" && "$KB" ls --json "$@") | grep -o '"id":"D-[0-9]*"' | tr -d '"' | sed 's/id://' | tr '\n' ' '; }
+[ "$(ids)" = "D-1 D-2 D-3 D-4 D-5 " ] || fail "the store's order: $(ids)"
+[ "$(ids)" = "$(ids)" ] || fail "the order is not stable"
+[ "$(ids --limit 2)" = "D-1 D-2 " ] || fail "first page: $(ids --limit 2)"
+[ "$(ids --limit 2 --after D-2)" = "D-3 D-4 " ] || fail "second page: $(ids --limit 2 --after D-2)"
+[ "$(ids --limit 2 --after D-4)" = "D-5 " ] || fail "last page: $(ids --limit 2 --after D-4)"
+[ "$(ids --after D-5)" = "" ] || fail "a cursor at the end gives nothing"
+[ "$(ids --after D-99)" = "" ] || fail "a cursor past the end gives nothing"
+[ "$(ids --reverse --limit 2)" = "D-5 D-4 " ] || fail "newest first: $(ids --reverse --limit 2)"
+[ "$(ids --reverse --after D-4)" = "D-3 D-2 D-1 " ] || fail "newest first, after D-4: $(ids --reverse --after D-4)"
+(cd "$WORK/paged" && "$KB" forget D-3 >/dev/null 2>&1) || fail "forget D-3"
+[ "$(ids --after D-3)" = "D-4 D-5 " ] || fail "a forgotten cursor continues where it was: $(ids --after D-3)"
+[ "$(ids --reverse --after D-3)" = "D-2 D-1 " ] || fail "and backwards: $(ids --reverse --after D-3)"
+out=$(cd "$WORK/paged" && "$KB" ls --after S-1 --json)
+has "a cursor must be a document" "$out" '"error":"usage"'
+
 # ------------------------------------------------------------------- done
 echo "e2e: $TESTS tests, $FAILED failed"
 [ "$FAILED" -eq 0 ] || exit 1

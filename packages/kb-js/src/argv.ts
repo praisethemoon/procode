@@ -57,6 +57,11 @@ export interface LsOptions {
      * document matches any one of its elements. */
     meta?: Readonly<Record<string, unknown>> | null;
     limit?: number | null;
+    /* The next page: the documents after this one (a D-n) in the list's
+     * order, which is the store's — newest first with `reverse`. A cursor
+     * whose document was forgotten since still continues where it was. */
+    after?: string | null;
+    reverse?: boolean;
 }
 
 /* The comma list both routes take, from one name or several. */
@@ -82,6 +87,10 @@ export function lsArgv(options: LsOptions = {}): string[] {
     put(argv, "--q", options.q);
     putMeta(argv, options.meta);
     putNumber(argv, "--limit", options.limit);
+    put(argv, "--after", options.after);
+    if (options.reverse === true) {
+        argv.push("--reverse");
+    }
     return argv;
 }
 
