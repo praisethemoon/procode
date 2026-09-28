@@ -177,6 +177,16 @@ void branches_status(Arena *a, const char *lapdir, const RecLog *log,
                                   : "active";
 }
 
+/* How far a merge of a branch went: whole, in part, or not at all. */
+static int32_t merge_rank(const BranchStatus *s) {
+    return strcmp(s->state, "merged") == 0 ? 2 : s->merged ? 1 : 0;
+}
+
+const BranchStatus *branches_status_nearer(const BranchStatus *via,
+                                           const BranchStatus *here) {
+    return merge_rank(here) > merge_rank(via) ? here : via;
+}
+
 const BranchEntry *branches_find(const Branches *b, const char *key) {
     for (int32_t i = 0; i < b->n; i++) {
         if (strcmp(b->v[i].id, key) == 0 || strcmp(b->v[i].name, key) == 0)

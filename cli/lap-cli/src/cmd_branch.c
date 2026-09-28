@@ -575,6 +575,7 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
         sb_printf(&sb, "this folder is branch %s (%s) of %s, from %.7s\n",
                   h->name, h->lineage, pname, h->base);
     }
+    int32_t listed = 0; /* entries shown */
     for (int32_t i = 0; i < reg.n; i++) {
         const BranchEntry *e = &reg.v[i];
         /* A branch's merges are recorded in the folder that started it:
@@ -585,13 +586,22 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
         char verr[256];
         bool vopen = via && repo_open_at(a, &vr, via->path, false, verr,
                                          sizeof verr);
-        BranchStatus st;
-        if (vopen && repo_log_load(a, &vr, &vlog, verr, sizeof verr))
+        BranchStatus st, here;
+        if (vopen && repo_log_load(a, &vr, &vlog, verr, sizeof verr)) {
             branches_status(a, vr.lapdir, &vlog, e, &st);
-        else
+            /* merged straight into this folder counts here too */
+            branches_status(a, repo.lapdir, &log, e, &here);
+            st = *branches_status_nearer(&st, &here);
+        } else {
             branches_status(a, repo.lapdir, &log, e, &st);
+        }
         if (vopen)
             repo_close(&vr);
+        /* merged here and its folder gone: nothing left to tend, as a
+         * registered branch of this folder's own would be pruned */
+        if (e->via && !st.present && strcmp(st.state, "merged") == 0)
+            continue;
+        listed++;
         /* no folder is known for it, so none is missing: work not merged
          * is going on elsewhere */
         bool registered = i < nreg;
@@ -602,7 +612,7 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
              p = p->via ? branches_find(&reg, p->via) : NULL)
             depth++;
         if (json) {
-            sb_puts(&sb, i ? ",{\"id\":" : "{\"id\":");
+            sb_puts(&sb, listed > 1 ? ",{\"id\":" : "{\"id\":");
             json_escape_c(&sb, e->id);
             sb_puts(&sb, ",\"name\":");
             json_escape_c(&sb, e->name);
@@ -669,7 +679,7 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
         sb_puts(&sb, "]}");
         puts(sb_finish(&sb));
     } else {
-        if (reg.n == 0 && !h->parent[0])
+        if (listed == 0 && !h->parent[0])
             sb_puts(&sb, "no branches started from this folder\n");
         fputs(sb_finish(&sb), stdout);
     }

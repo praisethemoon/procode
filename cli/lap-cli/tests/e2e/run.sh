@@ -2608,6 +2608,23 @@ expect_grep "missing shadow: a.txt" "$LAP" verify --deep
 expect_not_grep "index:" "$LAP" verify --deep
 cd "$WORK"
 
+t "a nested branch merged straight into main counts as merged there, and is gone from its list with its folder"
+nest_trio n7
+cd "$N2" && "$LAP" session start "b2 work" --branch b2 >/dev/null 2>&1
+edit_commit "$N2" b2 f.txt 's/^line 40$/B2 forty/' "B2 rewrites line 40"
+cd "$N2" && "$LAP" session end >/dev/null 2>&1 && git add -A && git commit -qm "b2 work" >/dev/null
+cd "$NP" && git add -A && git commit -qm "main" >/dev/null 2>&1
+git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into main"
+expect_grep "merged branch b2 .*adopted 2 of 2" "$LAP" merge b2
+expect_grep '"name":"b2","state":"merged"' "$LAP" branch list --json
+cd "$N1" && expect_grep '"name":"b2","state":"active"' "$LAP" branch list --json
+cd "$WORK" && git -C "$NP" worktree remove --force "$N2" >/dev/null 2>&1 || fail "remove b2's folder"
+cd "$NP" && expect_not_grep "b2" "$LAP" branch list
+expect_not_grep '"name":"b2"' "$LAP" branch list --json
+expect_grep '"name":"b"' "$LAP" branch list --json
+cd "$N1" && expect_grep '"name":"b2","state":"missing"' "$LAP" branch list --json
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

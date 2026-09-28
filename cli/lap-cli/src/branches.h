@@ -80,5 +80,11 @@ typedef struct {
  * (holding any merge records) is log. */
 void branches_status(Arena *a, const char *lapdir, const RecLog *log,
                      const BranchEntry *e, BranchStatus *out);
+/* A nested branch as a folder lists it: merged when its head was adopted
+ * into that folder or into the branch it started from. Of its status there
+ * (via) and here, the one that went further — merged whole, over merged in
+ * part, over not merged; via's when they are level. */
+const BranchStatus *branches_status_nearer(const BranchStatus *via,
+                                           const BranchStatus *here);
 
 #endif /* LAP_BRANCHES_H */

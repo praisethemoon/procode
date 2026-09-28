@@ -376,6 +376,27 @@ void test_branches(void) {
     ASSERT_EQ_I(merge_unknown_records(&ulog, ulof, &utype), 2);
     ASSERT_EQ_S(utype, "annotate");
 
+    t_begin("branches_status_nearer: a nested branch counts as merged where "
+            "its head was adopted, here or in the branch it started from");
+    BranchStatus sv, sh;
+    memset(&sv, 0, sizeof sv);
+    memset(&sh, 0, sizeof sh);
+    sv.state = "active";
+    sh.state = "active";
+    ASSERT_TRUE(branches_status_nearer(&sv, &sh) == &sv); /* level: via's */
+    sh.state = "merged";
+    sh.merged = "h";
+    ASSERT_TRUE(branches_status_nearer(&sv, &sh) == &sh); /* merged here */
+    sv.state = "partly merged";
+    sv.merged = "g";
+    ASSERT_TRUE(branches_status_nearer(&sv, &sh) == &sh);
+    sh.state = "missing"; /* here: merged, but not up to its head */
+    ASSERT_TRUE(branches_status_nearer(&sv, &sh) == &sv); /* level again */
+    sv.state = "merged";
+    sh.state = "active";
+    sh.merged = NULL;
+    ASSERT_TRUE(branches_status_nearer(&sv, &sh) == &sv); /* merged there */
+
     t_begin("log_tracked_files: a file is tracked while its last commit is "
             "not a delete, whatever came before; other records are not files");
     Rec tl[6];

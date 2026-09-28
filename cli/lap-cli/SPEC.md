@@ -674,9 +674,14 @@ finding its history nowhere.
   branch whose folder is still that branch, and so on down; nothing is
   ever copied between registries. `lap branch list` shows a nested branch
   indented under the branch it started from, with `via` (that branch's
-  id) in `--json`, and judges its state against that branch's history,
-  where its merges are recorded. It is tended (`forget`, `move`) in that
-  branch's folder.
+  id) in `--json`. It is merged, as a folder lists it, when its head was
+  adopted into that folder or into the branch it started from: of its
+  state in either history, the one that went further is shown. So one
+  merged straight into main is `merged` in main's list, and, once its
+  folder is gone, drops out of it without a word, as a registered branch
+  of main's own is pruned; the branch between still lists it until it
+  adopts that work. It is tended (`forget`, `move`) in that branch's
+  folder.
 - **Known by its chunks only.** A branch whose chunks are in `.lap/log/`
   but which no registry lists — brought by `git merge` from a clone that
   started it, or dropped once merged and gone — is listed too, after the
