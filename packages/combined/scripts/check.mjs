@@ -30,11 +30,20 @@ const registered = new Map();
 const errors = [];
 let mcpProvider = null;
 const noop = () => ({ dispose() {} });
+/* A working emitter, so the check can count what the MCP provider fires. */
 const emitter = class {
-    event = noop;
-    fire() {}
+    listeners = [];
+    event = (fn) => {
+        this.listeners.push(fn);
+        return { dispose() {} };
+    };
+    fire(v) {
+        for (const fn of this.listeners) fn(v);
+    }
     dispose() {}
 };
+const configListeners = [];
+const folderListeners = [];
 const handler = {
     get(target, key) {
         if (key in target) return target[key];
@@ -89,6 +98,14 @@ const vscode = new Proxy(
         workspace: new Proxy(
             {
                 workspaceFolders: [{ uri: { scheme: "file", fsPath: folder, path: folder } }],
+                onDidChangeConfiguration: (fn) => {
+                    configListeners.push(fn);
+                    return { dispose() {} };
+                },
+                onDidChangeWorkspaceFolders: (fn) => {
+                    folderListeners.push(fn);
+                    return { dispose() {} };
+                },
                 /* defaults, but for a board folder set to show it is passed on */
                 getConfiguration: (section) => ({
                     get: (k, d) => (section === "coboard" && k === "boardFolder" ? "/shared/project" : d),
@@ -138,6 +155,22 @@ assert.equal(defs[0].env.LAP_BIN, "lap", "coboard is handed Board › Lap Path, 
 assert.equal(defs[0].env.COBOARD_DIR, "/shared/project", "coboard is handed Board › Board Folder as COBOARD_DIR");
 assert.equal(defs[1].env.COBOARD_DIR, undefined, "only coboard is handed the board folder");
 assert.equal(defs[1].env.KB_BIN, "kb", "kb is handed Knowledge › Cli Path, kb by default");
+
+// A setting the definitions are made from, or the folders, changing tells
+// VS Code to ask again, once; any other setting does not.
+let asked = 0;
+mcpProvider.onDidChangeMcpServerDefinitions(() => asked++);
+const changeOf = (key) => ({ affectsConfiguration: (k) => k === key || key.startsWith(`${k}.`) });
+for (const key of ["knowledge.cliPath", "coboard.lapPath", "coboard.boardFolder"]) {
+    const before = asked;
+    for (const fn of configListeners) fn(changeOf(key));
+    assert.equal(asked, before + 1, `a change to ${key} asks for the definitions again, once`);
+}
+const before = asked;
+for (const fn of configListeners) fn(changeOf("editor.fontSize"));
+assert.equal(asked, before, "an unrelated setting does not");
+for (const fn of folderListeners) fn({ added: [], removed: [] });
+assert.equal(asked, before + 1, "a change of workspace folders asks again, once");
 assert.equal(fs.existsSync(path.join(dist, "bin")), false, "the package carries no CLI");
 assert.equal(ext.resolveCli("kb", "/nowhere", () => false), null);
 assert.equal(ext.resolveCli("kb", ["/a", "/b"].join(path.delimiter), (p) => p === path.join("/b", "kb")), path.join("/b", "kb"));

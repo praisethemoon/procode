@@ -87,15 +87,28 @@ export function servers(ctx: vscode.ExtensionContext): Server[] {
     ];
 }
 
+/* The settings the definitions are made from: the CLIs handed to the
+ * servers, and the board folder handed to coboard's. */
+export const MCP_SETTINGS = ["knowledge.cliPath", "coboard.lapPath", "coboard.boardFolder"] as const;
+
 /* VS Code's own agent finds the servers without any configuration. Each runs
  * in the workspace folder, which is where it finds that workspace's .coboard/
- * and .kb/. */
+ * and .kb/. When a setting they are made from or the folders change, VS Code
+ * is told to ask for them again, so the change reaches the next server it
+ * starts without a reload. */
 function registerWithVsCode(ctx: vscode.ExtensionContext): void {
     if (typeof vscode.lm?.registerMcpServerDefinitionProvider !== "function") {
         return; // a VS Code older than the MCP API: the Claude Code command still works
     }
+    const changed = new vscode.EventEmitter<void>();
     ctx.subscriptions.push(
+        changed,
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (MCP_SETTINGS.some((k) => e.affectsConfiguration(k))) changed.fire();
+        }),
+        vscode.workspace.onDidChangeWorkspaceFolders(() => changed.fire()),
         vscode.lm.registerMcpServerDefinitionProvider("procode.mcp", {
+            onDidChangeMcpServerDefinitions: changed.event,
             provideMcpServerDefinitions: () => {
                 const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file")?.uri;
                 /* The extension's own version: VS Code compares it to notice

@@ -185,7 +185,10 @@ run the CLIs from `PATH`.
    `$KB_BIN` when set, else the ones built under `build/` (or by `make`),
    else the ones on `PATH`, and skip when there are none.
 
-3. **Agents.** VS Code's agent gets the MCP servers on its own. For Claude
+3. **Agents.** VS Code's agent gets the MCP servers on its own; a change to
+   **Knowledge › Cli Path**, **Board › Lap Path**, **Board › Board Folder**
+   or the workspace folders reaches the servers it starts next, without a
+   reload (one already running keeps what it started with). For Claude
    Code, run **procode: Set Up MCP for Claude Code** in a project: it adds
    `coboard`, `kb` and `artifacts` to the project's `.mcp.json` and keeps
    any other servers. After installing a new build, restart Claude Code (or
