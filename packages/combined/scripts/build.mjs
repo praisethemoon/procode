@@ -105,10 +105,13 @@ for (const c of partContainers) {
     if (!STACK.includes(c.id)) throw new Error(`container ${c.id} has no place in procode's STACK`);
 }
 partContainers.sort((a, b) => STACK.indexOf(a.id) - STACK.indexOf(b.id));
+// A part's view named for when its container, titled after the part, is
+// around it; in procode's container the part's name moves into the view's.
+const NAMES = { lapHistory: "Lap History" };
 contributes.viewsContainers.activitybar = [{ id: "procode", title: "procode", icon: "media/procode-views.svg" }];
 contributes.views = {
     ...Object.fromEntries(Object.entries(contributes.views).filter(([k]) => !partContainers.some((c) => c.id === k))),
-    procode: partContainers.flatMap((c) => (contributes.views[c.id] ?? []).map((v) => ({ ...v, icon: v.icon ?? c.icon }))),
+    procode: partContainers.flatMap((c) => (contributes.views[c.id] ?? []).map((v) => ({ ...v, name: NAMES[v.id] ?? v.name, icon: v.icon ?? c.icon }))),
 };
 
 const ids = [
