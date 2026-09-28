@@ -28,6 +28,7 @@ import {
 
 import { SHOW_EDIT, commentText, regionLabel, regionLines } from "./lapview";
 import type { ViewMode } from "./kanban";
+import { BESIDE, diffColumn } from "./placement";
 import { sessionKey } from "./protocol";
 import type { Choices, SidebarToHost, SidebarToView, ToHost, ToView } from "./protocol";
 
@@ -359,7 +360,7 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string
                 await pushSessions(m.ticket, panel);
                 return;
             case "showEdit":
-                await showEdit(m.commit, m.sessionMsg ?? null);
+                await showEdit(m.commit, m.sessionMsg ?? null, panel.viewColumn);
                 return;
             case "commits": {
                 const b = requireBoard();
@@ -391,8 +392,12 @@ const EDIT_SCHEME = "coboard-lap";
 const editText = new Map<string, string>();
 const editThreads = new Map<string, vscode.CommentThread>();
 let editComments: vscode.CommentController | null = null;
+/* The editor group the last diff opened in (see placement.ts). */
+let diffGroup: number | undefined;
 
-async function showEdit(commit: string, sessionMsg: string | null): Promise<void> {
+/* `from`: the column of the panel that asked, so the diff opens beside it;
+ * undefined for a link inside a diff. */
+async function showEdit(commit: string, sessionMsg: string | null, from?: number): Promise<void> {
     const b = requireBoard();
     syncLapPath();
     const d = await commitDiff(b.root, commit);
@@ -403,7 +408,19 @@ async function showEdit(commit: string, sessionMsg: string | null): Promise<void
     editText.set(right.toString(), d.after);
     const lines = regionLines(d);
     const range = new vscode.Range(lines.start, 0, lines.end, 0);
-    await vscode.commands.executeCommand("vscode.diff", left, right, `${d.id} · ${d.file}`, { preview: true, selection: range });
+    /* Not a preview: each edit keeps its own tab. The same edit opened again
+     * in that group is the tab already there, which VS Code brings forward. */
+    const col = diffColumn(from, diffGroup, vscode.window.tabGroups.all.map((g) => g.viewColumn));
+    await vscode.commands.executeCommand("vscode.diff", left, right, `${d.id} · ${d.file}`, {
+        preview: false,
+        preserveFocus: from !== undefined,
+        viewColumn: col === BESIDE ? vscode.ViewColumn.Beside : col,
+        selection: range,
+    });
+    const shown = vscode.window.tabGroups.all.find((g) =>
+        g.tabs.some((t) => t.input instanceof vscode.TabInputTextDiff && t.input.modified.toString() === right.toString()),
+    );
+    diffGroup = shown?.viewColumn ?? (col === BESIDE ? undefined : col);
 
     const existing = editThreads.get(d.id);
     if (existing) {

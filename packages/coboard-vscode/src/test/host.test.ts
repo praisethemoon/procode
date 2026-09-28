@@ -34,6 +34,11 @@ let content: { provideTextDocumentContent(uri: { toString(): string }): string }
 const LAP = cliBin("lap");
 let sidebar: { resolveWebviewView(view: unknown): void } | null = null;
 let onMessage: ((m: unknown) => void) | null = null;
+/* The editor groups, as vscode.diff fills them: a column's tabs. */
+class TabInputTextDiff {
+    constructor(public original: { toString(): string }, public modified: { toString(): string }) {}
+}
+const groups = new Map<number, { input: TabInputTextDiff }[]>();
 
 class EventEmitter {
     event = () => ({ dispose() {} });
@@ -48,7 +53,8 @@ const fake = {
     },
     EventEmitter,
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-    ViewColumn: { Active: -1 },
+    ViewColumn: { Active: -1, Beside: -2 },
+    TabInputTextDiff,
     CommentMode: { Editing: 0, Preview: 1 },
     CommentThreadCollapsibleState: { Collapsed: 0, Expanded: 1 },
     MarkdownString: class {
@@ -79,6 +85,7 @@ const fake = {
         },
         createWebviewPanel: () => ({
             title: "",
+            viewColumn: 1,
             reveal() {},
             onDidDispose() {},
             webview: {
@@ -89,6 +96,11 @@ const fake = {
                 onDidReceiveMessage: (fn: (m: unknown) => void) => (onMessage = fn),
             },
         }),
+        tabGroups: {
+            get all() {
+                return [...groups].map(([viewColumn, tabs]) => ({ viewColumn, tabs }));
+            },
+        },
         showErrorMessage: (m: string) => assert.fail(`the host reported an error: ${m}`),
         showWarningMessage: async (m: string) => {
             warnings.push(m);
@@ -106,6 +118,13 @@ const fake = {
         },
         executeCommand: (name: string, ...a: unknown[]) => {
             executed.push([name, ...a]);
+            if (name === "vscode.diff") {
+                const [left, right, , opts] = a as [{ toString(): string }, { toString(): string }, string, { viewColumn: number }];
+                const col = opts.viewColumn > 0 ? opts.viewColumn : 99;
+                const tabs = groups.get(col) ?? [];
+                if (!tabs.some((t) => t.input.modified.toString() === right.toString())) tabs.push({ input: new TabInputTextDiff(left, right) });
+                groups.set(col, tabs);
+            }
             return commands.get(name)?.(...a);
         },
     },
@@ -242,7 +261,10 @@ test("clicking a lap edit on a ticket opens it as a diff at the edited line", { 
     await new Promise((r) => setTimeout(r, 300));
     const diff = executed.find((c) => c[0] === "vscode.diff");
     assert.ok(diff, "vscode.diff was opened");
-    const [, left, right, title, opts] = diff as [string, { path: string }, { path: string }, string, { selection: { startLine: number } }];
+    type Opts = { selection: { startLine: number }; viewColumn: number; preview: boolean; preserveFocus: boolean };
+    const [, left, right, title, opts] = diff as [string, { path: string }, { path: string }, string, Opts];
+    // Beside the panel (column 1), as its own tab, the panel keeping focus.
+    assert.deepEqual([opts.viewColumn, opts.preview, opts.preserveFocus], [2, false, true]);
     assert.equal(left.path, "/L2/before/x.c");
     assert.equal(right.path, "/L2/after/x.c");
     assert.equal(title, "L2 · x.c");
@@ -271,4 +293,22 @@ test("clicking a lap edit on a ticket opens it as a diff at the edited line", { 
     await new Promise((r) => setTimeout(r, 300));
     assert.equal(threads.length, 1);
     assert.equal(executed.filter((c) => c[0] === "vscode.diff").length, 2);
+    const diffs = () => executed.filter((c) => c[0] === "vscode.diff") as [string, unknown, { path: string }, string, Opts][];
+    assert.equal(diffs().at(-1)![4].viewColumn, 2, "the same group again");
+    assert.deepEqual([...groups.keys()], [2]);
+    assert.equal(groups.get(2)!.length, 1, "the same edit is the tab already there, not a second");
+
+    // Another edit: a second tab in that group, never a third column.
+    onMessage!({ type: "showEdit", commit: "L1" });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(diffs().at(-1)![4].viewColumn, 2);
+    assert.deepEqual(groups.get(2)!.map((t) => t.input.modified.toString()), ["coboard-lap:/L2/after/x.c", "coboard-lap:/L1/after/x.c"]);
+
+    // A link inside a diff (no panel) opens in the diff group while it is
+    // open, taking focus; once that group is closed, beside the active editor.
+    await commands.get("coboard.showEdit")!("L2");
+    assert.deepEqual([diffs().at(-1)![4].viewColumn, diffs().at(-1)![4].preserveFocus], [2, false]);
+    groups.clear();
+    await commands.get("coboard.showEdit")!("L2");
+    assert.equal(diffs().at(-1)![4].viewColumn, -2);
 });
