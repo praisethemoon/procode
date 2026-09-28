@@ -29,6 +29,7 @@
  */
 #define _DEFAULT_SOURCE /* popen, mkdtemp, realpath, scandir under -std=c11 */
 #include <dirent.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -41,7 +42,6 @@
 
 #include "sha256.h"
 
-#define PATHSZ 1024
 #define MAXLINES 600
 
 /* ---- the seed's randomness --------------------------------------------- */
@@ -60,8 +60,8 @@ static bool chance(int percent) { return pick(100) < percent; }
 
 /* ---- running git and lap ----------------------------------------------- */
 
-static char lap_bin[PATHSZ];
-static char work_root[PATHSZ];
+static char lap_bin[PATH_MAX];
+static char work_root[PATH_MAX];
 static bool trace;
 static char out[1 << 20]; /* the last command's stdout and stderr */
 static char why[4096];    /* the current case's failure */
@@ -190,7 +190,7 @@ static void remove_tree(const char *path) {
         while (d && (e = readdir(d))) {
             if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, ".."))
                 continue;
-            char sub[PATHSZ];
+            char sub[PATH_MAX];
             snprintf(sub, sizeof sub, "%s/%s", path, e->d_name);
             remove_tree(sub);
         }
@@ -209,13 +209,13 @@ static int name_cmp(const struct dirent **a, const struct dirent **b) {
 /* Every file under dir, its path and bytes, in name order; .git left out
  * at the top. */
 static void hash_tree(Sha256 *c, const char *dir, const char *rel) {
-    char path[PATHSZ];
+    char path[PATH_MAX];
     snprintf(path, sizeof path, "%s%s%s", dir, rel[0] ? "/" : "", rel);
     struct dirent **ents;
     int n = scandir(path, &ents, NULL, name_cmp);
     for (int i = 0; i < n; i++) {
         const char *nm = ents[i]->d_name;
-        char sub[PATHSZ], full[PATHSZ];
+        char sub[PATH_MAX], full[PATH_MAX];
         snprintf(sub, sizeof sub, "%s%s%s", rel, rel[0] ? "/" : "", nm);
         snprintf(full, sizeof full, "%s/%s", dir, sub);
         struct stat st;
@@ -253,7 +253,7 @@ static void tree_digest(const char *dir, char hex[65]) {
 /* ---- a folder: the parent or a branch ---------------------------------- */
 
 typedef struct {
-    char dir[PATHSZ];
+    char dir[PATH_MAX];
     const char *branch; /* "main", "b1", "b2" */
     bool session;       /* a session of its own is open */
     char last[32];      /* its last commit's id, for an amendment */
@@ -331,7 +331,7 @@ static void apply_edit(Lines *l, const Edit *e) {
 }
 
 static bool edit_file(Side *s, const char *file, const Edit *e) {
-    char path[PATHSZ];
+    char path[PATH_MAX];
     snprintf(path, sizeof path, "%s/%s", s->dir, file);
     Lines l;
     TRY(lines_read(path, &l));
@@ -356,7 +356,7 @@ static const char *some_file(void) {
 }
 
 static bool random_edit(Side *s, const char *file, Edit *e) {
-    char path[PATHSZ];
+    char path[PATH_MAX];
     snprintf(path, sizeof path, "%s/%s", s->dir, file);
     Lines l;
     TRY(lines_read(path, &l));
@@ -392,7 +392,7 @@ static bool work(Side *s, int n) {
                 TRY(commit_file(s, file, what));
             }
         } else if (r < 82) { /* a change, then undone */
-            char path[PATHSZ];
+            char path[PATH_MAX];
             snprintf(path, sizeof path, "%s/%s", s->dir, file);
             size_t len;
             char *before = read_file(path, &len);
@@ -451,7 +451,7 @@ static bool git_commit(Side *s, const char *msg) {
 
 /* ---- the case's folders -------------------------------------------------- */
 
-static char case_dir[PATHSZ];
+static char case_dir[PATH_MAX];
 
 static bool make_parent(Side *p) {
     snprintf(p->dir, sizeof p->dir, "%s/p", case_dir);
@@ -475,7 +475,7 @@ static bool make_parent(Side *p) {
                 snprintf(t, sizeof t, "base %c%d", files[f][0], i + 1);
             l.v[l.n++] = strdup(t);
         }
-        char path[PATHSZ];
+        char path[PATH_MAX];
         snprintf(path, sizeof path, "%s/%s", p->dir, files[f]);
         bool ok = lines_write(path, &l);
         lines_free(&l);
@@ -520,7 +520,7 @@ static bool field(const char *line, const char *key, char *v, size_t vsz) {
 }
 
 static void folder_lineage(const Side *s, char lin[32]) {
-    char path[PATHSZ];
+    char path[PATH_MAX];
     snprintf(path, sizeof path, "%s/.lap/lineage", s->dir);
     char *d = read_file(path, NULL);
     snprintf(lin, 32, "%s", d ? d : "main");
@@ -536,7 +536,7 @@ typedef struct {
 /* No original record reaches this folder's lineage twice: following each
  * adopted record's from to the record it was first made as, no two meet. */
 static bool from_once(const Side *s) {
-    char lin[32], logdir[PATHSZ];
+    char lin[32], logdir[PATH_MAX];
     folder_lineage(s, lin);
     snprintf(logdir, sizeof logdir, "%s/.lap/log", s->dir);
     struct dirent **ents;
@@ -546,7 +546,7 @@ static bool from_once(const Side *s) {
     for (int i = 0; i < ne; i++) {
         const char *nm = ents[i]->d_name;
         bool own = !strncmp(nm, lin, strlen(lin)) && nm[strlen(lin)] == '.';
-        char path[PATHSZ];
+        char path[PATH_MAX];
         snprintf(path, sizeof path, "%s/%s", logdir, nm);
         char *d = strstr(nm, ".jsonl") ? read_file(path, NULL) : NULL;
         for (char *line = d; line && *line;) {
@@ -598,7 +598,7 @@ static bool from_once(const Side *s) {
 /* The folder's own chunks, with what changes between two runs of one merge
  * (the time, and the hashes it goes into) cut out. */
 static char *history_text(const Side *s) {
-    char lin[32], logdir[PATHSZ];
+    char lin[32], logdir[PATH_MAX];
     folder_lineage(s, lin);
     snprintf(logdir, sizeof logdir, "%s/.lap/log", s->dir);
     struct dirent **ents;
@@ -609,7 +609,7 @@ static char *history_text(const Side *s) {
     for (int i = 0; i < ne; i++) {
         const char *nm = ents[i]->d_name;
         if (!strncmp(nm, lin, strlen(lin)) && nm[strlen(lin)] == '.') {
-            char path[PATHSZ];
+            char path[PATH_MAX];
             snprintf(path, sizeof path, "%s/%s", logdir, nm);
             size_t len;
             char *d = read_file(path, &len);
@@ -665,7 +665,7 @@ static bool settle(Side *s) {
  * git merge left it, and requires each rerun to end where the whole run did. */
 static bool crash_loop(Side *into, const char *copy, const char *branch) {
     char *want = history_text(into);
-    char shadow[PATHSZ], want_shadow[65], got_shadow[65];
+    char shadow[PATH_MAX], want_shadow[65], got_shadow[65];
     snprintf(shadow, sizeof shadow, "%s/.lap/shadow", into->dir);
     tree_digest(shadow, want_shadow);
     bool ok = true;
@@ -755,7 +755,7 @@ static bool merge(Side *into, const char *branch, Side **all, int nall,
         free(dry);
         return fail("lap merge %s --dry-run changed %s", branch, into->dir);
     }
-    char copy[PATHSZ];
+    char copy[PATH_MAX];
     snprintf(copy, sizeof copy, "%s/before-merge", case_dir);
     if (crash && sh(case_dir, "cp -R '%s' '%s'", into->dir, copy) != 0) {
         free(dry);
@@ -906,7 +906,7 @@ static void run_child_here(int seed) {
     bool ok = run_case(seed);
     if (ok)
         remove_tree(case_dir);
-    char path[PATHSZ];
+    char path[PATH_MAX];
     snprintf(path, sizeof path, "%s/seed-%d.result", work_root, seed);
     FILE *f = fopen(path, "w");
     if (f) {
@@ -951,7 +951,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     /* git and lap see only the work folder: no config, no home */
-    char home[PATHSZ], tmpd[PATHSZ];
+    char home[PATH_MAX], tmpd[PATH_MAX];
     snprintf(home, sizeof home, "%s/home", work_root);
     snprintf(tmpd, sizeof tmpd, "%s/tmp", work_root);
     mkdir(home, 0755);
@@ -995,7 +995,7 @@ int main(int argc, char **argv) {
     int failed = 0, cases = 0;
     merges = commits = reruns = stops_git_clean = 0;
     for (int seed = first; seed <= last; seed++) {
-        char path[PATHSZ];
+        char path[PATH_MAX];
         snprintf(path, sizeof path, "%s/seed-%d.result", work_root, seed);
         char *r = read_file(path, NULL);
         int ok = 0, m = 0, c = 0, x = 0, g = 0, used = 0;
