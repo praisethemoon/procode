@@ -645,7 +645,8 @@ once it leaves its folder — in a ticket comment, say. **`<branch>/S<n>`**
 
 ### Reading another branch
 
-`lap log`, `lap show` and `lap rr` take `--branch <name>` to read another
+`lap log`, `lap show`, `lap rr` and `lap session list` take `--branch
+<name>` to read another
 branch's history instead of this folder's: a registered branch from its
 folder when that is reachable, else from its chunks here (a `git merge`
 brought them, or `lap merge` copied them). In a branch folder, `--branch
@@ -1249,9 +1250,11 @@ since the whole history goes with them.
 
 ## Portability
 
-C11, zero dependencies. POSIX (macOS/Linux) is the tested platform; the
-`_WIN32` branches (paths, locking, directory walking) are best-effort and
-currently untested. All internal paths use `/` separators.
+C11, zero dependencies. POSIX (macOS/Linux) is the fully tested platform.
+The `_WIN32` branches (paths, locking, directory walking) build with MSVC
+through CMake, and the unit suite runs there under ctest; the e2e suite, a
+shell script, runs on macOS and Linux only. All internal paths use `/`
+separators.
 
 ## Unresolved
 

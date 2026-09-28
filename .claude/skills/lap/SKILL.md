@@ -104,6 +104,11 @@ its own edit) or in a board comment:
 lap amend fa9cebd -i "<the intent, repeated if it was right>" -b "<what the edit really does>"
 ```
 
+Where branches exist (this folder is a branch, or has branches of its
+own), add `--branch <name>` as for `lap commit`: this folder's branch, or
+`main` in the folder the branches started from; without it lap refuses
+with `branch_required`.
+
 Both fields are always given, and the commit message checks apply. It
 appends a correction and changes nothing already written; the commit then
 shows the new text everywhere, marked "amended", and `lap show` keeps the

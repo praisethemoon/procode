@@ -15,7 +15,12 @@ $ lap commit src/fetch.c -i "survive the flaky staging DNS, which drops ~2% of l
 [L23 fa9cebd] S4 src/fetch.c: lines 10-24 (insertion)  "survive the flaky staging DNS, which drops ~2% of lookups"
 
 $ lap search --file src/fetch.c --line 12
-line 12 of src/fetch.c was last touched by L23 fa9cebd (2026-09-20T12:31:07Z)
+line 12 of src/fetch.c was last touched by L23 fa9cebd (2026-09-20 14:31:07)
+session: S4
+intent:
+  survive the flaky staging DNS, which drops ~2% of lookups
+behavior:
+  adds retry(): three attempts with exponential backoff
 ```
 
 Where git answers *what changed between commits*, lap answers *why does this

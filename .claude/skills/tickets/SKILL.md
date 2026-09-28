@@ -39,7 +39,8 @@ The lap skill covers lap itself; this is the loop around it.
    commit. `lap commit` prints the new commit's short hash; cite it as
    `#<hash>` when a later commit depends on it. A behavior (or intent) that
    landed on the wrong edit, or says something the edit does not do, is
-   corrected with `lap amend <commit> -i … -b …` — not in a later commit's
+   corrected with `lap amend <commit> [--branch <name>] -i … -b …` (the
+   `--branch` where branches exist, as for commit) — not in a later commit's
    message and not in the board comment.
 4. **A change that splits into many fragments** (a function moved, a file
    reworked): give every fragment the **same intent**, saying what the
