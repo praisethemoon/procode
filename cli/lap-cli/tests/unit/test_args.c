@@ -49,4 +49,14 @@ void test_args(void) {
     ASSERT_EQ_S(flag_value(3, msg, values, "-i"), "--json");
     ASSERT_TRUE(!has_flag(3, msg, values, "--json"));
     ASSERT_EQ_S(positional_arg(3, msg, values, 0), "f.txt");
+
+    t_begin("args: a commit that is its file whole refuses --edit and "
+            "--lines rather than ignoring them");
+    ASSERT_EQ_S(whole_file_pick_error("create", "2", NULL), "bad_edit_index");
+    ASSERT_EQ_S(whole_file_pick_error("create", NULL, "5-7"), "bad_lines");
+    ASSERT_EQ_S(whole_file_pick_error("delete", NULL, "1-3"), "bad_lines");
+    ASSERT_TRUE(whole_file_pick_error("create", NULL, NULL) == NULL);
+    ASSERT_TRUE(whole_file_pick_error("delete", NULL, NULL) == NULL);
+    ASSERT_TRUE(whole_file_pick_error("edit", "2", NULL) == NULL);
+    ASSERT_TRUE(whole_file_pick_error("edit", NULL, "5-7") == NULL);
 }

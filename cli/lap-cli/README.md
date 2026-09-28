@@ -179,7 +179,7 @@ with amendments needs this version of lap or later.
 |---|---|
 | `lap init` | create a repository in the current directory |
 | `lap status` | pending edits per file, numbered |
-| `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several, `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
+| `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several — refused on a new or deleted file, which is committed whole, `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
 | `lap amend <commit> -i "intent" -b "behavior"` | correct what a commit of this folder says; nothing written changes (`-F`, `--force-message` as for commit) |
 | `lap log` | commits, newest first (`--session`, `--file`, `-n`) |
 | `lap show <commit>` | one commit in full, by id, hash or hash prefix (`--full-file` reconstructs the file) |

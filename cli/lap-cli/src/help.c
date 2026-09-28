@@ -21,8 +21,10 @@ static const HelpFlag F_COMMIT[] = {
     {"-b", "--behavior", "\"behavior\"", "what this edit makes the code do"},
     {"-F", NULL, "<file>",
      "read both from Intent:/Behavior: sections of a file\n(- = stdin)"},
-    {"--edit", NULL, "<n>", "pick the n-th pending edit (lap status numbers them)"},
-    {"--lines", NULL, "<a>-<b>", "pick the edit covering these lines"},
+    {"--edit", NULL, "<n>",
+     "pick the n-th pending edit (lap status numbers them);\n"
+     "refused on a new or deleted file, committed whole"},
+    {"--lines", NULL, "<a>-<b>", "pick the edit covering these lines; refused likewise"},
     {"--force-message", NULL, NULL, "skip the repetition checks (not length)"},
     {"--dry-run", NULL, NULL, "show what would be recorded; write nothing"},
     {"--no-session", NULL, NULL, "commit outside any session"},

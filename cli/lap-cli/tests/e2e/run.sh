@@ -3277,6 +3277,23 @@ else
     echo "skip: git not found, the branch scenarios did not run"
 fi
 
+t "--edit and --lines on a new or deleted file are refused, and nothing is written"
+mkdir -p "$WORK/wf" && cd "$WORK/wf" && "$LAP" init >/dev/null 2>&1
+printf 'int f1(void) {\n    return 1;\n}\n\nint f2(void) {\n    return 2;\n}\n\nint f3(void) {\n    return 3;\n}\n' > f.c
+before=$(history | wc -l)
+expect_grep '"error":"bad_lines","message":"f.c is a new file: it is committed whole' \
+    "$LAP" commit f.c --lines 5-7 -i "add f2 alone" -b "f2 returns two to its callers" --no-session --json
+expect_grep '"error":"bad_edit_index","message":"f.c is a new file' \
+    "$LAP" commit f.c --edit 2 -i "add f2 alone" -b "f2 returns two to its callers" --no-session --json
+[ "$(history | wc -l)" = "$before" ] || fail "a refused commit wrote to the log"
+expect_ok "$LAP" commit f.c -i "three small functions" -b "f1, f2 and f3 return one, two and three" --no-session
+rm f.c
+expect_grep '"error":"bad_lines","message":"f.c was deleted' \
+    "$LAP" commit f.c --lines 1-3 -i "drop the functions" -b "the file and its three functions are gone" --no-session --json
+expect_ok "$LAP" commit f.c -i "drop the functions" -b "the file and its three functions are gone" --no-session
+expect_grep "chain ok" "$LAP" verify
+cd "$WORK"
+
 # ------------------------------------------------------------ summary
 echo "e2e: $TESTS scenarios, $FAILED failure(s)"
 [ "$FAILED" -eq 0 ] || exit 1

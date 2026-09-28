@@ -192,6 +192,12 @@ bool message_args(Arena *a, int32_t argc, char **argv,
                   const char *const *value_flags, bool json,
                   const char **intent, const char **behavior);
 
+/* A commit that is its file whole (op "create" or "delete") has no edit to
+ * pick: the error code for an --edit or --lines given anyway
+ * ("bad_edit_index", "bad_lines"), or NULL when neither was. */
+const char *whole_file_pick_error(const char *op, const char *edit_arg,
+                                  const char *lines_arg);
+
 /* Where a commit reference (SPEC §References) points in a loaded log: an
  * id ("L42"), or a hash or hash prefix of at least 7 hex digits, with or
  * without '#', in any case. Returns the record's index, or -1 with

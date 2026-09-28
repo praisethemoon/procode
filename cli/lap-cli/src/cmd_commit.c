@@ -193,6 +193,15 @@ bool message_args(Arena *a, int32_t argc, char **argv,
     return true;
 }
 
+const char *whole_file_pick_error(const char *op, const char *edit_arg,
+                                  const char *lines_arg) {
+    if (strcmp(op, "create") != 0 && strcmp(op, "delete") != 0)
+        return NULL;
+    if (edit_arg)
+        return "bad_edit_index";
+    return lines_arg ? "bad_lines" : NULL;
+}
+
 int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
     FlagSets fs;
     help_flag_sets("commit", &fs);
@@ -377,6 +386,13 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
             chosen->new_start + chosen->new_lines - 1 >= fd.work.count ||
             chosen->old_start + chosen->old_lines - 1 >= fd.shadow.count;
         rec.eof_nl = touches_end ? fd.work.eof_nl : fd.shadow.eof_nl;
+    }
+
+    const char *pick = whole_file_pick_error(rec.op, edit_arg, lines_arg);
+    if (pick) {
+        err_out(json, pick, "%s %s: it is committed whole (no --lines/--edit)",
+                rel, strcmp(rec.op, "create") == 0 ? "is a new file" : "was deleted");
+        goto done;
     }
 
     MsgInput check = {intent, behavior, NULL, NULL, 0, force};

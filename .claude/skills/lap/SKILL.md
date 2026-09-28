@@ -139,7 +139,8 @@ a listed range.
 
 - `"no active session"` → start one, or use `--no-session` only for
   genuinely task-independent commits (e.g. committing `.lapignore` itself).
-- New files commit whole as one edit — but a whole-file commit is only as
+- New files commit whole as one edit (`--lines`/`--edit` are refused on a
+  new or deleted file: there is nothing to pick) — but a whole-file commit is only as
   interpretable as its message. When creating a **large** file, prefer
   building it in meaningful increments: write the skeleton, commit it,
   then add each section with its own commit. Reserve one-shot

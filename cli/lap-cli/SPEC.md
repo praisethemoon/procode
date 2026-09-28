@@ -920,6 +920,11 @@ Then, by the number of pending edits in the file:
   last-committed lines for pure deletions). Remaining edits stay pending and
   are re-detected (with fresh coordinates) on the next run.
 - New file → `create` (whole content, one edit). Deleted file → `delete`.
+  Either is the file whole, so there is no edit to pick: `--lines` is
+  refused with `bad_lines` and `--edit` with `bad_edit_index` ("f.c is a
+  new file: it is committed whole (no --lines/--edit)"), and nothing is
+  written — never ignored, which would record the whole file under a
+  message meant for part of it.
 - A file lap cannot read (as for `lap status`) → error `unreadable`: it is
   never recorded as deleted, nor compared as unchanged.
 
@@ -1131,10 +1136,10 @@ lap cannot write): the message says which file.
 | `append_failed` | commit, session, amend | *internal*: the record could not be appended |
 | `bad_args` | branch | arguments that do not fit together |
 | `bad_color` | any | `--color=` other than auto, always, never |
-| `bad_edit_index` | commit | `--edit N` names no edit |
+| `bad_edit_index` | commit | `--edit N` names no edit, or the commit is a new or deleted file (whole, nothing to pick) |
 | `bad_line` | search | `--line` is not a line of the file |
 | `bad_lineage` | branch start | `.lap/lineage` does not hold a branch id |
-| `bad_lines` | commit | `--lines A-B` matches no edit's range |
+| `bad_lines` | commit | `--lines A-B` matches no edit's range, or the commit is a new or deleted file (whole, nothing to pick) |
 | `bad_message_file` | commit, session | a `-F` file that is not the two sections |
 | `bad_meta` | session start | a `--meta` that is not `key=value` |
 | `bad_name` | branch start | a branch name outside the allowed letters, or `main` |
