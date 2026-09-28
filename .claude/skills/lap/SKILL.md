@@ -1,6 +1,7 @@
 ---
 name: lap
 description: Record fine-grained edit history with the lap CLI while coding. Use whenever a lap repository (.lap directory) exists in the project, or the user asks to track edits with lap. Teaches the session -> edit -> commit cadence, one-edit-per-commit recovery, and history search.
+compatibility: Requires the lap CLI (cli/lap-cli) on PATH.
 ---
 
 # lap — fine-grained edit recording

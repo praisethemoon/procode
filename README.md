@@ -21,7 +21,11 @@ one never lands as a single unexplained blob.
 `lap` is available as a CLI and as an agent skill that teaches the agent
 how to use it. To install the skills (`lap`, `tickets` and `artifacts`),
 copy the folders in [.claude/skills/](.claude/skills/) into your project's
-`.claude/skills/` (or `~/.claude/skills/` for every project).
+`.claude/skills/` (or `~/.claude/skills/` for every project). They follow the
+[Agent Skills spec](https://agentskills.io/specification), each naming what it
+needs to run in its `compatibility` line; `npm test` checks the spec's rules
+(`scripts/skills.test.mjs`: names, lengths, and links that stay in the
+skill's folder).
 
 Agents working in parallel each get a folder of their own — a git worktree
 or a copy — made a **lap branch** of the first folder (`lap branch start`),
