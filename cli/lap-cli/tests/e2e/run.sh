@@ -2712,6 +2712,16 @@ expect_not_grep '"registered":true' "$LAP" branch list --json
 expect_not_grep "missing" "$LAP" branch list
 cd "$WORK"
 
+t "an empty flag value is refused as a missing one"
+mkdir -p "$WORK/ev1" && cd "$WORK/ev1" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+"$LAP" commit a.txt --no-session -i "seed the fixture" -b "records a.txt as the base" >/dev/null 2>&1
+expect_grep '"error":"usage","message":"-n needs a value"' "$LAP" log -n "" --json
+expect_grep '"error":"usage","message":"--meta needs a value"' "$LAP" session list --meta= --json
+expect_grep '"error":"usage","message":"--branch needs a value"' "$LAP" log --branch= --json
+expect_grep '"error":"usage","message":"--branch needs a value"' "$LAP" session start "work" --branch= --json
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

@@ -34,6 +34,16 @@ void test_args(void) {
     char *after_dashes[] = {"--", "--branch"};
     ASSERT_TRUE(flags_known(2, after_dashes, values, bools));
 
+    t_begin("args: an empty value is refused as a missing one, joined or "
+            "apart, long or short");
+    ASSERT_TRUE(!flags_known(2, empty, values, bools)); /* --branch= */
+    char *apart_empty[] = {"log", "--branch", ""};
+    ASSERT_TRUE(!flags_known(3, apart_empty, values, bools));
+    char *short_empty[] = {"-i", "", "f.txt"};
+    ASSERT_TRUE(!flags_known(3, short_empty, values, bools));
+    char *empty_after_dashes[] = {"--", ""};
+    ASSERT_TRUE(flags_known(2, empty_after_dashes, values, bools));
+
     t_begin("args: a value that looks like a flag is still the value");
     char *msg[] = {"-i", "--json", "f.txt"};
     ASSERT_EQ_S(flag_value(3, msg, values, "-i"), "--json");

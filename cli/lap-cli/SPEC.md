@@ -820,8 +820,9 @@ flags) is refused with `unknown_flag`, naming it; nothing is run. A
 skipped flag would let its value pass for an argument — `-x "text" f.c`
 would name a file `text`. A long flag that takes a value also takes it
 joined, `--branch=feat` for `--branch feat` (short ones only apart:
-`-i "..."`); a value-taking flag that ends the command line is refused with
-`usage`, naming it.
+`-i "..."`); a value-taking flag that ends the command line, or is given an
+empty value (`--branch=`, `-n ""`), is refused with `usage` ("<flag> needs
+a value"), naming it: an empty value is never read as none given.
 
 ### Colour
 

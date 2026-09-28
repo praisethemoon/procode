@@ -66,13 +66,19 @@ bool flags_known(int32_t argc, char **argv, const char *const *value_flags,
         const char *w = argv[i];
         if (strcmp(w, "--") == 0)
             return true;
+        /* an empty value is no value: never read as "none given" */
         if (is_value_flag(value_flags, w)) {
-            if (i + 1 >= argc) {
+            if (i + 1 >= argc || argv[i + 1][0] == '\0') {
                 err_out(tty_json(), "usage", "%s needs a value", w);
                 return false;
             }
             i++;
             continue;
+        }
+        if (is_value_eq(value_flags, w) && strchr(w, '=')[1] == '\0') {
+            err_out(tty_json(), "usage", "%.*s needs a value",
+                    (int)(strchr(w, '=') - w), w);
+            return false;
         }
         if (w[0] != '-' || is_value_flag(bool_flags, w) ||
             is_value_eq(value_flags, w) ||
