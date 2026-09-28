@@ -2779,6 +2779,23 @@ gone "rebuild"
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "branch start says why the parent could not be opened, with its own code"
+mkdir -p "$WORK/bp9-main" && cd "$WORK/bp9-main" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+for f in a.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+cp -R "$WORK/bp9-main" "$WORK/bp9-b"
+CH=$(open_chunk)
+PREV=$(tail -n 1 "$CH" | tr -d '\n' | shasum -a 256 | cut -d' ' -f1)
+printf '{"type":"annotate","of":"x","ts":"2026-09-27T00:00:00Z","prev":"%s"}\n' "$PREV" >> "$CH"
+cd "$WORK/bp9-b"
+expect_grep '"error":"newer_history"' "$LAP" branch start b --from ../bp9-main --json
+[ -e .lap/lineage ] && fail "a refused start made a branch"
+mkdir -p "$WORK/bp9-plain"
+expect_grep '"error":"no_parent"' "$LAP" branch start b --from ../bp9-plain --json
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

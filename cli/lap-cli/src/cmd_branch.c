@@ -200,7 +200,11 @@ static int32_t start_locked(Arena *a, bool json, const char *name,
      * the checks and the sealing. */
     Repo pr;
     if (!repo_open_at(a, &pr, there, true, err, sizeof err)) {
-        err_out(json, "no_parent", "%s", err);
+        /* no repository there is no parent; any other failure keeps its
+         * own code (a newer history, a broken one) */
+        const char *code = repo_error_code();
+        err_out(json, strcmp(code, "no_repo") == 0 ? "no_parent" : code, "%s",
+                err);
         return LAP_EXIT_ERR;
     }
     /* 1. This folder's history, if it has one, must be where the parent's

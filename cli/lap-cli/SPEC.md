@@ -1030,7 +1030,9 @@ the board follows to the parent's board) could not be written, which the
 text output also warns of — the start itself stands, lap never reads it.
 Errors: `missing_from`, `bad_name`, `same_folder`, `already_branch`,
 `has_branches`, `no_parent`, `unrelated_history`, `not_clean`,
-`name_taken`, `parent_read_only`; `already_branch` is not given for a
+`name_taken`, `parent_read_only`, and whatever opening the parent refuses
+with keeps its own code (`newer_history`, `history_broken`; `no_parent` only
+when no lap repository is there); `already_branch` is not given for a
 plain copy of a branch folder, which starts a branch (above). Any writer in
 such a copy is `copied_branch`. `has_branches`: this folder's registry
 lists a live branch of it (its folder is that branch and its `.lap/parent`

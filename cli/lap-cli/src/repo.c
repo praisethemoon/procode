@@ -432,6 +432,7 @@ bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
 
 bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
                   char *err, size_t errsz) {
+    open_code = "no_repo"; /* until a repository is found here */
     memset(r, 0, sizeof(*r));
     r->a = a;
     snprintf(r->root, sizeof r->root, "%s", root);
