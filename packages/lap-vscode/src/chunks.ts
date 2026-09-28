@@ -321,3 +321,42 @@ export class IncrementalLog {
         return this.offset;
     }
 }
+
+/* What `lap branch list` depends on in this folder, as one string: the
+ * registry file's stat, how many merges its history records, and the
+ * other branches' chunks here with their sizes — not this folder's own
+ * lineage (in a branch folder, every commit grows it; the list does not
+ * change with it). "" when there is none of it. */
+export function listSignature(root: string, merges: number): string {
+    const lapDir = path.join(root, ".lap");
+    const parts: string[] = [];
+    try {
+        const st = fs.statSync(path.join(lapDir, "branches.json"));
+        parts.push(`registry ${st.mtimeMs} ${st.size}`);
+    } catch {
+        /* no registry */
+    }
+    if (merges > 0) parts.push(`merges ${merges}`);
+    let own = "main";
+    try {
+        own = fs.readFileSync(path.join(lapDir, "lineage"), "utf8").trim() || "main";
+    } catch {
+        /* a main folder */
+    }
+    let names: string[] = [];
+    try {
+        names = fs.readdirSync(path.join(lapDir, "log"));
+    } catch {
+        /* no chunks */
+    }
+    for (const n of names.sort()) {
+        const c = parseChunkName(n);
+        if (!c || c.lineage === "main" || c.lineage === own) continue;
+        try {
+            parts.push(`${n} ${fs.statSync(path.join(lapDir, "log", n)).size}`);
+        } catch {
+            /* gone meanwhile */
+        }
+    }
+    return parts.join("\n");
+}

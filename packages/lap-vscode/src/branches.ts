@@ -136,6 +136,17 @@ export function lapBin(own: string | undefined, board: string | undefined): stri
 export class ListGate {
     private answered = "\0"; /* nothing asked yet */
     private asking: string | null = null;
+    private latest = 0; /* the newest request made */
+
+    /* A request's number: its answer is used only while no newer one was
+     * made, so an older answer landing last never overwrites a newer. */
+    begin(): number {
+        return ++this.latest;
+    }
+
+    isLatest(n: number): boolean {
+        return n === this.latest;
+    }
 
     ask(sig: string, force: boolean): boolean {
         if (!force && (sig === this.answered || sig === this.asking)) return false;
@@ -143,9 +154,11 @@ export class ListGate {
         return true;
     }
 
-    done(sig: string, ok: boolean): void {
+    /* n: the request's number; an older one's answer is no longer what the
+     * list is, and is not remembered as answered */
+    done(sig: string, ok: boolean, n = this.latest): void {
         if (this.asking === sig) this.asking = null;
-        if (ok) this.answered = sig;
+        if (ok && n === this.latest) this.answered = sig;
     }
 }
 
@@ -154,7 +167,8 @@ export type LapExec = (args: string[], cwd: string, cb: (err: { message: string 
 
 /* Asks lap branch list through gate: cb gets lap's failure in its words
  * (null when it answered) and its JSON (null when none). False, and cb is
- * never called, when nothing moved. */
+ * never called, when nothing moved; nor is it for an answer that lands
+ * after a newer request's. */
 export function askBranchList(
     gate: ListGate,
     sig: string,
@@ -164,9 +178,11 @@ export function askBranchList(
     cb: (error: string | null, out: unknown) => void,
 ): boolean {
     if (!gate.ask(sig, force)) return false;
+    const n = gate.begin();
     exec(["branch", "list", "--json"], root, (err, stdout) => {
         const error = lapFailure(err, stdout);
-        gate.done(sig, error === null);
+        gate.done(sig, error === null, n);
+        if (!gate.isLatest(n)) return; /* a newer request answers */
         let out: unknown = null;
         try {
             out = JSON.parse(stdout);

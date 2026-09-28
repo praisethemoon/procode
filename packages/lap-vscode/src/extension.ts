@@ -13,7 +13,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { askBranchList, BranchRow, BranchView, branchView, LapExec, lapBin, ListGate, parseBranchList } from "./branches";
-import { IncrementalLog, branchProblem, folderFiles, hasHistory, historyProblem, ownFiles, parseChunkName, readStream } from "./chunks";
+import { IncrementalLog, branchProblem, folderFiles, hasHistory, historyProblem, listSignature, ownFiles, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
     CommitRec,
@@ -182,36 +182,6 @@ class LapLogSource {
  * last known and gets a fresh page when lap answers. A branch's log is read
  * again only when its files grew. Registered folders are watched, so work in
  * them shows here as it happens. */
-/* What `lap branch list` depends on in this folder, as one string: the
- * registry file's stat, how many merges its history records, and the
- * branch chunks here with their sizes. "" when there is none of it. */
-function listSignature(root: string, merges: number): string {
-    const parts: string[] = [];
-    try {
-        const st = fs.statSync(path.join(root, ".lap", "branches.json"));
-        parts.push(`registry ${st.mtimeMs} ${st.size}`);
-    } catch {
-        /* no registry */
-    }
-    if (merges > 0) parts.push(`merges ${merges}`);
-    let names: string[] = [];
-    try {
-        names = fs.readdirSync(path.join(root, ".lap", "log"));
-    } catch {
-        /* no chunks */
-    }
-    for (const n of names.sort()) {
-        const c = parseChunkName(n);
-        if (!c || c.lineage === "main") continue;
-        try {
-            parts.push(`${n} ${fs.statSync(path.join(root, ".lap", "log", n)).size}`);
-        } catch {
-            /* gone meanwhile */
-        }
-    }
-    return parts.join("\n");
-}
-
 class BranchSource {
     views: BranchView[] = [];
     /* why lap gave no branch list, in its words; null when it answered */

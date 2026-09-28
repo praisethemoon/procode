@@ -11,7 +11,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { askBranchList, branchView, LapExec, lapBin, lapFailure, ListGate, ownPart, parseBranchList } from "../branches";
-import { folderFiles, lineageFiles, readStream } from "../chunks";
+import { folderFiles, lineageFiles, listSignature, readStream } from "../chunks";
 import { row } from "../history";
 import { parseLog } from "../model";
 
@@ -237,4 +237,41 @@ test("ListGate: a list still being asked is not asked twice", () => {
     assert.equal(gate.ask("s1", true), true, "unless forced");
     gate.done("s1", false);
     assert.equal(gate.ask("s1", false), true, "it failed: asked again");
+});
+
+test("listSignature: in a branch folder its own commits leave the signature as it is; another branch's growth moves it", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lap-sig-"));
+    const log = path.join(root, ".lap", "log");
+    fs.mkdirSync(log, { recursive: true });
+    const own = "0123456789ab";
+    const other = "ba9876543210";
+    fs.writeFileSync(path.join(root, ".lap", "lineage"), `${own}\n`);
+    fs.writeFileSync(path.join(root, ".lap", "branches.json"), "[]\n");
+    fs.writeFileSync(path.join(log, "main.000001.jsonl"), "m\n");
+    fs.writeFileSync(path.join(log, `${own}.000001.jsonl`), "b\n");
+    fs.writeFileSync(path.join(log, `${other}.000001.jsonl`), "o\n");
+    const before = listSignature(root, 0);
+    fs.appendFileSync(path.join(log, `${own}.000001.jsonl`), "a commit here\n");
+    fs.writeFileSync(path.join(log, `${own}.000002.jsonl`), "another\n");
+    assert.equal(listSignature(root, 0), before, "this folder's own commits");
+    fs.appendFileSync(path.join(log, `${other}.000001.jsonl`), "more\n");
+    assert.notEqual(listSignature(root, 0), before, "another branch grew");
+    assert.notEqual(listSignature(root, 1), listSignature(root, 0), "a merge");
+});
+
+test("askBranchList: of two overlapping requests, only the newer answer is used", () => {
+    const gate = new ListGate();
+    const pending: (() => void)[] = [];
+    let answer = 0;
+    const exec: LapExec = (_args, _cwd, cb) => {
+        const n = ++answer;
+        pending.push(() => cb(null, `{"ok":true,"self":null,"branches":[],"n":${n}}`));
+    };
+    const used: unknown[] = [];
+    askBranchList(gate, "s1", false, "/w", exec, (_e, out) => used.push((out as { n: number }).n));
+    askBranchList(gate, "s2", false, "/w", exec, (_e, out) => used.push((out as { n: number }).n));
+    pending[1](); /* the newer one answers first */
+    pending[0](); /* the older lands last, and is dropped */
+    assert.deepEqual(used, [2]);
+    assert.equal(gate.ask("s2", false), false, "the newer one's signature is answered");
 });
