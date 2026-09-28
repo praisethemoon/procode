@@ -2505,6 +2505,23 @@ if [ "$(id -u)" != 0 ]; then
 fi
 cd "$WORK"
 
+t "a branch undoing a change both sides made stops the file, keeping the parent's"
+merge_pair un1; BP="$WORK/un1-p"; BW="$WORK/un1-w"
+cd "$BW" && "$LAP" session start "insert and undo" --branch b >/dev/null 2>&1
+in_branch f.txt '5a\
+X' "inserts X after line 5 on the branch"
+in_branch f.txt '/^X$/d' "removes X again on the branch"
+UNDO=$("$LAP" log -n 1 --json | tr ',' '\n' | grep '"hash"' | sed -n 1p | sed 's/.*"hash":"\([0-9a-f]*\)".*/\1/')
+in_parent f.txt '5a\
+X' "inserts the same X after line 5 on the parent"
+git_merge_b || fail "git merge un1"
+grep -q '^X$' "$BP/f.txt" || fail "git dropped X"
+cd "$BP"
+expect_grep "stopped: f.txt at #$(printf %.7s "$UNDO")" "$LAP" merge b
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

@@ -363,5 +363,31 @@ void test_adopt(void) {
     ASSERT_TRUE(p.already[0] && p.already[1]);
     ASSERT_EQ_S(text(a, p.result), text(a, g2));
 
+    t_begin("adopt: a change already done still counts as the parent's: the "
+            "branch undoing its copy stops the file, the parent's kept");
+    Rec *addx = edit(a, ten, 6, 0, "X\n");
+    Lines tx = after(a, ten, addx);
+    Rec *delx = edit(a, tx, 6, 1, "");
+    const Rec *c29[] = {addx, delx};
+    adopt_place(a, ten, tx, true, c29, 2, &p); /* the parent: ten + X */
+    ASSERT_EQ_I(p.placed, 1);
+    ASSERT_TRUE(p.already[0]);
+    ASSERT_TRUE(p.why != NULL);
+    ASSERT_EQ_S(text(a, p.result), text(a, tx));
+    /* the same after a change made in steps */
+    Rec *undo = edit(a, ten2, 5, 1, "5\n");
+    const Rec *c30[] = {step1, step2, undo};
+    adopt_place(a, ten, ten2, true, c30, 3, &p);
+    ASSERT_EQ_I(p.placed, 2);
+    ASSERT_TRUE(p.why != NULL);
+    ASSERT_EQ_S(text(a, p.result), text(a, ten2));
+    /* a commit clear of it, beyond one unchanged line, carries on */
+    Rec *far = edit(a, tx, 8, 1, "EIGHT\n");
+    const Rec *c31[] = {addx, far};
+    adopt_place(a, ten, tx, true, c31, 2, &p);
+    ASSERT_EQ_I(p.placed, 2);
+    ASSERT_TRUE(p.why == NULL);
+    ASSERT_TRUE(str_eq_c(p.result.lines[7], "EIGHT"));
+
     arena_free(a);
 }

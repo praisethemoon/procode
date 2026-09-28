@@ -517,8 +517,10 @@ folder, `lap merge <branch> [--dry-run]`.
    one parent change, of exactly its region and size, and lands where the
    parent's text already is its new text (with the same final newline) is
    not a conflict: the parent made the same change. Nothing is adopted for
-   it and nothing stops; that change is common ground for the file's later
-   commits. A file deleted on both sides, or created on both with the same
+   it and nothing stops. That change still counts as the parent's for the
+   file's later commits: one that overlaps or touches it (the branch undoing
+   its copy, say) is a conflict like any other, and the parent's text there
+   is kept, as `git merge` keeps it. A file deleted on both sides, or created on both with the same
    lines, is this case. So is a change made in several steps: consecutive
    edits that stay inside one parent change and, taken together, leave the
    parent's text there are all already done, however the parent's side

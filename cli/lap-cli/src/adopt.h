@@ -19,9 +19,9 @@
  * One exception: a commit whose region is exactly one parent change, and
  * whose new text is the parent's text there, is already done — the parent
  * made the same change. Nothing is placed for it and nothing stops; that
- * parent change is then common ground for the commits after it. A file
- * deleted on both sides, or created on both with the same lines, is this
- * case too. So is a run of consecutive edits that stay inside one parent
+ * change still counts as the parent's, so a later commit touching it (one
+ * undoing it, say) is a conflict. A file deleted on both sides, or created
+ * on both with the same lines, is already done too. So is a run of consecutive edits that stay inside one parent
  * change and, together, leave the parent's text there: a change both sides
  * made in several steps. Near is not identical: one line different, or a
  * run that stops short of the parent's text, is a conflict.

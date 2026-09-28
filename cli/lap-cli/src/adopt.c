@@ -110,11 +110,14 @@ void adopt_place(Arena *a, Lines base, Lines parent, bool parent_has,
             (c->eof_nl == branch.eof_nl || c->eof_nl == merged.eof_nl)) {
             branch = lines_replace(a, branch, s, c->old_lines, c->new_text,
                                    c->new_n, c->eof_nl);
-            ch[hit].len = -1;
             for (int32_t i = 0; i < pr.count; i++) {
-                if (ch[i].start >= e)
+                if (i != hit && ch[i].start >= e)
                     ch[i].start += c->new_n - c->old_lines;
             }
+            /* still the parent's change, now the same text on both sides:
+             * a later commit touching it is a conflict */
+            ch[hit].len = c->new_n;
+            ch[hit].delta = 0;
             out->already[k] = true;
             out->start[k] = at;
             out->eof_nl[k] = merged.eof_nl;
@@ -153,7 +156,8 @@ void adopt_place(Arena *a, Lines base, Lines parent, bool parent_has,
                     if (i != hit && ch[i].len >= 0 && ch[i].start > hs)
                         ch[i].start += cur - hl;
                 }
-                ch[hit].len = -1;
+                ch[hit].len = cur; /* the parent's still, as above */
+                ch[hit].delta = 0;
                 branch = tmp;
                 for (int32_t q = k; q <= reached; q++) {
                     out->already[q] = true;
