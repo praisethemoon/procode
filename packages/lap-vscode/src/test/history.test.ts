@@ -4,7 +4,7 @@ import * as assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 
-import { EMPTY_FILTER, HistoryFilter, PAGE_SIZE, fieldCount, isFiltering, pageOf, query, rangeStart } from "../history";
+import { EMPTY_FILTER, HistoryFilter, PAGE_SIZE, fieldCount, isFiltering, pageOf, query, rangeStart, treeRowKey } from "../history";
 import { parseLog } from "../model";
 
 const sha = (line: string) => createHash("sha256").update(line, "utf8").digest("hex");
@@ -181,4 +181,16 @@ test("pageOf finds the page a commit is on, or null when the filter hides it", (
     assert.equal(pageOf(big, f({ text: "edit 5" }), at(false), "L10"), null);
     assert.equal(pageOf(big, EMPTY_FILTER, at(true), "L1"), 2, "Most recent: every commit is on the 20th, the last day");
     assert.equal(pageOf(big, ALL, at(true), "L99"), null);
+});
+
+test("a tree row's keys: Enter toggles, ArrowRight opens, ArrowLeft closes, and moving on (Tab, ArrowDown) folds nothing", () => {
+    for (const k of ["Tab", "ArrowDown", "ArrowUp", "Shift", "Escape", "a"]) {
+        assert.equal(treeRowKey(k, true), null, `${k} leaves an open row open`);
+        assert.equal(treeRowKey(k, false), null, `${k} leaves a closed row closed`);
+    }
+    assert.equal(treeRowKey("ArrowLeft", true), false);
+    assert.equal(treeRowKey("ArrowRight", false), true);
+    assert.equal(treeRowKey("ArrowRight", true), true, "already open: stays so");
+    assert.equal(treeRowKey("Enter", true), false);
+    assert.equal(treeRowKey("Enter", false), true);
 });

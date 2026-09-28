@@ -60,6 +60,17 @@ export function fieldCount(f: HistoryFilter): number {
     return f.ops.length + f.users.length + f.states.length;
 }
 
+/* What a key does to a tree row that opens and closes: Enter toggles it,
+ * ArrowRight opens it and ArrowLeft closes it; the row's new state, or null
+ * when the key leaves it alone (Tab, ArrowDown and the rest move through
+ * the tree, never folding what they pass). */
+export function treeRowKey(key: string, open: boolean): boolean | null {
+    if (key === "Enter") return !open;
+    if (key === "ArrowRight") return true;
+    if (key === "ArrowLeft") return false;
+    return null;
+}
+
 export function isFiltering(f: HistoryFilter): boolean {
     return f.text.trim() !== "" || f.range !== "recent" || fieldCount(f) > 0;
 }

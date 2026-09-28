@@ -36,6 +36,7 @@ import {
     SessionRow,
     fieldCount,
     isFiltering,
+    treeRowKey,
 } from "../src/history";
 import type { BranchState, BranchView } from "../src/branches";
 import { localTime, shortHash } from "../src/model";
@@ -365,9 +366,8 @@ function SessionLine(props: { s: SessionRow; open: boolean; filtering: boolean; 
                 title={`${s.id ?? "no session"} · ${s.msg}\n\nstarted ${s.ts}${s.endTs ? `, ended ${s.endTs}` : s.state === "active" ? " · active" : ""}`}
                 onClick={() => hasKids && props.onToggle()}
                 onKeyDown={(e) => {
-                    if (hasKids && (e.key === "Enter" || e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-                        if (e.key === "Enter" || (e.key === "ArrowRight") !== props.open) props.onToggle();
-                    }
+                    const next = hasKids ? treeRowKey(e.key, props.open) : null;
+                    if (next !== null && next !== props.open) props.onToggle();
                 }}
             >
                 <span className="lh-twistie">{hasKids ? <Codicon name={props.open ? "chevron-down" : "chevron-right"} /> : null}</span>
@@ -427,7 +427,8 @@ function BranchLine(props: {
                 title={`branch ${r.name} (${r.id}) · ${r.state}\n${r.registered ? `${r.path}${r.present ? "" : " (gone)"}` : "not registered here: read from its chunks, which git brought"}`}
                 onClick={() => props.setOpen(key, !isOpen)}
                 onKeyDown={(e) => {
-                    if (e.key === "Enter" || (e.key === "ArrowRight") !== isOpen) props.setOpen(key, !isOpen);
+                    const next = treeRowKey(e.key, isOpen);
+                    if (next !== null && next !== isOpen) props.setOpen(key, next);
                 }}
             >
                 <span className="lh-twistie">
