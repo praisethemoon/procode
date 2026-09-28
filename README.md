@@ -44,7 +44,7 @@ branch or straight into the first folder.
 The extension's **Lap History** view renders the sessions and their changes
 inside VS Code.
 
-![lap-vscode](assets/lap-vscode.webp)
+![lap-vscode](assets/lap.webp)
 
 More in [lap's README](cli/lap-cli/README.md) and its [SPEC](cli/lap-cli/SPEC.md).
 
@@ -72,7 +72,7 @@ server, or **Board › Board Folder** in VS Code, to another folder's board (a
 relative path is taken from the folder worked in). Writes take the board's
 lock, so agents in several folders share it safely.
 
-![coboard-vscode](assets/coboard-vscode.webp)
+![coboard-vscode](assets/coboard.webp)
 
 The [tickets skill](.claude/skills/tickets/SKILL.md) is the loop used in
 this repository (board, lap and git together); adapt it for yours.
@@ -93,7 +93,7 @@ collection opens its documents (a page at a time, with their size, type,
 fetch date and description), and the search bar searches the store or the
 open collection — and see how documents link to each other in its graph.
 
-![kb-vscode](assets/kb-vscode.webp)
+![kb-vscode](assets/kb.webp)
 
 The contract is in [specs/index-api.md](specs/index-api.md).
 
@@ -111,7 +111,7 @@ chevron.
 The format is in [specs/techdocs.md](specs/techdocs.md). These are almost
 identical to claude artifacts, except they stay local to your project.
 
-![techdocs-extension](assets/artifact-extension.webp)
+![techdocs-extension](assets/techdocs.webp)
 
 techdocs pages are meant to live and be rendered in your vscode. They are HTML documents
 that adjust to the user theme since all UI in this repo uses  [baukasten](https://github.com/TypeFox/baukasten).
