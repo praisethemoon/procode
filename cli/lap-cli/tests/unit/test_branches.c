@@ -270,6 +270,36 @@ void test_branches(void) {
     ASSERT_EQ_S(gi, "mine\n");
     remove(gip);
 
+    t_begin("repo_convert_legacy: a conversion writes lap's .gitignore when "
+            "there is none, keeps one that is there, and none is written "
+            "without a conversion");
+    bool conv = false;
+    char cerr[256];
+    const char *old_log = ".gitignore_unit_test/" LAP_LOG_NAME;
+    const char *chunk1 = ".gitignore_unit_test/" LAP_LOG_DIR
+                         "/main.000001.jsonl";
+    ASSERT_TRUE(repo_convert_legacy(a, ".gitignore_unit_test", 1000, &conv,
+                                    cerr, sizeof cerr));
+    ASSERT_TRUE(!conv);
+    ASSERT_TRUE(!plat_is_file(gip));
+    plat_write_file_atomic(old_log, "aaaa\n", 5);
+    ASSERT_TRUE(repo_convert_legacy(a, ".gitignore_unit_test", 1000, &conv,
+                                    cerr, sizeof cerr));
+    ASSERT_TRUE(conv);
+    ASSERT_TRUE(plat_read_file(a, gip, &gi, &gil));
+    ASSERT_TRUE(strstr(gi, "\n/*\n!/.gitignore\n!/log/\n") != NULL);
+    remove(chunk1);
+    plat_write_file_atomic(gip, "mine\n", 5);
+    plat_write_file_atomic(old_log, "aaaa\n", 5);
+    ASSERT_TRUE(repo_convert_legacy(a, ".gitignore_unit_test", 1000, &conv,
+                                    cerr, sizeof cerr));
+    ASSERT_TRUE(conv);
+    ASSERT_TRUE(plat_read_file(a, gip, &gi, &gil));
+    ASSERT_EQ_S(gi, "mine\n");
+    remove(chunk1);
+    remove(".gitignore_unit_test/" LAP_LOG_DIR);
+    remove(gip);
+
     t_begin("own_part_start: a branch's own records start after its own "
             "branch record, not its parent branch's; main's at 0");
     Rec op[5];

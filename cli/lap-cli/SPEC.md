@@ -338,9 +338,13 @@ and a `git merge` of the branch's code brings its chunks as new files.
   a branch id. That file is machine-local, like the registry: after a `git
   merge` the parent holds the branch's chunks too, and the chunks alone
   cannot say which lineage is the folder's own. So it never goes through
-  git: `lap init` and `lap branch start` write `.lap/.gitignore`
-  (`/*`, `!/.gitignore`, `!/log/`, kept if one is there), leaving git only
-  the history. Should a `lineage` arrive anyway, with the `.lap/parent`
+  git: `lap init`, `lap branch start` and the conversion of a single-file
+  log write `.lap/.gitignore` (`/*`, `!/.gitignore`, `!/log/`, kept if one
+  is there), leaving git only the history. At conversion it also brings
+  the chunks back into git's view under a root `.gitignore` of older docs
+  (`.lap/*`, `!.lap/log.jsonl`); lap never runs git, so the conversion
+  says to commit `.lap/.gitignore` and `.lap/log/` with the old file's
+  removal. Should a `lineage` arrive anyway, with the `.lap/parent`
   that names this very folder (compared as a directory on disk), it is
   ignored with a notice: the folder stays `main`.
 - Ids go on from the base: the branch's next `L` and `S` numbers follow

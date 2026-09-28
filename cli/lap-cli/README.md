@@ -315,6 +315,13 @@ branch folder's `lineage` and `parent`, which would make the parent think
 it is the branch. To keep the history on this machine too, add `.lap/` to
 the project's own `.gitignore`.
 
+**Upgrading from the single-file log.** A project whose `.gitignore` has
+the older `.lap/*` and `!.lap/log.jsonl` would hide the chunks from git.
+The first write after the upgrade moves `.lap/log.jsonl` to chunks and
+writes `.lap/.gitignore` if there is none, whose `!/log/` lets git see
+them. Commit `.lap/.gitignore` and `.lap/log/` together with the removal
+of `.lap/log.jsonl`, as lap says when it converts.
+
 **A shared history can be corrupted by merging it.** If two git branches of
 *one folder* both record commits, merging them conflicts on the chunk both
 appended to, and resolving that by interleaving lines breaks the hash

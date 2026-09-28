@@ -401,6 +401,23 @@ static bool newer_check(Arena *a, Repo *r, char *err, size_t errsz) {
     return false;
 }
 
+bool repo_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
+                         bool *converted, char *err, size_t errsz) {
+    if (!hist_convert_legacy(a, lapdir, limit, converted, err, errsz))
+        return false;
+    if (!*converted)
+        return true;
+    /* The root .gitignore older docs gave keeps only .lap/log.jsonl, which
+     * would hide the chunks from git; this file's "!/log/" brings them
+     * back. */
+    if (!repo_write_gitignore(lapdir))
+        fprintf(stderr, "lap: warning: cannot write %s/.gitignore\n", lapdir);
+    fprintf(stderr, "lap: commit .lap/.gitignore and .lap/%s/ to git with "
+                    "the removal of .lap/%s\n",
+            LAP_LOG_DIR, LAP_LOG_NAME);
+    return true;
+}
+
 bool repo_open(Arena *a, Repo *r, bool for_write, char *err, size_t errsz) {
     open_code = "no_repo";
     char root[LAP_PATH_MAX];
@@ -436,7 +453,7 @@ bool repo_open_at(Arena *a, Repo *r, const char *root, bool for_write,
         }
         /* a folder from before chunks moves to them on its first write */
         bool converted;
-        if (!hist_convert_legacy(a, r->lapdir, hist_chunk_limit(), &converted,
+        if (!repo_convert_legacy(a, r->lapdir, hist_chunk_limit(), &converted,
                                  err, errsz))
             return false;
         hist_clear_tmp(a, r->lapdir);

@@ -2376,6 +2376,33 @@ expect_grep "chain ok" "$LAP" verify
 expect_grep "uppercases g1 after the torn append" cat "$C"
 cd "$WORK"
 
+t "converting an old log under the old root .gitignore keeps the history in git's view"
+mkdir -p "$WORK/gi1" && cd "$WORK/gi1" || exit 1
+git init -q . && git config user.name e2e && git config user.email e2e@lap
+printf '.lap/*\n!.lap/log.jsonl\n' > .gitignore
+"$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+"$LAP" commit a.txt --no-session -i "seed an old-shaped history" -b "creates a.txt" >/dev/null 2>&1
+# the shape an older lap left: one file, and no .lap/.gitignore
+history > .lap/log.jsonl
+rm .lap/log/main.*.jsonl .lap/.gitignore && rmdir .lap/log
+git add .gitignore a.txt .lap/log.jsonl && git commit -qm old
+cp -R "$WORK/gi1" "$WORK/gi2"
+printf 'b\n' >> a.txt
+expect_grep "commit .lap/.gitignore and .lap/log/" "$LAP" commit a.txt --no-session \
+    -i "write after an upgrade" -b "appends b to a.txt"
+[ -f .lap/.gitignore ] || fail "the conversion wrote no .lap/.gitignore"
+ST=$(git status --short --untracked-files=all)
+echo "$ST" | grep -q '^?? .lap/.gitignore$' || fail "git does not see .lap/.gitignore: $ST"
+echo "$ST" | grep -q '^?? .lap/log/main.000001.jsonl$' || fail "git does not see the chunks: $ST"
+echo "$ST" | grep -q '^ D .lap/log.jsonl$' || fail "git does not see the old log's removal: $ST"
+# a .lap/.gitignore already there is the user's, kept as it is
+cd "$WORK/gi2" && printf '/*\n!/.gitignore\n!/log/\n# mine\n' > .lap/.gitignore
+printf 'b\n' >> a.txt
+expect_ok "$LAP" commit a.txt --no-session -i "write after an upgrade" -b "appends b to a.txt"
+[ "$(tail -n 1 .lap/.gitignore)" = "# mine" ] || fail "the conversion rewrote .lap/.gitignore"
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

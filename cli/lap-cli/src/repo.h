@@ -78,6 +78,11 @@ bool repo_init(Arena *a, const char *dir, char *err, size_t errsz);
  * the file itself), so nothing machine-local — a branch folder's lineage
  * and parent above all — reaches another folder through git. */
 bool repo_write_gitignore(const char *lapdir);
+/* Moves an older single-file log to chunks (hist_convert_legacy) and, when
+ * it did, writes lapdir/.gitignore unless one is there, and says what to
+ * commit to git. */
+bool repo_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
+                         bool *converted, char *err, size_t errsz);
 
 /* Reads and parses this folder's whole history; messages name chunks and
  * lines ("main.000002.jsonl line 7"). */
