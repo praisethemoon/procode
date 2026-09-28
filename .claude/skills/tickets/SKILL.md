@@ -22,6 +22,9 @@ The lap skill covers lap itself; this is the loop around it.
    *Done when*. Then `board_update T-<n> status=doing assignee=claude`.
 2. **Start the session.**
    `LAP_USER=claude lap session start "T-<n>: <what>" --meta ticket=T-<n>`.
+   A branch folder may be a worktree inside the project (e.g.
+   `.claude/worktrees/<name>`); the lap skill's Branches section says how
+   to start one and what its refusals mean.
    In a branch folder, or a folder with branches, add `--branch <name>`
    (or set `LAP_BRANCH`) here and on every `lap commit`. The board stays
    one: in a lap branch folder coboard works the parent's board by itself;

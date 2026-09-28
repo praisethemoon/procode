@@ -158,6 +158,11 @@ a listed range.
   make the trail findable with `lap search --msg "old.c"`. You know it is a
   rename; the history only knows if you say so. If the content changed in
   transit, say what changed instead of hiding it behind "renamed".
+- **`unreadable` in `lap status`**: a file lap cannot read ("cannot be read:
+  fix its permissions"), or a folder it cannot open (`unreadable  d/`,
+  whose contents are unknown). It is never shown as deleted or clean, and
+  `lap commit` refuses it (`unreadable`). Fix the permissions, or ask the
+  user — never commit around it.
 - Binary files are not tracked; add noisy artifacts to `.lapignore`.
   `.lapignore` keeps lap from recording files it has not recorded yet. A
   file recorded before it was ignored stays tracked: its edits still show
@@ -182,9 +187,31 @@ cd ../proj-parser
 lap branch start parser --from ../proj         # its own line of history
 ```
 
+The branch folder may also live inside the project (a tool's
+`.claude/worktrees/<name>`, `git worktree add sub`): a subfolder with its
+own `.lap/` is another repository, so its files never show in the
+parent's `lap status`, and a commit of one from the parent is refused
+("outside this repository: sub has its own .lap/"). The same rule means a
+**leftover `.lap/`** in a subfolder hides that whole folder from lap: if
+its files never show in `lap status`, or a commit gives that message for
+a folder that is no branch, tell the user — never delete a `.lap/`
+yourself.
+
 - The parent's work must be committed (lap and git) first: a branch starts
   from the parent's committed state, and `branch start` refuses files that
   differ (`not_clean`).
+- **`branch start` runs in the new folder**, with `--from` naming the
+  parent. `has_branches` ("a folder with branches cannot become a branch")
+  means you ran it in the parent: move to the new folder. `name_taken`
+  means the name is, or was, some branch's that main can see: pick
+  another. `ambiguous_branch` ("names more than one branch … name it by
+  its id") means two old branches share a name: pass the id it lists.
+- **A plain copy of a branch folder is not that branch.** Writers refuse
+  there with `copied_branch` ("… is a copy of branch <name>, which is
+  <original>: two folders never record to one branch"). Either start a
+  branch of its own in the copy (`lap branch start <name> --from
+  <original>`, the way to make a branch of a branch by copying), or do the
+  work in the original folder.
 - **Say which branch you record to.** Where branches exist, `lap commit`
   and `lap session start` need `--branch <name>` (`--branch main` in the
   first folder), or `LAP_BRANCH=<name>` in the environment. A missing or
