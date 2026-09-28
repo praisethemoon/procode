@@ -439,9 +439,11 @@ void test_branches(void) {
     plat_write_file_atomic(there_c2, "c\nd", 3);
     OwnChunk *own;
     int32_t nown;
+    bool obehind;
     char oerr[256];
     ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
-                           false, &own, &nown, oerr, sizeof oerr));
+                           false, false, &own, &nown, &obehind, oerr,
+                           sizeof oerr));
     ASSERT_EQ_I(nown, 1);
     ASSERT_EQ_I((int32_t)own[0].len, 2);
     ASSERT_TRUE(!own[0].write);
@@ -449,7 +451,8 @@ void test_branches(void) {
     t_begin("own_chunks: filling in, a shorter copy here is extended and a "
             "missing chunk taken, cut to its complete lines");
     ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
-                           true, &own, &nown, oerr, sizeof oerr));
+                           true, true, &own, &nown, &obehind, oerr,
+                           sizeof oerr));
     ASSERT_EQ_I(nown, 2);
     ASSERT_TRUE(own[0].write && own[0].len == 4 &&
                 memcmp(own[0].data, "a\nb\n", 4) == 0);
@@ -457,22 +460,38 @@ void test_branches(void) {
                 memcmp(own[1].data, "c\n", 2) == 0);
     ASSERT_EQ_S(own[1].name, "0123456789ab.000002.jsonl");
 
+    t_begin("own_chunks: filling in without extending (git brought the copy "
+            "here), a shorter copy is kept as the last chunk and said to be "
+            "behind");
+    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
+                           true, false, &own, &nown, &obehind, oerr,
+                           sizeof oerr));
+    ASSERT_EQ_I(nown, 1);
+    ASSERT_TRUE(!own[0].write && own[0].len == 2);
+    ASSERT_TRUE(obehind);
+    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
+                           true, true, &own, &nown, &obehind, oerr,
+                           sizeof oerr));
+    ASSERT_TRUE(!obehind);
+
     t_begin("own_chunks: a copy here that is not a prefix of the folder's is "
             "kept as it is");
     plat_write_file_atomic(here_c1, "x\n", 2);
     ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
-                           true, &own, &nown, oerr, sizeof oerr));
+                           true, true, &own, &nown, &obehind, oerr,
+                           sizeof oerr));
     ASSERT_TRUE(!own[0].write && memcmp(own[0].data, "x\n", 2) == 0);
 
     t_begin("own_chunks: a chunk holding only a line still being written "
             "ends them; nothing anywhere is none");
     plat_write_file_atomic(there_c2, "zz", 2);
     ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
-                           true, &own, &nown, oerr, sizeof oerr));
+                           true, true, &own, &nown, &obehind, oerr,
+                           sizeof oerr));
     ASSERT_EQ_I(nown, 1);
     remove(here_c1);
-    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", NULL, oid, true, &own,
-                           &nown, oerr, sizeof oerr));
+    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", NULL, oid, true, true,
+                           &own, &nown, &obehind, oerr, sizeof oerr));
     ASSERT_EQ_I(nown, 0);
     remove(there_c1);
     remove(there_c2);

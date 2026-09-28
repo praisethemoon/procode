@@ -2625,6 +2625,23 @@ expect_grep '"name":"b"' "$LAP" branch list --json
 cd "$N1" && expect_grep '"name":"b2","state":"missing"' "$LAP" branch list --json
 cd "$WORK"
 
+t "--copy-from-folder never rewrites a branch chunk git brought"
+merge_pair cf1; BP="$WORK/cf1-p"; BW="$WORK/cf1-w"
+cd "$BW" && "$LAP" session start "branch work" --branch b >/dev/null 2>&1
+in_branch g.txt 's/^g1$/G1/' "uppercases g1 on the branch"
+git_merge_b || fail "git merge cf1"
+in_branch g.txt 's/^g2$/G2/' "uppercases g2 on the branch, not in git yet"
+cd "$BP"
+BCH=".lap/log/$(cat "$BW/.lap/lineage").000001.jsonl"
+[ -f "$BCH" ] || fail "git brought no chunk of b"
+SUMB=$(cksum < "$BCH")
+expect_grep "comes with the next git merge" "$LAP" merge b --copy-from-folder
+[ "$(cksum < "$BCH")" = "$SUMB" ] || fail "the chunk git brought was rewritten"
+[ -z "$(git status --short "$BCH")" ] || fail "git sees b's chunk changed: $(git status --short "$BCH")"
+expect_grep "uppercases g1 on the branch" "$LAP" log --json
+expect_not_grep "not in git yet" "$LAP" log --json
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

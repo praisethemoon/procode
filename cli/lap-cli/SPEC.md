@@ -475,8 +475,11 @@ folder, `lap merge <branch> [--dry-run]`.
      here, `lap merge` refuses with **`git_merge_first`** and writes
      nothing — run `git merge` first. Taken from the folder, the history
      would run ahead of the code, and the next `git merge` would conflict
-     on the copies. **`--copy-from-folder`** takes the folder's chunks
-     anyway, for a user who wants the history before the code, knowingly.
+     on the copies. **`--copy-from-folder`** takes the folder's missing
+     chunks anyway, for a user who wants the history before the code,
+     knowingly — but never extends a chunk git brought: that copy is where
+     the history stops (a note says the rest comes with the next `git
+     merge`), so git still finds it unchanged on this side.
    - **No git** (plain copies): nothing brings the history by itself, so
      lap takes from the folder every chunk missing here, and extends a copy
      here that is a byte prefix of the folder's. History may then run ahead
@@ -1040,7 +1043,8 @@ registry is `unknown_branch`.
 ### `lap merge <branch> [--dry-run] [--copy-from-folder]`
 Adopts a branch's history into this folder's (§Branches → Merging).
 `--copy-from-folder` takes a git checkout's missing chunks from its folder
-instead of refusing with `git_merge_first`. Prints
+instead of refusing with `git_merge_first`; a chunk git brought is never
+rewritten, and what the folder has past it waits for the next `git merge`. Prints
 what was adopted of how many commits, with the new ids, then each stopped
 file with the first commit not adopted and why, then each commit already
 done here, then how many of the branch's amendments were carried and how

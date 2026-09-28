@@ -231,8 +231,9 @@ static bool folder_is_git(const char *path) {
 }
 
 bool own_chunks(Arena *a, const char *lapdir, const char *from,
-                const char *id, bool fill, OwnChunk **out, int32_t *n,
-                char *err, size_t errsz) {
+                const char *id, bool fill, bool extend, OwnChunk **out,
+                int32_t *n, bool *behind, char *err, size_t errsz) {
+    *behind = false;
     Hist here, there;
     memset(&there, 0, sizeof there);
     if (!hist_open(a, lapdir, id, &here, err, errsz))
@@ -270,7 +271,16 @@ bool own_chunks(Arena *a, const char *lapdir, const char *from,
         }
         OwnChunk *c = &v[k];
         hist_chunk_name(id, k + 1, c->name);
-        if (has_h && !(has_t && tl > hl && memcmp(td, hd, hl) == 0)) {
+        bool ahead = has_h && has_t && tl > hl && memcmp(td, hd, hl) == 0;
+        if (has_h && ahead && !extend) {
+            /* git brought this copy: never rewritten here; what the
+             * folder has past it comes with the next git merge */
+            c->data = hd;
+            c->len = hl;
+            *behind = true;
+            k++;
+            break;
+        } else if (has_h && !ahead) {
             c->data = hd;
             c->len = hl;
         } else if (has_t && tl > 0) {
@@ -418,11 +428,19 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     sb_putn(&all, adata, alen);
     for (int32_t k = 0; k < nlin; k++) {
         Lin *l = &lin[k];
+        bool behind;
         if (!own_chunks(a, repo.lapdir, reachable ? ent->path : NULL, l->id,
-                        fill, &l->own, &l->nown, err, sizeof err)) {
+                        fill, fill && !git, &l->own, &l->nown, &behind, err,
+                        sizeof err)) {
             err_out(json, "log_unreadable", "%s", err);
             goto done;
         }
+        if (behind && !json)
+            fprintf(stderr,
+                    "note: %s's history here stops where git merge left it; "
+                    "what its folder has past that comes with the next git "
+                    "merge\n",
+                    l->name);
         if (l->cut > 0 && l->nown > l->cut)
             l->nown = l->cut;
         if (l->nown == 0 || l->nown < l->cut) {

@@ -118,12 +118,14 @@ typedef struct {
  * history lap merge adopts is the one whose code is here, and a file git
  * tracks is never rewritten. The branch folder (from; NULL when
  * unreachable) fills in only when fill is set — a folder without git, or
- * --copy-from-folder — and then also extends a copy here that is a byte
- * prefix of its own, since without git nothing else brings the rest. Stops
- * at the first chunk neither side has. */
+ * --copy-from-folder — with the chunks missing here. It extends a copy here
+ * that is a byte prefix of its own only when extend is set (no git: nothing
+ * else brings the rest); else that copy is the last chunk taken, and
+ * *behind says the folder has more. Stops at the first chunk neither side
+ * has. */
 bool own_chunks(Arena *a, const char *lapdir, const char *from,
-                const char *id, bool fill, OwnChunk **out, int32_t *n,
-                char *err, size_t errsz);
+                const char *id, bool fill, bool extend, OwnChunk **out,
+                int32_t *n, bool *behind, char *err, size_t errsz);
 /* Where lap merge takes this folder's files when placing a branch's new
  * records (their hashes in newer): the index in log just before the
  * records an interrupted run of the merge appended (found by their from,
