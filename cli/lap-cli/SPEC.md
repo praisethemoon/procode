@@ -832,6 +832,16 @@ joined, `--branch=feat` for `--branch feat` (short ones only apart:
 empty value (`--branch=`, `-n ""`), is refused with `usage` ("<flag> needs
 a value"), naming it: an empty value is never read as none given.
 
+Help: `lap --help` lists every command and subcommand with its synopsis.
+`lap <command> --help`, `-h` anywhere before `--` (never as a flag's value)
+and `lap help <command> [<subcommand>]` print that command's synopsis, what
+it does and every flag it takes, one line each, to stdout, exit `0`, and
+run nothing — no repository is needed. A group (`session`, `branch`) answers
+for the subcommand named on the line, else for itself with its subcommands
+listed. The help, each command's `usage` error and the flags each command
+accepts are read from one table (`src/help.c`); a flag the parser takes is
+in its command's help by construction, and the unit and e2e suites check it.
+
 ### Colour
 
 `--color=auto|always|never` and `--no-color` are lap's own flags rather

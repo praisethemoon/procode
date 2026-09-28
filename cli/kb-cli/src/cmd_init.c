@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* `kb init` — create a store.
  *
@@ -18,8 +19,9 @@
  * when a store is already there. It takes no path: there is no store outside
  * the workspace for it to make. */
 
-static const char *const VALUE_FLAGS[] = {NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+/* The flags kb init accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("init")
+#define BOOL_FLAGS help_bools("init")
 
 int32_t cmd_init(Arena *a, int32_t argc, char **argv) {
     bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");

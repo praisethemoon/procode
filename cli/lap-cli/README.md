@@ -199,6 +199,11 @@ to; `log`, `show`, `rr` and `session list` take it to read another branch's
 history. A session of a branch is named `<branch>/S<n>`. Long flags take
 their value apart or joined (`--branch feat`, `--branch=feat`).
 
+Every command and subcommand answers `--help` (or `-h`, or
+`lap help <command>`) with its synopsis and every flag it takes, one line
+each, on stdout, before looking for a repository. The help, the usage errors
+and the flags a command accepts come from one table (`src/help.c`).
+
 Every command takes `--json` for machine-readable output. Exit codes: `0`
 success, `1` user or repository error, `2` internal failure.
 

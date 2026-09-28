@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* §2's DELETE /documents/{id} and DELETE /sources/{id}:
  *
@@ -16,8 +17,9 @@
  * NOT AN MCP TOOL. §9: forgetting is the reader's decision, not an agent's.
  */
 
-static const char *const VALUE_FLAGS[] = {NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+/* The flags kb forget accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("forget")
+#define BOOL_FLAGS help_bools("forget")
 
 int32_t cmd_forget(Arena *a, int32_t argc, char **argv) {
     bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");

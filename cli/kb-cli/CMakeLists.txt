@@ -61,6 +61,7 @@ set(KB_LIB_SOURCES
     src/cmd_maint.c
     src/cmd_forget.c
     src/cmd_sources.c
+    src/help.c
 )
 
 # tree-sitter and its grammars, vendored (src/third_party/TREE-SITTER.md).

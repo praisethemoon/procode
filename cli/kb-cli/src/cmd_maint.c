@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 #include "modelrec.h"
 #include "vectors.h"
 
@@ -24,8 +25,6 @@
  * sense §8 needs, because nothing but an explicit reindex can overwrite it.
  */
 
-static const char *const VALUE_FLAGS[] = {NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 /* ---- GET /stats -------------------------------------------------------- */
 
@@ -42,8 +41,10 @@ static int stat_cmp(const void *x, const void *y) {
 }
 
 int32_t cmd_stats(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
+    const char *const *values = help_values("stats");
+    const char *const *bools = help_bools("stats");
+    bool json = has_flag(argc, argv, values, "--json");
+    const char *bad = unknown_flag(argc, argv, values, bools);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;
@@ -144,8 +145,10 @@ static bool chunks_same(const Chunks *x, const Chunks *y) {
 }
 
 int32_t cmd_reindex(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
+    const char *const *values = help_values("reindex");
+    const char *const *bools = help_bools("reindex");
+    bool json = has_flag(argc, argv, values, "--json");
+    const char *bad = unknown_flag(argc, argv, values, bools);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;
@@ -356,8 +359,10 @@ static WalkAction blob_visit(const char *rel, bool is_dir, void *ud) {
 }
 
 int32_t cmd_compact(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
+    const char *const *values = help_values("compact");
+    const char *const *bools = help_bools("compact");
+    bool json = has_flag(argc, argv, values, "--json");
+    const char *bad = unknown_flag(argc, argv, values, bools);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;

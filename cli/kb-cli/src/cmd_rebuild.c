@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 #include "vectors.h"
 
 /* POST /rebuild (§7): reconstruct every derived structure from the logs and
@@ -20,12 +21,12 @@
  * chunked, not the way this build would chunk today.
  */
 
-static const char *const VALUE_FLAGS[] = {NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
+    const char *const *values = help_values("rebuild");
+    const char *const *bools = help_bools("rebuild");
+    bool json = has_flag(argc, argv, values, "--json");
+    const char *bad = unknown_flag(argc, argv, values, bools);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;
@@ -117,8 +118,10 @@ int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
  * embedded now, with progress on a terminal. The same pass `kb rebuild` ends
  * with, without rebuilding the keyword index first. */
 int32_t cmd_embed(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, VALUE_FLAGS, BOOL_FLAGS);
+    const char *const *values = help_values("embed");
+    const char *const *bools = help_bools("embed");
+    bool json = has_flag(argc, argv, values, "--json");
+    const char *bad = unknown_flag(argc, argv, values, bools);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;

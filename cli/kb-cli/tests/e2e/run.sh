@@ -99,6 +99,7 @@ utf8_state() {
         }'
 }
 
+SRC=$(cd "$(dirname "$0")/../../src" && pwd)
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/kb-e2e.XXXXXX") || exit 1
 # Without a directory of its own the run would work in, and the trap would
 # delete, whatever the caller's current directory is.
@@ -118,6 +119,59 @@ unset KB_STORE
 mkdir -p .lap .coboard
 echo 'lap log line' > .lap/log.jsonl
 echo 'coboard log line' > .coboard/log.jsonl
+
+# ---------------------------------------------------------------- help
+t "--help, -h and kb help <command> answer for every command and subcommand, outside a store"
+for c in init add ls get search chunk collections "collections rename" \
+    "collections delete" stats sources "sources show" forget stale refresh \
+    links "links add" "links delete" embed rebuild reindex compact status; do
+    # shellcheck disable=SC2086
+    for how in "$c --help" "$c -h" "help $c"; do
+        out=$("$KB" $how 2>/dev/null); rc=$?
+        [ "$rc" = 0 ] || fail "kb $how exited $rc"
+        err=$("$KB" $how 2>&1 >/dev/null)
+        [ -n "$err" ] && fail "kb $how wrote to stderr: $err"
+        printf '%s\n' "$out" | head -1 | grep -q "^usage: kb $c" ||
+            fail "kb $how does not start with its usage: $(printf '%s' "$out" | head -1)"
+        printf '%s\n' "$out" | grep -q '^flags:' || fail "kb $how lists no flags"
+    done
+done
+[ -e .kb ] && fail "asking for help made a store"
+HELP=$("$KB" --help)
+for w in --fusion --rerank-depth --rerank-tokens --embed-budget --wait \
+    --no-forget --with-documents --include --older-than "collections rename" \
+    "sources show" "links add" "links delete"; do
+    printf '%s\n' "$HELP" | grep -qF -e "$w" || fail "kb --help does not mention $w"
+done
+expect_grep "^usage: kb search" "$KB" search "some query" --k 5 --help
+expect_grep "^usage: kb collections rename" "$KB" collections rename --help
+expect_grep "subcommands" "$KB" links -h
+expect_fail "$KB" help nope
+expect_fail "$KB" help links nope
+# a flag's value is never read as asking for help
+expect_grep "kb init" "$KB" ls --q -h
+
+t "every flag a command's source reads is in that command's --help"
+for f in "$SRC"/cmd_*.c; do
+    [ "$(basename "$f")" = cmd_common.c ] && continue
+    for fn in $(grep -o '^int32_t cmd_[a-z]*(' "$f" | sed 's/^int32_t cmd_//; s/($//'); do
+        help=$("$KB" "$fn" --help 2>&1)
+        for flag in $(grep -o '"--*[a-zA-Z][a-zA-Z-]*"' "$f" | tr -d '"' | sort -u); do
+            # a file serving several commands: each flag must be in one of theirs
+            printf '%s\n' "$help" | grep -qE -e "(^|[ ,])$flag([ ,=]|\$)" && continue
+            found=
+            for other in $(grep -o '^int32_t cmd_[a-z]*(' "$f" | sed 's/^int32_t cmd_//; s/($//'); do
+                "$KB" "$other" --help 2>&1 | grep -qE -e "(^|[ ,])$flag([ ,=]|\$)" && found=1
+            done
+            [ -n "$found" ] || fail "$(basename "$f") reads $flag, which no --help of its commands lists"
+        done
+    done
+done
+
+t "a usage error is followed by the command's synopsis; in JSON it is not"
+expect_grep "^usage: kb get <D-n>" "$KB" get
+expect_grep "^usage: kb collections \[--json\] | kb collections rename" "$KB" collections bogus
+expect_not_grep "usage: kb" "$KB" get --json
 
 # ---------------------------------------------------------------- init
 t "init creates the §1.6 layout"

@@ -1,6 +1,7 @@
 #include "cmd.h"
 
 #include "errdet.h"
+#include "help.h"
 #include "sha256.h"
 
 #include <ctype.h>
@@ -133,6 +134,9 @@ void err_out(bool json_mode, const char *code, const char *fmt, ...) {
         for (const char *p = msg; *p; p++)
             fputc((unsigned char)*p < 0x20 ? ' ' : *p, stderr);
         fputc('\n', stderr);
+        /* the command's shape, from the table its --help prints */
+        if (strcmp(code, "usage") == 0 && help_running)
+            help_synopsis(stderr, help_running);
     }
 }
 

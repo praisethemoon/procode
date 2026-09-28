@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 #include "modelrec.h"
 #include "vectors.h"
 
@@ -11,9 +12,9 @@
  * means a reindex is owed.
  */
 
-static const char *const VALUE_FLAGS[] = {"--older-than", "--olderThan",
-                                          NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+/* The flags kb status accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("status")
+#define BOOL_FLAGS help_bools("status")
 
 /* Emits the fields without enclosing braces. dir is NULL when there is no
  * store at or above the current directory: status still succeeds then,

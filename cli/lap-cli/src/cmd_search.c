@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* lap search — interrogates the history:
  *   --file F --line N     which commit last touched current line N (blame)
@@ -110,11 +111,10 @@ static int64_t blame_chain(const Idx *ix, const char *rel, int32_t line) {
 
 
 int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {
-        "--file", "--line", "--text", "--msg", "--session",
-        "--since", "--until", "--limit", NULL};
-    static const char *const bool_flags[] = {"--json", "--added",
-                                             "--removed", NULL};
+    FlagSets fs;
+    help_flag_sets("search", &fs);
+    const char *const *value_flags = fs.values;
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;
@@ -153,9 +153,7 @@ int32_t cmd_search(Arena *a, int32_t argc, char **argv) {
     if (!f_line && !m.text && !m.msg && !f_session && !f_since && !f_until &&
         !f_file) {
         err_out(json, "usage",
-                "usage: lap search [--file F [--line N]] [--text STR "
-                "[--added|--removed]] [--msg STR] [--session S] [--since TS] "
-                "[--until TS] [--limit N] [--json]");
+                "usage: lap %s", help_synopsis("search"));
         return LAP_EXIT_ERR;
     }
     if (f_line && !f_file) {

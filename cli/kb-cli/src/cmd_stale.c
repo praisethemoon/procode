@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 #include "sha256.h"
 
@@ -32,11 +33,6 @@
 /* Two tables, not one. `--limit` narrows a list of documents and means
  * nothing to a report about sources, and a flag a command accepts and then
  * ignores is worse than one it refuses: the caller believes it was heard. */
-static const char *const STALE_FLAGS[] = {"--older-than", "--olderThan",
-                                          "--collection", "--limit", NULL};
-static const char *const REFRESH_FLAGS[] = {"--older-than", "--olderThan",
-                                            "--collection", NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
 
 typedef struct {
     const Document *d;
@@ -111,20 +107,22 @@ static bool collect(Arena *a, int32_t argc, char **argv,
 }
 
 int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, STALE_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, STALE_FLAGS, BOOL_FLAGS);
+    const char *const *values = help_values("stale");
+    const char *const *bools = help_bools("stale");
+    bool json = has_flag(argc, argv, values, "--json");
+    const char *bad = unknown_flag(argc, argv, values, bools);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;
     }
     char err[512];
     Staleness st;
-    if (!staleness_init(&st, older_than_arg(argc, argv, STALE_FLAGS), err,
+    if (!staleness_init(&st, older_than_arg(argc, argv, values), err,
                         sizeof err)) {
         err_out(json, "usage", "%s", err);
         return KB_EXIT_ERR;
     }
-    const char *limit_s = flag_value(argc, argv, STALE_FLAGS, "--limit");
+    const char *limit_s = flag_value(argc, argv, values, "--limit");
     int64_t limit = limit_s ? strtoll(limit_s, NULL, 10) : 0;
     if (limit_s && limit <= 0) {
         err_out(json, "usage", "--limit expects a positive number");
@@ -134,7 +132,7 @@ int32_t cmd_stale(Arena *a, int32_t argc, char **argv) {
     Store s;
     Row *rows = NULL;
     size_t n = 0;
-    if (!collect(a, argc, argv, STALE_FLAGS, json, &st, &s, &rows, &n))
+    if (!collect(a, argc, argv, values, json, &st, &s, &rows, &n))
         return KB_EXIT_ERR;
     if (limit && (int64_t)n > limit)
         n = (size_t)limit;
@@ -298,8 +296,10 @@ static int32_t refresh_source(Arena *a, bool json, const char *id) {
 }
 
 int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
-    bool json = has_flag(argc, argv, REFRESH_FLAGS, "--json");
-    const char *bad = unknown_flag(argc, argv, REFRESH_FLAGS, BOOL_FLAGS);
+    const char *const *values = help_values("refresh");
+    const char *const *bools = help_bools("refresh");
+    bool json = has_flag(argc, argv, values, "--json");
+    const char *bad = unknown_flag(argc, argv, values, bools);
     if (bad) {
         err_out(json, "usage", "unknown option \"%s\"", bad);
         return KB_EXIT_ERR;
@@ -307,11 +307,11 @@ int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
     /* A source id names one source to read again; without one this is §5's
      * report over a scope. The two take different arguments, and mixing them
      * is refused rather than half-honoured. */
-    const char *one = positional_arg(argc, argv, REFRESH_FLAGS, 0);
+    const char *one = positional_arg(argc, argv, values, 0);
     if (one) {
-        if (kb_id_num(one, 'S') == 0 || positional_arg(argc, argv, REFRESH_FLAGS, 1) ||
-            flag_value(argc, argv, REFRESH_FLAGS, "--collection") ||
-            older_than_arg(argc, argv, REFRESH_FLAGS)) {
+        if (kb_id_num(one, 'S') == 0 || positional_arg(argc, argv, values, 1) ||
+            flag_value(argc, argv, values, "--collection") ||
+            older_than_arg(argc, argv, values)) {
             err_out(json, "usage", "kb refresh takes one source id (S-n) on its "
                                    "own, or --collection and --older-than");
             return KB_EXIT_ERR;
@@ -320,7 +320,7 @@ int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
     }
     char err[512];
     Staleness st;
-    if (!staleness_init(&st, older_than_arg(argc, argv, REFRESH_FLAGS), err,
+    if (!staleness_init(&st, older_than_arg(argc, argv, values), err,
                         sizeof err)) {
         err_out(json, "usage", "%s", err);
         return KB_EXIT_ERR;
@@ -329,7 +329,7 @@ int32_t cmd_refresh(Arena *a, int32_t argc, char **argv) {
     Store s;
     Row *rows = NULL;
     size_t n = 0;
-    if (!collect(a, argc, argv, REFRESH_FLAGS, json, &st, &s, &rows, &n))
+    if (!collect(a, argc, argv, values, json, &st, &s, &rows, &n))
         return KB_EXIT_ERR;
 
     /* Grouped by source, because a refetch is a thing you do to a source.

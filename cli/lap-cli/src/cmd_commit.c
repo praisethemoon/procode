@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* Parses "A-B" or "A" (single line) into a 1-based inclusive range. */
 static bool parse_lines_arg(const char *s, int32_t *out_a, int32_t *out_b) {
@@ -193,12 +194,10 @@ bool message_args(Arena *a, int32_t argc, char **argv,
 }
 
 int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {
-        "-i", "--intent", "-b", "--behavior", "-F", "--edit", "--lines",
-        "--branch", NULL};
-    static const char *const bool_flags[] = {"--json", "--no-session",
-                                             "--force-message", "--dry-run",
-                                             NULL};
+    FlagSets fs;
+    help_flag_sets("commit", &fs);
+    const char *const *value_flags = fs.values;
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;
@@ -214,10 +213,7 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
 
     if (!file_arg) {
         err_out(json, "usage",
-                "usage: lap commit <file> (-i \"intent\" -b \"behavior\" | "
-                "-F <file|->) [--edit <n> | --lines <a>-<b>] "
-                "[--force-message] [--no-session] [--dry-run] "
-                "[--branch <name>] [--json]");
+                "usage: lap %s", help_synopsis("commit"));
         return LAP_EXIT_ERR;
     }
     const char *intent = NULL, *behavior = NULL;

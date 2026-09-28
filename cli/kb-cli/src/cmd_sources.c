@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* §2's GET /sources and GET /sources/{id}:
  *
@@ -12,9 +13,9 @@
  * documents it describes. Reading a source again is `kb refresh S-n`.
  */
 
-static const char *const VALUE_FLAGS[] = {"--collection", "--kind",
-                                          "--status", "--q", NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+/* The flags kb sources accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("sources")
+#define BOOL_FLAGS help_bools("sources")
 
 static int32_t show(Arena *a, bool json, Store *s, const char *id) {
     const Source *src = src_by_id(&s->sources, id);

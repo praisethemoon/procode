@@ -1,5 +1,6 @@
 #include "branches.h"
 #include "cmd.h"
+#include "help.h"
 #include "sha256.h"
 
 #include <time.h>
@@ -449,8 +450,10 @@ static int32_t start_locked(Arena *a, bool json, const char *name,
 }
 
 static int32_t branch_start(Arena *a, int32_t argc, char **argv, bool json) {
-    static const char *const value_flags[] = {"--from", NULL};
-    static const char *const bool_flags[] = {"--json", NULL};
+    FlagSets fs;
+    help_flag_sets("branch start", &fs);
+    const char *const *value_flags = fs.values;
+    const char *const *bool_flags = fs.bools;
     if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;
     const char *from = flag_value(argc, argv, value_flags, "--from");
@@ -524,7 +527,9 @@ static bool in_this_history(const Hist *h, const char *lineage) {
 }
 
 static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
-    static const char *const bool_flags[] = {"--json", NULL};
+    FlagSets fs;
+    help_flag_sets("branch list", &fs);
+    const char *const *bool_flags = fs.bools;
     if (!flags_known(argc, argv, NULL, bool_flags))
         return LAP_EXIT_ERR;
     Repo repo;
@@ -702,15 +707,16 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
 /* forget and move: the registry changed under the lock. */
 static int32_t branch_edit(Arena *a, int32_t argc, char **argv, bool json,
                            bool move) {
-    static const char *const bool_flags[] = {"--json", NULL};
+    FlagSets fs;
+    help_flag_sets(move ? "branch move" : "branch forget", &fs);
+    const char *const *bool_flags = fs.bools;
     if (!flags_known(argc, argv, NULL, bool_flags))
         return LAP_EXIT_ERR;
     const char *key = positional_arg(argc, argv, NULL, 1);
     const char *to = positional_arg(argc, argv, NULL, 2);
     if (!key || (move && !to) || positional_arg(argc, argv, NULL, move ? 3 : 2)) {
-        err_out(json, "bad_args", move ? "usage: lap branch move <branch> "
-                                         "<path>"
-                                       : "usage: lap branch forget <branch>");
+        err_out(json, "bad_args", "usage: lap %s",
+                help_synopsis(move ? "branch move" : "branch forget"));
         return LAP_EXIT_ERR;
     }
     Repo repo;
@@ -761,7 +767,9 @@ done:
 }
 
 int32_t cmd_branch(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"--from", NULL};
+    FlagSets fs;
+    help_flag_sets("branch", &fs);
+    const char *const *value_flags = fs.values;
     bool json = has_flag(argc, argv, value_flags, "--json");
     const char *sub = positional_arg(argc, argv, value_flags, 0);
     if (sub && strcmp(sub, "start") == 0)
@@ -773,7 +781,6 @@ int32_t cmd_branch(Arena *a, int32_t argc, char **argv) {
     if (sub && strcmp(sub, "move") == 0)
         return branch_edit(a, argc, argv, json, true);
     err_out(json, "bad_args",
-            "usage: lap branch start [name] --from <parent folder> | list | "
-            "forget <branch> | move <branch> <path>");
+            "usage: lap %s", help_synopsis("branch"));
     return LAP_EXIT_ERR;
 }

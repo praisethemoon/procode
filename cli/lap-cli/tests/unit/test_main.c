@@ -23,6 +23,7 @@ void test_branches(void);
 void test_adopt(void);
 void test_platform(void);
 void test_args(void);
+void test_help(void);
 
 int main(void) {
     test_arena();
@@ -40,6 +41,7 @@ int main(void) {
     test_adopt();
     test_platform();
     test_args();
+    test_help();
     printf("unit tests: %d passed, %d failed\n", t_pass, t_fail);
     return t_fail == 0 ? 0 : 1;
 }

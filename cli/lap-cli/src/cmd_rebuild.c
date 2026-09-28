@@ -1,11 +1,14 @@
 #include "cmd.h"
+#include "help.h"
 
 /* lap rebuild: drop every derived cache and reconstruct it from the log —
  * the executable proof that the log (.lap/log/) alone is the truth.
  * --verify fails the command when the log's hash chain is broken.
  */
 int32_t cmd_rebuild(Arena *a, int32_t argc, char **argv) {
-    static const char *const bool_flags[] = {"--json", "--verify", NULL};
+    FlagSets fs;
+    help_flag_sets("rebuild", &fs);
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, NULL, "--json");
     if (!flags_known(argc, argv, NULL, bool_flags))
         return LAP_EXIT_ERR;

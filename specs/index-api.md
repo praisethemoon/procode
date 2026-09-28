@@ -506,6 +506,15 @@ code has none to give.
 | `store_locked` | `store`; `pid` of the holding process when it is known |
 | `collection_in_use` | `collection`, `documents`: the count |
 
+Without `--json`, a `usage` error is followed by the command's synopsis
+(`usage: kb get <D-n> [--include …] …`). `kb <command> --help`, `-h` anywhere
+before `--` (never as a flag's value) and `kb help <command> [<subcommand>]`
+print that command's synopsis, what it does and every flag it takes, one line
+each, to stdout, and run nothing — no store is needed. The help, that synopsis
+and the flags each command accepts are read from one table
+(`cli/kb-cli/src/help.c`), so a flag the parser takes is in the help by
+construction.
+
 ## 12. Unresolved
 
 1. **Entity nodes.** §6 links documents only. Whether a symbol or concept

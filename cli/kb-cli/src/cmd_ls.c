@@ -1,13 +1,12 @@
 #include "cmd.h"
+#include "help.h"
 
 /* GET /documents (§2) with its ?collection=&source=&mime=&q=&since=
  * filters, and meta (§1.2's "filterable"). */
 
-static const char *const VALUE_FLAGS[] = {
-    "--collection", "--source",     "--mime",      "--since",
-    "--q",          "--meta",       "--limit",     "--older-than",
-    "--olderThan",  NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+/* The flags kb ls accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("ls")
+#define BOOL_FLAGS help_bools("ls")
 
 int32_t cmd_ls(Arena *a, int32_t argc, char **argv) {
     bool json = has_flag(argc, argv, VALUE_FLAGS, "--json");

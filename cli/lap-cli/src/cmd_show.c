@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* Reconstructs rec's file as of `entry`, seeded from snapshots when the
  * index can serve it and replayed from birth otherwise. Both routes must
@@ -20,8 +21,10 @@ static bool show_replay(Arena *a, Repo *repo, Idx *ix, const Rec *rec,
 }
 
 int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"--branch", NULL};
-    static const char *const bool_flags[] = {"--json", "--full-file", NULL};
+    FlagSets fs;
+    help_flag_sets("show", &fs);
+    const char *const *value_flags = fs.values;
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;
@@ -29,9 +32,7 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
     const char *view = flag_value(argc, argv, value_flags, "--branch");
     const char *id = positional_arg(argc, argv, value_flags, 0);
     if (!id) {
-        err_out(json, "usage", "usage: lap show <commit> [--full-file] "
-                               "[--branch <name>] [--json]  (an id, a hash "
-                               "or a hash prefix)");
+        err_out(json, "usage", "usage: lap %s", help_synopsis("show"));
         return LAP_EXIT_ERR;
     }
 

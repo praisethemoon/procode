@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 #include "modelrec.h"
 #include "vectors.h"
 
@@ -32,12 +33,9 @@
  * joins it without a second merge path when the model arrives.
  */
 
-static const char *const VALUE_FLAGS[] = {
-    "--collection", "--mode",       "--k",         "--expand",
-    "--source",     "--mime",       "--since",     "--min-score",
-    "--minScore",   "--older-than", "--olderThan", "--meta",
-    "--fusion",     "--rerank-depth", "--rerank-tokens", NULL};
-static const char *const BOOL_FLAGS[] = {"--json", "--rerank", NULL};
+/* The flags kb search accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("search")
+#define BOOL_FLAGS help_bools("search")
 
 typedef enum { MODE_KEYWORD, MODE_HYBRID, MODE_SEMANTIC } SearchMode;
 static const char *const MODE_NAMES[] = {"keyword", "hybrid", "semantic"};

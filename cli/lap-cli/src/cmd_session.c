@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 static const char *first_line(Arena *a, const char *s) {
     const char *nl = strchr(s, '\n');
@@ -160,9 +161,10 @@ static int32_t session_list(Arena *a, Repo *repo, bool json,
 }
 
 int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"-F", "--meta", "--branch",
-                                              NULL};
-    static const char *const bool_flags[] = {"--json", NULL};
+    FlagSets fs;
+    help_flag_sets("session", &fs);
+    const char *const *value_flags = fs.values;
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;
@@ -328,9 +330,7 @@ int32_t cmd_session(Arena *a, int32_t argc, char **argv) {
         rc = LAP_EXIT_OK;
     } else {
         err_out(json, "usage",
-                "usage: lap session [start (\"purpose\" | -F <file|->) "
-                "[--meta k=v]... [--branch <name>] | end | list [--meta k=v]... "
-                "[--branch <name>] | current] [--json]");
+                "usage: lap %s", help_synopsis("session"));
     }
 
 done:

@@ -1,10 +1,11 @@
 #include "cmd.h"
+#include "help.h"
 
 /* GET /documents/{id} (§2) with ?include=text,chunks,links. */
 
-static const char *const VALUE_FLAGS[] = {"--include", "--older-than",
-                                          "--olderThan", NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+/* The flags kb get accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("get")
+#define BOOL_FLAGS help_bools("get")
 
 static bool include_has(const char *list, const char *what) {
     if (!list)

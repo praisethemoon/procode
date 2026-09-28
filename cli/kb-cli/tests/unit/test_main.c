@@ -30,6 +30,7 @@ void test_modernbert(void);
 void test_gitignore(void);
 void test_syntax(void);
 void test_q8(void);
+void test_help(void);
 
 /* Holds the write lock on a store until stdin closes, so the end-to-end
  * script can see what a *second* process meets: cross-process locking is
@@ -78,6 +79,7 @@ int main(int argc, char **argv) {
     test_gitignore();
     test_syntax();
     test_q8();
+    test_help();
     printf("unit tests: %d passed, %d failed\n", t_pass, t_fail);
     return t_fail == 0 ? 0 : 1;
 }

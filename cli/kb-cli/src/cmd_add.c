@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 #include "dirscan.h"
 #include "modelrec.h"
 #include "vectors.h"
@@ -13,11 +14,9 @@
  * same topic is answered from disk.
  */
 
-static const char *const VALUE_FLAGS[] = {
-    "--title", "--collection", "--url",  "--mime", "--etag",
-    "--file",  "--meta",       "--meta-file", "--dir", "--embed-budget", NULL};
-static const char *const BOOL_FLAGS[] = {"--json", "--batch", "--no-forget",
-                                         "--wait", NULL};
+/* The flags kb add accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("add")
+#define BOOL_FLAGS help_bools("add")
 
 /* --embed-budget S: seconds to spend embedding before answering (0: none
  * now); --wait: as long as it takes. What is left is pending for `kb embed`

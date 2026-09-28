@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* §6 — a small, optional layer over documents. Not a graph database.
  *
@@ -25,9 +26,9 @@
  * gone is exactly the repair a reader would want.
  */
 
-static const char *const VALUE_FLAGS[] = {"--older-than", "--olderThan",
-                                          NULL};
-static const char *const BOOL_FLAGS[] = {"--json", "--all", NULL};
+/* The flags kb links accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("links")
+#define BOOL_FLAGS help_bools("links")
 
 /* "supersedes, cites, analogue_of, implements or see_also" — built from the
  * one table so a type added there cannot be missing from the message. */

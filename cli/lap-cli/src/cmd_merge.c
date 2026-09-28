@@ -1,6 +1,7 @@
 #include "adopt.h"
 #include "branches.h"
 #include "cmd.h"
+#include "help.h"
 
 /* lap merge <branch>: after git merged a branch's code into this folder,
  * adopt the branch's history — every commit that can be placed on this
@@ -332,8 +333,9 @@ bool own_chunks(Arena *a, const char *lapdir, const char *from,
 }
 
 int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
-    static const char *const bool_flags[] = {"--json", "--dry-run",
-                                             "--copy-from-folder", NULL};
+    FlagSets fs;
+    help_flag_sets("merge", &fs);
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, NULL, "--json");
     if (!flags_known(argc, argv, NULL, bool_flags))
         return LAP_EXIT_ERR;
@@ -341,8 +343,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     bool copy = has_flag(argc, argv, NULL, "--copy-from-folder");
     const char *key = positional_arg(argc, argv, NULL, 0);
     if (!key || positional_arg(argc, argv, NULL, 1)) {
-        err_out(json, "usage", "usage: lap merge <branch> [--dry-run] "
-                               "[--copy-from-folder] [--json]");
+        err_out(json, "usage", "usage: lap %s", help_synopsis("merge"));
         return LAP_EXIT_ERR;
     }
     Repo repo;

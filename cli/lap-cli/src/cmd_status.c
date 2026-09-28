@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 #include "statcache.h"
 
 /* A path status looks at: from the working-tree walk (with the stat the walk
@@ -133,7 +134,9 @@ static void join_tracked(Tracked *t, size_t nt, Arena *a, SeenList *files) {
 }
 
 int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
-    static const char *const bool_flags[] = {"--json", NULL};
+    FlagSets fs;
+    help_flag_sets("status", &fs);
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, NULL, "--json");
     if (!flags_known(argc, argv, NULL, bool_flags))
         return LAP_EXIT_ERR;

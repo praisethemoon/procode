@@ -1,13 +1,14 @@
 #include "cmd.h"
+#include "help.h"
 
 /* lap amend: appends an amend record that gives a commit a new intent and
  * behavior. Nothing already written changes; readers show the latest text
  * (rec_amend_log, idx_fetch). */
 int32_t cmd_amend(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {
-        "-i", "--intent", "-b", "--behavior", "-F", "--branch", NULL};
-    static const char *const bool_flags[] = {"--json", "--force-message",
-                                             NULL};
+    FlagSets fs;
+    help_flag_sets("amend", &fs);
+    const char *const *value_flags = fs.values;
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;
@@ -15,8 +16,7 @@ int32_t cmd_amend(Arena *a, int32_t argc, char **argv) {
     const char *ref = positional_arg(argc, argv, value_flags, 0);
     if (!ref) {
         err_out(json, "usage",
-                "usage: lap amend <commit> (-i \"intent\" -b \"behavior\" | "
-                "-F <file|->) [--force-message] [--branch <name>] [--json]");
+                "usage: lap %s", help_synopsis("amend"));
         return LAP_EXIT_ERR;
     }
     const char *intent = NULL, *behavior = NULL;

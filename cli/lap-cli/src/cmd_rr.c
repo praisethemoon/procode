@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* lap rr — a review request: what a run of work changed, and why.
  *
@@ -79,8 +80,10 @@ static void render_net(StrBuf *sb, Arena *a, Lines before, Lines after,
 }
 
 int32_t cmd_rr(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"--branch", NULL};
-    static const char *const bool_flags[] = {"--json", "--no-diff", NULL};
+    FlagSets fs;
+    help_flag_sets("rr", &fs);
+    const char *const *value_flags = fs.values;
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;

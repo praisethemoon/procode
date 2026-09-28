@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* lap verify: checks the log hash chain (and with --deep, replays every
  * file's history and compares the result byte-for-byte with the shadow
@@ -342,7 +343,9 @@ static void deep_indexed(Arena *a, Repo *repo, Idx *idx, DeepCheck *dc) {
 }
 
 int32_t cmd_verify(Arena *a, int32_t argc, char **argv) {
-    static const char *const bool_flags[] = {"--json", "--deep", NULL};
+    FlagSets fs;
+    help_flag_sets("verify", &fs);
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, NULL, "--json");
     if (!flags_known(argc, argv, NULL, bool_flags))
         return LAP_EXIT_ERR;

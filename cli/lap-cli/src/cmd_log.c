@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 typedef struct {
     uint32_t session; /* 0 = no session filter */
@@ -62,9 +63,10 @@ static bool log_via_scan(Arena *a, Repo *repo, const LogQuery *q, StrBuf *sb,
 }
 
 int32_t cmd_log(Arena *a, int32_t argc, char **argv) {
-    static const char *const value_flags[] = {"--session", "--file", "-n",
-                                              "--branch", NULL};
-    static const char *const bool_flags[] = {"--json", NULL};
+    FlagSets fs;
+    help_flag_sets("log", &fs);
+    const char *const *value_flags = fs.values;
+    const char *const *bool_flags = fs.bools;
     bool json = has_flag(argc, argv, value_flags, "--json");
     if (!flags_known(argc, argv, value_flags, bool_flags))
         return LAP_EXIT_ERR;

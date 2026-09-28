@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* GET /chunks/{id} (§4): the full text of one chunk and its neighbours.
  *
@@ -15,8 +16,9 @@
  * after a rebuild (§1.1).
  */
 
-static const char *const VALUE_FLAGS[] = {"--expand", NULL};
-static const char *const BOOL_FLAGS[] = {"--json", NULL};
+/* The flags kb chunk accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("chunk")
+#define BOOL_FLAGS help_bools("chunk")
 
 static void chunk_json(StrBuf *sb, const Document *d, const Source *src,
                        const Chunk *c, uint32_t ordinal, const char *text,

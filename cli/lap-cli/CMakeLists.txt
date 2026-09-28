@@ -46,6 +46,7 @@ set(LAP_LIB_SOURCES
     src/cmd_merge.c
     src/cmd_amend.c
     src/tty.c
+    src/help.c
 )
 
 add_executable(lap ${LAP_LIB_SOURCES} src/main.c)

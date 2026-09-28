@@ -44,6 +44,7 @@ $out
 open_chunk() { ls .lap/log/main.*.jsonl | LC_ALL=C sort | tail -1; }
 history() { cat $(ls .lap/log/main.*.jsonl | LC_ALL=C sort); }
 
+SRC=$(cd "$(dirname "$0")/../../src" && pwd)
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/lap-e2e.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 cd "$WORK" || exit 1
@@ -64,7 +65,44 @@ for c in "log " "show <commit>" "rr "; do
     printf '%s\n' "$HELP" | grep -F -e "$c" -A1 | grep -qF -e "--branch" ||
         fail "the help's $c line lacks --branch"
 done
-printf '%s\n' "$HELP" | grep -qF "on list: that" || fail "the help does not give session list --branch"
+printf '%s\n' "$HELP" | grep -F -e "session list" | grep -qF -e "--branch" ||
+    fail "the help does not give session list --branch"
+
+t "--help, -h and lap help <command> answer for every command and subcommand, outside a repository"
+for c in init status commit amend log show search session "session start" \
+    "session end" "session list" "session current" verify rebuild rr review \
+    branch "branch start" "branch list" "branch forget" "branch move" merge; do
+    # shellcheck disable=SC2086
+    for how in "$c --help" "$c -h" "help $c"; do
+        out=$("$LAP" $how 2>/dev/null); rc=$?
+        [ "$rc" = 0 ] || fail "lap $how exited $rc"
+        err=$("$LAP" $how 2>&1 >/dev/null)
+        [ -n "$err" ] && fail "lap $how wrote to stderr: $err"
+        name=$c; [ "$c" = review ] && name=rr
+        printf '%s\n' "$out" | head -1 | grep -q "^usage: lap $name" ||
+            fail "lap $how does not start with its usage: $(printf '%s' "$out" | head -1)"
+        printf '%s\n' "$out" | grep -q '^flags:' || fail "lap $how lists no flags"
+    done
+done
+[ -e .lap ] && fail "asking for help made a repository"
+expect_grep "^usage: lap commit" "$LAP" commit notes.txt -i "x" --help
+expect_grep "^usage: lap session start" "$LAP" session start "purpose" --meta ticket=T-1 -h
+expect_grep "subcommands" "$LAP" session --help
+expect_fail "$LAP" help nope
+expect_fail "$LAP" help session nope
+# a flag's value is never read as asking for help
+expect_grep "not inside a lap repository" "$LAP" log --file -h
+
+t "every flag a command's source reads is in that command's --help"
+for f in "$SRC"/cmd_*.c; do
+    c=$(basename "$f" .c); c=${c#cmd_}
+    [ "$c" = common ] && continue
+    help=$("$LAP" "$c" --help 2>&1)
+    for flag in $(grep -o '"--*[a-zA-Z][a-zA-Z-]*"' "$f" | tr -d '"' | sort -u); do
+        printf '%s\n' "$help" | grep -qE -e "(^|[ ,])$flag([ ,=]|\$)" ||
+            fail "lap $c reads $flag, which lap $c --help does not list"
+    done
+done
 
 # ---------------------------------------------------------------- init
 t "init creates the repository"
@@ -3075,13 +3113,13 @@ ORDER=$("$LAP" branch list | grep -oE '^ *(b1|x2|n1) ' | tr -d ' ' | tr '\n' ' '
 "$LAP" branch list | grep -q '^  n1 ' || fail "n1 is not indented under b1"
 cd "$WORK"
 
-t "usage errors list --branch where the command takes it, and --help points at lap --help"
+t "usage errors list --branch where the command takes it, and an unknown flag points at the command's --help"
 mkdir -p "$WORK/us1" && cd "$WORK/us1" && "$LAP" init >/dev/null 2>&1
 expect_grep "usage: lap commit .*\[--branch <name>\]" "$LAP" commit
 expect_grep "usage: lap amend .*\[--branch <name>\]" "$LAP" amend
 expect_grep "usage: lap show .*\[--branch <name>\]" "$LAP" show
 expect_grep "usage: lap session .*-F <file|->.*\[--branch <name>\]" "$LAP" session bogus
-expect_grep "unknown flag --help (lap --help lists each command's flags)" "$LAP" commit --help
+expect_grep "unknown flag --hlep (the command's --help lists its flags)" "$LAP" commit --hlep
 cd "$WORK"
 
 t "a read-only parent refuses the start and nothing is made here"

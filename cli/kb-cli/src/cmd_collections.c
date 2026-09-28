@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "help.h"
 
 /* GET /collections (§7): the names, with what is under each.
  *
@@ -36,8 +37,9 @@
  * filter. So a rename cannot stale the index, and rebuilding after one would
  * be work for nothing. */
 
-static const char *const VALUE_FLAGS[] = {NULL};
-static const char *const BOOL_FLAGS[] = {"--json", "--with-documents", NULL};
+/* The flags kb collections accepts: the ones its --help lists (help.c). */
+#define VALUE_FLAGS help_values("collections")
+#define BOOL_FLAGS help_bools("collections")
 
 typedef struct {
     const char *name;
