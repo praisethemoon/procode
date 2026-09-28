@@ -3,7 +3,7 @@ name: tickets
 description: The workflow for working a ticket in this repository — coboard board, lap session, git — from picking it up to closing it. Use whenever you start, continue or finish work on a board ticket (T-<n>), or the user asks you to work on tickets.
 compatibility: Requires the coboard MCP server, the lap CLI (cli/lap-cli) and git.
 metadata:
-  version: "2"
+  version: "3"
 ---
 
 # tickets — one ticket, start to finish
@@ -17,7 +17,8 @@ Three records follow every piece of work, and they point at each other:
 - **git** holds the result, one commit per ticket, its message ending in
   `(T-<n>)`.
 
-The lap skill covers lap itself; this is the loop around it.
+The lap skill covers lap itself, including where it is (`~/.procode/bin/lap`
+with procode installed, else `lap` on PATH); this is the loop around it.
 
 ## The loop
 

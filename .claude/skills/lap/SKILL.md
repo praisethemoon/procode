@@ -1,9 +1,9 @@
 ---
 name: lap
 description: Record fine-grained edit history with the lap CLI while coding. Use whenever a lap repository (.lap directory) exists in the project, or the user asks to track edits with lap. Teaches the session -> edit -> commit cadence, one-edit-per-commit recovery, and history search.
-compatibility: Requires the lap CLI (cli/lap-cli) on PATH.
+compatibility: Requires the lap CLI (cli/lap-cli): at ~/.procode/bin/lap when procode's VS Code extension is installed, else on PATH.
 metadata:
-  version: "2"
+  version: "3"
 ---
 
 # lap — fine-grained edit recording
@@ -11,6 +11,10 @@ metadata:
 lap is a flight recorder for your work: every small edit gets committed with
 its intent and what it does, grouped into purposeful sessions. It is
 independent of git and never modifies files.
+
+**Where lap is.** Run it as `~/.procode/bin/lap`: procode's VS Code
+extension puts it there. Without the extension, use `lap` from PATH. This
+skill writes `lap` for short; read it as whichever of the two you have.
 
 ## Identity
 
