@@ -1,16 +1,35 @@
 # procode
 
-procode is a set of (very opinionated) tools for working alongside AI coding
-agents. The agent works through CLIs and MCP servers; this extension is where
-you follow along. It adds one **procode** icon to the activity bar, holding
-four views: **Board**, **Lap History**, **techdocs** and **Knowledge**.
+`procode`, short for progressive coding, is a set of (very opinionated) tools 
+for working alongside AI coding agents. The agent works through CLIs and MCP servers; 
+this extension is where you follow along. It adds one **procode** icon to the activity 
+bar, holding four views: **Board**, **Lap History**, **techdocs** and **Knowledge**.
 
-The tools can generally be used with any agent, but only Claude Code is
-tested.
+The tools can generally be used with any agent (Humans included too!), but only Claude 
+Code is tested.
 
-## Board
+## Before You Install
 
-A very simple board of epics, milestones and tickets, meant as a more robust
+**DIY Warning!** This project requires binaries, which are not shipped with the extension, 
+but instead must be compiled manually. CMake build & install script are available, check the main
+README for exact instructions: [https://github.com/praisethemoon/procode](https://github.com/praisethemoon/procode)
+
+If you do not want all the features, they are also available as individual extensions
+on the github repo, and you can build from source and handpick what you like.
+
+Also, these tools and skills, will cause your agent to spend more tokens, on average, it
+increases usage by 10 to 15% from my experiments. (`lap` is a CLI so it is hard to measure).
+
+What you get, is order and code that you understand and can reason about. Meant to be the literate 
+opposite of vibe coding.
+
+Finally, `procode` is meant to be used only by you. In otherwords, not for collaborative projects. 
+`lap` and `coboard` are not meant to be used across multiple parallel branches and forks. 
+`lap` has some support for branching however, purely for fanning git worktrees by agents and
+merging.
+
+## Coboard
+A simple board of epics, milestones and tickets, meant as a more robust
 alternative to an agent's plan: you keep track of progress, comment on
 tickets, and see what the agent is doing. Agents work it through the
 `coboard` MCP server; you work it here. When lap is installed, a ticket also
@@ -18,14 +37,16 @@ shows the lap sessions made under it.
 
 ![The Board](https://raw.githubusercontent.com/praisethemoon/procode/master/assets/coboard.webp)
 
-## Lap History
+## lap & Lap History
 
-lap is an edit recorder. Like git it records changes, but every edit an agent
+`lap` is an edit recorder. Like git it records changes, but every edit an agent
 makes is its own commit, with the intent behind it and the behavior it gives
 the code, grouped into sessions. Lap History shows those sessions and their
 changes, so you can come back later and see what happened and why.
 
 ![Lap History](https://raw.githubusercontent.com/praisethemoon/procode/master/assets/lap.webp)
+
+This requires `lap` binary to be installed and available in your PATH
 
 ## techdocs
 
@@ -36,16 +57,21 @@ VS Code theme.
 
 ![techdocs](https://raw.githubusercontent.com/praisethemoon/procode/master/assets/techdocs.webp)
 
-## Knowledge
+This is equivalent to Claude's artifact, except they live locally, and vscode theme aware.
+
+## kb & Knowledge (Experimental Feature)
 
 kb is a local knowledge base of documentation, source and papers that agents
 and you can both search and cite, with provenance for every passage. Agents
 use it through the `kb` MCP server, so research filed once is searched from
 disk the next time instead of fetched again. Knowledge browses its
 collections and documents, searches them, and shows how documents link to
-each other. Nothing leaves your machine.
+each other.
 
 ![Knowledge](https://raw.githubusercontent.com/praisethemoon/procode/master/assets/kb.webp)
+
+The `kb` cli must be available, and the embedding model msut have already be setup,
+more details in the main readme.
 
 ## Requirements
 
@@ -57,7 +83,7 @@ procode finds them on PATH, or wherever the settings **Board › Lap Path** and
 
 ## Set up Claude Code in a project
 
-VS Code's own agent gets procode's MCP servers without any setup. For Claude
+VS Code's own agent should get procode's MCP servers without any setup. For Claude
 Code, once per project:
 
 1. Open the project's folder in VS Code.
@@ -93,3 +119,5 @@ it starts the new servers.
 
 MIT. Source, issues and the CLIs:
 [github.com/praisethemoon/procode](https://github.com/praisethemoon/procode).
+
+## Have fun.

@@ -6,7 +6,7 @@
 agents. It includes CLIs and MCP servers the agent uses, and a VS Code
 extension, **procode**, for you to follow along.
 
-These tools can generally be used with any agent, but only Claude Code is
+These tools can generally be used with any agent (or human), but only Claude Code is
 tested.
 
 ## <img src="packages/lap-vscode/media/lap.svg" alt="" width="22" height="22"> Lap
