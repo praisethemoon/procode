@@ -113,6 +113,12 @@ For the packages and the extension: Node.js 18+ with npm, and VS Code
 
 Development happens on macOS; the CLIs are also built on Windows with MSVC.
 
+**The tests need git.** lap's branch and merge tests — the end-to-end
+branch scenarios and the generated merge cases — build real repositories
+with git; without it they are skipped, and **a skip counts as a pass**: a
+run on a machine without git is green without having tested any merge, so
+CI must have git installed. lap itself never needs git.
+
 ## Build and install
 
 From the repository root, in this order: the extension and its MCP servers
@@ -126,6 +132,10 @@ run the CLIs from `PATH`.
    ctest --test-dir build          # both CLIs' suites
    sudo cmake --install build
    ```
+
+   `ctest` needs git for lap's branch and merge tests: without it they are
+   skipped and the run is still green (see **The tests need git** under
+   Requirements).
 
    `-DCMAKE_BUILD_TYPE=Release` matters: without it the build is
    unoptimised, and kb's semantic search is much slower. Add

@@ -88,7 +88,12 @@ LAP_PROP_SEED=17 LAP_PROP_TRACE=1 bin/lap-prop         # every command it ran
 bin/lap-prop 1 2000                                    # any range of seeds
 ```
 
-It needs git, and says it skipped when there is none.
+**The tests need git.** lap's branch and merge tests — the end-to-end
+branch scenarios and the generated merge cases — build real repositories
+with git; without it they are skipped, and **a skip counts as a pass**: a
+run on a machine without git is green without having tested any merge, so
+CI must have git installed. lap itself never needs git. The e2e suite prints `skip: git not found, the branch scenarios did
+not run`, and the merge cases `lap-prop: skipped: git is not installed`.
 
 Or with CMake — the cross-platform path, and the one to use on Windows with
 MSVC or MinGW:
