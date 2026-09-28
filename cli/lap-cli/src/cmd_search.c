@@ -67,7 +67,7 @@ static void emit(StrBuf *sb, const Rec *rec, bool json, int64_t printed,
         json_commit(sb, rec, note);
         sb_putc(sb, '}');
     } else {
-        print_commit_human(sb, rec, false, note);
+        print_commit_human(sb, rec, false, note, SHOW_INTENT);
     }
 }
 

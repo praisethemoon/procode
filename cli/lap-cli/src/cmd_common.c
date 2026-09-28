@@ -182,11 +182,25 @@ void json_commit(StrBuf *sb, const Rec *rec, const char *note) {
     }
 }
 
+/* One text's first line, indented under the commit line, labelled when
+ * both texts are shown; the amend marker follows the first line printed. */
+static void text_line(StrBuf *sb, const Rec *rec, const char *label,
+                      const char *text, bool marker) {
+    const char *nl = strchr(text, '\n');
+    size_t len = nl ? (size_t)(nl - text) : strlen(text);
+    sb_puts(sb, "       ");
+    if (label)
+        sb_puts(sb, label);
+    sb_text(sb, text, len);
+    if (marker && rec->amended) {
+        sb_putc(sb, ' ');
+        sb_field(sb, S_MUTED, amend_marker(sb->a, rec), 0);
+    }
+    sb_putc(sb, '\n');
+}
+
 void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
-                        const char *note) {
-    const char *nl = strchr(rec->intent, '\n');
-    int32_t mlen =
-        nl ? (int32_t)(nl - rec->intent) : (int32_t)strlen(rec->intent);
+                        const char *note, CommitText show) {
     char sh[SHORT_HASH_LEN + 1];
     short_hash(rec, sh);
     sb_field(sb, S_ID, rec->id, 6);
@@ -221,13 +235,14 @@ void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
         sb_text(sb, note, strlen(note));
         sb_putc(sb, '\n');
     }
-    sb_puts(sb, "       ");
-    sb_text(sb, rec->intent, (size_t)mlen);
-    if (rec->amended) {
-        sb_putc(sb, ' ');
-        sb_field(sb, S_MUTED, amend_marker(sb->a, rec), 0);
+    if (show == SHOW_BOTH) {
+        text_line(sb, rec, "intent:   ", rec->intent, true);
+        text_line(sb, rec, "behavior: ", rec->behavior ? rec->behavior : "", false);
+    } else if (show == SHOW_BEHAVIOR) {
+        text_line(sb, rec, NULL, rec->behavior ? rec->behavior : "", true);
+    } else {
+        text_line(sb, rec, NULL, rec->intent, true);
     }
-    sb_putc(sb, '\n');
 }
 
 const char *amend_marker(Arena *a, const Rec *rec) {

@@ -167,9 +167,15 @@ void caches_sync_warn(Arena *a, const Repo *r);
  * the field list WITHOUT enclosing braces so callers can add their own. */
 void json_commit(StrBuf *sb, const Rec *rec, const char *note);
 
-/* Human one-liner + intent summary, shared by log and search. */
+/* Which of a commit's texts a human listing shows under its line: the
+ * intent alone (search, log --intent-only), the behavior alone (log
+ * --behavior-only), or both, labelled (log). */
+typedef enum { SHOW_INTENT, SHOW_BEHAVIOR, SHOW_BOTH } CommitText;
+
+/* Human one-liner + the first line of the texts asked for, shared by log
+ * and search. */
 void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
-                        const char *note);
+                        const char *note, CommitText show);
 
 /* "(amended)", or "(amended <n> times)", for a commit lap amend corrected. */
 const char *amend_marker(Arena *a, const Rec *rec);

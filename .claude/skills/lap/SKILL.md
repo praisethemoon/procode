@@ -267,7 +267,9 @@ yourself.
 - When did this string appear/disappear? →
   `lap search --text "<str>" [--added|--removed]`.
 - What happened in a task? → `lap session list`, then
-  `lap log --session S<n>`.
+  `lap log --session S<n>`: each commit with its intent and its behavior
+  (`--intent-only` / `--behavior-only` for one); no need to read the chunk
+  files.
 - Read one commit in full (intent, behavior, diff): `lap show L<n>`, or
   by hash or hash prefix (`lap show fa9cebd`, `#fa9cebd` works too); add
   `--full-file` to see the whole file as of that commit.

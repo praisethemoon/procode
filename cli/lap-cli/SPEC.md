@@ -976,9 +976,13 @@ that), `unknown_ref`/`ambiguous_ref`. Prints `[L42 fa9cebd] amended (<n>)`
 and the new intent's first line; `--json` returns the commit's `id`,
 `hash` and `amended` (the count).
 
-### `lap log [--session S] [--file F] [-n N] [--branch B]`
-Commits newest-first: id, short hash, timestamp, session, op, file, range,
-intent summary.
+### `lap log [--session S] [--file F] [-n N] [--intent-only | --behavior-only] [--branch B]`
+Commits newest-first: id, short hash, timestamp, session, op, file, range;
+under each, the first line of its intent and of its behavior, labelled
+`intent:` and `behavior:` (an amended commit shows its latest texts, the
+amend marker after the intent). `--intent-only` or `--behavior-only` shows
+that one alone, unlabelled; both together are `bad_args`. `--json` always
+carries both texts in full.
 
 ### `lap show <commit> [--full-file] [--branch B]`
 Full record: metadata with the full hash, the complete intent and behavior,

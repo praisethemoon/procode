@@ -52,6 +52,8 @@ static const HelpFlag F_LOG[] = {
     {"--session", NULL, "<S>", "only that session's commits (S<n> or <branch>/S<n>)"},
     {"--file", NULL, "<F>", "only that file's commits"},
     {"-n", NULL, "<N>", "at most N commits"},
+    {"--intent-only", NULL, NULL, "show each commit's intent alone (default: both texts)"},
+    {"--behavior-only", NULL, NULL, "show each commit's behavior alone"},
     BRANCH_READ,
     JSON_FLAG,
     END};
@@ -156,8 +158,10 @@ const HelpCmd HELP_CMDS[] = {
      "correct what a commit of this folder says; its code and every\n"
      "written record stay as they are",
      F_AMEND, cmd_amend, false},
-    {"log", NULL, "log [--session S] [--file F] [-n N] [--branch <name>] [--json]",
-     "commits newest first: id, short hash, time, session, file, intent",
+    {"log", NULL, "log [--session S] [--file F] [-n N] [--intent-only | --behavior-only]\n"
+     "[--branch <name>] [--json]",
+     "commits newest first: id, short hash, time, session, file, then\n"
+     "the intent and the behavior",
      F_LOG, cmd_log, false},
     {"show", NULL, "show <commit> [--full-file] [--branch <name>] [--json]",
      "one commit in full: its message and its hunk; <commit>: an id, a\n"

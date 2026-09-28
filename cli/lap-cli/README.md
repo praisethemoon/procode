@@ -195,7 +195,7 @@ with amendments needs this version of lap or later.
 | `lap status` | pending edits per file, numbered |
 | `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several; on a new file `--lines A-B` creates it with that part, and one over 50 lines needs parts or `--whole-file`; `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
 | `lap amend <commit> -i "intent" -b "behavior"` | correct what a commit of this folder says; nothing written changes (`-F`, `--force-message` as for commit) |
-| `lap log` | commits, newest first (`--session`, `--file`, `-n`) |
+| `lap log` | commits, newest first, each with its intent and behavior (`--session`, `--file`, `-n`; `--intent-only` / `--behavior-only` for one) |
 | `lap show <commit>` | one commit in full, by id, hash or hash prefix (`--full-file` reconstructs the file) |
 | `lap search` | blame a line (`--file F --line N`), find text (`--text`), intents and behaviors (`--msg`), sessions, time ranges |
 | `lap session` | `start "purpose"` (or `-F <file>`) / `end` / `list` / `current` |

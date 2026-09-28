@@ -3315,6 +3315,29 @@ expect_grep "not a new file: --whole-file" "$LAP" commit fifty.txt --whole-file 
 expect_grep "chain ok" "$LAP" verify --deep
 cd "$WORK"
 
+t "lap log shows each commit's intent and behavior; --intent-only and --behavior-only one of them"
+mkdir -p "$WORK/lg" && cd "$WORK/lg" && "$LAP" init >/dev/null 2>&1
+printf 'g1\ng2\n' > g.txt
+"$LAP" commit g.txt --no-session -i "g edit for the test" -b "the test file lists g1 and g2" >/dev/null 2>&1
+out=$("$LAP" log -n 1)
+has_line() { printf '%s\n' "$1" | grep -qx "$2" || fail "expected the line [$2] in: $1"; }
+has_line "$out" "       intent:   g edit for the test"
+has_line "$out" "       behavior: the test file lists g1 and g2"
+out=$("$LAP" log -n 1 --intent-only)
+has_line "$out" "       g edit for the test"
+printf '%s\n' "$out" | grep -q "g1 and g2" && fail "--intent-only printed the behavior"
+out=$("$LAP" log -n 1 --behavior-only)
+has_line "$out" "       the test file lists g1 and g2"
+printf '%s\n' "$out" | grep -q "g edit for" && fail "--behavior-only printed the intent"
+expect_grep '"error":"bad_args"' "$LAP" log --intent-only --behavior-only --json
+expect_grep '"intent":"g edit for the test","behavior":"the test file lists g1 and g2"' "$LAP" log --json
+"$LAP" amend L1 -i "g edit for the test, corrected" -b "the test file lists g1 then g2" >/dev/null 2>&1
+out=$("$LAP" log -n 1)
+has_line "$out" "       intent:   g edit for the test, corrected (amended)"
+has_line "$out" "       behavior: the test file lists g1 then g2"
+has_line "$("$LAP" log --behavior-only)" "       the test file lists g1 then g2 (amended)"
+cd "$WORK"
+
 # ------------------------------------------------------------ summary
 echo "e2e: $TESTS scenarios, $FAILED failure(s)"
 [ "$FAILED" -eq 0 ] || exit 1

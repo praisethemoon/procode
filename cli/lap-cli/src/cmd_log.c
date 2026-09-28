@@ -6,9 +6,11 @@ typedef struct {
     int32_t file_id;  /* -1 = no file filter (index path only) */
     const char *rel;  /* "" = no file filter */
     int64_t limit;    /* <0 = unlimited */
+    CommitText show;  /* the texts under each commit, human output */
 } LogQuery;
 
-static void emit(StrBuf *sb, const Rec *rec, bool json, int64_t printed) {
+static void emit(StrBuf *sb, const Rec *rec, bool json, int64_t printed,
+                 CommitText show) {
     if (json) {
         if (printed)
             sb_putc(sb, ',');
@@ -16,7 +18,7 @@ static void emit(StrBuf *sb, const Rec *rec, bool json, int64_t printed) {
         json_commit(sb, rec, NULL);
         sb_putc(sb, '}');
     } else {
-        print_commit_human(sb, rec, true, NULL);
+        print_commit_human(sb, rec, true, NULL, show);
     }
 }
 
@@ -38,7 +40,7 @@ static bool log_via_index(Arena *a, Repo *repo, const Idx *ix,
         Rec rec;
         if (!idx_fetch(a, repo, ix, e, &rec))
             return false;
-        emit(sb, &rec, json, (*printed)++);
+        emit(sb, &rec, json, (*printed)++, q->show);
     }
     return true;
 }
@@ -57,7 +59,7 @@ static bool log_via_scan(Arena *a, Repo *repo, const LogQuery *q, StrBuf *sb,
             continue;
         if (q->limit >= 0 && *printed >= q->limit)
             break;
-        emit(sb, rec, json, (*printed)++);
+        emit(sb, rec, json, (*printed)++, q->show);
     }
     return true;
 }
@@ -74,6 +76,14 @@ int32_t cmd_log(Arena *a, int32_t argc, char **argv) {
                                           "--session");
     const char *filt_file = flag_value(argc, argv, value_flags, "--file");
     const char *limit_arg = flag_value(argc, argv, value_flags, "-n");
+    bool intent_only = has_flag(argc, argv, value_flags, "--intent-only");
+    bool behavior_only = has_flag(argc, argv, value_flags, "--behavior-only");
+    if (intent_only && behavior_only) {
+        err_out(json, "bad_args",
+                "--intent-only and --behavior-only each show one text; give "
+                "neither for both");
+        return LAP_EXIT_ERR;
+    }
 
     Repo repo;
     char err[512];
@@ -94,6 +104,7 @@ int32_t cmd_log(Arena *a, int32_t argc, char **argv) {
     q.session = rec_session_no(filt_session);
     q.file_id = -1;
     q.limit = limit_arg ? strtoll(limit_arg, NULL, 10) : -1;
+    q.show = intent_only ? SHOW_INTENT : behavior_only ? SHOW_BEHAVIOR : SHOW_BOTH;
     char rel[LAP_PATH_MAX] = "";
     if (filt_file &&
         !repo_relpath(&repo, filt_file, rel, sizeof rel, err, sizeof err)) {
