@@ -2,14 +2,14 @@
   <img src="packages/combined/media/procode.svg" alt="procode" width="96" 
   align="right">
   
-procode is a set of (very opinionated) tools for working alongside AI coding
+`procode` is a set of (very opinionated) tools for working alongside AI coding
 agents. It includes CLIs and MCP servers the agent uses, and a VS Code
 extension, **procode**, for you to follow along.
 
 These tools can generally be used with any agent, but only Claude Code is
 tested.
 
-## Lap
+## <img src="packages/lap-vscode/media/lap.svg" alt="" width="22" height="22"> Lap
 
 Lap is an edit recorder. Like git, lap records changes, but its goal is to
 capture not only the change, but also the intent behind it and the behavior
@@ -48,7 +48,7 @@ inside VS Code.
 
 More in [lap's README](cli/lap-cli/README.md) and its [SPEC](cli/lap-cli/SPEC.md).
 
-## Coboard
+## <img src="packages/coboard-vscode/media/board.svg" alt="" width="22" height="22"> Coboard
 
 Coboard is a very simple board of epics, milestones and tickets. It is meant
 to be a more robust alternative to Claude's plan: you can always keep track
@@ -77,7 +77,7 @@ lock, so agents in several folders share it safely.
 The [tickets skill](.claude/skills/tickets/SKILL.md) is the loop used in
 this repository (board, lap and git together); adapt it for yours.
 
-## KB (Knowledge Base)
+## <img src="packages/index-vscode/media/knowledge.svg" alt="" width="22" height="22"> KB (Knowledge Base)
 
 kb is a local knowledge base of documentation, source and papers, that
 agents and you can both search and cite. It keeps one store per workspace
@@ -97,7 +97,7 @@ open collection — and see how documents link to each other in its graph.
 
 The contract is in [specs/index-api.md](specs/index-api.md).
 
-## techdocs
+## <img src="packages/techdocs-vscode/media/techdocs.svg" alt="" width="22" height="22"> techdocs
 
 techdocs pages are what an agent publishes for you to read in the editor:
 reports, comparisons, findings, anything with a table or a chart. They are
