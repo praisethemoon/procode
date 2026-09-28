@@ -63,7 +63,6 @@
     "compile": "npm run compile --workspace techdocs && tsc -p ./ && tsc -p tsconfig.webview.json && node scripts/build.mjs",
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test \"out/test/*.test.js\"",
-    "package": "npm run compile && vsce package --no-dependencies --allow-missing-repository",
     "vscode:prepublish": "npm run compile"
   },
   "dependencies": {

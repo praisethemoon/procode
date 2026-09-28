@@ -180,7 +180,7 @@ fs.writeFileSync(
     path.join(dist, "README.md"),
     "# procode\n\nLap History, Knowledge, the Board and techdocs in one extension.\n\n" +
         "Knowledge and the Board run the `kb` and `lap` CLIs, which you build with CMake from the procode " +
-        "repository (see its README). They are found on PATH, or wherever " +
+        "repository ([Build and install](https://github.com/praisethemoon/procode#build-and-install)). They are found on PATH, or wherever " +
         "the settings **Knowledge › Cli Path** and **Board › Lap Path** point.\n\n" +
         "The kb, coboard and techdocs MCP servers are registered with VS Code's agent automatically. For Claude Code, " +
         "**procode: Set Up MCP for Claude Code** writes them into the project's `.mcp.json`, and " +
