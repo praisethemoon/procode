@@ -2,6 +2,8 @@
 name: tickets
 description: The workflow for working a ticket in this repository — coboard board, lap session, git — from picking it up to closing it. Use whenever you start, continue or finish work on a board ticket (T-<n>), or the user asks you to work on tickets.
 compatibility: Requires the coboard MCP server, the lap CLI (cli/lap-cli) and git.
+metadata:
+  version: "1"
 ---
 
 # tickets — one ticket, start to finish

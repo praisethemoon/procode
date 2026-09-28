@@ -2,6 +2,8 @@
 name: artifacts
 description: Write and publish an artifact — an HTML page the person reads in VS Code — with the artifacts MCP server. Use when a result is worth reading as a document rather than a chat reply (a report, a comparison, findings, a design note, anything with a table or a chart), or when the user asks for an artifact, a report or a page.
 compatibility: Requires the artifacts MCP server (packages/artifacts).
+metadata:
+  version: "1"
 ---
 
 # artifacts — pages for people

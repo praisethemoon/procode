@@ -15,8 +15,9 @@ import * as vscode from "vscode";
 import { forClaude } from "./claude";
 import { CLIS, Cli, missingMessage, resolveCli, serverNeeds } from "./clis";
 import { outdated, withServers } from "./mcpjson";
+import { ShippedSkill, behind, folderHash, install, shippedSkills, stateOf } from "./skills";
 
-export { forClaude, resolveCli };
+export { folderHash, forClaude, resolveCli };
 
 interface Part {
     activate(ctx: vscode.ExtensionContext): unknown;
@@ -207,6 +208,116 @@ function checkClaudeMcp(ctx: vscode.ExtensionContext): void {
         });
 }
 
+/* ------------------------------------------------------------ Claude skills
+ *
+ * The skills that teach Claude Code to use the tools, shipped with the
+ * extension (skills/, the repository's .claude/skills as of this build) and
+ * added to a project's .claude/skills on request — never to ~/.claude, and
+ * never over a folder of the person's own without asking. The hash of each
+ * folder procode writes is kept, so a later version can replace a copy only
+ * while it is still exactly as procode wrote it. */
+
+const INSTALLED_SKILLS = "procode.installedSkills";
+
+function projectSkillsDir(): string | null {
+    const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file");
+    return folder ? path.join(folder.uri.fsPath, ".claude", "skills") : null;
+}
+
+function shipped(ctx: vscode.ExtensionContext): ShippedSkill[] {
+    return shippedSkills(path.join(ctx.extensionPath, "skills"));
+}
+
+function installAndRecord(ctx: vscode.ExtensionContext, skill: ShippedSkill, dir: string): void {
+    const hash = install(skill, dir);
+    const record = { ...(ctx.workspaceState.get<Record<string, string>>(INSTALLED_SKILLS) ?? {}), [skill.name]: hash };
+    void ctx.workspaceState.update(INSTALLED_SKILLS, record);
+}
+
+async function addClaudeSkills(ctx: vscode.ExtensionContext): Promise<void> {
+    const dir = projectSkillsDir();
+    if (!dir) {
+        void vscode.window.showWarningMessage("procode: open a folder first; Claude Code's skills are added per project.");
+        return;
+    }
+    const picked = await vscode.window.showQuickPick(
+        shipped(ctx).map((skill) => ({
+            label: skill.name,
+            description: `version ${skill.version}`,
+            detail: skill.name === "tickets" ? "This repository's own workflow (board, lap and git): adapt it before relying on it." : undefined,
+            picked: skill.name !== "tickets",
+            skill,
+        })),
+        { canPickMany: true, title: "procode: Add Skills for Claude Code", placeHolder: "The skills to add to this project's .claude/skills" },
+    );
+    if (!picked || picked.length === 0) return;
+    const added: string[] = [];
+    const updated: string[] = [];
+    const kept: string[] = [];
+    for (const { skill } of picked) {
+        const state = stateOf(skill, dir);
+        if (state === "identical") continue;
+        if (state === "different") {
+            let choice: string | undefined;
+            for (;;) {
+                choice = await vscode.window.showWarningMessage(
+                    `.claude/skills/${skill.name} is not procode's ${skill.name} skill (version ${skill.version}).`,
+                    { modal: true, detail: "Update replaces that folder with procode's; Keep mine leaves it as it is." },
+                    "Update",
+                    "Keep mine",
+                    "Show differences",
+                );
+                if (choice !== "Show differences") break;
+                await vscode.commands.executeCommand(
+                    "vscode.diff",
+                    vscode.Uri.file(path.join(dir, skill.name, "SKILL.md")),
+                    vscode.Uri.file(path.join(skill.dir, "SKILL.md")),
+                    `${skill.name}: yours ↔ procode's`,
+                );
+            }
+            if (choice !== "Update") {
+                kept.push(skill.name);
+                continue;
+            }
+            installAndRecord(ctx, skill, dir);
+            updated.push(skill.name);
+            continue;
+        }
+        installAndRecord(ctx, skill, dir);
+        added.push(skill.name);
+    }
+    const said = [
+        added.length ? `added ${added.join(", ")}` : "",
+        updated.length ? `updated ${updated.join(", ")}` : "",
+        kept.length ? `kept yours of ${kept.join(", ")}` : "",
+    ].filter((x) => x);
+    void vscode.window.showInformationMessage(
+        said.length
+            ? `procode: ${said.join("; ")} in .claude/skills. Restart Claude Code in this project (or run /skills) to pick them up.`
+            : "procode: this project's .claude/skills already has procode's skills as shipped.",
+    );
+}
+
+/* On opening a project: says when its copies of procode's skills are behind
+ * the shipped ones, offering to update those still as procode wrote them. */
+export function checkSkills(ctx: vscode.ExtensionContext): void {
+    const dir = projectSkillsDir();
+    if (!dir) return;
+    const { updatable, edited } = behind(shipped(ctx), dir, ctx.workspaceState.get<Record<string, string>>(INSTALLED_SKILLS) ?? {});
+    if (updatable.length > 0) {
+        void vscode.window
+            .showInformationMessage(`procode: newer procode skills are available: ${updatable.map((s) => s.name).join(", ")}.`, "Update")
+            .then((choice) => {
+                if (choice === "Update") for (const s of updatable) installAndRecord(ctx, s, dir);
+            });
+    }
+    if (edited.length > 0) {
+        void vscode.window.showInformationMessage(
+            `procode: newer versions of ${edited.map((s) => s.name).join(", ")} are shipped; this project's copies were changed, so they are left as they are. procode: Add Skills for Claude Code compares them.`,
+        );
+    }
+}
+
 function isFile(p: string): boolean {
     try {
         return fs.statSync(p).isFile();
@@ -253,8 +364,10 @@ export function activate(ctx: vscode.ExtensionContext): void {
     registerWithVsCode(ctx);
     ctx.subscriptions.push(
         vscode.commands.registerCommand("procode.setUpClaudeMcp", () => setUpClaudeMcp(ctx)),
+        vscode.commands.registerCommand("procode.addClaudeSkills", () => addClaudeSkills(ctx)),
     );
     checkClaudeMcp(ctx);
+    checkSkills(ctx);
     checkClis();
 }
 

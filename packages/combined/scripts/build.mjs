@@ -16,6 +16,8 @@
  *   out/mcp/coboard.js, out/mcp/kb.js, out/mcp/artifacts.js
  *                      the MCP servers, one file each
  *   media/             the parts' activity-bar icons
+ *   skills/            the repository's .claude/skills, every file, for
+ *                      procode: Add Skills for Claude Code
  *   icon.png           procode's own icon, from packages/combined/media
  */
 
@@ -87,6 +89,7 @@ for (const part of PARTS) {
 }
 contributes.commands.push(
     { command: "procode.setUpClaudeMcp", title: "Set Up MCP for Claude Code (This Project's .mcp.json)", category: "procode" },
+    { command: "procode.addClaudeSkills", title: "Add Skills for Claude Code (This Project's .claude/skills)", category: "procode" },
 );
 contributes.mcpServerDefinitionProviders = [{ id: "procode.mcp", label: "procode" }];
 
@@ -141,6 +144,9 @@ for (const part of PARTS) {
 // pdf.js, beside the bundle where Knowledge imports it from (index-vscode/src/pdf.ts).
 fs.cpSync(path.join(repo, "packages", "index-vscode", "out", "pdfjs"), path.join(dist, "out", "pdfjs"), { recursive: true });
 fs.copyFileSync(path.join(repo, "LICENSE"), path.join(dist, "LICENSE"));
+// The skills, whole folders, so what is added to a project matches this
+// build's tools.
+fs.cpSync(path.join(repo, ".claude", "skills"), path.join(dist, "skills"), { recursive: true });
 // The Extensions view's icon: a PNG rendered from media/procode.svg, since
 // VS Code does not take an SVG there.
 fs.copyFileSync(path.join(here, "media", "procode.png"), path.join(dist, "icon.png"));
@@ -153,7 +159,8 @@ fs.writeFileSync(
         "repository (see its README). They are found on PATH, or wherever " +
         "the settings **Knowledge › Cli Path** and **Board › Lap Path** point.\n\n" +
         "The kb, coboard and artifacts MCP servers are registered with VS Code's agent automatically. For Claude Code, " +
-        "**procode: Set Up MCP for Claude Code** writes them into the project's `.mcp.json`.\n",
+        "**procode: Set Up MCP for Claude Code** writes them into the project's `.mcp.json`, and " +
+        "**procode: Add Skills for Claude Code** adds the skills that teach Claude to use them to its `.claude/skills`.\n",
 );
 
 /* ----------------------------------------------------------------- bundles */

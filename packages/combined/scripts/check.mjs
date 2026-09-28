@@ -29,6 +29,13 @@ fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify({ mcpServers: { 
 const registered = new Map();
 const errors = [];
 const warnings = [];
+const infos = [];
+const executed = [];
+/* The answers a scenario gives: to modal questions, in order, and to the
+ * pick list (by default, what it offers ticked). */
+const answers = [];
+let pick = (items) => items.filter((i) => i.picked);
+const memento = new Map();
 /* Settings a scenario sets, "section.key" to value; the rest are defaults. */
 const settings = { "coboard.boardFolder": "/shared/project" };
 let mcpProvider = null;
@@ -85,7 +92,10 @@ const vscode = new Proxy(
                 registered.set(name, fn);
                 return { dispose() {} };
             },
-            executeCommand: async () => undefined,
+            executeCommand: async (...a) => {
+                executed.push(a);
+                return undefined;
+            },
         },
         window: new Proxy(
             {
@@ -95,9 +105,13 @@ const vscode = new Proxy(
                 },
                 showWarningMessage: (m) => {
                     warnings.push(m);
+                    return Promise.resolve(answers.shift());
+                },
+                showInformationMessage: (m) => {
+                    infos.push(m);
                     return Promise.resolve(undefined);
                 },
-                showInformationMessage: () => Promise.resolve(undefined),
+                showQuickPick: (items) => Promise.resolve(pick(items)),
             },
             handler,
         ),
@@ -135,7 +149,7 @@ const Module = createRequire(import.meta.url)("node:module");
 const load = Module._load;
 Module._load = (req, parent, isMain) => (req === "vscode" ? vscode : load(req, parent, isMain));
 const ext = createRequire(import.meta.url)(path.join(dist, "out", "extension.js"));
-const ctx = { subscriptions: [], extension: { packageJSON: manifest }, extensionPath: dist, extensionUri: { fsPath: dist, path: dist }, workspaceState: { get: () => undefined, update: async () => undefined }, globalState: { get: () => undefined, update: async () => undefined } };
+const ctx = { subscriptions: [], extension: { packageJSON: manifest }, extensionPath: dist, extensionUri: { fsPath: dist, path: dist }, workspaceState: { get: (k) => memento.get(k), update: async (k, v) => void memento.set(k, v) }, globalState: { get: () => undefined, update: async () => undefined } };
 ext.activate(ctx);
 await new Promise((r) => setTimeout(r, 200));
 Module._load = load;
@@ -227,6 +241,81 @@ assert.equal(written.mcpServers.kb.args[0], defs[1].args[0], "Claude Code runs t
 assert.equal(written.mcpServers.coboard.env.COBOARD_AUTHOR, "claude", "Claude Code's board comments are signed");
 
 assert.equal(registered.has("procode.registerClaudeMcp"), false, "Claude Code is set up per project only");
+
+// ------------------------------------------------------------ Claude skills
+// The package carries the skills whole, and the command adds them to the
+// project's .claude/skills only.
+assert.ok(registered.has("procode.addClaudeSkills"), "Add Skills for Claude Code is registered");
+for (const f of ["lap/SKILL.md", "lap/references/branches.md", "tickets/SKILL.md", "artifacts/SKILL.md"]) {
+    assert.ok(fs.existsSync(path.join(dist, "skills", f)), `skills/${f} is in the package`);
+}
+const skills = path.join(folder, ".claude", "skills");
+const tree = (d, rel = "") =>
+    fs.existsSync(path.join(d, rel))
+        ? fs.readdirSync(path.join(d, rel), { withFileTypes: true }).flatMap((e) =>
+              e.isDirectory() ? tree(d, path.join(rel, e.name)) : [path.join(rel, e.name)],
+          )
+        : [];
+const read = (f) => fs.readFileSync(f, "utf8");
+const outsideBefore = tree(folder).filter((f) => !f.startsWith(path.join(".claude", "skills")) && !f.startsWith(".claude")).map((f) => `${f}:${read(path.join(folder, f))}`);
+const addSkills = () => registered.get("procode.addClaudeSkills")();
+const same = (name) => read(path.join(skills, name, "SKILL.md")) === read(path.join(dist, "skills", name, "SKILL.md"));
+
+// No .claude/ yet: it is made, and the ticked skills (not tickets) written.
+assert.equal(fs.existsSync(path.join(folder, ".claude")), false);
+await addSkills();
+assert.ok(same("lap") && same("artifacts"), "lap and artifacts are written as shipped");
+assert.ok(fs.existsSync(path.join(skills, "lap", "references", "branches.md")), "with every file of the folder");
+assert.equal(fs.existsSync(path.join(skills, "tickets")), false, "tickets is not written unless picked");
+assert.match(infos.at(-1), /added artifacts, lap/);
+
+// Another skill and settings in .claude/ are left as they are; tickets goes in when picked.
+fs.mkdirSync(path.join(skills, "other"), { recursive: true });
+fs.writeFileSync(path.join(skills, "other", "SKILL.md"), "mine\n");
+fs.writeFileSync(path.join(folder, ".claude", "settings.json"), '{"x":1}\n');
+pick = (items) => items;
+await addSkills();
+assert.ok(same("tickets"), "tickets is written when picked");
+assert.equal(read(path.join(skills, "other", "SKILL.md")), "mine\n", "another skill is untouched");
+assert.equal(read(path.join(folder, ".claude", "settings.json")), '{"x":1}\n', "settings are untouched");
+
+// An identical copy: nothing asked, nothing done.
+const questions = warnings.length;
+await addSkills();
+assert.equal(warnings.length, questions, "nothing is asked about identical copies");
+assert.match(infos.at(-1), /already has procode's skills/);
+
+// A different copy: asked; Show differences opens a diff and asks again; Keep mine leaves it; Update replaces it.
+fs.appendFileSync(path.join(skills, "lap", "SKILL.md"), "my own note\n");
+pick = (items) => items.filter((i) => i.label === "lap");
+answers.push("Show differences", "Keep mine");
+await addSkills();
+assert.equal(warnings.length, questions + 2, "asked, shown the differences, asked again");
+assert.equal(executed.filter((c) => c[0] === "vscode.diff").length, 1, "the differences are a diff");
+assert.match(read(path.join(skills, "lap", "SKILL.md")), /my own note/, "Keep mine leaves it");
+assert.match(infos.at(-1), /kept yours of lap/);
+answers.push("Update");
+await addSkills();
+assert.ok(same("lap"), "Update replaces it with procode's");
+assert.match(infos.at(-1), /updated lap/);
+
+// Nothing outside the project's .claude/ was written.
+const outsideAfter = tree(folder).filter((f) => !f.startsWith(".claude")).map((f) => `${f}:${read(path.join(folder, f))}`);
+assert.deepEqual(outsideAfter, outsideBefore, "nothing outside .claude/ changed");
+
+// The update notice: a copy procode wrote at an older version is offered an
+// update; a copy changed since is only mentioned.
+const skillMd = path.join(skills, "lap", "SKILL.md");
+fs.writeFileSync(skillMd, read(skillMd).replace(/version: "\d+"/, 'version: "0"'));
+memento.set("procode.installedSkills", { ...memento.get("procode.installedSkills"), lap: ext.folderHash(path.join(skills, "lap")) });
+infos.length = 0;
+ext.checkSkills(ctx);
+assert.ok(infos.some((m) => /newer procode skills are available: lap/.test(m)), "an older copy as written is offered an update");
+fs.appendFileSync(skillMd, "changed by hand\n");
+infos.length = 0;
+ext.checkSkills(ctx);
+assert.ok(!infos.some((m) => /are available/.test(m)), "a changed copy is not offered one");
+assert.ok(infos.some((m) => /lap are shipped; this project's copies were changed/.test(m)), "it is only mentioned");
 
 console.log(`check: ${registered.size} commands registered, ${defs.length} MCP servers, no errors`);
 console.log(`check: workspace ${folder}`);

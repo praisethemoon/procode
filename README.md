@@ -19,9 +19,12 @@ file is committed in parts too (`--lines` picks the first part), so a large
 one never lands as a single unexplained blob.
 
 `lap` is available as a CLI and as an agent skill that teaches the agent
-how to use it. To install the skills (`lap`, `tickets` and `artifacts`),
-copy the folders in [.claude/skills/](.claude/skills/) into your project's
-`.claude/skills/` (or `~/.claude/skills/` for every project). They follow the
+how to use it. To install the skills (`lap`, `tickets` and `artifacts`) in a
+project, run **procode: Add Skills for Claude Code** in VS Code: it adds the
+ones you pick to the project's `.claude/skills/`, never touching other
+skills and asking before it replaces a copy of its own that differs. Or copy
+the folders in [.claude/skills/](.claude/skills/) by hand (into
+`~/.claude/skills/` for every project). They follow the
 [Agent Skills spec](https://agentskills.io/specification), each naming what it
 needs to run in its `compatibility` line; `npm test` checks the spec's rules
 (`scripts/skills.test.mjs`: names, lengths, and links that stay in the
@@ -195,7 +198,10 @@ run the CLIs from `PATH`.
    reload (one already running keeps what it started with). For Claude
    Code, run **procode: Set Up MCP for Claude Code** in a project: it adds
    `coboard`, `kb` and `artifacts` to the project's `.mcp.json` and keeps
-   any other servers. After installing a new build, restart Claude Code (or
+   any other servers. **procode: Add Skills for Claude Code** adds the
+   skills that teach Claude to use them to the project's `.claude/skills/`
+   (lap and artifacts ticked; tickets is this repository's workflow, so it
+   is left for you to pick), and says when a newer version ships. After installing a new build, restart Claude Code (or
    run `/mcp`) so it starts the new servers.
 
 4. **Stores.** `lap init`, `kb init` in the project root. The board and
