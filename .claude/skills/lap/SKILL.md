@@ -154,6 +154,11 @@ a listed range.
   rename; the history only knows if you say so. If the content changed in
   transit, say what changed instead of hiding it behind "renamed".
 - Binary files are not tracked; add noisy artifacts to `.lapignore`.
+  `.lapignore` keeps lap from recording files it has not recorded yet. A
+  file recorded before it was ignored stays tracked: its edits still show
+  in `lap status`, so none is lost unseen. To shed tracked files for good,
+  start a new history (a fresh `.lap/` from `lap init`): rare, and blunt,
+  since the whole history goes with them.
 - `lap status --json`, and `--json` on every command, when you want to
   parse output.
 - Output is coloured only at a terminal, so piped output is plain. If you

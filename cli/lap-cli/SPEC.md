@@ -1083,6 +1083,12 @@ segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git`
 (a directory, or the file a git worktree has in its place), `.hg/`,
 `.svn/`, `.DS_Store`.
 
+`.lapignore` keeps lap from recording files it has not recorded yet. A
+file recorded before it was ignored stays tracked: its edits still show
+in `lap status`, so none is lost unseen. To shed tracked files for good,
+start a new history (a fresh `.lap/` from `lap init`): rare, and blunt,
+since the whole history goes with them.
+
 ## Concurrency & crash safety
 
 - One exclusive lock (`.lap/lock`) serializes writers; readers never lock

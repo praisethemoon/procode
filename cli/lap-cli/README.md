@@ -222,8 +222,12 @@ lap reads CRLF as LF, as git stores text: a working file's `\r\n` endings
 are compared and recorded as `\n`. `.lapignore` (gitignore-like subset) controls what is tracked: list
 there whatever nobody edits by hand — build output, dependencies, and
 vendored or generated code (a copied-in parser can be megabytes, and every
-update of it would be another whole-file record). Files lap recorded before
-you ignored them keep their history. Details in [SPEC.md](SPEC.md).
+update of it would be another whole-file record). `.lapignore` keeps lap from recording files it has not recorded yet. A
+file recorded before it was ignored stays tracked: its edits still show
+in `lap status`, so none is lost unseen. To shed tracked files for good,
+start a new history (a fresh `.lap/` from `lap init`): rare, and blunt,
+since the whole history goes with them. Details in
+[SPEC.md](SPEC.md).
 
 ## Branches and merging
 
