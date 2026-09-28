@@ -414,6 +414,23 @@ void test_branches(void) {
     ASSERT_EQ_I(merge_unknown_records(&ulog, ulof, &utype), 2);
     ASSERT_EQ_S(utype, "annotate");
 
+    t_begin("branches_tree_order: each nested branch right after the branch "
+            "it started from, depth first, roots in the registry's order");
+    Branches tr;
+    memset(&tr, 0, sizeof tr);
+    branches_add(a, &tr, (BranchEntry){"aaaaaaaaaaaa", "b1", "/w/b1", "h", "t", NULL});
+    branches_add(a, &tr, (BranchEntry){"bbbbbbbbbbbb", "x2", "/w/x2", "h", "t", NULL});
+    branches_add(a, &tr, (BranchEntry){"cccccccccccc", "n1", "/w/n1", "h", "t", "aaaaaaaaaaaa"});
+    branches_add(a, &tr, (BranchEntry){"dddddddddddd", "m1", "/w/m1", "h", "t", "cccccccccccc"});
+    branches_add(a, &tr, (BranchEntry){"eeeeeeeeeeee", "lost", "/w/l", "h", "t", "ffffffffffff"});
+    int32_t tord[5];
+    ASSERT_EQ_I(branches_tree_order(a, &tr, tord), 5);
+    ASSERT_EQ_I(tord[0], 0); /* b1 */
+    ASSERT_EQ_I(tord[1], 2); /* n1, from b1 */
+    ASSERT_EQ_I(tord[2], 3); /* m1, from n1 */
+    ASSERT_EQ_I(tord[3], 1); /* x2 */
+    ASSERT_EQ_I(tord[4], 4); /* its parent unlisted: a root, in order */
+
     t_begin("branches_status_nearer: a nested branch counts as merged where "
             "its head was adopted, here or in the branch it started from");
     BranchStatus sv, sh;

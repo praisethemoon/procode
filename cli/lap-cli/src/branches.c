@@ -252,3 +252,32 @@ bool branches_copy_of(Arena *a, const char *lapdir, const char *root,
     }
     return false;
 }
+
+/* Appends entry i and then, depth first, the entries started from it. */
+static void tree_visit(const Branches *b, int32_t i, int32_t *out,
+                       int32_t *n, bool *seen, int32_t depth) {
+    if (seen[i] || depth > 32)
+        return;
+    seen[i] = true;
+    out[(*n)++] = i;
+    for (int32_t j = 0; j < b->n; j++) {
+        if (b->v[j].via && strcmp(b->v[j].via, b->v[i].id) == 0)
+            tree_visit(b, j, out, n, seen, depth + 1);
+    }
+}
+
+int32_t branches_tree_order(Arena *a, const Branches *b, int32_t *out) {
+    bool *seen = (bool *)arena_alloc0(a, (size_t)(b->n ? b->n : 1) *
+                                             sizeof(bool));
+    int32_t n = 0;
+    for (int32_t i = 0; i < b->n; i++) {
+        /* a root: this folder's own, or one whose parent is not listed */
+        bool root = b->v[i].via == NULL || branches_find(b, b->v[i].via) == NULL;
+        if (root)
+            tree_visit(b, i, out, &n, seen, 0);
+    }
+    for (int32_t i = 0; i < b->n; i++) /* a loop of vias: shown all the same */
+        if (!seen[i])
+            tree_visit(b, i, out, &n, seen, 0);
+    return n;
+}

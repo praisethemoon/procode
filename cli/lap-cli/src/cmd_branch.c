@@ -584,7 +584,12 @@ static int32_t branch_list(Arena *a, int32_t argc, char **argv, bool json) {
                   h->name, h->lineage, pname, h->base);
     }
     int32_t listed = 0; /* entries shown */
-    for (int32_t i = 0; i < reg.n; i++) {
+    /* each nested branch right under the branch it started from */
+    int32_t *order =
+        (int32_t *)arena_alloc(a, (size_t)(reg.n ? reg.n : 1) * sizeof(int32_t));
+    int32_t norder = branches_tree_order(a, &reg, order);
+    for (int32_t oi = 0; oi < norder; oi++) {
+        int32_t i = order[oi];
         const BranchEntry *e = &reg.v[i];
         /* A branch's merges are recorded in the folder that started it:
          * this one, or for a nested branch the branch that listed it. */

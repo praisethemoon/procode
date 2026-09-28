@@ -56,6 +56,11 @@ const BranchEntry *branches_live_of(Arena *a, const Branches *b,
 bool branches_copy_of(Arena *a, const char *lapdir, const char *root,
                       const char *lineage, const char **original);
 
+/* The order branch list shows b's entries in, as indexes into b->v: each
+ * entry followed, depth first, by the branches started from it (their via
+ * its id), roots in b's order. out holds b->n; the count is returned. */
+int32_t branches_tree_order(Arena *a, const Branches *b, int32_t *out);
+
 /* What the parent knows of one registered branch. An entry is checked,
  * never trusted: its folder counts only while it exists and its .lap is
  * that branch. The branch's history is read from that folder, else from

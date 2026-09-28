@@ -2851,6 +2851,21 @@ rm -f .lap/state.json
 expect_grep "$(basename "$C") line [0-9]*:" "$LAP" log
 cd "$WORK"
 
+t "lap branch list shows a nested branch under the branch it started from"
+mkdir -p "$WORK/tr1-main" && cd "$WORK/tr1-main" && "$LAP" init >/dev/null 2>&1
+printf 'a\n' > a.txt
+for f in a.txt .lapignore; do
+    "$LAP" commit "$f" --no-session -i "seed the fixture" -b "records $f as the base" >/dev/null 2>&1
+done
+cp -R "$WORK/tr1-main" "$WORK/tr1-b1" && cd "$WORK/tr1-b1" && "$LAP" branch start b1 --from ../tr1-main >/dev/null 2>&1 || fail "start b1"
+cp -R "$WORK/tr1-main" "$WORK/tr1-x2" && cd "$WORK/tr1-x2" && "$LAP" branch start x2 --from ../tr1-main >/dev/null 2>&1 || fail "start x2"
+cp -R "$WORK/tr1-b1" "$WORK/tr1-n1" && cd "$WORK/tr1-n1" && "$LAP" branch start n1 --from ../tr1-b1 >/dev/null 2>&1 || fail "start n1"
+cd "$WORK/tr1-main"
+ORDER=$("$LAP" branch list | grep -oE '^ *(b1|x2|n1) ' | tr -d ' ' | tr '\n' ' ')
+[ "$ORDER" = "b1 n1 x2 " ] || fail "branch list order: $ORDER"
+"$LAP" branch list | grep -q '^  n1 ' || fail "n1 is not indented under b1"
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"
