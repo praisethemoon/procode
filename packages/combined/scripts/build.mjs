@@ -95,10 +95,16 @@ contributes.commands.push(
 contributes.mcpServerDefinitionProviders = [{ id: "procode.mcp", label: "procode" }];
 
 /* One activity-bar icon for the whole extension. Each part brings its own
- * container for when it runs alone; here their views move, in the parts'
- * order, into procode's, and each keeps its part's icon for when someone
- * drags it out into a container of its own. */
+ * container for when it runs alone; here their views move into procode's,
+ * stacked in STACK's order, and each keeps its part's icon for when someone
+ * drags it out into a container of its own. A part's container missing from
+ * STACK is an error, so a new part is placed on purpose. */
+const STACK = ["coboard", "lap-explorer", "techdocs", "knowledge"];
 const partContainers = contributes.viewsContainers.activitybar;
+for (const c of partContainers) {
+    if (!STACK.includes(c.id)) throw new Error(`container ${c.id} has no place in procode's STACK`);
+}
+partContainers.sort((a, b) => STACK.indexOf(a.id) - STACK.indexOf(b.id));
 contributes.viewsContainers.activitybar = [{ id: "procode", title: "procode", icon: "media/procode-views.svg" }];
 contributes.views = {
     ...Object.fromEntries(Object.entries(contributes.views).filter(([k]) => !partContainers.some((c) => c.id === k))),
