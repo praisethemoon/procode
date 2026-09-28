@@ -29,7 +29,7 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
       version: ${{ steps.plan.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: plan
         name: Check the tag and choose the builds
         env:
@@ -60,7 +60,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build and test (macOS, universal)
         if: runner.os == 'macOS'
@@ -92,7 +92,7 @@ jobs:
           ctest --test-dir build -C Release --output-on-failure
           mkdir out && cp build/cli/lap-cli/Release/lap.exe build/cli/kb-cli/Release/kb.exe out/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: clis-${{ matrix.build }}
           path: out/
@@ -102,14 +102,14 @@ jobs:
     needs: [plan, clis]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: clis-*
           path: clis
@@ -135,7 +135,7 @@ jobs:
           mkdir vsix && mv packages/combined/procode-*.vsix vsix/
           ls -l vsix
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vsix
           path: vsix/
@@ -148,7 +148,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: vsix
           path: vsix
