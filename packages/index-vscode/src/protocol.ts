@@ -80,7 +80,8 @@ export type Request =
      * resources and therefore two tabs for one document, which is the failure
      * §6 names by hand. */
     | { kind: "open"; reference: string; chunk: string | null; preview: boolean }
-    /* §3.1's source locator, "as a link that opens the original externally". */
+    /* §3.1's source locator, as a link that opens the original: a local
+     * file in VS Code, a web page externally. */
     | { kind: "link"; href: string }
     /* §4: "a collection row opens the sidebar scoped to it." */
     | { kind: "scope"; collection: string }

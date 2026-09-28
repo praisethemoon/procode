@@ -21,6 +21,8 @@
  * and no second CSP, and why it can afford a nonce on `script-src`.
  */
 
+import * as fs from "node:fs";
+
 import * as vscode from "vscode";
 
 import { Kb, KbCrash, KbDirAdded, KbError, KbSourceRefreshed, isKbCrash, isKbError } from "kb-js";
@@ -29,6 +31,7 @@ import { refreshDocument } from "./commands";
 import { KNOWLEDGE_STYLESHEETS, knowledgePolicy } from "./policy";
 import { Operation, Request, Response, StoredPositions, ViewTag, isRequest } from "./protocol";
 import { Settings } from "./session";
+import { linkTarget } from "./view/locator";
 
 /* A CSP nonce, which is the whole of why this package's own script may run and
  * an injected one may not. 128 bits of randomness spelled in hex. */
@@ -365,23 +368,36 @@ export function failure(id: number, e: unknown): Response {
     return { kind: "crash", id, message: e instanceof Error ? `${e.name}: ${e.message}` : String(e) };
 }
 
-/* §3.1's source locator, "as a link that opens the original externally".
+/* §3.1's source locator, as a link that opens the original.
  *
- * BEHIND A CONFIRMATION, AND THE CONFIRMATION NAMES THE HOST. The locator was
- * written by whatever filed the document, which may have been an agent, and
- * `vscode.env.openExternal` hands a URL to the system handler — where a
- * scheme that is not `http` can be an application launch. So the scheme is
- * checked here and the reader is shown where they are about to go. */
-const OPENABLE = /^(https?|mailto):/i;
-
+ * A LOCAL ORIGINAL OPENS IN VS CODE, without asking: it opens a file for
+ * reading and runs nothing. One that is gone is said to be gone.
+ *
+ * A WEB ONE OPENS BEHIND A CONFIRMATION, AND THE CONFIRMATION NAMES THE HOST.
+ * The locator was written by whatever filed the document, which may have been
+ * an agent, and `vscode.env.openExternal` hands a URL to the system handler —
+ * where a scheme that is not `http` can be an application launch. So the
+ * scheme is checked (`view/locator.ts`) and the reader is shown where they
+ * are about to go. */
 function openLink(href: string): void {
-    const url = href.trim();
-    if (!OPENABLE.test(url)) {
+    const target = linkTarget(href, (p) => fs.existsSync(p));
+    if (target.kind === "file") {
+        void vscode.commands.executeCommand("vscode.open", vscode.Uri.file(target.path));
+        return;
+    }
+    if (target.kind === "missing") {
         void vscode.window.showWarningMessage(
-            `Knowledge did not open that link. Only http, https and mailto locators open externally, and this one is ${describeScheme(url)}.`,
+            `The original is no longer at ${target.path}; the copy kb stored is what you are reading.`,
         );
         return;
     }
+    if (target.kind === "refused") {
+        void vscode.window.showWarningMessage(
+            `Knowledge did not open that link. Only local files and http, https and mailto locators open, and this one is ${describeScheme(target.href)}.`,
+        );
+        return;
+    }
+    const url = target.url;
     let parsed: vscode.Uri;
     try {
         parsed = vscode.Uri.parse(url, true);

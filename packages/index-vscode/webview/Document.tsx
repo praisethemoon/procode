@@ -27,6 +27,7 @@ import { KbChunk, KbDirAdded, KbDocument, KbSourceRead, KbSourceRefreshed, isSta
 
 import { documentFacts, formatDate, metaEntries } from "../src/view/facts";
 import { revealId } from "../src/view/headings";
+import { documentLocation, localPath } from "../src/view/locator";
 import { mimeLabel, renderingFor } from "../src/view/mime";
 import { RefreshOutcome, folderMessage, outcomeMessage } from "../src/refresh";
 import { Body } from "./Body";
@@ -83,26 +84,29 @@ function Provenance(props: { document: KbDocument; onRefresh: () => void }): JSX
     const stale = isStale(d.fetchedAt, Date.now(), tag.staleAfterDays);
     const label = mimeLabel(d.mime);
     const meta = metaEntries(d.meta);
+    const location = documentLocation(d.locator, d.path);
     return (
         <header className="kb-head">
             <h1 className="kb-head-title">{d.title === "" ? d.id : d.title}</h1>
             <div className="kb-head-line">
                 <span className="kb-ref">{d.id}</span>
-                {/* §3.1: "the source locator, as a link that opens the original
-                  * externally". A button rather than an anchor — nothing in
-                  * this webview navigates, and the host checks the scheme and
-                  * confirms before the system handler sees it. */}
+                {/* §3.1: the source locator, as a link that opens the original:
+                  * a local document's own file (a folder's path joined with
+                  * the document's), opened in VS Code, or a web page, opened
+                  * externally. A button rather than an anchor — nothing in
+                  * this webview navigates, and the host checks the target and
+                  * confirms a web one before the system handler sees it. */}
                 {d.locator === "" ? (
                     <span className="kb-muted">no locator</span>
                 ) : (
                     <button
                         type="button"
                         className="kb-link kb-locator"
-                        title={d.locator}
-                        onClick={() => link(d.locator)}
+                        title={location}
+                        onClick={() => link(location)}
                     >
-                        <Codicon name="link-external" />
-                        {d.locator}
+                        <Codicon name={localPath(location) !== null ? "go-to-file" : "link-external"} />
+                        {location}
                     </button>
                 )}
                 {stale ? (

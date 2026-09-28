@@ -103,11 +103,23 @@ The provenance, always visible, because a passage whose age and origin are
 unknown is a passage that will eventually be trusted when it should not be:
 
 - title
-- the source locator, as a link that opens the original externally
+- the source locator, as a link that opens the original (below)
 - collection
 - fetched date, and indexed date when they differ
 - `stale` badge with a refresh action
 - size, mime, chunk count
+
+**Where the locator link goes.** A document filed from a local file or
+folder shows and opens **its own file**: a file source's locator, or a
+folder source's locator joined with the document's `path` under it
+(`index-api.md` §2.1) — `…/cli/kb-cli` and `src/simd.h` show as
+`…/cli/kb-cli/src/simd.h`. A locator written as a bare absolute path or as a
+`file://` URL is local either way. The file opens in a VS Code editor without
+asking: it is opened for reading and runs nothing. When it is no longer there,
+the view says so — the original is gone, and the copy kb stored is what the
+reader has. A web locator (`http`, `https`, `mailto`) opens externally behind
+a confirmation that names the host, because the system handler is what
+receives it; any other scheme, and a relative path, is refused.
 
 Anything else the document carries in `meta` — a paper's authors and year, a
 page's section path, a file's language — renders as a plain key/value list
