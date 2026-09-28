@@ -238,3 +238,42 @@ Lines lines_without_cr(Arena *a, Lines l) {
     out.lines = v;
     return out;
 }
+
+static size_t strmap_slot(const char **keys, size_t cap, const char *key) {
+    size_t i = (size_t)str_hash(str_c(key)) & (cap - 1);
+    while (keys[i] && strcmp(keys[i], key) != 0)
+        i = (i + 1) & (cap - 1);
+    return i;
+}
+
+void strmap_put(Arena *a, StrMap *m, const char *key, const char *val) {
+    if ((m->n + 1) * 2 > m->cap) {
+        size_t ncap = m->cap ? m->cap * 2 : 64;
+        const char **nk =
+            (const char **)arena_alloc0(a, ncap * sizeof(char *));
+        const char **nv = (const char **)arena_alloc(a, ncap * sizeof(char *));
+        for (size_t i = 0; i < m->cap; i++) {
+            if (m->keys[i]) {
+                size_t j = strmap_slot(nk, ncap, m->keys[i]);
+                nk[j] = m->keys[i];
+                nv[j] = m->vals[i];
+            }
+        }
+        m->keys = nk;
+        m->vals = nv;
+        m->cap = ncap;
+    }
+    size_t i = strmap_slot(m->keys, m->cap, key);
+    if (!m->keys[i]) {
+        m->keys[i] = key;
+        m->n++;
+    }
+    m->vals[i] = val;
+}
+
+const char *strmap_get(const StrMap *m, const char *key) {
+    if (!m->cap)
+        return NULL;
+    size_t i = strmap_slot(m->keys, m->cap, key);
+    return m->keys[i] ? m->vals[i] : NULL;
+}

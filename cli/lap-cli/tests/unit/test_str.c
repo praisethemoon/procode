@@ -86,6 +86,36 @@ void test_str(void) {
     ASSERT_TRUE(str_hash(str_c("a")) != str_hash(str_c("b")));
     ASSERT_TRUE(str_hash(str_c("")) != str_hash(str_c(" ")));
 
+    t_begin("str: StrMap puts and gets, the last put winning, and grows");
+    StrMap m;
+    memset(&m, 0, sizeof m);
+    ASSERT_TRUE(strmap_get(&m, "x") == NULL);
+    strmap_put(a, &m, "x", "1");
+    strmap_put(a, &m, "x", "2");
+    ASSERT_EQ_S(strmap_get(&m, "x"), "2");
+    char *keys[200];
+    for (int32_t i = 0; i < 200; i++) {
+        keys[i] = arena_printf(a, "k%d", i);
+        strmap_put(a, &m, keys[i], keys[i]);
+    }
+    ASSERT_EQ_I((int32_t)m.n, 201);
+    ASSERT_EQ_S(strmap_get(&m, "k0"), "k0");
+    ASSERT_EQ_S(strmap_get(&m, "k199"), "k199");
+    ASSERT_TRUE(strmap_get(&m, "k200") == NULL);
+
+    t_begin("str: a chain of copies followed through a StrMap reaches the "
+            "original");
+    StrMap from;
+    memset(&from, 0, sizeof from);
+    strmap_put(a, &from, "main-copy", "b1-copy"); /* copied from b1's copy */
+    strmap_put(a, &from, "b1-copy", "b2-orig");   /* which came from b2 */
+    const char *f = "main-copy", *last = NULL;
+    int32_t hops = 0;
+    for (; f; f = strmap_get(&from, f), hops++)
+        last = f;
+    ASSERT_EQ_S(last, "b2-orig");
+    ASSERT_EQ_I(hops, 3);
+
     t_begin("str: lines_bytes is join_lines' length, without joining");
     const char *shapes[] = {"", "a\n", "a\nbb", "a\nbb\n", "\n\n", NULL};
     for (int32_t i = 0; shapes[i]; i++) {

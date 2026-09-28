@@ -70,4 +70,14 @@ void strset_init(StrSet *s, Arena *a);
 bool strset_add(StrSet *s, const char *key);
 bool strset_has(const StrSet *s, const char *key);
 
+/* string -> string, hashed, the last put winning; zero-initialized empty.
+ * Keys and values are stored as given (the caller keeps them alive). */
+typedef struct {
+    const char **keys, **vals;
+    size_t cap, n;
+} StrMap;
+
+void strmap_put(Arena *a, StrMap *m, const char *key, const char *val);
+const char *strmap_get(const StrMap *m, const char *key); /* NULL: none */
+
 #endif /* LAP_STR_H */

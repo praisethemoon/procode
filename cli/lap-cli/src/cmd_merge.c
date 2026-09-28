@@ -41,6 +41,95 @@ static int32_t find_hash(const RecLog *log, const char *hash) {
     return -1;
 }
 
+/* The merges this folder took in by way of other branches. A merge of
+ * branch L recorded here brings L's history up to the head adopted, and
+ * with it L's own merges of other branches (their merge records in that
+ * history), and theirs in turn: out gets each such merge record. Every from
+ * link read on the way goes into from_of (copy -> what it was copied from),
+ * so a copy of a copy leads back to its original. */
+static void merges_by_way(Arena *a, const char *lapdir, const RecLog *plog,
+                          const Rec ***out, int32_t *nout, StrMap *from_of) {
+    typedef struct {
+        const char *id, *head;
+    } Todo;
+    const Rec **v = NULL;
+    Todo *todo = NULL;
+    size_t n = 0, cap = 0, nt = 0, tcap = 0;
+    StrSet seen;
+    strset_init(&seen, a);
+    for (int32_t i = 0; i < plog->count; i++) {
+        const Rec *r = &plog->v[i];
+        if (r->from)
+            strmap_put(a, from_of, r->hash, r->from);
+        if (r->type == REC_MERGE) {
+            ARENA_GROW(a, todo, nt, tcap, Todo);
+            todo[nt++] = (Todo){r->branch, r->head};
+        }
+    }
+    for (size_t t = 0; t < nt; t++) {
+        const char *id = todo[t].id, *head = todo[t].head;
+        if (!strset_add(&seen, arena_printf(a, "%s:%s", id, head)))
+            continue;
+        Hist h;
+        char err[256], *data;
+        size_t len;
+        RecLog l;
+        if (!hist_open_lineage(a, lapdir, id, &h, err, sizeof err) ||
+            !hist_read_all(a, &h, &data, &len) ||
+            !rec_log_parse(a, data, len, NULL, NULL, &l, err, sizeof err))
+            continue; /* its chunks are not here: nothing came by it */
+        int32_t upto = find_hash(&l, head);
+        for (int32_t i = 0; i <= upto; i++) {
+            const Rec *r = &l.v[i];
+            if (r->from)
+                strmap_put(a, from_of, r->hash, r->from);
+            if (r->type == REC_MERGE) {
+                ARENA_GROW(a, v, n, cap, const Rec *);
+                v[n++] = r;
+                ARENA_GROW(a, todo, nt, tcap, Todo);
+                todo[nt++] = (Todo){r->branch, r->head};
+            }
+        }
+    }
+    *out = v;
+    *nout = (int32_t)n;
+}
+
+/* What m holds for branch record b, found by b's hash or by any record b
+ * is a copy of (following from links): the record's work may have come
+ * here first by another route. */
+static const char *map_chain(const Map *m, const Rec *b,
+                             const StrMap *from_of) {
+    const char *v = map_get(m, b->hash);
+    for (const char *f = b->from; !v && f; f = strmap_get(from_of, f))
+        v = map_get(m, f);
+    return v;
+}
+
+static bool set_chain(const StrSet *s, const Rec *b, const StrMap *from_of) {
+    if (strset_has(s, b->hash))
+        return true;
+    for (const char *f = b->from; f; f = strmap_get(from_of, f)) {
+        if (strset_has(s, f))
+            return true;
+    }
+    return false;
+}
+
+/* Whether branch commit b is here already as another route's copy: a copy
+ * of a copy of it, or a copy of what b itself was copied from. (A direct
+ * copy is this merge's own, from an interrupted run, and is placed again.) */
+static bool came_by_way(const Rec *b, const StrSet *by_way, const Map *copy_of,
+                        const StrMap *from_of) {
+    if (strset_has(by_way, b->hash))
+        return true;
+    for (const char *f = b->from; f; f = strmap_get(from_of, f)) {
+        if (map_get(copy_of, f))
+            return true;
+    }
+    return false;
+}
+
 /* A branch of the chain one merge adopts: the branch named, and the
  * branches it started from that this folder has not taken in yet — outer
  * (the one started from this folder's history) first. */
@@ -383,23 +472,46 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     /* file -> the first commit to it an earlier merge did not place */
     Map stopped_before = {0};
     Map adopted_sessions = {0}; /* branch session_start hash -> our id */
-    for (int32_t i = 0; i < plog.count; i++) {
-        const Rec *p = &plog.v[i];
+    /* Work can come here by way of another branch that had merged it: its
+     * merges count as merges here, and a copy of a copy leads back to the
+     * original, so nothing is adopted twice. */
+    StrMap from_of = {0};
+    const Rec **byway;
+    int32_t nbyway;
+    merges_by_way(a, repo.lapdir, &plog, &byway, &nbyway, &from_of);
+    int32_t *best = (int32_t *)arena_alloc(a, (size_t)nlin * sizeof(int32_t));
+    for (int32_t k = 0; k < nlin; k++)
+        best[k] = -1;
+    for (int32_t i = 0; i < plog.count + nbyway; i++) {
+        const Rec *p = i < plog.count ? &plog.v[i] : byway[i - plog.count];
         if (p->type == REC_MERGE) {
             for (int32_t k = 0; k < nlin; k++) {
                 if (strcmp(p->branch, lin[k].id) != 0)
                     continue;
-                lin[k].head = p->head;
+                /* the furthest head any route reached; one the stream no
+                 * longer holds only when no route's is found */
+                int32_t h = find_hash(&blog, p->head);
+                if (h >= best[k] || !lin[k].head) {
+                    if (h >= best[k])
+                        best[k] = h;
+                    if (h >= 0 || best[k] < 0)
+                        lin[k].head = p->head;
+                }
                 for (int32_t s = 0; s < p->stopped_n; s++) {
                     if (!map_get(&stopped_before, p->stopped_file[s]))
                         map_put(a, &stopped_before, p->stopped_file[s],
                                 p->stopped_at[s]);
                 }
             }
-        } else if (p->type == REC_SESSION_START && p->from) {
-            map_put(a, &adopted_sessions, p->from, p->id);
-        } else if (p->type == REC_SESSION_END && p->from) {
-            strset_add(&ended, p->from);
+            continue;
+        }
+        if (i >= plog.count || !p->from)
+            continue;
+        for (const char *f = p->from; f; f = strmap_get(&from_of, f)) {
+            if (p->type == REC_SESSION_START)
+                map_put(a, &adopted_sessions, f, p->id);
+            else if (p->type == REC_SESSION_END)
+                strset_add(&ended, f);
         }
     }
     int32_t upto = bi; /* the stream's last record already taken in here */
@@ -450,12 +562,21 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     Map copy_of = {0};
     StrSet amends_here;
     strset_init(&amends_here, a);
+    StrSet by_way; /* branch commits here only as copies of copies */
+    strset_init(&by_way, a);
     for (int32_t i = 0; i < plog.count; i++) {
         const Rec *p = &plog.v[i];
-        if (p->type == REC_COMMIT && p->from)
-            map_put(a, &copy_of, p->from, p->hash);
-        else if (p->type == REC_AMEND && p->from)
-            strset_add(&amends_here, p->from);
+        if (!p->from)
+            continue;
+        for (const char *f = p->from; f; f = strmap_get(&from_of, f)) {
+            if (p->type == REC_COMMIT) {
+                map_put(a, &copy_of, f, p->hash);
+                if (f != p->from)
+                    strset_add(&by_way, f);
+            } else if (p->type == REC_AMEND) {
+                strset_add(&amends_here, f);
+            }
+        }
     }
     int32_t amends_carried = 0, amends_left = 0;
 
@@ -469,7 +590,9 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     StrSet seen;
     strset_init(&seen, a);
     for (int32_t i = start; i < blog.count; i++) {
-        if (blog.v[i].type == REC_COMMIT && strset_add(&seen, blog.v[i].file)) {
+        if (blog.v[i].type == REC_COMMIT &&
+            !came_by_way(&blog.v[i], &by_way, &copy_of, &from_of) &&
+            strset_add(&seen, blog.v[i].file)) {
             ARENA_GROW(a, files, nfiles, fcap, const char *);
             files[nfiles++] = blog.v[i].file;
         }
@@ -489,8 +612,9 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         size_t n = 0, mcap = 0, icap = 0;
         for (int32_t i = start; i < blog.count; i++) {
             if (blog.v[i].type != REC_COMMIT ||
-                strcmp(blog.v[i].file, files[f]) != 0)
-                continue;
+                strcmp(blog.v[i].file, files[f]) != 0 ||
+                came_by_way(&blog.v[i], &by_way, &copy_of, &from_of))
+                continue; /* not this file's, or here by another branch */
             size_t ni = n;
             ARENA_GROW(a, mine, n, mcap, const Rec *);
             ARENA_GROW(a, idx, ni, icap, int32_t);
@@ -613,9 +737,8 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             rec.ts = b->ts;
             rec.user = b->user;
             if (b->type == REC_SESSION_START) {
-                const char *prior = map_get(&adopted_sessions, b->hash);
-                if (!prior && b->from) /* adopted here by another route */
-                    prior = map_get(&adopted_sessions, b->from);
+                /* adopted here before, by this route or another */
+                const char *prior = map_chain(&adopted_sessions, b, &from_of);
                 if (prior) {
                     map_put(a, &adopted_sessions, b->hash, prior);
                     continue;
@@ -630,8 +753,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             } else if (b->type == REC_SESSION_END) {
                 const char *sh = map_get(&starts, b->id);
                 const char *ours = sh ? map_get(&adopted_sessions, sh) : NULL;
-                if (!ours || strset_has(&ended, b->hash) ||
-                    (b->from && strset_has(&ended, b->from)))
+                if (!ours || set_chain(&ended, b, &from_of))
                     continue; /* not adopted, or already ended here */
                 rec.type = REC_SESSION_END;
                 rec.id = ours;
@@ -661,8 +783,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 rec.behavior = b->behavior;
                 rec.forced = b->forced;
             } else if (b->type == REC_AMEND) {
-                if (strset_has(&amends_here, b->hash) ||
-                    (b->from && strset_has(&amends_here, b->from)))
+                if (set_chain(&amends_here, b, &from_of))
                     continue; /* carried already */
                 /* the commit it names, adopted here straight from this
                  * branch or from the branch that commit came from */

@@ -540,6 +540,15 @@ folder, `lap merge <branch> [--dry-run]`.
    stopped in an outer branch's part is stopped in the inner branches'
    records too.
 
+**Work that came by another route.** A branch's work can reach this folder
+through a branch that had merged it (b2 merged into b1, b1 into main, then
+b2 straight into main, or the other way round). A merge record in an
+adopted branch's history, up to the head adopted here, counts as a merge
+made here — its head and its stops — and `from` links are followed through
+every copy (a copy of a copy leads to the original). So a commit, session,
+session end or amendment whose original is already here, by any route, is
+never adopted again.
+
 **What is left.** The working tree holds what `git merge` made; the shadow
 holds this history plus what was adopted. The difference — conflict
 resolutions, stopped files, anything git did that lap could not place —

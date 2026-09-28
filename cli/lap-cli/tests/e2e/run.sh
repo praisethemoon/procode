@@ -2263,6 +2263,60 @@ grep '"type":"merge"' .lap/log/main.*.jsonl | grep -q '"name":"b2",.*"stopped":\
 expect_grep "0 mismatch" "$LAP" verify --deep
 cd "$WORK"
 
+t "work that reached main through the branch between is not adopted again when its branch merges straight in"
+nest_trio n4
+cd "$N2" && "$LAP" session start "b2 work session" --branch b2 --meta ticket=T-9 >/dev/null 2>&1
+edit_commit "$N2" b2 f.txt '5a\
+X' "B2 inserts X after line 5"
+cd "$N2" && "$LAP" session end >/dev/null 2>&1 && git add -A && git commit -qm "b2 X" >/dev/null
+cd "$N1" && git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into b"
+expect_grep "adopted 1 of 1" "$LAP" merge b2
+"$LAP" session start "b1 takes X out" --branch b >/dev/null 2>&1
+edit_commit "$N1" b f.txt '/^X$/d' "B1 deletes X again"
+cd "$N1" && "$LAP" session end >/dev/null 2>&1 && git add -A && git commit -qm "b1 without X" >/dev/null
+cd "$NP" && git add -A && git commit -qm "main" >/dev/null 2>&1
+git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge b into main"
+expect_ok "$LAP" merge b
+expect_grep "clean" "$LAP" status
+cd "$N2" && "$LAP" session start "b2 more" --branch b2 >/dev/null 2>&1
+edit_commit "$N2" b2 g.txt 's/^g3$/B2 g3/' "B2 edits g3 later"
+cd "$N2" && "$LAP" session end >/dev/null 2>&1 && git add -A && git commit -qm "b2 more" >/dev/null
+cd "$NP" && git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into main"
+expect_grep "adopted 1 of 1 commit" "$LAP" merge b2
+expect_grep "clean" "$LAP" status
+once "B2 inserts X after line 5"
+once "B2 edits g3 later"
+[ "$("$LAP" session list --meta ticket=T-9 --json | grep -o '"msg":"b2 work session"' | wc -l | tr -d ' ')" = 1 ] ||
+    fail "b2's session is listed more than once"
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
+t "a branch's work taken straight into main is not adopted again from the branch between"
+nest_trio n5
+cd "$N2" && "$LAP" session start "b2 work session" --branch b2 --meta ticket=T-9 >/dev/null 2>&1
+edit_commit "$N2" b2 f.txt '5a\
+X' "B2 inserts X after line 5"
+cd "$N2" && "$LAP" session end >/dev/null 2>&1 && git add -A && git commit -qm "b2 X" >/dev/null
+cd "$N1" && git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into b"
+expect_grep "adopted 1 of 1" "$LAP" merge b2
+git add -A && git commit -qm "b took in b2" >/dev/null
+cd "$NP" && git add -A && git commit -qm "main" >/dev/null 2>&1
+git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into main"
+expect_ok "$LAP" merge b2
+cd "$N1" && "$LAP" session start "b1 later" --branch b >/dev/null 2>&1
+edit_commit "$N1" b g.txt 's/^g1$/B1 g1/' "B1 edits g1 later"
+cd "$N1" && "$LAP" session end >/dev/null 2>&1 && git add -A && git commit -qm "b1 later" >/dev/null
+cd "$NP" && git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge b into main"
+expect_ok "$LAP" merge b
+expect_grep "clean" "$LAP" status
+once "B2 inserts X after line 5"
+once "B1 edits line 10 before b2 starts"
+once "B1 edits g1 later"
+[ "$("$LAP" session list --meta ticket=T-9 --json | grep -o '"msg":"b2 work session"' | wc -l | tr -d ' ')" = 1 ] ||
+    fail "b2's session is listed more than once"
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"
