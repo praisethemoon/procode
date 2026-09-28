@@ -2742,6 +2742,18 @@ expect_grep "outside this repository: sub has its own .lap/" "$LAP" commit sub/a
 cd "$WORK/ns1/sub" && expect_grep "modified  a.txt" "$LAP" status
 cd "$WORK"
 
+t "lap amend refuses a session or other record with not_a_commit"
+mkdir -p "$WORK/am9" && cd "$WORK/am9" && "$LAP" init >/dev/null 2>&1
+"$LAP" session start "work to amend" >/dev/null 2>&1
+printf 'a\n' > a.txt
+"$LAP" commit a.txt -i "seed the fixture" -b "records a.txt as the base" >/dev/null 2>&1
+SH=$("$LAP" session list --json | grep -o '"hash":"[0-9a-f]*"' | head -n 1 | cut -d'"' -f4)
+expect_grep '"error":"not_a_commit".*session_start' "$LAP" amend "$(printf %.12s "$SH")" \
+    -i "a new intent here" -b "a new behavior here" --json
+expect_grep '"error":"not_a_commit"' "$LAP" amend S1 -i "a new intent here" -b "a new behavior here" --json
+expect_ok "$LAP" amend L1 -i "a new intent here" -b "a new behavior here"
+cd "$WORK"
+
 t "a read-only parent refuses the start and nothing is made here"
 if [ "$(id -u)" != 0 ]; then
     mkdir -p "$WORK/br" && cp "$WORK/bp/f.txt" "$WORK/bp/g.txt" "$WORK/bp/.lapignore" "$WORK/bp/.gitignore" "$WORK/br/"

@@ -190,6 +190,12 @@ bool message_args(Arena *a, int32_t argc, char **argv,
  * *code = "unknown_ref" / "ambiguous_ref" and a sentence in err. */
 int32_t ref_find(const RecLog *log, const char *ref, const char **code,
                  char *err, size_t errsz);
+/* ref_find over every record: a hash names whatever record it is (a
+ * session's start, an amendment), and "S<n>" names a session's start. For
+ * a command that says what else a reference named (lap amend's
+ * not_a_commit). */
+int32_t ref_find_record(const RecLog *log, const char *ref,
+                        const char **code, char *err, size_t errsz);
 /* True when ref is spelled as a commit id rather than a hash. */
 bool ref_is_id(const char *ref);
 

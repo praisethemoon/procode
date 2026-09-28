@@ -247,9 +247,21 @@ bool ref_is_id(const char *ref) {
     return true;
 }
 
-int32_t ref_find(const RecLog *log, const char *ref, const char **code,
-                 char *err, size_t errsz) {
+/* ref_find, over every record when any is set: a hash names whatever
+ * record it is, and "S<n>" a session's start. */
+static int32_t find_ref(const RecLog *log, const char *ref, bool any,
+                        const char **code, char *err, size_t errsz) {
     *code = "unknown_ref";
+    if (any && (ref[0] == 'S' || ref[0] == 's') && ref[1] >= '0' &&
+        ref[1] <= '9') {
+        for (int32_t i = 0; i < log->count; i++) {
+            if (log->v[i].type == REC_SESSION_START && log->v[i].id &&
+                strcasecmp(log->v[i].id, ref) == 0)
+                return i;
+        }
+        snprintf(err, errsz, "no session named %s", ref);
+        return -1;
+    }
     if (ref_is_id(ref)) {
         for (int32_t i = 0; i < log->count; i++) {
             if (log->v[i].type == REC_COMMIT &&
@@ -281,23 +293,37 @@ int32_t ref_find(const RecLog *log, const char *ref, const char **code,
     char list[256] = "";
     for (int32_t i = 0; i < log->count; i++) {
         const Rec *rec = &log->v[i];
-        if (rec->type != REC_COMMIT || memcmp(rec->hash, want, n) != 0)
+        if ((!any && rec->type != REC_COMMIT) ||
+            memcmp(rec->hash, want, n) != 0)
             continue;
         if (matches++ == 0)
             found = i;
         size_t used = strlen(list);
         snprintf(list + used, sizeof list - used, "%s%s %.*s",
-                 used ? ", " : "", rec->id, (int)SHORT_HASH_LEN, rec->hash);
+                 used ? ", " : "", rec->id ? rec->id : rec_type_name(rec->type),
+                 (int)SHORT_HASH_LEN, rec->hash);
     }
     if (matches == 1)
         return found;
     if (matches > 1) {
         *code = "ambiguous_ref";
-        snprintf(err, errsz, "%s matches %d commits: %s", ref, matches, list);
+        snprintf(err, errsz, "%s matches %d %s: %s", ref, matches,
+                 any ? "records" : "commits", list);
         return -1;
     }
-    snprintf(err, errsz, "no commit has a hash starting %.*s", (int)n, want);
+    snprintf(err, errsz, "no %s has a hash starting %.*s",
+             any ? "record" : "commit", (int)n, want);
     return -1;
+}
+
+int32_t ref_find(const RecLog *log, const char *ref, const char **code,
+                 char *err, size_t errsz) {
+    return find_ref(log, ref, false, code, err, errsz);
+}
+
+int32_t ref_find_record(const RecLog *log, const char *ref,
+                        const char **code, char *err, size_t errsz) {
+    return find_ref(log, ref, true, code, err, errsz);
 }
 
 void caches_sync_warn(Arena *a, const Repo *r) {

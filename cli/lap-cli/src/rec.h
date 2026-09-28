@@ -104,6 +104,8 @@ typedef struct {
 } Rec;
 
 /* Serializes rec (canonical field order), fills rec->hash and rec->raw. */
+/* A record type as the log spells it ("commit", "session_start", …). */
+const char *rec_type_name(RecType t);
 char *rec_encode(Arena *a, Rec *rec, size_t *out_len);
 
 /* Parses one line; returns false with a message in err on malformed input. */

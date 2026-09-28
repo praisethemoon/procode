@@ -18,6 +18,10 @@ static const char *type_name(RecType t) {
     return "?";
 }
 
+const char *rec_type_name(RecType t) {
+    return type_name(t);
+}
+
 static void put_text_array(StrBuf *sb, const char *key, const Str *lines,
                            int32_t n) {
     sb_printf(sb, ",\"%s\":[", key);

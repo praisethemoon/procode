@@ -933,7 +933,8 @@ branches exist, as for commits. Needs no session.
 Only commits of **this folder's own line of history** can be amended: in
 a branch folder, a commit from before its base is its parent's
 (`not_own_commit`: amend it there). Also refused: `not_a_commit` (the
-reference names another record), `same_message` (the commit already says
+reference names another record: a hash of a session's start or an
+amendment, or `S<n>`, naming the record's type), `same_message` (the commit already says
 that), `unknown_ref`/`ambiguous_ref`. Prints `[L42 fa9cebd] amended (<n>)`
 and the new intent's first line; `--json` returns the commit's `id`,
 `hash` and `amended` (the count).

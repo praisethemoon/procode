@@ -42,14 +42,17 @@ int32_t cmd_amend(Arena *a, int32_t argc, char **argv) {
         goto done;
     }
     const char *code;
-    int32_t at = ref_find(&log, ref, &code, err, sizeof err);
+    int32_t at = ref_find_record(&log, ref, &code, err, sizeof err);
     if (at < 0) {
         err_out(json, code, "%s", err);
         goto done;
     }
     Rec *c = &log.v[at];
     if (c->type != REC_COMMIT) {
-        err_out(json, "not_a_commit", "%s is not a commit", ref);
+        err_out(json, "not_a_commit",
+                "%s is not a commit: it names a %s record; lap amend "
+                "corrects commits",
+                ref, rec_type_name(c->type));
         goto done;
     }
     /* a branch's history starts with its parent's, which only the parent

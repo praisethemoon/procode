@@ -352,6 +352,33 @@ void test_branches(void) {
     rl[3].branch = "ffffffffffff"; /* another branch's merge: other work */
     ASSERT_EQ_I(merge_redo_point(&rlog, &nw, &runb), 3);
 
+    t_begin("ref_find_record: a hash or S<n> names any record, which "
+            "ref_find, for commits only, does not");
+    Rec rr[3];
+    memset(rr, 0, sizeof rr);
+    rr[0].type = REC_SESSION_START;
+    rr[0].id = "S1";
+    snprintf(rr[0].hash, sizeof rr[0].hash, "%s", "aaaa1111aaaa1111");
+    rr[1].type = REC_COMMIT;
+    rr[1].id = "L1";
+    snprintf(rr[1].hash, sizeof rr[1].hash, "%s", "bbbb2222bbbb2222");
+    rr[2].type = REC_AMEND;
+    snprintf(rr[2].hash, sizeof rr[2].hash, "%s", "cccc3333cccc3333");
+    RecLog rrlog;
+    memset(&rrlog, 0, sizeof rrlog);
+    rrlog.v = rr;
+    rrlog.count = 3;
+    const char *rcode;
+    char rerr[256];
+    ASSERT_EQ_I(ref_find_record(&rrlog, "aaaa1111", &rcode, rerr, sizeof rerr), 0);
+    ASSERT_EQ_I(ref_find_record(&rrlog, "#CCCC3333", &rcode, rerr, sizeof rerr), 2);
+    ASSERT_EQ_I(ref_find_record(&rrlog, "S1", &rcode, rerr, sizeof rerr), 0);
+    ASSERT_EQ_I(ref_find_record(&rrlog, "L1", &rcode, rerr, sizeof rerr), 1);
+    ASSERT_EQ_I(ref_find_record(&rrlog, "S9", &rcode, rerr, sizeof rerr), -1);
+    ASSERT_EQ_S(rcode, "unknown_ref");
+    ASSERT_EQ_I(ref_find(&rrlog, "aaaa1111", &rcode, rerr, sizeof rerr), -1);
+    ASSERT_EQ_I(ref_find(&rrlog, "bbbb2222", &rcode, rerr, sizeof rerr), 1);
+
     t_begin("merge_nothing_yet: a merge finding nothing records itself only "
             "for a branch never merged, marking each unmerged in its chain");
     const char *mh[2] = {NULL, "hash-of-b1"};
