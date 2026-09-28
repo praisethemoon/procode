@@ -6,7 +6,23 @@
 #include "platform.h"
 #include "test.h"
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #define T_REGDIR ".branches_unit_test"
+
+/* A fixture folder under TMPDIR (else /tmp), not left in the source tree;
+ * on Windows, in the current folder as before. */
+static void unit_tmp(char *out, size_t sz, const char *name) {
+#ifdef _WIN32
+    snprintf(out, sz, ".%s", name);
+#else
+    const char *t = getenv("TMPDIR");
+    snprintf(out, sz, "%s/lap_unit_%ld_%s", t && *t ? t : "/tmp",
+             (long)getpid(), name);
+#endif
+}
 
 void test_branches(void) {
     Arena *a = arena_new(0);
@@ -217,15 +233,14 @@ void test_branches(void) {
     t_begin("branches_load_deep: a branch's registry joins, its entries "
             "marked with the branch that listed them");
     remove(path);
-    plat_mkdirs(".deep_unit_b1/.lap");
-    hist_write_lineage(".deep_unit_b1/.lap", "0123456789ab");
+    char b1path[LAP_PATH_MAX], b1lap[LAP_PATH_MAX];
+    unit_tmp(b1path, sizeof b1path, "deep_unit_b1");
+    snprintf(b1lap, sizeof b1lap, "%s/.lap", b1path);
+    plat_mkdirs(b1lap);
+    hist_write_lineage(b1lap, "0123456789ab");
     Branches top, sub, deep;
     memset(&top, 0, sizeof top);
     memset(&sub, 0, sizeof sub);
-    char b1path[LAP_PATH_MAX];
-    ASSERT_TRUE(plat_getcwd(b1path, sizeof b1path));
-    snprintf(b1path + strlen(b1path), sizeof b1path - strlen(b1path),
-             "/.deep_unit_b1");
     branches_add(a, &top, (BranchEntry){"0123456789ab", "b1", b1path, "x",
                                         "t", NULL});
     branches_add(a, &sub, (BranchEntry){"ba9876543210", "b2", "/w/b2", "y",
@@ -233,7 +248,7 @@ void test_branches(void) {
     branches_add(a, &sub, (BranchEntry){"0123456789ab", "b1", b1path, "x",
                                         "t", NULL}); /* already listed */
     ASSERT_TRUE(branches_save(a, T_REGDIR, &top));
-    ASSERT_TRUE(branches_save(a, ".deep_unit_b1/.lap", &sub));
+    ASSERT_TRUE(branches_save(a, b1lap, &sub));
     branches_load_deep(a, T_REGDIR, &deep);
     ASSERT_EQ_I(deep.n, 2);
     ASSERT_TRUE(deep.v[0].via == NULL);
@@ -244,13 +259,16 @@ void test_branches(void) {
 
     t_begin("branches_load_deep: a folder that is no longer that branch is "
             "not followed");
-    hist_write_lineage(".deep_unit_b1/.lap", "ba9876543210");
+    hist_write_lineage(b1lap, "ba9876543210");
     branches_load_deep(a, T_REGDIR, &deep);
     ASSERT_EQ_I(deep.n, 1);
     char subpath[LAP_PATH_MAX];
-    snprintf(subpath, sizeof subpath, ".deep_unit_b1/.lap/%s",
-             LAP_BRANCHES_NAME);
+    snprintf(subpath, sizeof subpath, "%s/%s", b1lap, LAP_BRANCHES_NAME);
     remove(subpath);
+    snprintf(subpath, sizeof subpath, "%s/lineage", b1lap);
+    remove(subpath);
+    remove(b1lap);
+    remove(b1path);
     remove(path);
 
     t_begin("repo_write_gitignore: git keeps only log/ and the file itself; "
@@ -516,15 +534,19 @@ void test_branches(void) {
     t_begin("own_chunks: this folder's copy wins, and the branch folder is "
             "not read unless it may fill in");
     const char *oid = "0123456789ab";
-    char here_c1[256], there_c1[256], there_c2[256];
-    plat_mkdirs(".own_unit_here/.lap/log");
-    plat_mkdirs(".own_unit_there/.lap/log");
-    snprintf(here_c1, sizeof here_c1, ".own_unit_here/.lap/log/%s.000001.jsonl",
-             oid);
-    snprintf(there_c1, sizeof there_c1,
-             ".own_unit_there/.lap/log/%s.000001.jsonl", oid);
-    snprintf(there_c2, sizeof there_c2,
-             ".own_unit_there/.lap/log/%s.000002.jsonl", oid);
+    char here[LAP_PATH_MAX], there[LAP_PATH_MAX], here_lap[LAP_PATH_MAX];
+    char here_log[LAP_PATH_MAX], there_log[LAP_PATH_MAX];
+    char here_c1[LAP_PATH_MAX], there_c1[LAP_PATH_MAX], there_c2[LAP_PATH_MAX];
+    unit_tmp(here, sizeof here, "own_unit_here");
+    unit_tmp(there, sizeof there, "own_unit_there");
+    snprintf(here_lap, sizeof here_lap, "%s/.lap", here);
+    snprintf(here_log, sizeof here_log, "%s/log", here_lap);
+    snprintf(there_log, sizeof there_log, "%s/.lap/log", there);
+    plat_mkdirs(here_log);
+    plat_mkdirs(there_log);
+    snprintf(here_c1, sizeof here_c1, "%s/%s.000001.jsonl", here_log, oid);
+    snprintf(there_c1, sizeof there_c1, "%s/%s.000001.jsonl", there_log, oid);
+    snprintf(there_c2, sizeof there_c2, "%s/%s.000002.jsonl", there_log, oid);
     plat_write_file_atomic(here_c1, "a\n", 2);
     plat_write_file_atomic(there_c1, "a\nb\n", 4);
     plat_write_file_atomic(there_c2, "c\nd", 3);
@@ -532,7 +554,7 @@ void test_branches(void) {
     int32_t nown;
     bool obehind;
     char oerr[256];
-    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
+    ASSERT_TRUE(own_chunks(a, here_lap, there, oid,
                            false, false, &own, &nown, &obehind, oerr,
                            sizeof oerr));
     ASSERT_EQ_I(nown, 1);
@@ -541,7 +563,7 @@ void test_branches(void) {
 
     t_begin("own_chunks: filling in, a shorter copy here is extended and a "
             "missing chunk taken, cut to its complete lines");
-    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
+    ASSERT_TRUE(own_chunks(a, here_lap, there, oid,
                            true, true, &own, &nown, &obehind, oerr,
                            sizeof oerr));
     ASSERT_EQ_I(nown, 2);
@@ -554,13 +576,13 @@ void test_branches(void) {
     t_begin("own_chunks: filling in without extending (git brought the copy "
             "here), a shorter copy is kept as the last chunk and said to be "
             "behind");
-    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
+    ASSERT_TRUE(own_chunks(a, here_lap, there, oid,
                            true, false, &own, &nown, &obehind, oerr,
                            sizeof oerr));
     ASSERT_EQ_I(nown, 1);
     ASSERT_TRUE(!own[0].write && own[0].len == 2);
     ASSERT_TRUE(obehind);
-    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
+    ASSERT_TRUE(own_chunks(a, here_lap, there, oid,
                            true, true, &own, &nown, &obehind, oerr,
                            sizeof oerr));
     ASSERT_TRUE(!obehind);
@@ -568,7 +590,7 @@ void test_branches(void) {
     t_begin("own_chunks: a copy here that is not a prefix of the folder's is "
             "kept as it is");
     plat_write_file_atomic(here_c1, "x\n", 2);
-    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
+    ASSERT_TRUE(own_chunks(a, here_lap, there, oid,
                            true, true, &own, &nown, &obehind, oerr,
                            sizeof oerr));
     ASSERT_TRUE(!own[0].write && memcmp(own[0].data, "x\n", 2) == 0);
@@ -576,16 +598,23 @@ void test_branches(void) {
     t_begin("own_chunks: a chunk holding only a line still being written "
             "ends them; nothing anywhere is none");
     plat_write_file_atomic(there_c2, "zz", 2);
-    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", ".own_unit_there", oid,
+    ASSERT_TRUE(own_chunks(a, here_lap, there, oid,
                            true, true, &own, &nown, &obehind, oerr,
                            sizeof oerr));
     ASSERT_EQ_I(nown, 1);
     remove(here_c1);
-    ASSERT_TRUE(own_chunks(a, ".own_unit_here/.lap", NULL, oid, true, true,
+    ASSERT_TRUE(own_chunks(a, here_lap, NULL, oid, true, true,
                            &own, &nown, &obehind, oerr, sizeof oerr));
     ASSERT_EQ_I(nown, 0);
     remove(there_c1);
     remove(there_c2);
+    remove(here_log);
+    remove(here_lap);
+    remove(here);
+    remove(there_log);
+    snprintf(there_log, sizeof there_log, "%s/.lap", there);
+    remove(there_log);
+    remove(there);
 
     t_begin("branches_live_of: an entry whose folder is that branch and "
             "names this folder its parent is live");

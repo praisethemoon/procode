@@ -238,6 +238,11 @@ yourself.
   into main: `git merge` it there, then `lap merge sub`, which adopts the
   work of the branch between up to where `sub` started, too. `lap branch
   list` in main shows `sub` under `parser`.
+- **Merging the parent into a branch is not supported.** Never `git merge`
+  the parent (main) into a branch folder to stay current: its changes would
+  show as the branch's own pending edits and, if committed, come back to the
+  parent as branch work. To take in the parent's newer work, merge the
+  branch back, then start a fresh branch.
 - Ids repeat across folders (both go on from the base). In text that
   leaves the folder — a ticket comment, another branch's commit — cite
   commits by hash and sessions as `<branch>/S<n>`. lap prints a branch's

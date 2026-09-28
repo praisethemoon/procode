@@ -362,6 +362,12 @@ chain; `lap verify` detects it but cannot repair it. For parallel work, use
 lap branches (above): each records to its own chunks, and `lap merge`
 adopts them without git ever conflicting on `.lap/log/`.
 
+**Merging the parent into a branch is not supported.** Never `git merge`
+the parent (main) into a branch folder to stay current: its changes would
+show as the branch's own pending edits and, if committed, come back to the
+parent as branch work. To take in the parent's newer work, merge the
+branch back, then start a fresh branch.
+
 **Renames are two commits**, because lap tracks paths, not file identity —
 record the old path's disappearance and the new path's appearance, and name
 the other path in each behavior. Blame and `lap log --file` cannot follow a

@@ -228,6 +228,12 @@ specs/      the kb contract and the artifact format
 > goes in its own chunk files, and `lap merge` adopts it), and keep one
 > board: branch folders use their parent's.
 
+**Merging the parent into a branch is not supported.** Never `git merge`
+the parent (main) into a branch folder to stay current: its changes would
+show as the branch's own pending edits and, if committed, come back to the
+parent as branch work. To take in the parent's newer work, merge the
+branch back, then start a fresh branch.
+
 lap's other limits (it cannot restore files, it takes changes git makes
 for yours, renames are two commits) are in
 [its README](cli/lap-cli/README.md#limitations).

@@ -84,6 +84,11 @@ The lap skill covers lap itself; this is the loop around it.
   its own work, `git merge` the branch, then `lap merge <branch>` — in that
   order. On `git_merge_first`, run the `git merge` you skipped and merge
   again; never use `--copy-from-folder` unless the user asks for it.
+- **Merging the parent into a branch is not supported.** Never `git merge`
+  the parent (main) into a branch folder to stay current: its changes would
+  show as the branch's own pending edits and, if committed, come back to the
+  parent as branch work. To take in the parent's newer work, merge the
+  branch back, then start a fresh branch.
 - **The CLIs are the user's to build.** Do not add tickets for CLI
   packaging or releases unless asked.
 - Report failures as failures: a skipped test, an unverified claim, a

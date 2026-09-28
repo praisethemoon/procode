@@ -409,5 +409,55 @@ void test_adopt(void) {
     adopt_place(a, tn, midp, true, c33, 1, &p);
     ASSERT_TRUE(p.already[0] && p.why == NULL);
 
+    t_begin("adopt: a sibling branch's commits land on top of the work the "
+            "parent adopted from the other sibling");
+    Lines sb = numbered(a, 40);
+    /* sibling a, adopted: line 5 rewritten, two lines inserted before 20 */
+    Lines sa = lines_replace(a, sb, 5, 1, L(a, "A5\n").lines, 1, true);
+    sa = lines_replace(a, sa, 20, 0, L(a, "a1\na2\n").lines, 2, true);
+    Rec *s1 = edit(a, sb, 30, 1, "B30\n");
+    Rec *s2 = edit(a, after(a, sb, s1), 3, 1, "B3\n");
+    const Rec *c34[] = {s1, s2};
+    adopt_place(a, sb, sa, true, c34, 2, &p);
+    ASSERT_EQ_I(p.placed, 2);
+    ASSERT_EQ_I(p.start[0], 32);
+    ASSERT_EQ_I(p.start[1], 3);
+    ASSERT_TRUE(str_eq_c(p.result.lines[2], "B3"));
+    ASSERT_TRUE(str_eq_c(p.result.lines[4], "A5"));
+    ASSERT_TRUE(str_eq_c(p.result.lines[19], "a1"));
+    ASSERT_TRUE(str_eq_c(p.result.lines[31], "B30"));
+    ASSERT_EQ_I(p.result.count, 42);
+
+    t_begin("adopt: a sibling's commit touching the other sibling's adopted "
+            "change stops there, the earlier one kept");
+    Rec *s3 = edit(a, after(a, sb, s1), 19, 1, "B19\n");
+    const Rec *c35[] = {s1, s3};
+    adopt_place(a, sb, sa, true, c35, 2, &p);
+    ASSERT_EQ_I(p.placed, 1);
+    ASSERT_TRUE(p.why && strstr(p.why, "overlaps or touches") != NULL);
+    ASSERT_TRUE(str_eq_c(p.result.lines[31], "B30"));
+    ASSERT_TRUE(str_eq_c(p.result.lines[18], "l19"));
+
+    t_begin("adopt: the branch deleting a file the parent edited stops, the "
+            "parent's text kept");
+    Lines de = numbered(a, 6);
+    Lines dp = lines_replace(a, de, 4, 1, L(a, "P4\n").lines, 1, true);
+    Rec *dd = edit(a, de, 1, 6, "");
+    dd->op = "delete";
+    const Rec *c36[] = {dd};
+    adopt_place(a, de, dp, true, c36, 1, &p);
+    ASSERT_EQ_I(p.placed, 0);
+    ASSERT_TRUE(p.why != NULL);
+    ASSERT_EQ_S(text(a, p.result), text(a, dp));
+
+    t_begin("adopt: the parent deleting a file the branch edited stops it, "
+            "and the file stays deleted");
+    Rec *de1 = edit(a, de, 2, 1, "B2\n");
+    const Rec *c37[] = {de1};
+    adopt_place(a, de, none, false, c37, 1, &p);
+    ASSERT_EQ_I(p.placed, 0);
+    ASSERT_EQ_S(p.why, "the parent deleted the file");
+    ASSERT_EQ_I(p.result.count, 0);
+
     arena_free(a);
 }
