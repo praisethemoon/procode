@@ -1,6 +1,6 @@
 ---
 name: eggzibit
-description: Write and publish an eggzibit page — an HTML page the person reads in VS Code — with the eggzibit MCP server (local pages, not claude.ai artifacts). Use when a result is worth reading as a document rather than a chat reply (a report, a comparison, findings, a design note, anything with a table or a chart), or when the user asks for an eggzibit page, a report or a page.
+description: Write and publish an eggzibit page — an HTML page the person reads in VS Code — with the eggzibit MCP server (local pages, not to be confused with claude.ai artifacts). Use when a result is worth reading as a document rather than a chat reply (a report, a comparison, findings, a design note, anything with a table or a chart), or when the user asks for an eggzibit page, a report or a page.
 compatibility: Requires the eggzibit MCP server (packages/eggzibit).
 metadata:
   version: "2"
