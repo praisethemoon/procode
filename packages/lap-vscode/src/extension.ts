@@ -12,7 +12,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { askBranchList, BranchRow, BranchView, branchView, LapExec, lapBin, ListGate, parseBranchList } from "./branches";
+import { askBranchList, BranchRow, BranchView, branchView, LapExec, lapBin, ListGate, onAnyChange, parseBranchList, tendFolder } from "./branches";
 import { IncrementalLog, branchProblem, folderFiles, hasHistory, historyProblem, listSignature, ownFiles, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
@@ -263,8 +263,7 @@ class BranchSource {
                 if (this.timer) clearTimeout(this.timer);
                 this.timer = setTimeout(() => this.refresh(true), 300);
             };
-            w.onDidChange(later);
-            w.onDidCreate(later);
+            onAnyChange(w, later); /* a folder removed is a change too */
             this.watchers.push(w);
         }
     }
@@ -364,8 +363,10 @@ class HistoryView implements vscode.WebviewViewProvider {
     /* A missing branch's two fixes: point it at the folder it moved to, or
      * drop it from the registry. */
     private async fixBranch(action: "move" | "forget", name: string): Promise<void> {
-        const root = this.source.repoRoot;
-        if (!root) return;
+        const here = this.source.repoRoot;
+        if (!here) return;
+        /* a nested branch is tended in the folder of the branch it started from */
+        const root = tendFolder(here, this.branches.views.map((v) => v.row), name);
         let args: string[];
         if (action === "forget") {
             const ok = await vscode.window.showWarningMessage(

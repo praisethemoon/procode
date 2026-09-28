@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { askBranchList, branchView, LapExec, lapBin, lapFailure, ListGate, ownPart, parseBranchList } from "../branches";
+import { askBranchList, branchView, LapExec, lapBin, lapFailure, ListGate, onAnyChange, ownPart, parseBranchList, tendFolder } from "../branches";
 import { folderFiles, lineageFiles, listSignature, readStream } from "../chunks";
 import { row } from "../history";
 import { parseLog } from "../model";
@@ -274,4 +274,32 @@ test("askBranchList: of two overlapping requests, only the newer answer is used"
     pending[0](); /* the older lands last, and is dropped */
     assert.deepEqual(used, [2]);
     assert.equal(gate.ask("s2", false), false, "the newer one's signature is answered");
+});
+
+test("tendFolder: a nested branch is tended in its parent branch's folder; this folder's own, and one whose parent is gone, here", () => {
+    const row = (id: string, name: string, via: string | null, present = true) => ({
+        id, name, state: "missing" as const, present, path: `/w/${name}`, registered: true,
+        sinceBase: 0, sinceMerge: 0, stopped: [], via,
+    });
+    const rows = [row("0123456789ab", "b1", null), row("ba9876543210", "b2", "0123456789ab", false)];
+    assert.equal(tendFolder("/w/main", rows, "b2"), "/w/b1");
+    assert.equal(tendFolder("/w/main", rows, "b1"), "/w/main");
+    assert.equal(tendFolder("/w/main", rows, "nothing"), "/w/main");
+    const gone = [row("0123456789ab", "b1", null, false), rows[1]];
+    assert.equal(tendFolder("/w/main", gone, "b2"), "/w/main");
+});
+
+test("onAnyChange: a removed chunk (a branch folder deleted) calls for a refresh, as a changed or new one does", () => {
+    const fired: string[] = [];
+    const handlers: Record<string, () => void> = {};
+    const w = {
+        onDidChange: (fn: () => void) => (handlers["change"] = fn),
+        onDidCreate: (fn: () => void) => (handlers["create"] = fn),
+        onDidDelete: (fn: () => void) => (handlers["delete"] = fn),
+    };
+    onAnyChange(w, () => fired.push("refresh"));
+    handlers["delete"]();
+    handlers["change"]();
+    handlers["create"]();
+    assert.deepEqual(fired, ["refresh", "refresh", "refresh"]);
 });

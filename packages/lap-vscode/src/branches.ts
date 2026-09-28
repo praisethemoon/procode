@@ -193,3 +193,27 @@ export function askBranchList(
     });
     return true;
 }
+
+/* Where a branch is tended (lap branch move, forget): in the folder that
+ * started it — for a branch of a branch, that branch's folder, while it is
+ * there; else this folder, whose lap then says what it can. */
+export function tendFolder(root: string, rows: readonly BranchRow[], name: string): string {
+    const r = rows.find((x) => x.name === name);
+    if (!r || !r.via) return root;
+    const parent = rows.find((x) => x.id === r.via);
+    return parent && parent.present && parent.path ? parent.path : root;
+}
+
+/* A watcher that calls fn on any change under it: a chunk written or made,
+ * and also one removed, as when a branch's folder is deleted. */
+export interface ChangeWatcher {
+    onDidChange(fn: () => void): unknown;
+    onDidCreate(fn: () => void): unknown;
+    onDidDelete(fn: () => void): unknown;
+}
+
+export function onAnyChange(w: ChangeWatcher, fn: () => void): void {
+    w.onDidChange(fn);
+    w.onDidCreate(fn);
+    w.onDidDelete(fn);
+}
