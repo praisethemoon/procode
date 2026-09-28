@@ -564,6 +564,15 @@ body {
 .sb-row:focus-within .sb-actions {
     display: inline-flex;
 }
+/* Between the new-item buttons and the quick archive: a thin rule, so a
+ * click meant for New Ticket does not archive the epic. */
+.sb-action-sep {
+    align-self: center;
+    width: 1px;
+    height: 14px;
+    margin: 0 3px;
+    background: var(--bk-color-divider);
+}
 .sb-actions button {
     display: inline-flex;
     padding: 2px;

@@ -53,7 +53,9 @@ of the progress, comment on the tickets, and have better visibility. Agents
 work it through its MCP server; you work it in the extension's **Board**
 view. Finished work is archived from a row's right-click: **Archive** takes
 it (and what is under it) out of the lists at once, **Archive with Note**
-asks why first; **Unarchive** brings it back.
+asks why first; **Unarchive** brings it back. An epic whose milestones and
+own tickets are all done shows an archive button on hover, set apart from
+the new-item buttons, that archives it at once.
 
 Coboard works perfectly fine without lap. But if lap is available, a ticket
 also shows the sessions (groups of changes) made under it, for a smoother

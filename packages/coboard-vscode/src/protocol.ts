@@ -86,4 +86,4 @@ export type SidebarToView =
 export type SidebarToHost =
     | { readonly type: "ready" }
     | { readonly type: "open"; readonly id: string }
-    | { readonly type: "command"; readonly command: "coboard.newEpic" | "coboard.newMilestone" | "coboard.newTicket"; readonly id?: string };
+    | { readonly type: "command"; readonly command: "coboard.newEpic" | "coboard.newMilestone" | "coboard.newTicket" | "coboard.archive"; readonly id?: string };

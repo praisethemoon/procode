@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { Summary } from "coboard";
 
-import { rowParts } from "../row";
+import { quickArchivable, rowParts } from "../row";
 
 const s = (extra: Partial<Summary> & Pick<Summary, "id" | "kind" | "title" | "status">): Summary =>
     ({ updated: "2026-09-28T00:00:00Z", ...extra }) as Summary;
@@ -58,4 +58,23 @@ test("an archived row says so in its marker and tooltip", () => {
     assert.equal(p.archived, true);
     assert.equal(p.tooltip, "T-1003 — old\nticket, done, archived");
     assert.equal(p.id, "T-1003");
+});
+
+test("an epic is offered a quick archive when every milestone and milestone-less ticket in it is done", () => {
+    const e = (id: string, extra: Partial<Summary> = {}) => s({ id, kind: "epic", title: id, status: "open", ...extra });
+    const m = (id: string, epic: string, status: string, extra: Partial<Summary> = {}) => s({ id, kind: "milestone", title: id, status, epic, ...extra });
+    const t = (id: string, epic: string, status: string, milestone: string | null = null, extra: Partial<Summary> = {}) =>
+        s({ id, kind: "ticket", title: id, status, epic, milestone, ...extra });
+    const board = [
+        e("E-1"), m("M-1", "E-1", "done"), t("T-1", "E-1", "done"), t("T-2", "E-1", "todo", "M-1"),
+        e("E-2"), m("M-2", "E-2", "done"), t("T-3", "E-2", "doing"),
+        e("E-3"), m("M-3", "E-3", "open"),
+        e("E-4"),
+        e("E-5"), t("T-4", "E-5", "done"), t("T-5", "E-5", "todo", null, { archived: true }),
+        e("E-6", { archived: true }), t("T-6", "E-6", "done"),
+    ];
+    assert.deepEqual([...quickArchivable(board)].sort(), ["E-1", "E-5"]);
+    // E-1: its milestone and its own ticket are done; a ticket inside the milestone is the milestone's to answer for.
+    // E-2: a milestone-less ticket is still doing. E-3: its milestone is open. E-4: nothing in it.
+    // E-5: the unfinished ticket is archived, out of the way. E-6: already archived.
 });

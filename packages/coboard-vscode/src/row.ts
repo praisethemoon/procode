@@ -41,3 +41,19 @@ export function rowParts(s: Summary): RowParts {
         tooltip: `${s.id} — ${s.title}\n${s.kind}, ${s.status}${s.archived ? ", archived" : ""}`,
     };
 }
+
+/* The epics a row offers to archive at once: every milestone under the epic
+ * is done, and so is every ticket under it outside a milestone, and there is
+ * at least one of them. Archived items are out of the way and not counted,
+ * and an archived epic is not offered. */
+export function quickArchivable(all: readonly Summary[]): Set<string> {
+    const out = new Set<string>();
+    for (const e of all) {
+        if (e.kind !== "epic" || e.archived) continue;
+        const children = all.filter(
+            (c) => !c.archived && c.epic === e.id && (c.kind === "milestone" || (c.kind === "ticket" && !c.milestone)),
+        );
+        if (children.length > 0 && children.every((c) => c.status === "done")) out.add(e.id);
+    }
+    return out;
+}

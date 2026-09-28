@@ -19,7 +19,7 @@ import { createRoot } from "react-dom/client";
 import type { Summary } from "coboard";
 import { EMPTY, FIELDS, FIELD_LABELS, Filter, clear, counts, fieldCount, hasQuery, isActive, options, toggle, visible } from "../src/filter";
 import type { SidebarToHost, SidebarToView } from "../src/protocol";
-import { rowParts } from "../src/row";
+import { quickArchivable, rowParts } from "../src/row";
 
 declare function acquireVsCodeApi(): {
     postMessage(m: unknown): void;
@@ -191,6 +191,8 @@ function Row(props: {
     forceOpen: boolean;
     matched: Set<string>;
     filtering: boolean;
+    /* the epics whose children are all done: they get a quick archive */
+    quick: ReadonlySet<string>;
     onToggle: (id: string) => void;
 }): JSX.Element {
     const { n, depth, collapsed, forceOpen, matched, filtering } = props;
@@ -263,6 +265,21 @@ function Row(props: {
                             <Codicon name="new-file" />
                         </button>
                     ) : null}
+                    {props.quick.has(s.id) ? (
+                        <>
+                            <span className="sb-action-sep" aria-hidden="true" />
+                            <button
+                                type="button"
+                                title="Archive (every milestone and ticket in it is done)"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    send({ type: "command", command: "coboard.archive", id: s.id });
+                                }}
+                            >
+                                <Codicon name="archive" />
+                            </button>
+                        </>
+                    ) : null}
                 </span>
             </div>
             {expanded
@@ -275,6 +292,7 @@ function Row(props: {
                           forceOpen={forceOpen}
                           matched={matched}
                           filtering={filtering}
+                          quick={props.quick}
                           onToggle={props.onToggle}
                       />
                   ))
@@ -308,6 +326,7 @@ function App(): JSX.Element {
     }, []);
     const allRef = useRef(all);
     allRef.current = all;
+    const quick = useMemo(() => quickArchivable(all ?? []), [all]);
 
     useEffect(() => {
         vscode.setState({ filter, collapsed: [...collapsed] } satisfies Saved);
@@ -353,6 +372,7 @@ function App(): JSX.Element {
                             forceOpen={hasQuery(filter)}
                             matched={matched}
                             filtering={filtering}
+                            quick={quick}
                             onToggle={toggleNode}
                         />
                     ))}
