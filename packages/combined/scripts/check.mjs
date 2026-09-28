@@ -28,6 +28,9 @@ fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify({ mcpServers: { 
 
 const registered = new Map();
 const errors = [];
+const warnings = [];
+/* Settings a scenario sets, "section.key" to value; the rest are defaults. */
+const settings = { "coboard.boardFolder": "/shared/project" };
 let mcpProvider = null;
 const noop = () => ({ dispose() {} });
 /* A working emitter, so the check can count what the MCP provider fires. */
@@ -90,7 +93,10 @@ const vscode = new Proxy(
                     errors.push(m);
                     return Promise.resolve(undefined);
                 },
-                showWarningMessage: () => Promise.resolve(undefined),
+                showWarningMessage: (m) => {
+                    warnings.push(m);
+                    return Promise.resolve(undefined);
+                },
                 showInformationMessage: () => Promise.resolve(undefined),
             },
             handler,
@@ -106,9 +112,10 @@ const vscode = new Proxy(
                     folderListeners.push(fn);
                     return { dispose() {} };
                 },
-                /* defaults, but for a board folder set to show it is passed on */
+                /* defaults, but for what `settings` sets (a board folder, to
+                 * show it is passed on, and the CLI paths the scenarios move) */
                 getConfiguration: (section) => ({
-                    get: (k, d) => (section === "coboard" && k === "boardFolder" ? "/shared/project" : d),
+                    get: (k, d) => (`${section}.${k}` in settings ? settings[`${section}.${k}`] : d),
                     update: async () => undefined,
                 }),
             },
@@ -172,6 +179,40 @@ assert.equal(asked, before, "an unrelated setting does not");
 for (const fn of folderListeners) fn({ added: [], removed: [] });
 assert.equal(asked, before + 1, "a change of workspace folders asks again, once");
 assert.equal(fs.existsSync(path.join(dist, "bin")), false, "the package carries no CLI");
+
+// Just before a server starts, its CLI is looked for. With both found, every
+// server starts as defined and nothing is said.
+const fake = (name) => {
+    const f = path.join(folder, "clis", name);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, "#!/bin/sh\n");
+    return f;
+};
+const [coboardDef, kbDef, artifactsDef] = defs;
+const resolve = (d) => mcpProvider.resolveMcpServerDefinition(d);
+settings["knowledge.cliPath"] = fake("kb");
+settings["coboard.lapPath"] = fake("lap");
+warnings.length = 0;
+for (const d of defs) assert.equal(resolve(d), d, `${d.label} starts when its CLI is there`);
+assert.deepEqual(warnings, [], "nothing is said when the CLIs are there");
+// kb missing: its server is not started, and the person is told why.
+settings["knowledge.cliPath"] = "/nowhere/kb";
+assert.equal(resolve(kbDef), undefined, "kb's server does not start without kb");
+assert.equal(warnings.length, 1);
+assert.match(warnings[0], /"\/nowhere\/kb" was not found/);
+assert.equal(resolve(coboardDef), coboardDef, "coboard's does not need kb");
+assert.equal(resolve(artifactsDef), artifactsDef, "artifacts' needs no CLI");
+assert.equal(warnings.length, 1, "only the missing CLI is reported");
+// lap missing: coboard's server still starts, with a warning.
+settings["knowledge.cliPath"] = fake("kb");
+settings["coboard.lapPath"] = "/nowhere/lap";
+warnings.length = 0;
+assert.equal(resolve(coboardDef), coboardDef, "coboard's server starts without lap");
+assert.equal(warnings.length, 1);
+assert.match(warnings[0], /"\/nowhere\/lap" was not found/);
+assert.equal(resolve(kbDef), kbDef, "kb's does not need lap");
+delete settings["knowledge.cliPath"];
+delete settings["coboard.lapPath"];
 assert.equal(ext.resolveCli("kb", "/nowhere", () => false), null);
 assert.equal(ext.resolveCli("kb", ["/a", "/b"].join(path.delimiter), (p) => p === path.join("/b", "kb")), path.join("/b", "kb"));
 assert.equal(ext.resolveCli("/opt/kb", "", (p) => p === "/opt/kb"), "/opt/kb");

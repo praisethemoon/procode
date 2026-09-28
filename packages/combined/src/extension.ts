@@ -13,7 +13,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { forClaude } from "./claude";
-import { CLIS, missingMessage, resolveCli } from "./clis";
+import { CLIS, Cli, missingMessage, resolveCli, serverNeeds } from "./clis";
 import { outdated, withServers } from "./mcpjson";
 
 export { forClaude, resolveCli };
@@ -123,6 +123,19 @@ function registerWithVsCode(ctx: vscode.ExtensionContext): void {
                     return d;
                 });
             },
+            /* Just before VS Code starts a server: the CLI it runs is looked
+             * for, and when it is missing the person is told as checkClis
+             * tells them. kb's server is then not started (every tool needs
+             * kb); coboard's still is (only its sessions need lap). */
+            resolveMcpServerDefinition: (d: vscode.McpServerDefinition) => {
+                const name = servers(ctx).find((s) => s.label === d.label)?.name;
+                const need = name ? serverNeeds(name) : null;
+                const cli = need ? CLIS.find((c) => c.name === need.cli) : undefined;
+                const command = cli ? missingCli(cli) : null;
+                if (!cli || command === null) return d;
+                warnMissing(cli, command);
+                return need!.required ? undefined : d;
+            },
         }),
     );
 }
@@ -194,25 +207,37 @@ function checkClaudeMcp(ctx: vscode.ExtensionContext): void {
         });
 }
 
+function isFile(p: string): boolean {
+    try {
+        return fs.statSync(p).isFile();
+    } catch {
+        return false;
+    }
+}
+
+/* The command a CLI's setting names, when it cannot be found; null when it
+ * can. */
+function missingCli(cli: Cli): string | null {
+    const command = cliCommand(cli.settingId, cli.name);
+    return resolveCli(command, process.env["PATH"] ?? "", isFile) ? null : command;
+}
+
+/* What cannot run and how to fix it, with the setting one click away. */
+function warnMissing(cli: Cli, command: string): void {
+    void vscode.window.showWarningMessage(missingMessage(cli, command), "Open Setting").then((choice) => {
+        if (choice === "Open Setting") {
+            void vscode.commands.executeCommand("workbench.action.openSettings", cli.settingId);
+        }
+    });
+}
+
 /* Says once per window, for each CLI its setting cannot reach, what cannot
  * run and how to fix it. The parts report their own failures when used; this
- * is the one place that says it up front, with the setting one click away. */
+ * is the one place that says it up front. */
 function checkClis(): void {
-    const isFile = (p: string) => {
-        try {
-            return fs.statSync(p).isFile();
-        } catch {
-            return false;
-        }
-    };
     for (const cli of CLIS) {
-        const command = cliCommand(cli.settingId, cli.name);
-        if (resolveCli(command, process.env["PATH"] ?? "", isFile)) continue;
-        void vscode.window.showWarningMessage(missingMessage(cli, command), "Open Setting").then((choice) => {
-            if (choice === "Open Setting") {
-                void vscode.commands.executeCommand("workbench.action.openSettings", cli.settingId);
-            }
-        });
+        const command = missingCli(cli);
+        if (command !== null) warnMissing(cli, command);
     }
 }
 

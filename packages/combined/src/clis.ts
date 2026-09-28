@@ -64,3 +64,12 @@ export function missingMessage(cli: Cli, command: string): string {
         `Build it from the lap repository (${cli.build}) so it is on PATH, or set ${cli.setting} to its full path.`
     );
 }
+
+/* The CLI an MCP server runs, and whether it can start without it: kb's
+ * server is nothing but kb's tools; coboard's board works without lap, whose
+ * sessions are one tool among many. Null for a server that runs no CLI. */
+export function serverNeeds(server: string): { readonly cli: Cli["name"]; readonly required: boolean } | null {
+    if (server === "kb") return { cli: "kb", required: true };
+    if (server === "coboard") return { cli: "lap", required: false };
+    return null;
+}

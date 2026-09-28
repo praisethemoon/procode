@@ -179,7 +179,11 @@ run the CLIs from `PATH`.
    ```
 
    Then reload the VS Code window. If the CLIs are not on `PATH`, point the
-   settings **Knowledge › Cli Path** and **Board › Lap Path** at them.
+   settings **Knowledge › Cli Path** and **Board › Lap Path** at them. When
+   one cannot be found, procode says so once per window, and again when VS
+   Code is about to start the MCP server that needs it: kb's server is then
+   not started (all of its tools need `kb`), while coboard's still starts
+   (only its lap sessions need `lap`).
 
    Some package tests drive the real CLIs. They use `$LAP_BIN` and
    `$KB_BIN` when set, else the ones built under `build/` (or by `make`),
