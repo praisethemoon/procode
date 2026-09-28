@@ -438,8 +438,9 @@ static bool new_chunk(Arena *a, Hist *h, int32_t n, char *err, size_t errsz) {
     char path[LAP_PATH_MAX];
     snprintf(path, sizeof path, "%s/%s", h->dir, k->name);
     /* the new name made durable too: records appended to a chunk whose
-     * entry a power loss dropped would be lost with it */
-    if (!plat_append_file_sync(path, "", 0) || !plat_fsync_dir(h->dir)) {
+     * entry a power loss dropped would be lost with it. The full flush
+     * also carries the sealed chunk through the drive's cache. */
+    if (!plat_append_file_sync(path, "", 0) || !plat_fsync_full(h->dir)) {
         snprintf(err, errsz, "cannot create %s", path);
         return false;
     }
@@ -663,11 +664,11 @@ bool hist_convert_legacy(Arena *a, const char *lapdir, uint64_t limit,
     }
     /* the chunks' names durable in the working folder, then log/'s in
      * .lap/, before the old file goes: a power loss never leaves neither */
-    if (!plat_fsync_dir(tmp)) {
+    if (!plat_fsync_full(tmp)) { /* every chunk written, through the drive */
         snprintf(err, errsz, "cannot make %s durable", tmp);
         return false;
     }
-    if (!plat_rename(tmp, dir) || !plat_fsync_dir(lapdir)) {
+    if (!plat_rename(tmp, dir) || !plat_fsync_full(lapdir)) {
         snprintf(err, errsz, "cannot publish %s as %s", tmp, dir);
         return false;
     }

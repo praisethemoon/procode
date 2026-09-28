@@ -60,6 +60,12 @@ bool plat_fsync(FILE *f);
 /* Makes the names in a folder durable: a file created, renamed into or
  * removed from it survives a power loss once this returns true. */
 bool plat_fsync_dir(const char *path);
+/* A file's or folder's data flushed through the drive's own cache too
+ * (macOS: F_FULLFSYNC, which plain fsync is not; elsewhere fsync). Kept for
+ * the writes a power loss would cost the history's structure: a seal, a
+ * conversion's publish. Every write before it on the drive is flushed
+ * with it. */
+bool plat_fsync_full(const char *path);
 /* True when f is an interactive terminal that renders ANSI styling. On
  * Windows this also switches the console into VT mode; a console that
  * refuses is reported as not styleable. */

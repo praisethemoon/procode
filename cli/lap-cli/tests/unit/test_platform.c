@@ -81,6 +81,20 @@ void test_platform(void) {
     ASSERT_TRUE(plat_fsync_dir(T_PLATDIR "/sub"));
     ASSERT_TRUE(!plat_fsync_dir(T_PLATDIR "/nothing"));
 
+    t_begin("plat_fsync_full: a regular file in TMPDIR and a folder are "
+            "flushed through; a missing path is refused");
+#ifndef _WIN32
+    const char *tmpdir = getenv("TMPDIR");
+    char full[512];
+    snprintf(full, sizeof full, "%s/lap_fsync_full_%ld",
+             tmpdir && tmpdir[0] ? tmpdir : "/tmp", (long)getpid());
+    ASSERT_TRUE(plat_write_file_atomic(full, "x\n", 2));
+    ASSERT_TRUE(plat_fsync_full(full));
+    remove(full);
+#endif
+    ASSERT_TRUE(plat_fsync_full(T_PLATDIR "/sub"));
+    ASSERT_TRUE(!plat_fsync_full(T_PLATDIR "/nothing"));
+
     t_begin("plat_is_writable_dir: a folder one may write in; not a file, "
             "not a missing path");
     ASSERT_TRUE(plat_is_writable_dir(T_PLATDIR "/sub"));

@@ -1128,7 +1128,12 @@ since the whole history goes with them.
   chunk, writing one whole into `.lap/log/`, publishing a conversion's
   `log/` or writing `.lap/lineage`, the folder itself is synced, so a power
   loss cannot keep a later step (a record appended to the chunk, the old
-  `log.jsonl` removed) while losing the name it stands on.
+  `log.jsonl` removed) while losing the name it stands on. On macOS,
+  where `fsync` does not empty the drive's own cache, sealing a chunk
+  (creating the next) and publishing a conversion use `F_FULLFSYNC`,
+  which carries everything written before them through it; a commit's
+  append keeps plain `fsync`, since an interrupted append is a torn tail
+  lap already repairs.
 - **Damage is not a crash.** A torn line anywhere but the open chunk's end
   was not made by a crash (lap repairs its own before sealing or merging):
   a sealed chunk cut or copied short. Nor is a sealed chunk that is empty

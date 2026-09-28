@@ -501,6 +501,26 @@ bool plat_fsync(FILE *f) {
 #endif
 }
 
+bool plat_fsync_full(const char *path) {
+#ifdef _WIN32
+    return plat_is_file(path) || plat_is_dir(path); /* as plat_fsync_dir */
+#else
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return false;
+    bool ok = false;
+#ifdef __APPLE__
+    /* fsync hands the data to the drive; this also empties the drive's
+     * cache. A filesystem that refuses it gets fsync's promise. */
+    ok = fcntl(fd, F_FULLFSYNC) == 0;
+#endif
+    if (!ok)
+        ok = fsync(fd) == 0 || errno == EINVAL;
+    close(fd);
+    return ok;
+#endif
+}
+
 bool plat_fsync_dir(const char *path) {
 #ifdef _WIN32
     /* NTFS journals its metadata: a name is durable once the call that
