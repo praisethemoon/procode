@@ -1,9 +1,8 @@
-# artifacts — specification
+# eggzibit — specification
 
 Status: draft.
 
-An **artifact** is a finished piece of work an agent hands to a person as a
-page: a report, a comparison, a design note, a table of findings, a chart. It
+An eggzibit **page** is a finished piece of work an agent hands to a person: a report, a comparison, a design note, a table of findings, a chart. It
 is HTML, written against baukasten's design tokens, published into the
 workspace, and read in VS Code, where it looks like part of the editor in
 whatever theme the person uses.
@@ -12,41 +11,46 @@ Bindings, in the pattern lap, kb and coboard share:
 
 | binding | consumer | notes |
 |---|---|---|
-| `artifacts` (TypeScript) | the MCP server, the extension | the only code that writes |
+| `eggzibit` (TypeScript) | the MCP server, the extension | the only code that writes |
 | MCP tools | agents | §4 |
-| `artifacts-vscode` | people | the list and the viewer, §5 |
+| `eggzibit-vscode` | people | the list and the viewer, §5 |
 
 ---
 
-## 1. Where artifacts live
+## 1. Where pages live
 
-`.artifact/` at the workspace root, found by walking up from the working
-directory the way `.git`, `.kb/` and `.coboard/` are. `artifact_publish`
+`.eggzibit/` at the workspace root, found by walking up from the working
+directory the way `.git`, `.kb/` and `.coboard/` are. `eggzibit_publish`
 creates it at the enclosing git repository's root when there is none (the
 working directory outside a repository). Nothing is written
 anywhere else.
 
 ```
-.artifact/
+.eggzibit/
   A-1/
     index.html       the page
-    artifact.json    its metadata
+    page.json        its metadata
   A-2/
     …
 ```
 
-`.artifact/` belongs in version control: an artifact is a result, and a result
+A workspace from before the rename keeps its pages in `.artifact/`, each with
+an `artifact.json`. They are read there as they are; the first write moves the
+folder to `.eggzibit/` and renames each `artifact.json` to `page.json`, ids
+unchanged. When both folders exist, `.eggzibit/` is used.
+
+`.eggzibit/` belongs in version control: a page is a result, and a result
 worth reading is worth keeping with the work it came from.
 
 ## 2. Identity and metadata
 
 ```
-Artifact { id, title, description, keywords, createdAt, updatedAt, bytes }
+Page { id, title, description, keywords, createdAt, updatedAt, bytes }
 ```
 
 - **`id`** is `A-<n>`: public, prefixed, monotonic, never reused. The next id
-  is past both `.artifact/next` (a counter, so an id stays spent after its
-  artifact is deleted) and every `A-<n>` directory present, and is claimed by
+  is past both `.eggzibit/next` (a counter, so an id stays spent after its
+  page is deleted) and every `A-<n>` directory present, and is claimed by
   creating its directory, which only one writer can do.
 - **`title`** — required, one line, at most 200 characters.
 - **`description`** — optional, what the page is and why it exists, at most
@@ -58,13 +62,13 @@ Artifact { id, title, description, keywords, createdAt, updatedAt, bytes }
   else is refused (`invalid`). A page published without them has none, and
   a page written before keywords existed reads as none: no migration.
   Republishing with keywords replaces the list; without, it keeps it.
-- **`createdAt`**, **`updatedAt`** — ISO-8601 UTC. Republishing an artifact
+- **`createdAt`**, **`updatedAt`** — ISO-8601 UTC. Republishing a page
   moves `updatedAt` and keeps `createdAt`.
 - **`bytes`** — the size of `index.html`, reported and never stored.
 
-`artifact.json` holds `{ id, title, description, keywords, createdAt, updatedAt }`.
+`page.json` holds `{ id, title, description, keywords, createdAt, updatedAt }`.
 The directory name and `id` must agree; a directory that is not `A-<n>`, or
-whose `artifact.json` is missing or unreadable, is not an artifact and is
+whose `page.json` is missing or unreadable, is not a page and is
 skipped.
 
 Both files are written atomically (temporary file, then rename), the page
@@ -121,36 +125,40 @@ extension, the workspace or the viewer. Everything a page shows travels in
 
 | tool | does |
 |---|---|
-| `artifact_publish` | `{ title, html, description?, keywords?, id? }`. Without `id`, creates the next `A-<n>`. With `id`, replaces that artifact's page and metadata, keeping `createdAt`, and keeping its keywords unless `keywords` is given. Returns the artifact and the path of its page. The server's instructions ask for two to five keywords on every page. |
-| `artifact_template` | `{ name? }`: a starting page with every component in place (§3), or without `name` the list of templates. Today there is `report`. |
-| `artifact_list` | `{ keyword? }`: every artifact, newest `updatedAt` first, with its keywords and without pages; with `keyword`, only the pages carrying it (compared as keywords are stored, so case does not matter) |
-| `artifact_get` | `{ id }`: the metadata (keywords included) and the page |
+| `eggzibit_publish` | `{ title, html, description?, keywords?, id? }`. Without `id`, creates the next `A-<n>`. With `id`, replaces that page and its metadata, keeping `createdAt`, and keeping its keywords unless `keywords` is given. Returns the page's metadata and the path of its `index.html`. The server's instructions ask for two to five keywords on every page. |
+| `eggzibit_template` | `{ name? }`: a starting page with every component in place (§3), or without `name` the list of templates. Today there is `report`. |
+| `eggzibit_list` | `{ keyword? }`: every page, newest `updatedAt` first, with its keywords and without its HTML; with `keyword`, only the pages carrying it (compared as keywords are stored, so case does not matter) |
+| `eggzibit_get` | `{ id }`: the metadata (keywords included) and the page |
 
 Refusals are tool results with `isError`, never transport errors:
 
 | code | when |
 |---|---|
 | `invalid` | a title that is empty, multi-line or too long; a description that is too long; keywords that are not a list of text, or over the limits of §2; an empty page; a page over 5 MB |
-| `not_found` | an `id` that is not an artifact |
+| `not_found` | an `id` that is not a page |
 | `bad_id` | an `id` that is not `A-<n>` — including anything that could name a path |
 
-There is no delete tool. Removing an artifact is a person's decision, made in
+There is no delete tool. Removing a page is a person's decision, made in
 the editor.
 
 ## 5. The viewer
 
-`artifacts-vscode`:
+`eggzibit-vscode`:
 
-- an **Artifacts** view: every artifact, newest first, with its id, title,
+- an **eggzibit** view: every page, newest first, with its id, title,
   when it was last updated, its description and its keywords; refreshed when
-  `.artifact/` changes. It is a webview with the same filter bar as the Board
+  `.eggzibit/` changes. It is a webview with the same filter bar as the Board
   and Lap History: the text keeps the pages whose id, title, description or
   keywords hold every word typed, in any case; the chevron opens the
   keywords, each with how many pages carry it, and choosing some keeps the
   pages carrying any of them — as does clicking a keyword on a row. What is
   typed and chosen survives the view being hidden. A row opens its page;
   right-click offers Open, Open HTML Source and Delete;
-- opening one shows it in an editor tab titled with the artifact's title. The
+- its activity-bar icon is an egg, whole while the workspace has no page and
+  split open once it has one. VS Code fixes a container's icon, so the view
+  sits in two containers under two ids (`eggzibit.list`,
+  `eggzibit.listOpen`), and `eggzibit.hasPages` shows one of them;
+- opening one shows it in an editor tab titled with the page's title. The
   tab builds the frame's document from the page with, in order: a content
   security policy (`default-src 'none'; img-src data:; font-src data:;
   style-src 'unsafe-inline'; script-src 'unsafe-inline'`), baukasten's
@@ -159,4 +167,4 @@ the editor.
   page's own styles, so a page can override any of it;
 - a theme change re-injects the variables, and republishing reloads the tab;
 - **Open HTML Source** opens `index.html` as text; **Delete** removes the
-  artifact's directory after the person confirms.
+  page's directory after the person confirms.

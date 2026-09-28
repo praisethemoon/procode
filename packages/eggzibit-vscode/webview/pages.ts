@@ -145,7 +145,7 @@ function rows(): HTMLElement[] {
             el(
                 "p",
                 "pg-empty",
-                "No pages yet. An agent publishes one with the artifact_publish tool of the artifacts MCP server: an HTML page with a title, a description and keywords, saved under .artifact/.",
+                "No pages yet. An agent publishes one with the eggzibit_publish tool of the eggzibit MCP server: an HTML page with a title, a description and keywords, saved under .eggzibit/.",
             ),
         ];
     }
@@ -159,7 +159,7 @@ function row(p: PageRow, now: number): HTMLElement {
     const r = el("div", "pg-row");
     r.tabIndex = 0;
     r.setAttribute("role", "listitem");
-    r.dataset.vscodeContext = JSON.stringify({ webviewSection: "artifact", id: p.id, preventDefaultContextMenuItems: true });
+    r.dataset.vscodeContext = JSON.stringify({ webviewSection: "page", id: p.id, preventDefaultContextMenuItems: true });
     r.title = `${p.id} — ${p.title}${p.description ? `\n${p.description}` : ""}\ncreated ${p.createdAt} · updated ${p.updatedAt}`;
     const head = el("div", "pg-head");
     const source = button("pg-action", "Open HTML Source");

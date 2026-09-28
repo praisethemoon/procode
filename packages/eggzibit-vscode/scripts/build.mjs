@@ -1,6 +1,6 @@
-/* Copies the two stylesheets an artifact's frame is built with, and the
+/* Copies the two stylesheets a page's frame is built with, and the
  * list's stylesheet and icon font; bundles the list's webview script for the
- * browser, and the extension host with the artifacts store inlined, so the
+ * browser, and the extension host with the eggzibit store inlined, so the
  * .vsix needs no node_modules. The tests run against the unbundled out/ tree,
  * so the host bundle is written beside it as out/extension.js only. */
 
@@ -16,7 +16,7 @@ const req = createRequire(path.join(root, "package.json"));
 
 fs.mkdirSync(out, { recursive: true });
 fs.copyFileSync(req.resolve("baukasten-ui/dist/baukasten-vscode.css"), path.join(out, "baukasten-vscode.css"));
-fs.copyFileSync(path.join(root, "assets", "artifact.css"), path.join(out, "artifact.css"));
+fs.copyFileSync(path.join(root, "assets", "page.css"), path.join(out, "page.css"));
 fs.copyFileSync(path.join(root, "assets", "pages.css"), path.join(out, "pages.css"));
 /* The codicons baukasten brings, with the font next to its stylesheet. */
 const fromBaukasten = createRequire(req.resolve("baukasten-ui"));

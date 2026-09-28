@@ -1,19 +1,25 @@
-/* artifacts: pages an agent publishes into the workspace (specs/artifacts.md). */
+/* eggzibit: pages an agent publishes into the workspace (specs/eggzibit.md). */
 
 export {
-    ARTIFACT_DIR,
-    Artifact,
-    ArtifactError,
-    ArtifactErrorCode,
-    Artifacts,
+    Eggzibit,
+    EggzibitError,
+    EggzibitErrorCode,
+    LEGACY_DIR,
+    LEGACY_META,
     MAX_DESCRIPTION,
+    MAX_KEYWORD,
+    MAX_KEYWORDS,
     MAX_PAGE_BYTES,
     MAX_TITLE,
     META,
     PAGE,
+    Page,
     PublishInput,
+    STORE_DIR,
     defaultRoot,
-    findArtifacts,
-    isArtifactId,
+    findEggzibit,
+    hasKeyword,
+    isPageId,
+    normalizeKeywords,
 } from "./store";
 export { TEMPLATES, Template } from "./templates";

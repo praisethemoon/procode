@@ -1,8 +1,8 @@
-/* Artifacts in VS Code (specs/artifacts.md §5): the list of what agents have
+/* eggzibit in VS Code (specs/eggzibit.md §5): the list of what agents have
  * published into the workspace — a webview with the Board's filter bar —
- * and a tab per artifact that renders its page in the editor's theme.
+ * and a tab per page that renders it in the editor's theme.
  *
- * The store is the `artifacts` package, read fresh on every refresh: the
+ * The store is the `eggzibit` package, read fresh on every refresh: the
  * files are small, and an agent writing through MCP is a different process,
  * so there is no cache here that could disagree with the disk.
  */
@@ -12,7 +12,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { Artifacts, findArtifacts } from "artifacts";
+import { Eggzibit, findEggzibit } from "eggzibit";
 
 import { FrameParts, frameDocument } from "./frame";
 import { sortForList } from "./list";
@@ -21,32 +21,37 @@ import { viewerHtml } from "./viewer";
 
 const panels = new Map<string, vscode.WebviewPanel>();
 
-function store(): Artifacts | null {
+function store(): Eggzibit | null {
     const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file");
     if (!folder) return null;
-    const root = findArtifacts(folder.uri.fsPath);
-    return new Artifacts(root ?? folder.uri.fsPath);
+    const root = findEggzibit(folder.uri.fsPath);
+    return new Eggzibit(root ?? folder.uri.fsPath);
 }
 
 /* The list: a webview view (a native tree has no room for a filter bar).
- * The host reads the pages and sends them; the view filters and draws. */
+ * The host reads the pages and sends them; the view filters and draws.
+ *
+ * TWO VIEWS, ONE LIST. VS Code fixes a view container's icon in the
+ * manifest, so the whole egg and the hatched one are two containers, each
+ * with this view under its own id, shown by `eggzibit.hasPages`. One
+ * provider serves both, and says whether there are pages. */
 class Pages implements vscode.WebviewViewProvider {
-    private view: vscode.WebviewView | null = null;
+    private readonly views = new Set<vscode.WebviewView>();
 
     constructor(private readonly ctx: vscode.ExtensionContext) {}
 
     resolveWebviewView(view: vscode.WebviewView): void {
-        this.view = view;
+        this.views.add(view);
         const media = vscode.Uri.joinPath(this.ctx.extensionUri, "out", "media");
         view.webview.options = { enableScripts: true, localResourceRoots: [media] };
         view.webview.html = listHtml(view.webview, media);
         view.webview.onDidReceiveMessage((m: ToHost) => {
             if (m?.type === "ready") this.refresh();
             else if (m?.type === "open") open(this.ctx, m.id);
-            else if (m?.type === "source") void vscode.commands.executeCommand("artifacts.openSource", m.id);
+            else if (m?.type === "source") void vscode.commands.executeCommand("eggzibit.openSource", m.id);
         });
         view.onDidDispose(() => {
-            this.view = null;
+            this.views.delete(view);
         });
     }
 
@@ -54,7 +59,8 @@ class Pages implements vscode.WebviewViewProvider {
         const s = store();
         const pages = sortForList(s?.list() ?? []).map(({ bytes: _bytes, ...row }) => row);
         const m: ToView = { type: "pages", pages, hasFolder: s !== null };
-        void this.view?.webview.postMessage(m);
+        void vscode.commands.executeCommand("setContext", "eggzibit.hasPages", pages.length > 0);
+        for (const v of this.views) void v.webview.postMessage(m);
     }
 }
 
@@ -87,15 +93,15 @@ function parts(ctx: vscode.ExtensionContext): FrameParts {
     const media = path.join(ctx.extensionPath, "out", "media");
     return {
         tokens: fs.readFileSync(path.join(media, "baukasten-vscode.css"), "utf8"),
-        defaults: fs.readFileSync(path.join(media, "artifact.css"), "utf8"),
+        defaults: fs.readFileSync(path.join(media, "page.css"), "utf8"),
     };
 }
 
 function load(ctx: vscode.ExtensionContext, id: string, panel: vscode.WebviewPanel): void {
     const s = store();
     try {
-        const { artifact, html } = s!.get(id);
-        panel.title = artifact.title;
+        const { page, html } = s!.get(id);
+        panel.title = page.title;
         void panel.webview.postMessage({ type: "load", doc: frameDocument(html, parts(ctx)) });
     } catch {
         // Gone since it was opened: the tab has nothing left to show.
@@ -112,12 +118,12 @@ function open(ctx: vscode.ExtensionContext, id: string): void {
     const s = store();
     let title = id;
     try {
-        title = s!.get(id).artifact.title;
+        title = s!.get(id).page.title;
     } catch {
-        void vscode.window.showWarningMessage(`Artifacts: there is no ${id} any more.`);
+        void vscode.window.showWarningMessage(`eggzibit: there is no ${id} any more.`);
         return;
     }
-    const panel = vscode.window.createWebviewPanel("artifacts.view", title, vscode.ViewColumn.Active, {
+    const panel = vscode.window.createWebviewPanel("eggzibit.view", title, vscode.ViewColumn.Active, {
         enableScripts: true,
         localResourceRoots: [],
         retainContextWhenHidden: true,
@@ -142,7 +148,7 @@ async function pick(): Promise<string | undefined> {
     const all = sortForList(store()?.list() ?? []);
     const chosen = await vscode.window.showQuickPick(
         all.map((a) => ({ label: a.title, description: a.id, detail: a.description, id: a.id })),
-        { placeHolder: "Artifact" },
+        { placeHolder: "Page" },
     );
     return chosen?.id;
 }
@@ -152,13 +158,13 @@ async function remove(id: string): Promise<void> {
     if (!s) return;
     let title: string;
     try {
-        title = s.get(id).artifact.title;
+        title = s.get(id).page.title;
     } catch {
         return;
     }
     const answer = await vscode.window.showWarningMessage(
-        `Delete the artifact “${title}” (${id})?`,
-        { modal: true, detail: "Its page and metadata are removed from .artifact/. The id is not reused." },
+        `Delete the page “${title}” (${id})?`,
+        { modal: true, detail: "Its HTML and metadata are removed from .eggzibit/. The id is not reused." },
         "Delete",
     );
     if (answer !== "Delete") return;
@@ -170,7 +176,12 @@ async function remove(id: string): Promise<void> {
 
 export function activate(ctx: vscode.ExtensionContext): void {
     const list = new Pages(ctx);
-    ctx.subscriptions.push(vscode.window.registerWebviewViewProvider("artifacts.list", list));
+    ctx.subscriptions.push(
+        vscode.window.registerWebviewViewProvider("eggzibit.list", list),
+        vscode.window.registerWebviewViewProvider("eggzibit.listOpen", list),
+    );
+    /* The icon from the start, before either view is opened. */
+    list.refresh();
 
     let pending: NodeJS.Timeout | undefined;
     const changed = () => {
@@ -180,25 +191,28 @@ export function activate(ctx: vscode.ExtensionContext): void {
             for (const [id, panel] of panels) load(ctx, id, panel);
         }, 150);
     };
-    const watcher = vscode.workspace.createFileSystemWatcher("**/.artifact/**");
-    ctx.subscriptions.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
+    /* The store, and one from before the rename until its first write moves it. */
+    for (const glob of ["**/.eggzibit/**", "**/.artifact/**"]) {
+        const watcher = vscode.workspace.createFileSystemWatcher(glob);
+        ctx.subscriptions.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
+    }
 
     ctx.subscriptions.push(
-        vscode.commands.registerCommand("artifacts.open", async (arg?: unknown) => {
+        vscode.commands.registerCommand("eggzibit.open", async (arg?: unknown) => {
             const id = idOf(arg) ?? (await pick());
             if (id) open(ctx, id);
         }),
-        vscode.commands.registerCommand("artifacts.openSource", async (arg?: unknown) => {
+        vscode.commands.registerCommand("eggzibit.openSource", async (arg?: unknown) => {
             const id = idOf(arg) ?? (await pick());
             const s = store();
             if (!id || !s) return;
             await vscode.window.showTextDocument(vscode.Uri.file(s.pagePath(id)));
         }),
-        vscode.commands.registerCommand("artifacts.delete", async (arg?: unknown) => {
+        vscode.commands.registerCommand("eggzibit.delete", async (arg?: unknown) => {
             const id = idOf(arg);
             if (id) await remove(id);
         }),
-        vscode.commands.registerCommand("artifacts.refresh", () => changed()),
+        vscode.commands.registerCommand("eggzibit.refresh", () => changed()),
     );
 }
 

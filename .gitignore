@@ -9,8 +9,8 @@ packages/index-vscode/out/
 packages/lap-vscode/out/
 packages/coboard/out/
 packages/coboard-vscode/out/
-packages/artifacts/out/
-packages/artifacts-vscode/out/
+packages/eggzibit/out/
+packages/eggzibit-vscode/out/
 packages/combined/dist/
 *.vsix
 *.o

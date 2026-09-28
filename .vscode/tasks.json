@@ -32,16 +32,16 @@
       "problemMatcher": "$tsc"
     },
     {
-      "label": "compile: artifacts-vscode",
+      "label": "compile: eggzibit-vscode",
       "type": "shell",
-      "command": "npm run compile --workspace artifacts-vscode",
+      "command": "npm run compile --workspace eggzibit-vscode",
       "problemMatcher": "$tsc"
     },
     {
       "label": "playground",
-      "detail": "Creates .playground/ (gitignored) and seeds it with a board, lap sessions linked to its tickets, kb documents and artifacts; each part only when it is empty. Never deletes anything.",
+      "detail": "Creates .playground/ (gitignored) and seeds it with a board, lap sessions linked to its tickets, kb documents and eggzibit pages; each part only when it is empty. Never deletes anything.",
       "type": "shell",
-      "command": "npm run compile --workspace coboard && npm run compile --workspace artifacts && node scripts/playground.mjs",
+      "command": "npm run compile --workspace coboard && npm run compile --workspace eggzibit && node scripts/playground.mjs",
       "dependsOn": [
         "build: lap-cli",
         "build: kb-cli"
@@ -77,10 +77,10 @@
       "problemMatcher": []
     },
     {
-      "label": "prepare: Artifacts",
+      "label": "prepare: eggzibit",
       "dependsOn": [
         "playground",
-        "compile: artifacts-vscode"
+        "compile: eggzibit-vscode"
       ],
       "dependsOrder": "sequence",
       "problemMatcher": []
@@ -92,7 +92,7 @@
         "compile: lap-vscode",
         "compile: index-vscode",
         "compile: coboard-vscode",
-        "compile: artifacts-vscode"
+        "compile: eggzibit-vscode"
       ],
       "dependsOrder": "sequence",
       "problemMatcher": []

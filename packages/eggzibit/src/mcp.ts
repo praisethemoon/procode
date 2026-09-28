@@ -1,17 +1,18 @@
-/* Artifacts as MCP tools, over stdio: newline-delimited JSON-RPC 2.0
- * (specs/artifacts.md §4).
+/* eggzibit as MCP tools, over stdio: newline-delimited JSON-RPC 2.0
+ * (specs/eggzibit.md §4).
  *
  * Agents publish a page, list what is there and read one back. Deleting is
  * left to people, in the editor.
  *
- * The artifacts are the `.artifact/` found by walking up from the directory
- * the server was started in; with none, the first publish creates one at the
- * enclosing git repository's root.
+ * The pages are the `.eggzibit/` found by walking up from the directory the
+ * server was started in (or a store from before the rename, moved on the
+ * first publish); with none, the first publish creates one at the enclosing
+ * git repository's root.
  */
 
 import * as readline from "node:readline";
 
-import { ArtifactError, Artifacts, MAX_DESCRIPTION, MAX_KEYWORD, MAX_KEYWORDS, MAX_TITLE, defaultRoot, findArtifacts, hasKeyword } from "./store";
+import { Eggzibit, EggzibitError, MAX_DESCRIPTION, MAX_KEYWORD, MAX_KEYWORDS, MAX_TITLE, defaultRoot, findEggzibit, hasKeyword } from "./store";
 import { TEMPLATES } from "./templates";
 
 const VERSION = "0.1.0";
@@ -19,7 +20,9 @@ const VERSION = "0.1.0";
 /* What an agent needs to write a page that looks right, said once, where the
  * agent reads it. The token list is the useful subset of baukasten's; the
  * spec names the rest. */
-export const INSTRUCTIONS = `Artifacts are finished pieces of work you hand to the person as a page — a report, a comparison, a design note, findings, a chart. Publish one with artifact_publish when the result is worth reading as a document rather than as chat.
+export const INSTRUCTIONS = `These are local pages shown in VS Code by procode's eggzibit — not claude.ai artifacts, and not your own Artifact tool.
+
+eggzibit pages are finished pieces of work you hand to the person as a page — a report, a comparison, a design note, findings, a chart. Publish one with eggzibit_publish when the result is worth reading as a document rather than as chat.
 
 The page is HTML (a whole document or a fragment). It is shown inside VS Code in the person's theme, so style it ONLY with baukasten's CSS variables, never with fixed colours:
 - colour: --bk-color-foreground, --bk-color-foreground-muted, --bk-color-background, --bk-color-background-secondary, --bk-color-background-elevated, --bk-color-border, --bk-color-divider, --bk-color-link, --bk-color-primary, --bk-color-primary-foreground, --bk-color-success, --bk-color-warning, --bk-color-danger, --bk-color-info, --bk-color-code-background, --bk-color-code-foreground
@@ -28,9 +31,9 @@ The page is HTML (a whole document or a fragment). It is shown inside VS Code in
 - shape: --bk-radius-sm|md|lg, --bk-border-width-1|2, --bk-shadow-sm|md
 Plain elements (headings, paragraphs, lists, tables, code, pre, blockquote, details, links) are already styled, and so are components by class name, so a report needs no CSS at all:
 eyebrow, lede · meta + chip · kpis + kpi (<b>number</b><span>what</span><small>why</small>; kpi.warn, kpi.danger) · callout ok|info|warn|danger (<strong>verdict</strong><p>reason</p>) · cols, panel · tag (ok|warn|danger) · tabs (buttons with aria-pressed) · td.id, td.num · toc · svg.chart with .bar (ok|warn|danger|muted), .grid, .node (accent), .edge (accent|dashed), .arrowhead, text.label.
-For anything longer than a few paragraphs, start from artifact_template {name: "report"}: it has every component in place and says what goes where.
+For anything longer than a few paragraphs, start from eggzibit_template {name: "report"}: it has every component in place and says what goes where.
 The page has no network: inline everything (SVG, data: images, scripts). Scripts run sandboxed.
-Give every page two to five keywords (short lowercase words or phrases: the topic, the component, the kind of page) so pages about one topic can be found together; artifact_list filters by one.
+Give every page two to five keywords (short lowercase words or phrases: the topic, the component, the kind of page) so pages about one topic can be found together; eggzibit_list filters by one.
 Republish with the same id to revise a page; its createdAt is kept, and so are its keywords unless you pass new ones.`;
 
 type Json = Record<string, unknown>;
@@ -46,16 +49,16 @@ export interface Ctx {
     readonly cwd: string;
 }
 
-function readStore(ctx: Ctx): Artifacts | null {
-    const root = findArtifacts(ctx.cwd);
-    return root ? new Artifacts(root) : null;
+function readStore(ctx: Ctx): Eggzibit | null {
+    const root = findEggzibit(ctx.cwd);
+    return root ? new Eggzibit(root) : null;
 }
 
 export const TOOLS: readonly Tool[] = [
     {
-        name: "artifact_publish",
+        name: "eggzibit_publish",
         description:
-            "Publish an HTML page as an artifact the person reads in VS Code. Without id, creates the next A-<n>; with id, replaces that artifact's page and metadata. Style with baukasten's --bk-* variables only (see the server instructions). Returns the artifact and the path of its page.",
+            "Publish an HTML page the person reads in VS Code. Without id, creates the next A-<n>; with id, replaces that page and its metadata. Style with baukasten's --bk-* variables only (see the server instructions). Returns the artifact and the path of its page.",
         inputSchema: {
             type: "object",
             properties: {
@@ -70,12 +73,12 @@ export const TOOLS: readonly Tool[] = [
                     items: { type: "string" },
                     description: `Two to five short words or phrases the page is about, e.g. ["lap", "merge", "design note"]; stored lowercase, at most ${MAX_KEYWORDS}, each at most ${MAX_KEYWORD} characters. With id: given, they replace the page's keywords; omitted, the page keeps its own.`,
                 },
-                id: { type: "string", description: "A-<n>: the artifact to replace. Omit to create a new one." },
+                id: { type: "string", description: "A-<n>: the page to replace. Omit to create a new one." },
             },
             required: ["title", "html"],
         },
         call: (args, ctx) => {
-            const store = readStore(ctx) ?? new Artifacts(defaultRoot(ctx.cwd));
+            const store = readStore(ctx) ?? new Eggzibit(defaultRoot(ctx.cwd));
             return store.publish({
                 title: args["title"] as string,
                 html: args["html"] as string,
@@ -86,7 +89,7 @@ export const TOOLS: readonly Tool[] = [
         },
     },
     {
-        name: "artifact_template",
+        name: "eggzibit_template",
         description:
             "A starting point for a page: every component the viewer styles, in place, with what goes where. Without name, lists the templates.",
         inputSchema: {
@@ -99,30 +102,30 @@ export const TOOLS: readonly Tool[] = [
             }
             const t = TEMPLATES.find((x) => x.name === args["name"]);
             if (!t) {
-                throw new ArtifactError("not_found", `no template "${String(args["name"])}"; there is ${TEMPLATES.map((x) => x.name).join(", ")}`);
+                throw new EggzibitError("not_found", `no template "${String(args["name"])}"; there is ${TEMPLATES.map((x) => x.name).join(", ")}`);
             }
             return t;
         },
     },
     {
-        name: "artifact_list",
+        name: "eggzibit_list",
         description:
-            "Every artifact in the workspace, most recently updated first, with their keywords and without their pages. With keyword, only the pages carrying it.",
+            "Every page in the workspace, most recently updated first, with their keywords and without their pages. With keyword, only the pages carrying it.",
         inputSchema: {
             type: "object",
             properties: { keyword: { type: "string", description: "Only the pages carrying this keyword (case does not matter)." } },
         },
         call: (args, ctx) => {
             const keyword = args["keyword"];
-            if (keyword !== undefined && typeof keyword !== "string") throw new ArtifactError("invalid", "keyword must be text");
+            if (keyword !== undefined && typeof keyword !== "string") throw new EggzibitError("invalid", "keyword must be text");
             const all = readStore(ctx)?.list() ?? [];
-            const artifacts = keyword === undefined ? all : all.filter((a) => hasKeyword(a, keyword));
-            return { artifacts, count: artifacts.length };
+            const pages = keyword === undefined ? all : all.filter((a) => hasKeyword(a, keyword));
+            return { pages, count: pages.length };
         },
     },
     {
-        name: "artifact_get",
-        description: "One artifact's metadata (keywords included) and its page.",
+        name: "eggzibit_get",
+        description: "One page's metadata (keywords included) and its HTML.",
         inputSchema: {
             type: "object",
             properties: { id: { type: "string", description: "A-<n>" } },
@@ -130,7 +133,7 @@ export const TOOLS: readonly Tool[] = [
         },
         call: (args, ctx) => {
             const store = readStore(ctx);
-            if (!store) throw new ArtifactError("not_found", `no artifact ${String(args["id"])}: this workspace has none`);
+            if (!store) throw new EggzibitError("not_found", `no page ${String(args["id"])}: this workspace has none`);
             return store.get(args["id"] as string);
         },
     },
@@ -142,7 +145,7 @@ function checkArgs(tool: Tool, args: Json): void {
     const props = (tool.inputSchema["properties"] ?? {}) as Json;
     for (const k of Object.keys(args)) {
         if (!(k in props)) {
-            throw new ArtifactError("invalid", `${tool.name} takes no "${k}"; it takes ${Object.keys(props).join(", ") || "nothing"}`);
+            throw new EggzibitError("invalid", `${tool.name} takes no "${k}"; it takes ${Object.keys(props).join(", ") || "nothing"}`);
         }
     }
 }
@@ -159,7 +162,7 @@ export async function handle(msg: Json, ctx: Ctx): Promise<Json | null> {
             return reply({
                 protocolVersion: String((msg["params"] as Json | undefined)?.["protocolVersion"] ?? "2024-11-05"),
                 capabilities: { tools: {} },
-                serverInfo: { name: "artifacts", version: VERSION },
+                serverInfo: { name: "eggzibit", version: VERSION },
                 instructions: INSTRUCTIONS,
             });
         case "ping":
@@ -178,7 +181,7 @@ export async function handle(msg: Json, ctx: Ctx): Promise<Json | null> {
                 const result = await tool.call(args, ctx);
                 return reply({ content: [{ type: "text", text: JSON.stringify(result, null, 2) }] });
             } catch (e) {
-                const code = e instanceof ArtifactError ? e.code : "internal";
+                const code = e instanceof EggzibitError ? e.code : "internal";
                 return reply({ content: [{ type: "text", text: `${code}: ${(e as Error).message}` }], isError: true });
             }
         }

@@ -1,9 +1,9 @@
 /* The messages between the pages view's webview and the extension host. */
 
-import type { Artifact } from "artifacts";
+import type { Page } from "eggzibit";
 
 /* A page as the list shows it: its metadata, without the page. */
-export type PageRow = Omit<Artifact, "bytes">;
+export type PageRow = Omit<Page, "bytes">;
 
 export type ToView = {
     readonly type: "pages";

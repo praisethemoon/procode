@@ -1,12 +1,12 @@
-/* The webview that holds an artifact's frame. Pure: the host hands it the
+/* The webview that holds a page's frame. Pure: the host hands it the
  * frame's document with a message, and it does three things — fills the
  * theme slot from its own --vscode-* variables, loads the frame, and sends the
  * frame new variables when the theme changes.
  *
  * THE WEBVIEW'S POLICY ALLOWS INLINE SCRIPT, AND HAS TO. A srcdoc frame
  * inherits its parent's content security policy, so a nonce-only script-src
- * here would stop every script in every artifact, the bridge included. What
- * the webview itself runs is only this file's script; the artifact's markup
+ * here would stop every script in every page, the bridge included. What
+ * the webview itself runs is only this file's script; the page's markup
  * never becomes part of this document — it travels in a message and is set as
  * the frame's srcdoc.
  *

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <!-- Knowledge: lap's spiral as a magnifier (option 1 of artifact A-1, chosen
+  <!-- Knowledge: lap's spiral as a magnifier (option 1 of eggzibit page A-1, chosen
        2026-09-26): four passes as in lap.svg, with a handle. Rendered by
        VS Code as an alpha mask: only the silhouette matters. -->
   <path d="M10.5 10.5 A1.5 1.5 0 1 1 7.5 10.5 A3 3 0 1 1 13.5 10.5 A4.5 4.5 0 1 1 4.5 10.5 A6 6 0 1 1 16.5 10.5 M15.3 15.3 L21 21"

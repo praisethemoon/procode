@@ -1,4 +1,4 @@
-/* procode: Lap History, Knowledge, the Board and Artifacts as one extension.
+/* procode: Lap History, Knowledge, the Board and eggzibit as one extension.
  *
  * Each part is the extension it always was — its own activate(), its own
  * views and commands (the manifest is merged from theirs at build time) — and
@@ -17,7 +17,7 @@ import { CLIS, Cli, missingMessage, resolveCli, serverNeeds } from "./clis";
 import { outdated, withServers } from "./mcpjson";
 import { ShippedSkill, behind, folderHash, install, shippedSkills, stateOf } from "./skills";
 
-export { folderHash, forClaude, resolveCli };
+export { folderHash, forClaude, outdated, resolveCli, withServers };
 
 interface Part {
     activate(ctx: vscode.ExtensionContext): unknown;
@@ -29,7 +29,7 @@ const PARTS: readonly [string, Part][] = [
     ["Lap History", require("../../lap-vscode/out/extension.js") as Part],
     ["Knowledge", require("../../index-vscode/out/extension.js") as Part],
     ["Board", require("../../coboard-vscode/out/extension.js") as Part],
-    ["Artifacts", require("../../artifacts-vscode/out/extension.js") as Part],
+    ["eggzibit", require("../../eggzibit-vscode/out/extension.js") as Part],
 ];
 
 /* The command a CLI's setting names, "kb" or "lap" when it names none. */
@@ -47,7 +47,7 @@ function boardFolder(): Record<string, string> {
 
 /* ------------------------------------------------------------ MCP servers
  *
- * coboard's, kb's and artifacts' MCP servers, each bundled into one script under
+ * coboard's, kb's and eggzibit's MCP servers, each bundled into one script under
  * out/mcp. They run on VS Code's own runtime (the extension host's
  * executable with ELECTRON_RUN_AS_NODE=1), so no separate Node is needed,
  * and they are handed the CLIs the settings name. */
@@ -79,10 +79,10 @@ export function servers(ctx: vscode.ExtensionContext): Server[] {
             env: { ...node, KB_BIN: cliCommand("knowledge.cliPath", "kb") },
         },
         {
-            name: "artifacts",
-            label: "artifacts: pages agents publish",
+            name: "eggzibit",
+            label: "eggzibit: pages agents publish",
             command: process.execPath,
-            args: [script("artifacts")],
+            args: [script("eggzibit")],
             env: { ...node },
         },
     ];
@@ -185,7 +185,7 @@ function setUpClaudeMcp(ctx: vscode.ExtensionContext): void {
     }
     fs.writeFileSync(file, JSON.stringify(withServers(current, servers(ctx).map(forClaude)), null, 2) + "\n");
     void vscode.window.showInformationMessage(
-        "procode: coboard, kb and artifacts are in .mcp.json. Restart Claude Code in this project (or check /mcp) to pick them up.",
+        "procode: coboard, kb and eggzibit are in .mcp.json. Restart Claude Code in this project (or check /mcp) to pick them up.",
     );
 }
 

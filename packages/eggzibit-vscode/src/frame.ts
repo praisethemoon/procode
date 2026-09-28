@@ -1,4 +1,4 @@
-/* The document an artifact renders as (specs/artifacts.md §5), built from its
+/* The document a page renders as (specs/eggzibit.md §5), built from its
  * page. Pure: no vscode, no file system — the host reads the stylesheets and
  * the webview fills in the theme.
  *
@@ -54,7 +54,7 @@ const BRIDGE = `(function () {
 export interface FrameParts {
     /* baukasten-vscode.css */
     readonly tokens: string;
-    /* artifact.css */
+    /* page.css */
     readonly defaults: string;
 }
 

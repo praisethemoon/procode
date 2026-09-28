@@ -1,10 +1,10 @@
 /* Fills .playground/ with a small project to look at in the test window:
  * a board with epics, milestones and tickets, lap sessions linked to those
- * tickets (with real edits), a few kb documents, and two artifacts.
+ * tickets (with real edits), a few kb documents, and two eggzibit pages.
  *
  * Each part is seeded only when it is empty, so running this again changes
  * nothing, and work done in the playground is kept. It never deletes
- * anything. Needs the CLIs built and coboard and artifacts compiled (the "playground" task
+ * anything. Needs the CLIs built and coboard and eggzibit compiled (the "playground" task
  * in .vscode/tasks.json does both first).
  *
  *   node scripts/playground.mjs
@@ -21,7 +21,7 @@ const dir = path.join(repo, ".playground");
 const LAP = path.join(repo, "cli/lap-cli/bin/lap");
 const KB = path.join(repo, "cli/kb-cli/bin/kb");
 const { Board } = createRequire(import.meta.url)(path.join(repo, "packages/coboard/out/index.js"));
-const { Artifacts } = createRequire(import.meta.url)(path.join(repo, "packages/artifacts/out/index.js"));
+const { Eggzibit } = createRequire(import.meta.url)(path.join(repo, "packages/eggzibit/out/index.js"));
 
 fs.mkdirSync(dir, { recursive: true });
 const env = { ...process.env, LAP_USER: "claude" };
@@ -36,12 +36,12 @@ const write = (file, text) => {
 
 if (!fs.existsSync(path.join(dir, ".lap"))) lap("init");
 if (!fs.existsSync(path.join(dir, ".kb"))) kb(["init"]);
-// The board, the knowledge base and the artifacts are not source; lap should
+// The board, the knowledge base and the pages are not source; lap should
 // not track them.
 const ignore = path.join(dir, ".lapignore");
 const ignored = fs.readFileSync(ignore, "utf8");
 if (!ignored.includes(".coboard/")) fs.appendFileSync(ignore, "\n# stores, not source\n.coboard/\n.kb/\n");
-if (!ignored.includes(".artifact/")) fs.appendFileSync(ignore, ".artifact/\n");
+if (!ignored.includes(".eggzibit/")) fs.appendFileSync(ignore, ".eggzibit/\n");
 
 /* ----------------------------------------------------------------- board */
 
@@ -153,11 +153,11 @@ if (JSON.parse(kb(["ls", "--json"])).count === 0) {
     console.log("kb: seeded 3 documents");
 }
 
-/* ------------------------------------------------------------- artifacts */
+/* ------------------------------------------------------------- eggzibit */
 
-const artifacts = new Artifacts(dir);
-if (artifacts.list().length === 0) {
-    artifacts.publish(
+const pages = new Eggzibit(dir);
+if (pages.list().length === 0) {
+    pages.publish(
         {
             title: "Accepting connections: IOCP, io_uring, kqueue",
             description: "How each API accepts a connection without blocking a thread, from the kb documents D-1 to D-3.",
@@ -177,7 +177,7 @@ if (artifacts.list().length === 0) {
         },
         new Date(Date.now() - 2 * 3600 * 1000),
     );
-    artifacts.publish({
+    pages.publish({
         title: "T-2 progress",
         description: "Where the overlapped-read ticket stands, with a small status chart.",
         html: `<!doctype html><html><head><style>
@@ -193,7 +193,7 @@ if (artifacts.list().length === 0) {
 <script>document.getElementById("note").textContent = "Rendered " + new Date().toLocaleString() + " — scripts run inside the sandbox.";</script>
 </body></html>`,
     });
-    console.log("artifacts: seeded A-1, A-2");
+    console.log("eggzibit: seeded A-1, A-2");
 }
 
 console.log(`playground ready: ${dir}`);

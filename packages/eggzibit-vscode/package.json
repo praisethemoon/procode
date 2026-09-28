@@ -1,7 +1,7 @@
 {
-  "name": "artifacts-vscode",
-  "displayName": "Artifacts",
-  "description": "Pages agents publish into the workspace's .artifact/ directory, listed and rendered in the editor's theme through baukasten's design tokens.",
+  "name": "eggzibit-vscode",
+  "displayName": "eggzibit",
+  "description": "Pages agents publish into the workspace's .eggzibit/ directory, listed, filtered and rendered in the editor's theme through baukasten's design tokens.",
   "version": "0.1.0",
   "private": true,
   "publisher": "praisethemoon",
@@ -24,50 +24,64 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "artifacts",
-          "title": "Artifacts",
-          "icon": "media/artifacts.svg"
+          "id": "eggzibit",
+          "title": "eggzibit",
+          "icon": "media/eggzibit.svg"
+        },
+        {
+          "id": "eggzibit-open",
+          "title": "eggzibit",
+          "icon": "media/eggzibit-open.svg"
         }
       ]
     },
     "views": {
-      "artifacts": [
+      "eggzibit": [
         {
-          "id": "artifacts.list",
-          "name": "Artifacts",
-          "type": "webview"
+          "id": "eggzibit.list",
+          "name": "eggzibit",
+          "type": "webview",
+          "when": "!eggzibit.hasPages"
+        }
+      ],
+      "eggzibit-open": [
+        {
+          "id": "eggzibit.listOpen",
+          "name": "eggzibit",
+          "type": "webview",
+          "when": "eggzibit.hasPages"
         }
       ]
     },
     "commands": [
-      { "command": "artifacts.open", "title": "Open Artifact…", "category": "Artifacts", "icon": "$(preview)" },
-      { "command": "artifacts.openSource", "title": "Open HTML Source", "category": "Artifacts", "icon": "$(code)" },
-      { "command": "artifacts.delete", "title": "Delete", "category": "Artifacts" },
-      { "command": "artifacts.refresh", "title": "Refresh", "category": "Artifacts", "icon": "$(refresh)" }
+      { "command": "eggzibit.open", "title": "Open Page…", "category": "eggzibit", "icon": "$(preview)" },
+      { "command": "eggzibit.openSource", "title": "Open HTML Source", "category": "eggzibit", "icon": "$(code)" },
+      { "command": "eggzibit.delete", "title": "Delete", "category": "eggzibit" },
+      { "command": "eggzibit.refresh", "title": "Refresh", "category": "eggzibit", "icon": "$(refresh)" }
     ],
     "menus": {
       "view/title": [
-        { "command": "artifacts.refresh", "when": "view == artifacts.list", "group": "navigation@1" }
+        { "command": "eggzibit.refresh", "when": "view =~ /^eggzibit\\.list/", "group": "navigation@1" }
       ],
       "webview/context": [
-        { "command": "artifacts.open", "when": "webviewId == 'artifacts.list' && webviewSection == 'artifact'", "group": "1_open@1" },
-        { "command": "artifacts.openSource", "when": "webviewId == 'artifacts.list' && webviewSection == 'artifact'", "group": "1_open@2" },
-        { "command": "artifacts.delete", "when": "webviewId == 'artifacts.list' && webviewSection == 'artifact'", "group": "9_delete@1" }
+        { "command": "eggzibit.open", "when": "webviewId =~ /^eggzibit\\.list/ && webviewSection == 'page'", "group": "1_open@1" },
+        { "command": "eggzibit.openSource", "when": "webviewId =~ /^eggzibit\\.list/ && webviewSection == 'page'", "group": "1_open@2" },
+        { "command": "eggzibit.delete", "when": "webviewId =~ /^eggzibit\\.list/ && webviewSection == 'page'", "group": "9_delete@1" }
       ],
       "commandPalette": [
-        { "command": "artifacts.delete", "when": "false" }
+        { "command": "eggzibit.delete", "when": "false" }
       ]
     }
   },
   "scripts": {
-    "compile": "npm run compile --workspace artifacts && tsc -p ./ && tsc -p tsconfig.webview.json && node scripts/build.mjs",
+    "compile": "npm run compile --workspace eggzibit && tsc -p ./ && tsc -p tsconfig.webview.json && node scripts/build.mjs",
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test \"out/test/*.test.js\"",
     "package": "npm run compile && vsce package --no-dependencies --allow-missing-repository",
     "vscode:prepublish": "npm run compile"
   },
   "dependencies": {
-    "artifacts": "*",
+    "eggzibit": "*",
     "baukasten-ui": "^0.3.0"
   },
   "devDependencies": {

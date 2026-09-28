@@ -1,7 +1,7 @@
 {
-  "name": "artifacts",
-  "displayName": "artifacts",
-  "description": "Pages an agent publishes into the workspace's .artifact/ directory — HTML written against baukasten's tokens, with a title, a description and dates — and the MCP server agents publish them through.",
+  "name": "eggzibit",
+  "displayName": "eggzibit",
+  "description": "Pages an agent publishes into the workspace's .eggzibit/ directory — HTML written against baukasten's tokens, with a title, a description, keywords and dates — and the MCP server agents publish them through.",
   "version": "0.1.0",
   "private": true,
   "publisher": "praisethemoon",
@@ -23,7 +23,7 @@
     }
   },
   "bin": {
-    "artifacts-mcp": "./bin/artifacts-mcp"
+    "eggzibit-mcp": "./bin/eggzibit-mcp"
   },
   "files": [
     "out",

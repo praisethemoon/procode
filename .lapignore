@@ -37,7 +37,7 @@ cli/kb-cli/src/third_party/utf8proc/
 
 # published pages have their own store and their own dates; they are results,
 # not edits
-.artifact/
+.eggzibit/
 
 # machine-local configuration, not project code
 .mcp.json

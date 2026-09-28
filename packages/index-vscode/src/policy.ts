@@ -11,7 +11,7 @@
  * sign of it is a line in a console nobody has open.
  *
  * ONE POLICY, BECAUSE THERE IS ONE KIND OF DOCUMENT. coboard has two: its own
- * chrome, and the surface that embeds an agent-authored artifact in a
+ * chrome, and the surface that embeds an agent-authored page in a
  * `srcdoc` frame, which inherits its embedder's policy and therefore needs a
  * nonce-free one. This package frames nothing. Every document it builds is its
  * own React app over content it renders as ELEMENTS — never as markup — so

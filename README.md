@@ -19,7 +19,7 @@ file is committed in parts too (`--lines` picks the first part), so a large
 one never lands as a single unexplained blob.
 
 `lap` is available as a CLI and as an agent skill that teaches the agent
-how to use it. To install the skills (`lap`, `tickets` and `artifacts`) in a
+how to use it. To install the skills (`lap`, `tickets` and `eggzibit`) in a
 project, run **procode: Add Skills for Claude Code** in VS Code: it adds the
 ones you pick to the project's `.claude/skills/`, never touching other
 skills and asking before it replaces a copy of its own that differs. Or copy
@@ -97,23 +97,23 @@ open collection — and see how documents link to each other in its graph.
 
 The contract is in [specs/index-api.md](specs/index-api.md).
 
-## Artifacts
+## eggzibit
 
-Artifacts are pages an agent publishes for you to read in the editor:
+eggzibit pages are what an agent publishes for you to read in the editor:
 reports, comparisons, findings, anything with a table or a chart. They are
-stored in `.artifact/` and published through the `artifacts` MCP server,
-and the extension's **Artifacts** view opens them in your VS Code theme.
+stored in `.eggzibit/` and published through the `eggzibit` MCP server,
+and the extension's **eggzibit** view opens them in your VS Code theme.
 Each page carries a few keywords the agent gives it when publishing, shown
-in the view and used to find pages on one topic (`artifact_list {keyword}`).
+in the view and used to find pages on one topic (`eggzibit_list {keyword}`).
 The view has the same filter bar as the Board and Lap History: type to match
 a page's id, title, description or keywords, or pick keywords under its
 chevron.
-The format is in [specs/artifacts.md](specs/artifacts.md). These are almost
+The format is in [specs/eggzibit.md](specs/eggzibit.md). These are almost
 identical to claude artifacts, except they stay local to your project.
 
-![artifact-extension](assets/artifact-extension.webp)
+![eggzibit-extension](assets/artifact-extension.webp)
 
-Artifacts are meant to live and be rendered in your vscode. They are HTML document,
+eggzibit pages are meant to live and be rendered in your vscode. They are HTML documents
 that adjust to the user theme since all UI in this repo uses  [baukasten](https://github.com/TypeFox/baukasten).
 
 ## Requirements
@@ -199,15 +199,15 @@ run the CLIs from `PATH`.
    or the workspace folders reaches the servers it starts next, without a
    reload (one already running keeps what it started with). For Claude
    Code, run **procode: Set Up MCP for Claude Code** in a project: it adds
-   `coboard`, `kb` and `artifacts` to the project's `.mcp.json` and keeps
+   `coboard`, `kb` and `eggzibit` to the project's `.mcp.json` and keeps
    any other servers. **procode: Add Skills for Claude Code** adds the
    skills that teach Claude to use them to the project's `.claude/skills/`
-   (lap and artifacts ticked; tickets is this repository's workflow, so it
+   (lap and eggzibit ticked; tickets is this repository's workflow, so it
    is left for you to pick), and says when a newer version ships. After installing a new build, restart Claude Code (or
    run `/mcp`) so it starts the new servers.
 
 4. **Stores.** `lap init`, `kb init` in the project root. The board and
-   `.artifact/` are created on first write.
+   `.eggzibit/` are created on first write.
 
 **kb's embedding model** (for semantic search; keyword search works
 without it) lives in `~/.kb/models/`, shared by every workspace. kb only
@@ -231,7 +231,7 @@ inside the project:
   "mcpServers": {
     "coboard":   { "command": "/path/to/procode/packages/coboard/bin/coboard-mcp" },
     "kb":        { "command": "/path/to/procode/packages/kb-mcp/bin/kb-mcp", "env": { "KB_BIN": "kb" } },
-    "artifacts": { "command": "/path/to/procode/packages/artifacts/bin/artifacts-mcp" }
+    "eggzibit":  { "command": "/path/to/procode/packages/eggzibit/bin/eggzibit-mcp" }
   }
 }
 ```
@@ -248,10 +248,10 @@ those into links. The `tickets` skill spells out the whole loop.
 
 ```
 cli/        lap-cli, kb-cli                                     C11, make or CMake
-packages/   coboard, artifacts, kb-js, kb-mcp,
+packages/   coboard, eggzibit, kb-js, kb-mcp,
             lap-vscode, index-vscode, coboard-vscode,
-            artifacts-vscode, combined                          TypeScript, one npm workspace
-specs/      the kb contract and the artifact format
+            eggzibit-vscode, combined                          TypeScript, one npm workspace
+specs/      the kb contract and the eggzibit page format
 ```
 
 ## Limitations
@@ -285,10 +285,10 @@ for yours, renames are two commits) are in
 | **lap** | [cli/lap-cli/](cli/lap-cli/) | The edit recorder. It sits below git and never touches it. C11, no dependencies. [SPEC](cli/lap-cli/SPEC.md) |
 | **kb** | [cli/kb-cli/](cli/kb-cli/) | The knowledge base: one store per workspace in `.kb/`, keyword and semantic search, provenance and links. C11. [Contract](specs/index-api.md) |
 | **coboard** | [packages/coboard/](packages/coboard/) | The board: an append-only `.coboard/log.jsonl` (commit it) and an MCP server. |
-| **artifacts** | [packages/artifacts/](packages/artifacts/) | The `.artifact/` store and its MCP server. [Format](specs/artifacts.md) |
+| **eggzibit** | [packages/eggzibit/](packages/eggzibit/) | The `.eggzibit/` store and its MCP server. [Format](specs/eggzibit.md) |
 | **kb-js**, **kb-mcp** | [packages/kb-js/](packages/kb-js/), [packages/kb-mcp/](packages/kb-mcp/) | A typed client for the kb CLI, and kb as MCP tools. |
-| **procode** | [packages/combined/](packages/combined/) | The VS Code extension: Lap History, Knowledge, the Board and Artifacts, with the coboard, kb and artifacts MCP servers inside. It is built from `packages/*-vscode`. |
-| **skills** | [.claude/skills/](.claude/skills/) | How agents work here: `lap`, `tickets` (board, lap and git together) and `artifacts`. Copy them into your own `.claude/skills/` to use them elsewhere. |
+| **procode** | [packages/combined/](packages/combined/) | The VS Code extension: Lap History, Knowledge, the Board and eggzibit, with the coboard, kb and eggzibit MCP servers inside. It is built from `packages/*-vscode`. |
+| **skills** | [.claude/skills/](.claude/skills/) | How agents work here: `lap`, `tickets` (board, lap and git together) and `eggzibit`. Copy them into your own `.claude/skills/` to use them elsewhere. |
 
 ## License
 

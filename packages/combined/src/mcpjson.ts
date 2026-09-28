@@ -12,11 +12,25 @@ export interface ServerEntry {
 
 type Json = Record<string, unknown>;
 
+/* Servers procode once wrote under a name it no longer uses: `artifacts`,
+ * renamed eggzibit. An entry of that name that procode wrote (its script is
+ * procode's) is replaced by the new one; one set up by hand is left alone. */
+export const RETIRED = ["artifacts"] as const;
+
+function writtenByProcode(e: unknown, name: string): boolean {
+    const args = typeof e === "object" && e !== null && Array.isArray((e as Json)["args"]) ? ((e as Json)["args"] as unknown[]) : [];
+    const script = typeof args[0] === "string" ? args[0].replace(/\\/g, "/") : "";
+    return script.endsWith(`/out/mcp/${name}.js`);
+}
+
 /* The file with our servers written in; every other key and server is kept
  * exactly as it was. */
 export function withServers(file: Json, servers: readonly ServerEntry[]): Json {
     const existing = file["mcpServers"];
     const mcpServers: Json = typeof existing === "object" && existing !== null && !Array.isArray(existing) ? { ...(existing as Json) } : {};
+    for (const name of RETIRED) {
+        if (writtenByProcode(mcpServers[name], name)) delete mcpServers[name];
+    }
     for (const s of servers) {
         mcpServers[s.name] = { command: s.command, args: s.args, env: s.env };
     }
@@ -33,7 +47,7 @@ export function outdated(file: Json, servers: readonly ServerEntry[]): string[] 
     if (typeof existing !== "object" || existing === null) {
         return [];
     }
-    const out: string[] = [];
+    const out: string[] = RETIRED.filter((name) => writtenByProcode((existing as Json)[name], name));
     for (const s of servers) {
         const e = (existing as Json)[s.name] as Json | undefined;
         if (!e) {

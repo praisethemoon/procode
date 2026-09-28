@@ -5,7 +5,7 @@ import { FRAME_CSP, FRAME_SANDBOX, THEME_SLOT, frameDocument, themeCss } from ".
 import { describeWhen, sortForList } from "../list";
 import { VIEWER_CSP, viewerHtml } from "../viewer";
 
-const parts = { tokens: ":root{--bk-color-foreground:var(--vscode-foreground)}", defaults: "@layer artifact{body{margin:0}}" };
+const parts = { tokens: ":root{--bk-color-foreground:var(--vscode-foreground)}", defaults: "@layer page{body{margin:0}}" };
 
 test("a fragment is wrapped, with everything injected ahead of the page", () => {
     const doc = frameDocument("<h1>Findings</h1>", parts);

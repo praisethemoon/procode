@@ -170,7 +170,7 @@ a listed range.
   whose contents are unknown). It is never shown as deleted or clean, and
   `lap commit` refuses it (`unreadable`). Fix the permissions, or ask the
   user — never commit around it.
-- Binary files are not tracked; add noisy artifacts to `.lapignore`.
+- Binary files are not tracked; add noisy build output to `.lapignore`.
   `.lapignore` keeps lap from recording files it has not recorded yet. A
   file recorded before it was ignored stays tracked: its edits still show
   in `lap status`, so none is lost unseen. To shed tracked files for good,

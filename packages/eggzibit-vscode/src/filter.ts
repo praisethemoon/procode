@@ -6,7 +6,7 @@
  * THE KEYWORDS chosen under the chevron keep a page carrying any of them,
  * as a Board chip keeps an item with any of its field's values. */
 
-import type { Artifact } from "artifacts";
+import type { Page as Stored } from "eggzibit";
 
 export interface PageFilter {
     readonly text: string;
@@ -15,7 +15,7 @@ export interface PageFilter {
 
 export const EMPTY: PageFilter = { text: "", keywords: [] };
 
-type Page = Pick<Artifact, "id" | "title" | "description" | "keywords">;
+type Page = Pick<Stored, "id" | "title" | "description" | "keywords">;
 
 export function isActive(f: PageFilter): boolean {
     return f.text.trim() !== "" || f.keywords.length > 0;
