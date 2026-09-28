@@ -13,7 +13,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { askBranchList, BranchRow, BranchView, branchView, LapExec, lapBin, ListGate, parseBranchList } from "./branches";
-import { IncrementalLog, folderFiles, hasHistory, historyProblem, ownFiles, parseChunkName, readStream } from "./chunks";
+import { IncrementalLog, branchProblem, folderFiles, hasHistory, historyProblem, ownFiles, parseChunkName, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
 import {
     CommitRec,
@@ -254,7 +254,10 @@ class BranchSource {
             /* this folder has branches, so no list is a failure to show */
             this.error = error;
             const rows = parseBranchList(out, this.source.current);
-            this.views = rows.map((r) => branchView(r, this.read(root, r), new Date()));
+            this.views = rows.map((r) => {
+                const problem = branchProblem(this.lapDirOf(root, r), r.id);
+                return branchView(r, problem ? null : this.read(root, r), new Date(), problem);
+            });
             this.watch(rows);
             this.onChange();
         });
@@ -263,8 +266,14 @@ class BranchSource {
     /* A branch's own records, from its folder while it is there and from
      * its chunks here after: read as they grow, never again from the start
      * (the history it started from is main's, read already). */
+    /* where a branch's history is read: its folder while it is there,
+     * else its chunks here */
+    private lapDirOf(root: string, r: BranchRow): string {
+        return r.present ? path.join(r.path, ".lap") : path.join(root, ".lap");
+    }
+
     private read(root: string, r: BranchRow): LapLog | null {
-        const lapDir = r.present ? path.join(r.path, ".lap") : path.join(root, ".lap");
+        const lapDir = this.lapDirOf(root, r);
         let log = this.logs.get(r.id);
         if (!log) {
             log = new IncrementalLog(lineHash);

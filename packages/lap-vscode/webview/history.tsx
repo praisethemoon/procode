@@ -438,8 +438,16 @@ function BranchLine(props: {
                 <span className="lh-desc">
                     {r.state}
                     {counts}
+                    {props.v.problem ? " · history broken" : ""}
                 </span>
             </div>
+            {isOpen && props.v.problem ? (
+                <div className="lh-detail" style={pad(1)}>
+                    <div className="lh-field">
+                        <Codicon name="warning" className="lh-forced" /> {props.v.problem}
+                    </div>
+                </div>
+            ) : null}
             {isOpen && r.state === "missing" ? (
                 <div className="lh-detail" style={pad(1)}>
                     <div className="lh-field">

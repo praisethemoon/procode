@@ -36,6 +36,9 @@ export interface BranchView {
     readonly row: BranchRow;
     /* its own sessions, newest first, commits inside */
     readonly sessions: readonly SessionRow[];
+    /* why its history cannot be read, in lap's words (then no sessions:
+     * never part of a history); null when it can */
+    readonly problem: string | null;
 }
 
 function num(v: unknown): number | null {
@@ -99,10 +102,10 @@ export function ownPart(log: LapLog): LapLog {
 
 /* One branch as the view draws it: its row, and when its log could be read,
  * its own sessions. */
-export function branchView(row: BranchRow, log: LapLog | null, now: Date): BranchView {
-    if (!log) return { row, sessions: [] };
+export function branchView(row: BranchRow, log: LapLog | null, now: Date, problem: string | null = null): BranchView {
+    if (!log || problem) return { row, sessions: [], problem };
     const page = query(ownPart(log), { ...EMPTY_FILTER, range: "all" }, { grouped: true, page: 0, now });
-    return { row, sessions: page.sessions };
+    return { row, sessions: page.sessions, problem: null };
 }
 
 /* Why a lap run gave no answer, in lap's words: its JSON error message, or

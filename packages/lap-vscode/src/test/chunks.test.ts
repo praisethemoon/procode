@@ -9,7 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { IncrementalLog, firstLine, hasHistory, historyFiles, historyProblem, lineageChunks, missingChunk, ownFiles, parseChunkName, readStream } from "../chunks";
+import { IncrementalLog, branchProblem, firstLine, hasHistory, historyFiles, historyProblem, lineageChunks, missingChunk, ownFiles, parseChunkName, readStream } from "../chunks";
 import { consumableBytes, createReader, parseLog, readerFeed } from "../model";
 
 const hash = (line: string) => createHash("sha256").update(line, "utf8").digest("hex");
@@ -168,4 +168,62 @@ test("a chunk's first line is read however long it is, not the whole chunk", () 
     assert.equal(firstLine(f), long);
     fs.writeFileSync(f, "no newline");
     assert.equal(firstLine(f), "no newline");
+});
+
+test("a branch's history is named broken for a missing first chunk, a gap, or a nested branch's missing middle, as lap names them", () => {
+    const dir = lapDir();
+    const log = path.join(dir, "log");
+    const put = (name: string, text: string) => {
+        fs.mkdirSync(log, { recursive: true });
+        fs.writeFileSync(path.join(log, name), text);
+    };
+    const b1 = "0123456789ab";
+    const b2 = "ba9876543210";
+    const branch = (id: string, parent: string, base: number) =>
+        rec({ type: "branch", id, name: id, parent, base: "0".repeat(64), base_chunk: base, ts });
+    put("main.000001.jsonl", lines[0]);
+    put("main.000002.jsonl", lines[1]);
+    put(`${b1}.000001.jsonl`, branch(b1, "main", 2));
+    put(`${b1}.000002.jsonl`, commit("L4", "S3"));
+    put(`${b2}.000001.jsonl`, branch(b2, b1, 2));
+    assert.equal(branchProblem(dir, b1), null);
+    assert.equal(branchProblem(dir, b2), null);
+    // a gap in b2's own chunks
+    put(`${b2}.000003.jsonl`, commit("L9", "S9"));
+    assert.equal(branchProblem(dir, b2), `history chunk ${b2}.000002.jsonl is missing from ${log}`);
+    fs.rmSync(path.join(log, `${b2}.000003.jsonl`));
+    // the middle branch's chunk b2 started from is gone
+    fs.rmSync(path.join(log, `${b1}.000002.jsonl`));
+    assert.equal(branchProblem(dir, b2), `history chunk ${b1}.000002.jsonl is missing from ${log}`);
+    assert.equal(branchProblem(dir, b1), null, "b1 itself has what it needs");
+    // b1's first chunk gone: both are broken, never read past
+    put(`${b1}.000002.jsonl`, commit("L4", "S3"));
+    fs.rmSync(path.join(log, `${b1}.000001.jsonl`));
+    assert.equal(branchProblem(dir, b1), `history chunk ${b1}.000001.jsonl is missing from ${log}`);
+    assert.equal(branchProblem(dir, b2), `history chunk ${b1}.000001.jsonl is missing from ${log}`);
+    // a first chunk that is not the branch's own record
+    put(`${b1}.000001.jsonl`, commit("L1", "S1"));
+    assert.match(branchProblem(dir, b1) ?? "", /does not open with branch 0123456789ab's branch record/);
+    // main's chunks the branch starts from
+    put(`${b1}.000001.jsonl`, branch(b1, "main", 2));
+    fs.rmSync(path.join(log, "main.000002.jsonl"));
+    assert.equal(branchProblem(dir, b1), `history chunk main.000002.jsonl is missing from ${log}`);
+});
+
+test("the folder's own history is checked along its whole chain: a nested branch folder's middle branch too", () => {
+    const dir = lapDir();
+    const log = path.join(dir, "log");
+    fs.mkdirSync(log, { recursive: true });
+    const b1 = "0123456789ab";
+    const b2 = "ba9876543210";
+    const branch = (id: string, parent: string, base: number) =>
+        rec({ type: "branch", id, name: id, parent, base: "0".repeat(64), base_chunk: base, ts });
+    fs.writeFileSync(path.join(log, "main.000001.jsonl"), lines[0]);
+    fs.writeFileSync(path.join(log, `${b1}.000001.jsonl`), branch(b1, "main", 1));
+    fs.writeFileSync(path.join(log, `${b1}.000002.jsonl`), commit("L4", "S3"));
+    fs.writeFileSync(path.join(log, `${b2}.000001.jsonl`), branch(b2, b1, 2));
+    fs.writeFileSync(path.join(dir, "lineage"), `${b2}\n`);
+    assert.equal(historyProblem(dir), null);
+    fs.rmSync(path.join(log, `${b1}.000002.jsonl`));
+    assert.equal(historyProblem(dir), `history chunk ${b1}.000002.jsonl is missing from ${log}`);
 });

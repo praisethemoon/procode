@@ -54,14 +54,56 @@ export function missingChunk(names: string[], lineage: string): string | null {
     }
     const max = Math.max(0, ...have);
     for (let n = 1; n <= max; n++) {
-        if (!have.has(n)) return `${lineage}.${String(n).padStart(6, "0")}.jsonl`;
+        if (!have.has(n)) return chunkName(lineage, n);
     }
     return null;
 }
 
-/* Why the folder's history cannot be shown, in lap's words, or null: a
- * chunk missing from the middle of its lineage (or of main's, which a
- * branch folder's history starts with). */
+function chunkName(lineage: string, n: number): string {
+    return `${lineage}.${String(n).padStart(6, "0")}.jsonl`;
+}
+
+/* Why lineage's history, as the chunks in dir hold it, cannot be read, in
+ * lap's words, or null. Every lineage on its way to main must run from its
+ * chunk 1 with no gap, as far as the branch after it needs (its base
+ * chunk), and a branch's first chunk must open with its branch record: a
+ * missing first chunk, a gap, or a nested branch's missing middle are each
+ * named, never read past. */
+export function chainProblem(dir: string, names: string[], lineage: string, need = 0, depth = 0): string | null {
+    const gone = missingChunk(names, lineage);
+    if (gone) return `history chunk ${gone} is missing from ${dir}`;
+    const own = lineageChunks(names, lineage);
+    const least = Math.max(need, lineage === "main" ? 0 : 1);
+    if (own.length < least) return `history chunk ${chunkName(lineage, own.length + 1)} is missing from ${dir}`;
+    if (lineage === "main") return null;
+    if (depth >= 32) return `the branch records in ${dir} loop`;
+    let rec: Record<string, unknown> | null = null;
+    try {
+        rec = JSON.parse(firstLine(path.join(dir, own[0]))) as Record<string, unknown>;
+    } catch {
+        rec = null;
+    }
+    if (!rec || rec["type"] !== "branch" || rec["id"] !== lineage) {
+        return `history chunk ${own[0]} in ${dir} does not open with branch ${lineage}'s branch record`;
+    }
+    return chainProblem(dir, names, String(rec["parent"] ?? "main"), Number(rec["base_chunk"] ?? 0), depth + 1);
+}
+
+/* chainProblem for branch lineage as lapDir holds it. */
+export function branchProblem(lapDir: string, lineage: string): string | null {
+    const dir = path.join(lapDir, "log");
+    let names: string[] = [];
+    try {
+        names = fs.readdirSync(dir);
+    } catch {
+        return `no history of branch ${lineage} in ${lapDir}`;
+    }
+    return chainProblem(dir, names, lineage);
+}
+
+/* Why the folder's history cannot be shown, in lap's words, or null: its
+ * lineage's chain, and each lineage it runs through to main, checked as
+ * chainProblem does. */
 export function historyProblem(lapDir: string): string | null {
     const dir = path.join(lapDir, "log");
     let names: string[] = [];
@@ -76,11 +118,7 @@ export function historyProblem(lapDir: string): string | null {
     } catch {
         /* a main folder */
     }
-    for (const l of lineage === "main" ? ["main"] : [lineage, "main"]) {
-        const gone = missingChunk(names, l);
-        if (gone) return `history chunk ${gone} is missing from ${dir}`;
-    }
-    return null;
+    return chainProblem(dir, names, lineage);
 }
 
 /* True when lapDir holds a history in either shape. */

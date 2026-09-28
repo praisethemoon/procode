@@ -93,6 +93,15 @@ test("a branch log is cut to its own part, and its view lists only its sessions"
     assert.equal(ownPart(parseLog(rec({ type: "init", version: 1, ts }) + commit("L1", null), hash)).commits.length, 1, "a main log is its own");
 });
 
+test("a branch whose history is broken shows lap's words, never part of its sessions", () => {
+    const log = parseLog(BRANCH_LOG, hash);
+    const why = "history chunk 0123456789ab.000002.jsonl is missing from /w/.lap/log";
+    const v = branchView(parseBranchList(LIST)[0], log, new Date(ts), why);
+    assert.equal(v.problem, why);
+    assert.deepEqual(v.sessions, []);
+    assert.equal(branchView(parseBranchList(LIST)[0], log, new Date(ts)).problem, null);
+});
+
 test("the model reads from links, keeps adopted sessions out of the active one, and collects merges", () => {
     const log = parseLog(
         rec({ type: "session_start", id: "S1", msg: "mine", meta: {}, ts }) +
