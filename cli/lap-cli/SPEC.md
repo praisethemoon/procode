@@ -583,7 +583,10 @@ folder, `lap merge <branch> [--dry-run]`.
    stops: a branch the chain passed through advances to the base of the
    next, so its own later merge adopts only what came after — and a file
    stopped in an outer branch's part is stopped in the inner branches'
-   records too.
+   records too, at that same commit, as a later merge records it. A run
+   cut part-way reads the merge records it wrote before the cut as its
+   own, not as earlier merges, and does not write them again, so running
+   it again records what the whole run would.
 
 **Work that came by another route.** A branch's work can reach this folder
 through a branch that had merged it (b2 merged into b1, b1 into main, then

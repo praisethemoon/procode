@@ -1,7 +1,7 @@
 # lap - fine-grained edit recorder for AI agents (C11, zero dependencies)
 #
 #   cmake -B build && cmake --build build
-#   ctest --test-dir build          # unit tests (+ e2e on POSIX)
+#   ctest --test-dir build          # unit tests (+ e2e, merge cases on POSIX)
 #   cmake --install build           # installs bin/lap (see CMAKE_INSTALL_PREFIX)
 #   cmake --build build --target uninstall
 #
@@ -73,6 +73,13 @@ if(UNIX)
     add_test(NAME lap.e2e
              COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/run.sh)
     set_tests_properties(lap.e2e PROPERTIES
+        ENVIRONMENT "LAP=$<TARGET_FILE:lap>")
+    # generated merge cases, seeds 1-60 (POSIX: it runs git through a shell)
+    add_executable(lap-prop tests/prop/prop.c src/sha256.c)
+    target_include_directories(lap-prop PRIVATE src)
+    target_compile_options(lap-prop PRIVATE -Wall -Wextra)
+    add_test(NAME lap.prop COMMAND lap-prop 1 60)
+    set_tests_properties(lap.prop PROPERTIES
         ENVIRONMENT "LAP=$<TARGET_FILE:lap>")
 endif()
 

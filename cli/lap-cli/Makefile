@@ -4,7 +4,9 @@
 #   make            build bin/lap
 #   make unit       build + run unit tests
 #   make e2e        build + run end-to-end tests
-#   make test       unit + e2e
+#   make test       unit + e2e + generated merge cases (seeds 1-60)
+#   make prop       generated merge cases, seeds 1-500 (before a release);
+#                   LAP_PROP_SEED=<n> make prop replays one
 #   make install    copy bin/lap to $(PREFIX)/bin (PREFIX=/usr/local)
 #   make uninstall  remove it
 #   make clean
@@ -30,6 +32,7 @@ SRC_TESTS := $(wildcard tests/unit/*.c)
 
 BIN := bin/lap
 TEST_BIN := bin/lap-unit-tests
+PROP_BIN := bin/lap-prop
 
 all: $(BIN)
 
@@ -41,13 +44,24 @@ $(TEST_BIN): $(SRC_LIB) $(SRC_TESTS) src/*.h tests/unit/test.h
 	@mkdir -p bin
 	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC_LIB) $(SRC_TESTS) $(LDFLAGS)
 
+$(PROP_BIN): tests/prop/prop.c src/sha256.c src/sha256.h src/lap.h
+	@mkdir -p bin
+	$(CC) $(CFLAGS) -Isrc -o $@ tests/prop/prop.c src/sha256.c $(LDFLAGS)
+
 unit: $(TEST_BIN)
 	./$(TEST_BIN)
 
 e2e: $(BIN)
 	LAP="$(abspath $(BIN))" sh tests/e2e/run.sh
 
-test: unit e2e
+# the generated merge cases: seeds 1-60 in make test, 1-500 in make prop
+prop-quick: $(BIN) $(PROP_BIN)
+	LAP="$(abspath $(BIN))" ./$(PROP_BIN) 1 60
+
+prop: $(BIN) $(PROP_BIN)
+	LAP="$(abspath $(BIN))" ./$(PROP_BIN) 1 500
+
+test: unit e2e prop-quick
 
 install: $(BIN)
 	install -d "$(DESTDIR)$(PREFIX)/bin"
@@ -61,4 +75,4 @@ uninstall:
 clean:
 	rm -rf bin
 
-.PHONY: all unit e2e test install uninstall clean
+.PHONY: all unit e2e prop-quick prop test install uninstall clean

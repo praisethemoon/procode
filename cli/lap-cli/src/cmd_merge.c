@@ -116,6 +116,18 @@ static bool set_chain(const StrSet *s, const Rec *b, const StrMap *from_of) {
     return false;
 }
 
+/* The copy here of the commit branch amendment b names, adopted straight
+ * from this branch or from the branch that commit came from; NULL when it
+ * was not adopted, and the amendment stays in the branch. */
+static const char *amend_target(const Rec *b, const RecLog *blog,
+                                const Map *copy_of) {
+    const char *of = map_get(copy_of, b->of);
+    int32_t j = of ? -1 : find_hash(blog, b->of);
+    if (j >= 0 && blog->v[j].from)
+        of = map_get(copy_of, blog->v[j].from);
+    return of;
+}
+
 /* Whether branch commit b is here already as another route's copy: a copy
  * of a copy of it, or a copy of what b itself was copied from. (A direct
  * copy is this merge's own, from an interrupted run, and is placed again.) */
@@ -200,6 +212,22 @@ int32_t merge_redo_point(const RecLog *log, const StrSet *newer,
             return log->count - 1; /* other work since: no redo */
     }
     return p0 - 1;
+}
+
+int32_t merge_cut_start(const RecLog *log, const char *const *ids,
+                        const char *const *heads, int32_t n) {
+    int32_t i = log->count;
+    for (; i > 0; i--) {
+        const Rec *r = &log->v[i - 1];
+        bool ours = false;
+        for (int32_t k = 0; k < n && !ours; k++)
+            ours = r->type == REC_MERGE && r->branch && r->head &&
+                   strcmp(r->branch, ids[k]) == 0 &&
+                   strcmp(r->head, heads[k]) == 0;
+        if (!ours)
+            break;
+    }
+    return i;
 }
 
 /* Adds an adopted commit's id (and, for JSON, its original's hash) to the
@@ -528,6 +556,23 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         goto done;
     }
 
+    /* The merge records an interrupted run of this chain wrote are its
+     * own: earlier merges are read from the history before them (earlier),
+     * and the rerun does not write them again. */
+    const char **outer_ids =
+        (const char **)arena_alloc(a, (size_t)nlin * sizeof(char *));
+    const char **outer_heads =
+        (const char **)arena_alloc(a, (size_t)nlin * sizeof(char *));
+    int32_t nouter = 0;
+    for (int32_t k = 0; k + 1 < nlin; k++) {
+        if (lin[k].last < 0)
+            continue;
+        outer_ids[nouter] = lin[k].id;
+        outer_heads[nouter++] = blog.v[lin[k].last].hash;
+    }
+    RecLog earlier = plog;
+    earlier.count = merge_cut_start(&plog, outer_ids, outer_heads, nouter);
+
     /* What earlier merges took in of each branch, and the sessions they
      * carried: a session adopted before, straight from its branch or by way
      * of a branch that had adopted it, is not adopted again. */
@@ -542,12 +587,12 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
     StrMap from_of = {0};
     const Rec **byway;
     int32_t nbyway;
-    merges_by_way(a, repo.lapdir, &plog, &byway, &nbyway, &from_of);
+    merges_by_way(a, repo.lapdir, &earlier, &byway, &nbyway, &from_of);
     int32_t *best = (int32_t *)arena_alloc(a, (size_t)nlin * sizeof(int32_t));
     for (int32_t k = 0; k < nlin; k++)
         best[k] = -1;
-    for (int32_t i = 0; i < plog.count + nbyway; i++) {
-        const Rec *p = i < plog.count ? &plog.v[i] : byway[i - plog.count];
+    for (int32_t i = 0; i < earlier.count + nbyway; i++) {
+        const Rec *p = i < earlier.count ? &earlier.v[i] : byway[i - earlier.count];
         if (p->type == REC_MERGE) {
             for (int32_t k = 0; k < nlin; k++) {
                 if (strcmp(p->branch, lin[k].id) != 0)
@@ -569,13 +614,50 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             }
             continue;
         }
-        if (i >= plog.count || !p->from)
+        if (i >= earlier.count || !p->from)
             continue;
         for (const char *f = p->from; f; f = strmap_get(&from_of, f)) {
             if (p->type == REC_SESSION_START)
                 map_put(a, &adopted_sessions, f, p->id);
             else if (p->type == REC_SESSION_END)
                 strset_add(&ended, f);
+        }
+    }
+    /* A file stopped here for a branch whose work this one took in (its
+     * merge of that branch is in the stream, or came in one) stays
+     * stopped: this branch's commits to it carry what the stop left out,
+     * or the same change made twice, where git keeps what the parent
+     * resolved. */
+    Map stopped_via = {0}; /* file -> the commit it stopped at */
+    Map stopped_for = {0}; /* file -> the name of the branch it stopped for */
+    {
+        RecLog own = blog;
+        own.v = blog.v + bi + 1;
+        own.count = blog.count - bi - 1;
+        const Rec **taken;
+        int32_t ntaken;
+        StrMap links = {0};
+        merges_by_way(a, repo.lapdir, &own, &taken, &ntaken, &links);
+        StrSet took;
+        strset_init(&took, a);
+        for (int32_t i = 0; i < own.count; i++) {
+            if (own.v[i].type == REC_MERGE)
+                strset_add(&took, own.v[i].branch);
+        }
+        for (int32_t i = 0; i < ntaken; i++)
+            strset_add(&took, taken[i]->branch);
+        for (int32_t i = 0; i < earlier.count + nbyway; i++) {
+            const Rec *p = i < earlier.count ? &earlier.v[i] : byway[i - earlier.count];
+            if (p->type != REC_MERGE || !strset_has(&took, p->branch))
+                continue;
+            for (int32_t s = 0; s < p->stopped_n; s++) {
+                const char *file = p->stopped_file[s];
+                if (map_get(&stopped_before, file) ||
+                    map_get(&stopped_via, file))
+                    continue;
+                map_put(a, &stopped_via, file, p->stopped_at[s]);
+                map_put(a, &stopped_for, file, p->name ? p->name : p->branch);
+            }
         }
     }
     int32_t upto = bi; /* the stream's last record already taken in here */
@@ -691,6 +773,11 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             n++;
         }
         const char *was = map_get(&stopped_before, files[f]);
+        const char *why = "an earlier merge stopped it here";
+        if (!was && (was = map_get(&stopped_via, files[f])))
+            why = arena_printf(a, "stopped here for %s, whose work this "
+                               "branch took in",
+                               map_get(&stopped_for, files[f]));
         if (was) {
             /* stopped once, stopped for good: reported and recorded again,
              * at the commit where it first stopped */
@@ -713,7 +800,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             ARENA_GROW(a, stop_why, s3, scap3, const char *);
             stop_file[nstop] = files[f];
             stop_at[nstop] = was;
-            stop_why[nstop] = "an earlier merge stopped it here";
+            stop_why[nstop] = why;
             nstop++;
             continue;
         }
@@ -742,7 +829,8 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         }
         left += (int32_t)n - p.placed;
         /* A stopped file stops for every branch of the chain with commits
-         * to it left: each branch's merge record names its first one. */
+         * to it left, each branch's merge record naming the commit where
+         * it stopped, as a later merge of the branch records it. */
         for (int32_t k = p.placed; k < (int32_t)n; k++) {
             Lin *l = &lin[lof[idx[k]]];
             l->left++;
@@ -752,7 +840,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             ARENA_GROW(a, l->stop_file, l->nstop, l->scap, const char *);
             ARENA_GROW(a, l->stop_at, s2, l->scap2, const char *);
             l->stop_file[l->nstop] = files[f];
-            l->stop_at[l->nstop] = mine[k]->hash;
+            l->stop_at[l->nstop] = mine[p.placed]->hash;
             l->nstop++;
         }
         if (last >= 0) {
@@ -785,6 +873,23 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
                 err_out(json, "io_error", "cannot copy %s into %s", c->name,
                         repo.hist.dir);
                 goto done;
+            }
+        }
+    }
+
+    /* A dry run counts the amendments the append below would carry and
+     * leave, each commit it would adopt standing in for its copy. */
+    if (dry) {
+        for (int32_t i = start; i < blog.count; i++) {
+            const Rec *b = &blog.v[i];
+            if (b->type == REC_COMMIT && at[i] > 0)
+                map_put(a, &copy_of, b->hash, b->hash);
+            else if (b->type == REC_AMEND &&
+                     !set_chain(&amends_here, b, &from_of)) {
+                if (amend_target(b, &blog, &copy_of))
+                    amends_carried++;
+                else
+                    amends_left++;
             }
         }
     }
@@ -853,12 +958,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
             } else if (b->type == REC_AMEND) {
                 if (set_chain(&amends_here, b, &from_of))
                     continue; /* carried already */
-                /* the commit it names, adopted here straight from this
-                 * branch or from the branch that commit came from */
-                const char *of = map_get(&copy_of, b->of);
-                int32_t j = of ? -1 : find_hash(&blog, b->of);
-                if (j >= 0 && blog.v[j].from)
-                    of = map_get(&copy_of, blog.v[j].from);
+                const char *of = amend_target(b, &blog, &copy_of);
                 if (!of) { /* not adopted: it stays in the branch */
                     amends_left++;
                     continue;
@@ -892,7 +992,10 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
          * branch it started from advances to the base of the next. */
         for (int32_t k = 0; k < nlin; k++) {
             const Lin *l = &lin[k];
-            if (l->last <= upto)
+            bool written = false; /* by an interrupted run, before its cut */
+            for (int32_t i = earlier.count; i < plog.count && !written; i++)
+                written = strcmp(plog.v[i].branch, l->id) == 0;
+            if (l->last <= upto || written)
                 continue;
             Rec m;
             memset(&m, 0, sizeof m);

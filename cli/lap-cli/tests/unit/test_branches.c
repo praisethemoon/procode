@@ -352,6 +352,42 @@ void test_branches(void) {
     rl[3].branch = "ffffffffffff"; /* another branch's merge: other work */
     ASSERT_EQ_I(merge_redo_point(&rlog, &nw, &runb), 3);
 
+    t_begin("merge_cut_start: trailing merge records of the chain's outer "
+            "branches at the heads it writes are the cut run's own");
+    Rec cr[5];
+    memset(cr, 0, sizeof cr);
+    cr[0].type = REC_COMMIT; /* the run's copies, then its outer records */
+    cr[1].type = REC_COMMIT;
+    cr[2].type = REC_MERGE;
+    cr[2].branch = "0123456789ab";
+    cr[2].head = "h1";
+    cr[3].type = REC_MERGE;
+    cr[3].branch = "ba9876543210";
+    cr[3].head = "h2";
+    RecLog clog;
+    memset(&clog, 0, sizeof clog);
+    clog.v = cr;
+    clog.count = 4;
+    const char *oids[] = {"0123456789ab", "ba9876543210"};
+    const char *oheads[] = {"h1", "h2"};
+    ASSERT_EQ_I(merge_cut_start(&clog, oids, oheads, 2), 2);
+    ASSERT_EQ_I(merge_cut_start(&clog, oids, oheads, 1), 4);
+    ASSERT_EQ_I(merge_cut_start(&clog, oids, oheads, 0), 4);
+
+    t_begin("merge_cut_start: a merge record at another head, of another "
+            "branch, or followed by other work is not the run's");
+    oheads[1] = "h9"; /* a merge of that branch alone, further on */
+    ASSERT_EQ_I(merge_cut_start(&clog, oids, oheads, 2), 4);
+    oheads[1] = "h2";
+    cr[3].branch = "ffffffffffff";
+    ASSERT_EQ_I(merge_cut_start(&clog, oids, oheads, 2), 4);
+    cr[3].branch = "ba9876543210";
+    cr[4].type = REC_SESSION_START; /* work recorded after the cut */
+    clog.count = 5;
+    ASSERT_EQ_I(merge_cut_start(&clog, oids, oheads, 2), 5);
+    clog.count = 0;
+    ASSERT_EQ_I(merge_cut_start(&clog, oids, oheads, 2), 0);
+
     t_begin("ref_find_record: a hash or S<n> names any record, which "
             "ref_find, for commits only, does not");
     Rec rr[3];

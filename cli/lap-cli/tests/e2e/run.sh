@@ -2123,6 +2123,26 @@ for n in 0 1 2 3 4 5; do
 done
 cd "$WORK"
 
+t "lap merge --dry-run counts the amendments the merge will carry and leave"
+merge_pair am1; BP="$WORK/am1-p"; BW="$WORK/am1-w"
+cd "$BW" && "$LAP" session start "amended work" --branch b >/dev/null 2>&1
+lasthash() { "$LAP" log -n 1 --json | tr ',' '\n' | grep '"hash"' | head -n 1 | sed 's/.*"hash":"\([0-9a-f]*\)".*/\1/'; }
+in_branch g.txt 's/^g1$/G1/' "uppercases g1 on the branch"
+cd "$BW" && expect_ok "$LAP" amend "$(lasthash)" --branch b \
+    -i "say what the g1 edit is for" -b "uppercases g1 so the branch's work stands out"
+in_branch f.txt 's/^line 10$/branch 10/' "rewrites line 10 on the branch"
+cd "$BW" && expect_ok "$LAP" amend "$(lasthash)" --branch b \
+    -i "say what the line 10 edit is for" -b "rewrites line 10 as the branch wants it"
+in_parent f.txt 's/^line 10$/parent 10/' "rewrites line 10 on the parent"
+git_merge_b && fail "git merged a real conflict cleanly"
+cd "$BP" && git checkout -q --ours f.txt && git add f.txt &&
+    git commit -qm "merged b, keeping the parent's f.txt" >/dev/null
+# g1's commit is adopted, its amendment carried; line 10's stops, its amendment stays
+expect_grep '"amendments":{"carried":1,"left":1}' "$LAP" merge b --dry-run --json
+expect_grep '"amendments":{"carried":1,"left":1}' "$LAP" merge b --json
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
 t "lap merge adopts only what git merge brought, so .lap/log never conflicts"
 merge_pair m12; BP="$WORK/m12-p"; BW="$WORK/m12-w"
 cd "$BW" && "$LAP" session start "staged work" --branch b >/dev/null 2>&1
@@ -2393,6 +2413,70 @@ expect_grep "clean" "$LAP" status
 expect_grep "^b  *merged" "$LAP" branch list
 once "B2 shouts line 40"
 expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
+t "a nested branch's merge record stops a file at the commit where its parent branch's part stopped it"
+cd "$WORK/n3-p" || exit 1
+ATS=$(grep '"type":"merge"' .lap/log/main.*.jsonl | grep '"stopped":\[{"file":"f.txt"' |
+    sed 's/.*"stopped":\[{"file":"f.txt","at":"\([0-9a-f]*\)".*/\1/' | sort -u)
+[ "$(printf '%s\n' "$ATS" | wc -l | tr -d ' ')" = 1 ] ||
+    fail "b's and b2's merge records stop f.txt at different commits: $ATS"
+expect_grep "B1 edits line 10 before b2 starts" "$LAP" show "$ATS" --branch b
+cd "$WORK"
+
+t "a file stopped for a branch stays stopped when another branch brings that branch's work"
+nest_trio n8
+edit_commit "$N1" b f.txt 's/^line 30$/same 30/' "B1 rewrites line 30"
+cd "$N1" && git add -A && git commit -qm "b1 line 30" >/dev/null
+cd "$N2" && "$LAP" session start "b2 work" --branch b2 >/dev/null 2>&1
+edit_commit "$N2" b2 f.txt 's/^line 40$/B2 40/' "B2 rewrites line 40"
+edit_commit "$N2" b2 f.txt 's/^line 30$/same 30/' "B2 rewrites line 30 as b1 did"
+cd "$N2" && git add -A && git commit -qm "b2 work" >/dev/null
+cd "$N1" && git merge -q --no-edit b2 >/dev/null 2>&1 || fail "git merge b2 into b"
+expect_ok "$LAP" merge b2
+git add -A && git commit -qm "b took in b2" >/dev/null
+cd "$NP" && "$LAP" session start "main work" --branch main >/dev/null 2>&1
+edit_commit "$NP" main f.txt 's/^line 40$/MAIN 40/' "main rewrites line 40"
+cd "$NP" && git add -A && git commit -qm "main 40" >/dev/null
+git merge -q --no-edit b2 >/dev/null 2>&1 && fail "git merged b2's line 40 cleanly"
+# the parent keeps its line 40 and, deciding by hand, its line 30 too
+git show :3:f.txt | sed 's/^B2 40$/MAIN 40/; s/^same 30$/line 30/' > f.txt
+git add f.txt && git commit -qm "merged b2, keeping main's lines 30 and 40" >/dev/null
+expect_grep '"stopped":\[{"file":"f.txt"' "$LAP" merge b2 --json
+expect_grep "clean" "$LAP" status
+git merge -q --no-edit b >/dev/null 2>&1 || fail "git merge b into main"
+grep -q '^line 30$' f.txt || fail "git took b's line 30"
+# b's own line 30 is the change the parent turned down from b2: stopped too
+expect_grep "stopped: f.txt at #[0-9a-f]\{7\} (stopped here for b2, whose work this branch took in)" "$LAP" merge b
+expect_grep "clean" "$LAP" status
+expect_grep "0 mismatch" "$LAP" verify --deep
+cd "$WORK"
+
+t "a chain merge cut after its outer branch's merge record ends, run again, where the whole run does"
+nest_trio n9
+cd "$N2" && "$LAP" session start "b2 work" --branch b2 >/dev/null 2>&1
+# b2 deletes the line under b's line 10, which the parent changes the same way
+edit_commit "$N2" b2 f.txt '/^line 11$/d' "B2 deletes line 11"
+cd "$N2" && git add -A && git commit -qm "b2 work" >/dev/null
+cd "$NP" && "$LAP" session start "main work" --branch main >/dev/null 2>&1
+edit_commit "$NP" main f.txt 's/^line 10$/B1 early/' "main rewrites line 10 as b did"
+cd "$NP" && git add -A && git commit -qm "main 10" >/dev/null
+git merge -q --no-edit b2 >/dev/null 2>&1 ||
+    { git checkout -q --theirs f.txt && git add f.txt && git commit -qm "merged b2" >/dev/null; }
+logcore() { sed 's/"ts":"[^"]*"//; s/"prev":"[^"]*"//; s/"hash":"[^"]*"//' .lap/log/main.*.jsonl; }
+cp -R "$NP" "$WORK/n9-ref" && cd "$WORK/n9-ref" && expect_ok "$LAP" merge b2
+REF9=$(logcore)
+n=0
+while [ $n -le 12 ]; do
+    cp -R "$NP" "$WORK/n9-c$n" && cd "$WORK/n9-c$n" || exit 1
+    LAP_TEST_MERGE_FAIL_AFTER=$n "$LAP" merge b2 >/dev/null 2>&1 && break
+    expect_ok "$LAP" merge b2
+    [ "$(logcore)" = "$REF9" ] || fail "cut after $n records, the rerun's history differs"
+    [ "$(grep -c '"type":"merge"' .lap/log/main.*.jsonl | awk -F: '{s+=$NF} END {print s}')" = 2 ] ||
+        fail "cut after $n records, the rerun wrote a merge record twice"
+    n=$((n + 1))
+done
+[ $n -ge 3 ] || fail "the chain merge wrote too few records to cut ($n)"
 cd "$WORK"
 
 t "a torn first line in the open chunk a branch start left empty is cut by the next commit"

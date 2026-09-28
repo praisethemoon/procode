@@ -56,9 +56,10 @@ libraries to fetch, no build-time code generation, no network access.
 
 ```sh
 make                          # -> bin/lap
-make test                     # unit tests + end-to-end suite
+make test                     # unit tests + end-to-end suite + merge cases 1-60
 make unit                     # unit tests alone
 make e2e                      # end-to-end suite alone (needs sh)
+make prop                     # generated merge cases, seeds 1-500
 sudo make install             # -> /usr/local/bin/lap
 sudo make uninstall
 ```
@@ -71,12 +72,30 @@ the sanitizer build runs:
 make CFLAGS="-std=c11 -Wall -Wextra -O1 -g -fsanitize=address,undefined" test
 ```
 
+The generated merge cases (`tests/prop/prop.c`, built as `bin/lap-prop`)
+build a parent and branches with real `git worktree`, random edits and
+lap commits on every side, then `git merge` and `lap merge`, and check each
+merge: `--dry-run` predicts it and writes nothing, what git merged cleanly
+is recorded as git merged it, `lap verify --deep` passes, nothing is
+adopted twice, and a merge cut after any record ends, run again, where the
+whole run did. Each seed is one case, the same on every run and machine (the
+driver has its own PRNG and reads no clock). A failure prints its seed and
+keeps its folder; replay it alone with its trace:
+
+```sh
+LAP_PROP_SEED=17 make prop                             # seed 17 alone
+LAP_PROP_SEED=17 LAP_PROP_TRACE=1 bin/lap-prop         # every command it ran
+bin/lap-prop 1 2000                                    # any range of seeds
+```
+
+It needs git, and says it skipped when there is none.
+
 Or with CMake — the cross-platform path, and the one to use on Windows with
 MSVC or MinGW:
 
 ```sh
 cmake -B build && cmake --build build
-ctest --test-dir build        # unit (+ e2e on POSIX)
+ctest --test-dir build        # unit (+ e2e, merge cases on POSIX)
 cmake --install build         # CMAKE_INSTALL_PREFIX to change the target
 cmake --build build --target uninstall
 ```
@@ -372,7 +391,8 @@ its `log/` directory plus the working tree, then run `lap rebuild` on
 arrival.
 
 **Windows** builds with MSVC through CMake and runs the unit suite under
-ctest. The e2e suite is a shell script, run on macOS and Linux.
+ctest. The e2e suite is a shell script and the generated merge cases run
+git through one, so both run on macOS and Linux.
 
 ## For agents
 

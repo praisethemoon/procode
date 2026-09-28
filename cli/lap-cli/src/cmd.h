@@ -133,6 +133,14 @@ bool own_chunks(Arena *a, const char *lapdir, const char *from,
  * them), when they are the last thing in log; else log's last record. */
 int32_t merge_redo_point(const RecLog *log, const StrSet *newer,
                          const StrSet *run_branches);
+/* Where the merge records an interrupted run of a chain merge wrote begin
+ * in log: the trailing merge records, each of one of the n outer branches
+ * (ids) at exactly the head the chain writes for it (heads). A chain
+ * writes the merged branch's own record last, so these mean the run did
+ * not finish, and its rerun reads them as its own, not as earlier merges.
+ * log's count when there are none. */
+int32_t merge_cut_start(const RecLog *log, const char *const *ids,
+                        const char *const *heads, int32_t n);
 /* Whether a merge that finds nothing to adopt (start, the first record of
  * the branch's stream not taken in yet, is count) still records itself:
  * when the branch (heads[0], its last merged head) was never merged — one
