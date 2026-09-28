@@ -94,7 +94,7 @@ html, body {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--bk-gap-xs, 4px);
-  padding: var(--bk-padding-sm);
+  padding: 6px 4px 4px;
   background: var(--bk-color-background);
   border-bottom: 1px solid var(--bk-color-border);
   flex: 0 0 auto;
