@@ -271,8 +271,10 @@ static int32_t find_ref(const RecLog *log, const char *ref, bool any,
     if (any && (ref[0] == 'S' || ref[0] == 's') && ref[1] >= '0' &&
         ref[1] <= '9') {
         for (int32_t i = 0; i < log->count; i++) {
+            /* ref is S or s and digits: only its first letter's case
+             * may differ from the id's */
             if (log->v[i].type == REC_SESSION_START && log->v[i].id &&
-                strcasecmp(log->v[i].id, ref) == 0)
+                log->v[i].id[0] == 'S' && strcmp(log->v[i].id + 1, ref + 1) == 0)
                 return i;
         }
         snprintf(err, errsz, "no session named %s", ref);
