@@ -325,7 +325,7 @@ body {
 }
 
 .sb-filter {
-    padding: 6px 8px 4px;
+    padding: 6px 4px 4px;
     border-bottom: 1px solid var(--bk-color-divider);
 }
 
