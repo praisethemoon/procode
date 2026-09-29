@@ -9,6 +9,9 @@ extension, **procode**, for you to follow along.
 These tools can generally be used with any agent (or human), but only Claude Code is
 tested.
 
+This repository in itself, is written with claude code, using this extension, 
+so you can clone it and open it in vscode to see how it looks like.
+
 ## <img src="packages/lap-vscode/media/lap.svg" alt="" width="22" height="22"> Lap
 
 Lap is an edit recorder. Like git, lap records changes, but its goal is to
