@@ -10,7 +10,7 @@
 # in cli/ stay the quick path on POSIX (npm run build uses them).
 
 cmake_minimum_required(VERSION 3.16)
-project(lap_workspace LANGUAGES C)
+project(procode LANGUAGES C)
 
 enable_testing()
 

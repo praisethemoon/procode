@@ -1,5 +1,5 @@
 {
-    "name": "lap-workspace",
+    "name": "procode",
     "private": true,
     "description": "procode: the TypeScript packages under packages/ are npm workspaces; the C tools under cli/ build with CMake, not npm.",
     "workspaces": [

@@ -142,7 +142,7 @@ if (dup) {
 const manifest = {
     name: "procode",
     displayName: "procode",
-    description: "Lap History, Knowledge, the Board and techdocs in one extension, with the lap and kb CLIs and the kb, coboard and techdocs MCP servers.",
+    description: "Board, Lap History, techdocs and Knowledge in one sidebar, with the coboard, kb and techdocs MCP servers for your agent. Packages for macOS, Linux and Windows include the lap and kb CLIs.",
     version: VERSION,
     publisher: "praisethemoon",
     author: { name: "Soulaymen Chouri", email: "doit@praisethemoon.org" },

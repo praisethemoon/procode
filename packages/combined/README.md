@@ -16,8 +16,10 @@ you get the package without them, and build them yourself: CMake build & install
 scripts are available, check the main README for exact instructions:
 [Build and install](https://github.com/praisethemoon/procode#build-and-install)
 
-If you do not want all the features, they are also available as individual extensions
-on the github repo, and you can build from source and handpick what you like.
+If you do not want all the features, hide the views you don't use (right-click a view's
+header). Each view is also its own extension in the github repo, if you want to build
+from source and handpick what you like; only procode itself sets up the MCP servers
+and skills for your agent, though.
 
 Also, these tools and skills, will cause your agent to spend more tokens, on average, it
 increases usage by 10 to 15% from my experiments. (`lap` is a CLI so it is hard to measure).
