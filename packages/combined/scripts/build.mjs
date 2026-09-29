@@ -142,7 +142,7 @@ if (dup) {
 const manifest = {
     name: "procode",
     displayName: "procode",
-    description: "Board, Lap History, techdocs and Knowledge in one sidebar, with the coboard, kb and techdocs MCP servers for your agent. Packages for macOS, Linux and Windows include the lap and kb CLIs.",
+    description: "Progressive coding: very opinionated tools for working alongside AI coding agents. Order and code you understand and can reason about, the literate opposite of vibe coding.",
     version: VERSION,
     publisher: "praisethemoon",
     author: { name: "Soulaymen Chouri", email: "doit@praisethemoon.org" },
