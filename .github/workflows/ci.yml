@@ -38,7 +38,20 @@ jobs:
           cache: npm
 
       - name: Build and test the packages
+        shell: bash
         run: |
           npm ci
           npm run build
-          npm test
+          npm test 2>&1 | tee test.log
+
+      # npm's own error lands in the middle of the test output, far from the
+      # failure; this prints every failing test, with its error, at the end.
+      - name: Show the failing tests
+        if: failure()
+        shell: bash
+        run: |
+          if [[ -f test.log ]] && grep -qE '^\s*not ok' test.log; then
+            grep -nE -A30 '^\s*not ok' test.log
+          else
+            echo "No test reported 'not ok': the failure is in an earlier step or outside a test."
+          fi
