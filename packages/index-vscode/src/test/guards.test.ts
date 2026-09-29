@@ -981,7 +981,7 @@ test("the build outputs are gitignored rather than committed", () => {
         "node_modules/",
     ]) {
         assert.ok(
-            ignore.split("\n").includes(needed),
+            ignore.split(/\r?\n/).includes(needed),
             `.gitignore does not carry ${needed}, so a build would be committed`,
         );
     }

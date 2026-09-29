@@ -186,7 +186,7 @@ for (let i = 0; i < 25; i++) b.create({ kind: "ticket", title: "${tag} " + i, ep
     assert.equal(new Set(tickets.map((t) => t.id)).size, 50, "no id was handed out twice");
 });
 
-test("a board whose folder cannot be written fails at once, as a refusal, never waiting", { skip: process.getuid?.() === 0 }, async () => {
+test("a board whose folder cannot be written fails at once, as a refusal, never waiting", { skip: process.platform === "win32" ? "chmod cannot make a folder read-only on Windows" : process.getuid?.() === 0 }, async () => {
     const dir = tmp();
     new Board(dir).create({ kind: "epic", title: "Read-only" });
     fs.chmodSync(path.join(dir, ".coboard"), 0o555);

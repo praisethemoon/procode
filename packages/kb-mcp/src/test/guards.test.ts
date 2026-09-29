@@ -76,7 +76,7 @@ test("the only stream written by name is stderr", () => {
     const writers = new Set<string>();
     for (const { file, text } of shipped()) {
         for (const m of code(text).matchAll(/process\.(stdout|stderr)\b/g)) {
-            writers.add(`${file}:${m[1]}`);
+            writers.add(`${file.split(path.sep).join("/")}:${m[1]}`);
         }
     }
     for (const writer of writers) {
@@ -247,7 +247,7 @@ test("the build outputs are ignored by the repository, the way the siblings' are
     const ignore = fs.readFileSync(path.join(REPO, ".gitignore"), "utf8");
     for (const line of ["packages/kb-mcp/out/", "node_modules/"]) {
         assert.ok(
-            ignore.split("\n").includes(line),
+            ignore.split(/\r?\n/).includes(line),
             `.gitignore does not carry ${line}, so a build would be committed`,
         );
     }
@@ -256,7 +256,11 @@ test("the build outputs are ignored by the repository, the way the siblings' are
 test("the entry point is executable and starts the compiled server", () => {
     const entry = path.join(ROOT, "bin", "kb-mcp");
     assert.ok(fs.existsSync(entry));
-    assert.ok((fs.statSync(entry).mode & 0o111) !== 0, "bin/kb-mcp is not executable");
+    if (process.platform !== "win32") {
+        /* Windows has no exec bit to read; the platforms that run the entry
+         * point directly are the ones that need it. */
+        assert.ok((fs.statSync(entry).mode & 0o111) !== 0, "bin/kb-mcp is not executable");
+    }
     const text = fs.readFileSync(entry, "utf8");
     assert.match(text, /^#!/, "bin/kb-mcp has no shebang, so a host cannot exec it");
     assert.match(text, /require\("\.\.\/out\/main\.js"\)/);

@@ -1,0 +1,3 @@
+# Text is LF in every checkout, Windows included: lap's log is hash-chained
+# over its bytes, and the tests read files the way macOS and Linux write them.
+* text=auto eol=lf

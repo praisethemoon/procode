@@ -312,7 +312,7 @@ test("startSession: records where lap says this folder does — main despite a l
     }
 });
 
-test("ticketSessions: a branch whose history cannot be read is named in the error, its sessions not silently dropped", { skip: (!LAP && noCli("lap")) || process.getuid?.() === 0 }, async () => {
+test("ticketSessions: a branch whose history cannot be read is named in the error, its sessions not silently dropped", { skip: process.platform === "win32" ? "chmod cannot make a folder unreadable on Windows" : (!LAP && noCli("lap")) || process.getuid?.() === 0 }, async () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-sessions-")));
     const parent = path.join(root, "proj");
     const feat = path.join(root, "feat");
