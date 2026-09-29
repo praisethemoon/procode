@@ -1,0 +1,204 @@
+/* The page's layout, and the few plain elements baukasten has no component
+ * for (lists). Every value is a baukasten token (--bk-*); colours come from
+ * baukasten-web.css, never from here. */
+
+:root {
+    --side-width: 16rem;
+    color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    scroll-padding-top: var(--bk-spacing-6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+}
+
+body {
+    margin: 0;
+    background: var(--bk-color-background);
+    color: var(--bk-color-foreground);
+    font-family: var(--bk-font-family-sans);
+    font-size: var(--bk-font-size-base);
+    line-height: var(--bk-line-height-relaxed);
+    -webkit-text-size-adjust: 100%;
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.layout {
+    display: grid;
+    grid-template-columns: var(--side-width) minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--bk-color-background-secondary);
+    border-right: var(--bk-border-width-1) solid var(--bk-color-border);
+    padding: var(--bk-spacing-6) var(--bk-spacing-3);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bk-gap-sm);
+    padding: 0 var(--bk-spacing-2);
+    margin-bottom: var(--bk-spacing-6);
+}
+
+.brand-link {
+    display: flex;
+    align-items: center;
+    gap: var(--bk-gap-sm);
+    color: var(--bk-color-foreground);
+    text-decoration: none;
+}
+
+.menu-toggle {
+    display: none;
+}
+
+.side-links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bk-gap-sm);
+    margin-top: var(--bk-spacing-6);
+    padding: var(--bk-spacing-4) var(--bk-spacing-3) 0;
+    border-top: var(--bk-border-width-1) solid var(--bk-color-divider);
+}
+
+.side-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bk-gap-sm);
+}
+
+main {
+    padding: var(--bk-spacing-12) clamp(var(--bk-spacing-4), 5vw, var(--bk-spacing-16)) var(--bk-spacing-16);
+    max-width: 54rem;
+}
+
+section {
+    padding-bottom: var(--bk-spacing-10);
+    margin-bottom: var(--bk-spacing-10);
+    border-bottom: var(--bk-border-width-1) solid var(--bk-color-divider);
+}
+
+section:last-of-type {
+    border-bottom: none;
+}
+
+/* ------------------------------------------------- inside the chapters */
+
+ul,
+ol {
+    margin: 0 0 var(--bk-spacing-4);
+    padding-left: var(--bk-spacing-6);
+}
+
+li + li {
+    margin-top: var(--bk-spacing-2);
+}
+
+li > p:last-child {
+    margin-bottom: 0;
+}
+
+.block {
+    margin: 0 0 var(--bk-spacing-4);
+    overflow-x: auto;
+}
+
+.callout {
+    margin: var(--bk-spacing-5) 0;
+}
+
+.callout p:last-child {
+    margin-bottom: 0;
+}
+
+.shot {
+    margin: var(--bk-spacing-6) 0;
+}
+
+.grid {
+    overflow-x: auto;
+    margin: 0 0 var(--bk-spacing-4);
+}
+
+.grid td:first-child {
+    min-width: 12rem;
+}
+
+.faq p:last-child {
+    margin-bottom: 0;
+}
+
+.faq .grid {
+    margin-bottom: 0;
+}
+
+footer {
+    padding-top: var(--bk-spacing-2);
+}
+
+/* ---------------------------------------------------------------- narrow */
+
+@media (max-width: 800px) {
+    .layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sidebar {
+        z-index: var(--bk-z-index-sticky);
+        height: auto;
+        max-height: 100vh;
+        padding: var(--bk-spacing-3) var(--bk-spacing-2);
+        border-right: none;
+        border-bottom: var(--bk-border-width-1) solid var(--bk-color-border);
+    }
+
+    .brand {
+        margin-bottom: 0;
+    }
+
+    .menu-toggle {
+        display: inline-flex;
+    }
+
+    .sidebar nav {
+        display: none;
+        padding-top: var(--bk-spacing-3);
+    }
+
+    .sidebar.open nav {
+        display: block;
+    }
+
+    html {
+        scroll-padding-top: var(--bk-spacing-20);
+    }
+
+    main {
+        padding-top: var(--bk-spacing-6);
+    }
+
+    .grid td:first-child {
+        min-width: 9rem;
+    }
+}

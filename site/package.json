@@ -1,0 +1,24 @@
+{
+    "name": "procode-site",
+    "private": true,
+    "description": "procode's page on GitHub Pages: one React page, built with Vite. Not an npm workspace of the repository; it has its own lock file.",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc --noEmit && vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "@tanstack/react-table": "^8.21.3",
+        "baukasten-ui": "^0.3.0",
+        "react": "^19.3.0",
+        "react-dom": "^19.3.0"
+    },
+    "devDependencies": {
+        "@types/react": "^19.3.0",
+        "@types/react-dom": "^19.3.0",
+        "@vitejs/plugin-react": "^6.1.1",
+        "typescript": "^5.9.3",
+        "vite": "^8.3.1"
+    }
+}
