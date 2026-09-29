@@ -187,7 +187,7 @@ test("branch list rows say which branch a nested one started from", () => {
     assert.equal(parseBranchList(LIST)[0].via, null, "an older lap without via: this folder's own");
 });
 
-test("a failing lap is reported in its own words, and a missing one says it could not run", async () => {
+test("a failing lap is reported in its own words, and a missing one says it could not run", { skip: process.platform === "win32" && "the stand-in lap is a #! script, which Windows cannot start" }, async () => {
     const { execFile } = await import("node:child_process");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lapfail-"));
     const standIn = path.join(dir, "lap");

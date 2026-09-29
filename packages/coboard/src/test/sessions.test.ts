@@ -341,7 +341,7 @@ test("ticketSessions: a branch whose history cannot be read is named in the erro
     }
 });
 
-test("board_sessions: a session whose commits could not be read is named in lapError", async () => {
+test("board_sessions: a session whose commits could not be read is named in lapError", { skip: process.platform === "win32" && "the stand-in lap is a #! script, which Windows cannot start" }, async () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coboard-sessions-")));
     /* a lap that lists one session and cannot read its commits */
     const fake = path.join(root, "fake-lap");

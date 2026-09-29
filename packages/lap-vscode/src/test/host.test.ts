@@ -158,13 +158,16 @@ test("the view asks for a page, and is sent it again when the log grows or the g
         return posted.length > before && m.type === "page" ? m : null;
     };
     try {
-        process.env.PATH = bin;
-        const byLap = await revealed("#abcdef0");
-        assert.deepEqual(fs.readFileSync(args, "utf8").split("\n"), ["show", "#abcdef0", "--json", ""]);
-        assert.ok(byLap && byLap.page && byLap.reveal);
-        assert.equal(byLap.reveal.id, "L1");
-        assert.deepEqual(byLap.reveal.filter, { text: "", range: "all", ops: [], users: [], states: [] });
-        assert.deepEqual(byLap.page.commits.map((c) => c.id), ["L3", "L2", "L1"]);
+        // The stand-in lap is a #! script, which Windows cannot start.
+        if (process.platform !== "win32") {
+            process.env.PATH = bin;
+            const byLap = await revealed("#abcdef0");
+            assert.deepEqual(fs.readFileSync(args, "utf8").split("\n"), ["show", "#abcdef0", "--json", ""]);
+            assert.ok(byLap && byLap.page && byLap.reveal);
+            assert.equal(byLap.reveal.id, "L1");
+            assert.deepEqual(byLap.reveal.filter, { text: "", range: "all", ops: [], users: [], states: [] });
+            assert.deepEqual(byLap.page.commits.map((c) => c.id), ["L3", "L2", "L1"]);
+        }
 
         // No lap: the log's own hashes resolve a prefix.
         process.env.PATH = nolap;

@@ -148,7 +148,7 @@ test("a tools/call for a tool §9 withholds is an error and not a result", async
     }
 });
 
-test("a tools/call that reaches the store comes back as a result", async () => {
+test("a tools/call that reaches the store comes back as a result", { skip: process.platform === "win32" && "the stand-in kb is a #! script, which Windows cannot start" }, async () => {
     const fake = FakeKb.create([
         { stdout: ok({ collections: [], count: 0 }) },
         { stdout: ok({ collections: [], count: 0, totals: { documents: 0, chunks: 0, bytes: 0 } }) },
@@ -176,7 +176,7 @@ test("a tools/call that reaches the store comes back as a result", async () => {
     }
 });
 
-test("a _meta the client attached to the params is left alone", async () => {
+test("a _meta the client attached to the params is left alone", { skip: process.platform === "win32" && "the stand-in kb is a #! script, which Windows cannot start" }, async () => {
     /* The strictness that matters is over a tool's own arguments, where an
      * unread key is a filter that silently does nothing. MCP reserves the
      * right to add fields at this level. */

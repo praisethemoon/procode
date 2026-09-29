@@ -18,7 +18,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
-import { test } from "node:test";
+import { test as base } from "node:test";
+
+/* The stand-in kb (fake.ts) is a #! script, which Windows cannot start, so
+ * this file's tests run on macOS and Linux only. */
+const test = process.platform === "win32" ? base.skip : base;
 
 import { FakeKb, ok } from "./fake";
 

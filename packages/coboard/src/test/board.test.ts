@@ -343,7 +343,7 @@ test("lap: a session tagged with a ticket is found through the board", { skip: !
     assert.deepEqual([c1.behavior, c1.amended], ["The file now opens with one hello line", 1]);
 });
 
-test("board_get and board_sessions say when lap failed, instead of showing no sessions", async () => {
+test("board_get and board_sessions say when lap failed, instead of showing no sessions", { skip: process.platform === "win32" && "the stand-in lap is a #! script, which Windows cannot start" }, async () => {
     const dir = tmp();
     fs.mkdirSync(path.join(dir, ".git"));
     const standIn = path.join(dir, "lap-fails.sh");

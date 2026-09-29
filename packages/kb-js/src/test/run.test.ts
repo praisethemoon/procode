@@ -7,7 +7,11 @@
  */
 
 import * as assert from "node:assert/strict";
-import { test } from "node:test";
+import { test as base } from "node:test";
+
+/* The stand-in kb (fake.ts) is a #! script, which Windows cannot start, so
+ * this file's tests run on macOS and Linux only. */
+const test = process.platform === "win32" ? base.skip : base;
 
 import { KbCrash, KbError } from "../errors";
 import { run } from "../run";
