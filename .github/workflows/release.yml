@@ -54,7 +54,7 @@ jobs:
     name: clis (${{ matrix.build }})
     runs-on: ${{ matrix.runner }}
     strategy:
-      fail-fast: true
+      fail-fast: false # a release run reports every platform
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     defaults:
       run:
@@ -75,7 +75,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           docker run --rm -v "$PWD:/src" -w /src alpine:3.20 sh -euc '
-            apk add --no-cache build-base cmake git bash file
+            # tzdata, python3 and shasum (in perl-utils): the lap tests use them
+            apk add --no-cache build-base cmake git bash file tzdata python3 perl-utils
             git config --global user.name ci && git config --global user.email ci@example.invalid
             cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS=-static
             cmake --build build --parallel
