@@ -1,0 +1,98 @@
+# Publishes a GitHub release that release.yml made to the VS Code
+# Marketplace and Open VSX. Started by hand only (Actions → publish → Run
+# workflow), and it builds nothing: it uploads that release's own .vsix
+# files, so what reaches the stores is byte for byte what was released and
+# could be tried first.
+#
+# Each store needs its token as a repository secret: VSCE_PAT (an Azure
+# DevOps token with Marketplace › Manage) and OVSX_PAT (an Open VSX access
+# token). A store that is ticked without its secret fails the run before
+# anything is uploaded. Versions already on a store are skipped, so running
+# it again after a partial failure is safe.
+
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release to publish, e.g. v0.1.0"
+        required: true
+        type: string
+      marketplace:
+        description: "Publish to the VS Code Marketplace"
+        type: boolean
+        default: true
+      openvsx:
+        description: "Publish to Open VSX"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      MARKETPLACE: ${{ inputs.marketplace }}
+      OPENVSX: ${{ inputs.openvsx }}
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    steps:
+      - name: Check what was asked for
+        run: |
+          if [[ "$MARKETPLACE" != "true" && "$OPENVSX" != "true" ]]; then
+            echo "::error::neither store is ticked: nothing to publish"; exit 1
+          fi
+          if [[ "$MARKETPLACE" == "true" && -z "$VSCE_PAT" ]]; then
+            echo "::error::the Marketplace is ticked but the VSCE_PAT secret is not set"; exit 1
+          fi
+          if [[ "$OPENVSX" == "true" && -z "$OVSX_PAT" ]]; then
+            echo "::error::Open VSX is ticked but the OVSX_PAT secret is not set"; exit 1
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$TAG is not a version tag like v0.1.0"; exit 1
+          fi
+
+      - name: Download the release's packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.vsix" --dir vsix
+          version=${TAG#v}
+          ls -l vsix
+          for f in vsix/*.vsix; do
+            if [[ ! "$(basename "$f")" =~ ^procode-${version//./\\.}(-[a-z0-9]+-[a-z0-9]+)?\.vsix$ ]]; then
+              echo "::error::$(basename "$f") is not a procode $version package"; exit 1
+            fi
+          done
+          if [[ ! -f "vsix/procode-$version.vsix" ]]; then
+            echo "::error::the release has no procode-$version.vsix, the package for every other platform"; exit 1
+          fi
+          if ! compgen -G "vsix/procode-$version-*.vsix" > /dev/null; then
+            echo "::error::the release has no platform package"; exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Publish to the VS Code Marketplace
+        if: inputs.marketplace
+        run: |
+          for f in vsix/*.vsix; do
+            echo "::group::$(basename "$f")"
+            npx --yes @vscode/vsce@4.0.0 publish --packagePath "$f" --skip-duplicate
+            echo "::endgroup::"
+          done
+
+      - name: Publish to Open VSX
+        if: inputs.openvsx
+        run: |
+          for f in vsix/*.vsix; do
+            echo "::group::$(basename "$f")"
+            npx --yes ovsx@1.2.0 publish --packagePath "$f" --skip-duplicate -p "$OVSX_PAT"
+            echo "::endgroup::"
+          done

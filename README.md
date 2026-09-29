@@ -277,6 +277,24 @@ need GitHub's arm64 runners, which only public repositories get: a private
 one releases without them. Run by hand (Actions → release → Run workflow),
 it builds the packages as the run's artifacts and releases nothing.
 
+Publishing to the VS Code Marketplace and Open VSX is a separate step,
+started by hand once a release has been tried: Actions → publish → Run
+workflow, with the tag and the stores to publish to
+([publish.yml](.github/workflows/publish.yml)). It builds nothing; it
+uploads that GitHub release's own `.vsix` files, checks each is a package of
+the tag's version first, and skips a version a store already has, so running
+it again after a failure is safe. Once, beforehand:
+
+- **Marketplace:** create the `praisethemoon` publisher at
+  [marketplace.visualstudio.com/manage](https://marketplace.visualstudio.com/manage),
+  make an Azure DevOps personal access token with the **Marketplace ›
+  Manage** scope, and save it as the repository secret `VSCE_PAT`.
+- **Open VSX:** sign in at [open-vsx.org](https://open-vsx.org) with GitHub,
+  create the namespace (`npx ovsx create-namespace praisethemoon -p <token>`),
+  and save the access token as the repository secret `OVSX_PAT`.
+
+A store ticked without its secret stops the run before anything is uploaded.
+
 One platform's package, locally, from CLIs you built:
 
 ```sh
