@@ -271,9 +271,11 @@ inside the project:
 
 ## Releasing
 
-Every push to `master` and every pull request is built and tested on macOS,
-Linux and Windows ([ci.yml](.github/workflows/ci.yml)): both CLIs with
-CMake and `ctest`, then every package with `npm test`.
+Before a release, run **ci** by hand (Actions → ci → Run workflow,
+[ci.yml](.github/workflows/ci.yml)): it builds and tests both CLIs with CMake
+and `ctest`, then every package with `npm test`, on macOS, Linux and Windows.
+It does not run on push, so no Actions minutes are spent between releases;
+the release itself tests the CLIs it ships, but not the packages.
 
 A release is a version tag. Set `version` in
 `packages/combined/package.json`, commit, then tag and push it:

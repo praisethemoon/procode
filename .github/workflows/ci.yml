@@ -1,14 +1,15 @@
-# Every push and pull request: both CLIs built and tested with CMake, then
-# every npm package built and tested against those CLIs, on macOS, Linux and
-# Windows. The tests need git (lap's branch and merge tests skip without it,
-# and a skip passes), which every GitHub runner has.
+# Run by hand before a release (Actions → ci → Run workflow): both CLIs built
+# and tested with CMake, then every npm package built and tested against those
+# CLIs, on macOS, Linux and Windows. release.yml tests the CLIs it ships but
+# not the packages, so this is where npm test runs on every platform. It does
+# not run on push, to spend no Actions minutes between releases. The tests
+# need git (lap's branch and merge tests skip without it, and a skip passes),
+# which every GitHub runner has.
 
 name: ci
 
 on:
-  push:
-    branches: [master]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
