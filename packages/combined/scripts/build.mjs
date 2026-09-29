@@ -142,7 +142,7 @@ if (dup) {
 const manifest = {
     name: "procode",
     displayName: "procode",
-    description: "Progressive coding: very opinionated tools for working alongside AI coding agents. Order and code you understand and can reason about, the literate opposite of vibe coding.",
+    description: "Progressive coding: very opinionated tools for working alongside AI coding agents. Order and code you understand and can reason about.",
     version: VERSION,
     publisher: "praisethemoon",
     author: { name: "Soulaymen Chouri", email: "doit@praisethemoon.org" },
