@@ -4,6 +4,7 @@
 
 :root {
     --side-width: 16rem;
+    --content-width: 54rem;
     color-scheme: dark;
 }
 
@@ -24,9 +25,16 @@ html {
     }
 }
 
+/* On a screen wider than the layout, the layout is centered, and the page
+ * is painted in two halves: the sidebar's colour runs out to the left edge,
+ * the content's to the right. */
 body {
     margin: 0;
-    background: var(--bk-color-background);
+    background: linear-gradient(
+        to right,
+        var(--bk-color-background-secondary) 50%,
+        var(--bk-color-background) 50%
+    );
     color: var(--bk-color-foreground);
     font-family: var(--bk-font-family-sans);
     font-size: var(--bk-font-size-base);
@@ -40,6 +48,8 @@ body {
     display: grid;
     grid-template-columns: var(--side-width) minmax(0, 1fr);
     min-height: 100vh;
+    max-width: calc(var(--side-width) + var(--content-width));
+    margin: 0 auto;
 }
 
 .sidebar {
@@ -90,7 +100,7 @@ body {
 
 main {
     padding: var(--bk-spacing-12) clamp(var(--bk-spacing-4), 5vw, var(--bk-spacing-16)) var(--bk-spacing-16);
-    max-width: 54rem;
+    background: var(--bk-color-background);
 }
 
 section {
@@ -160,6 +170,10 @@ footer {
 /* ---------------------------------------------------------------- narrow */
 
 @media (max-width: 800px) {
+    body {
+        background: var(--bk-color-background);
+    }
+
     .layout {
         grid-template-columns: minmax(0, 1fr);
     }
