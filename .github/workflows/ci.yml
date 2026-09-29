@@ -16,6 +16,30 @@ permissions:
   contents: read
 
 jobs:
+  # Both CLIs' suites under AddressSanitizer and UndefinedBehaviorSanitizer,
+  # every report fatal: undefined behaviour can pass every test at one
+  # optimisation level and crash at another, on one compiler. One Linux job
+  # is enough; the other jobs build what ships.
+  sanitizers:
+    name: sanitizers (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the CLIs with ASan and UBSan
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -g"
+          cmake --build build --parallel
+
+      - name: Test the CLIs
+        env:
+          # lap and kb are short-lived and leave their arenas to exit, so
+          # LeakSanitizer would report every run; memory errors stay fatal.
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build --output-on-failure
+
   test:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

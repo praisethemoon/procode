@@ -277,7 +277,8 @@ Before a release, run **ci** by hand (Actions → ci → Run workflow,
 and `ctest`, then every package with `npm test`, on macOS, Linux and Windows,
 and on Linux arm64 too once the repository is public (GitHub gives arm64
 runners only to public repositories), in the same Release build a release
-uses.
+uses. A separate job runs both CLIs' suites under AddressSanitizer and
+UndefinedBehaviorSanitizer, with every report fatal.
 It does not run on push, so no Actions minutes are spent between releases;
 the release itself tests the CLIs it ships, but not the packages.
 
