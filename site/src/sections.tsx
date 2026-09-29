@@ -365,9 +365,6 @@ venv/bin/python convert.py <the folder it printed> ~/.kb/models/gte-modernbert-b
                     once, and <Code>kb embed</Code> (or <strong>Knowledge: Finish Embedding</strong>) finishes it.
                 </li>
             </ul>
-            <Paragraph>
-                The whole contract is in <Link href={`${BLOB}/specs/index-api.md`}>specs/index-api.md</Link>.
-            </Paragraph>
         </>
     ),
 };

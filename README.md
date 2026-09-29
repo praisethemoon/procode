@@ -95,8 +95,6 @@ open collection — and see how documents link to each other in its graph.
 
 ![kb-vscode](assets/kb.webp)
 
-The contract is in [specs/index-api.md](specs/index-api.md).
-
 ## <img src="packages/techdocs-vscode/media/techdocs.svg" alt="" width="22" height="22"> techdocs
 
 techdocs pages are what an agent publishes for you to read in the editor:
@@ -333,7 +331,6 @@ cli/        lap-cli, kb-cli                                     C11, make or CMa
 packages/   coboard, techdocs, kb-js, kb-mcp,
             lap-vscode, index-vscode, coboard-vscode,
             techdocs-vscode, combined                          TypeScript, one npm workspace
-specs/      the kb contract and the techdocs page format
 ```
 
 ## Limitations
@@ -365,7 +362,7 @@ for yours, renames are two commits) are in
 | part | path | what it is |
 |---|---|---|
 | **lap** | [cli/lap-cli/](cli/lap-cli/) | The edit recorder. It sits below git and never touches it. C11, no dependencies. [SPEC](cli/lap-cli/SPEC.md) |
-| **kb** | [cli/kb-cli/](cli/kb-cli/) | The knowledge base: one store per workspace in `.kb/`, keyword and semantic search, provenance and links. C11. [Contract](specs/index-api.md) |
+| **kb** | [cli/kb-cli/](cli/kb-cli/) | The knowledge base: one store per workspace in `.kb/`, keyword and semantic search, provenance and links. C11. |
 | **coboard** | [packages/coboard/](packages/coboard/) | The board: an append-only `.coboard/log.jsonl` (commit it) and an MCP server. |
 | **techdocs** | [packages/techdocs/](packages/techdocs/) | The `.techdocs/` store and its MCP server. [Format](specs/techdocs.md) |
 | **kb-js**, **kb-mcp** | [packages/kb-js/](packages/kb-js/), [packages/kb-mcp/](packages/kb-mcp/) | A typed client for the kb CLI, and kb as MCP tools. |
