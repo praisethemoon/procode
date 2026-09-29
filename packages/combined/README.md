@@ -10,9 +10,11 @@ Code is tested.
 
 ## Before You Install
 
-**DIY Warning!** This project requires binaries, which are not shipped with the extension, 
-but instead must be compiled manually. CMake build & install script are available, check the main
-README for exact instructions: [https://github.com/praisethemoon/procode](https://github.com/praisethemoon/procode)
+procode runs two small CLIs, `lap` and `kb`. The packages for macOS, Linux and
+Windows include them, so there is nothing else to install. On any other platform
+you get the package without them, and build them yourself: CMake build & install
+scripts are available, check the main README for exact instructions:
+[Build and install](https://github.com/praisethemoon/procode#build-and-install)
 
 If you do not want all the features, they are also available as individual extensions
 on the github repo, and you can build from source and handpick what you like.
@@ -46,7 +48,7 @@ changes, so you can come back later and see what happened and why.
 
 ![Lap History](https://raw.githubusercontent.com/praisethemoon/procode/master/assets/lap.webp)
 
-This requires `lap` binary to be installed and available in your PATH
+This uses the `lap` CLI, which procode ships for macOS, Linux and Windows.
 
 ## techdocs
 
@@ -70,16 +72,18 @@ each other.
 
 ![Knowledge](https://raw.githubusercontent.com/praisethemoon/procode/master/assets/kb.webp)
 
-The `kb` cli must be available, and the embedding model msut have already be setup,
-more details in the main readme.
+This uses the `kb` CLI, which procode ships for macOS, Linux and Windows. Keyword
+search works as it is; semantic search also needs an embedding model, which you
+download once, more details in the main readme.
 
 ## Requirements
 
 Lap History and the Board's sessions use the `lap` CLI, and Knowledge uses
-the `kb` CLI. Build both with CMake from the procode repository
-([Build and install](https://github.com/praisethemoon/procode#build-and-install)).
-procode finds them on PATH, or wherever the settings **Board › Lap Path** and
-**Knowledge › Cli Path** point. techdocs needs neither.
+the `kb` CLI; techdocs needs neither. The packages for macOS, Linux and
+Windows include both. Elsewhere, build them with CMake from the procode
+repository ([Build and install](https://github.com/praisethemoon/procode#build-and-install)).
+procode uses the ones the settings **Board › Lap Path** and **Knowledge ›
+Cli Path** name when you set them, else its own, else the ones on PATH.
 
 procode keeps `lap` and `kb` in `~/.procode/bin`, the path its skills tell
 agents to use: copies of the ones it ships, or links to yours when a setting

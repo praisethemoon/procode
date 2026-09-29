@@ -116,6 +116,20 @@ identical to claude artifacts, except they stay local to your project.
 techdocs pages are meant to live and be rendered in your vscode. They are HTML documents
 that adjust to the user theme since all UI in this repo uses  [baukasten](https://github.com/TypeFox/baukasten).
 
+## Install
+
+Download the `.vsix` for your platform from the repository's
+[Releases](https://github.com/praisethemoon/procode/releases) and install it
+with **Extensions: Install from VSIX…**: `darwin-arm64` (Apple silicon),
+`darwin-x64` (Intel Mac), `linux-x64` / `linux-arm64`, `alpine-x64` /
+`alpine-arm64`, `win32-x64` / `win32-arm64`. Each includes the `lap` and `kb`
+CLIs; there is nothing else to install. Then set up Claude Code in your
+project (step 3 of [Build and install](#build-and-install)).
+
+`procode-<version>.vsix` is for any other platform and has no CLIs: build
+them as below. The rest of this section, and the next, are for building from
+source.
+
 ## Requirements
 
 For the CLIs, a C11 compiler and CMake 3.16+:
@@ -126,8 +140,8 @@ For the CLIs, a C11 compiler and CMake 3.16+:
 - **Windows:** Visual Studio 2022 (or its Build Tools) with the
   *Desktop development with C++* workload, which includes MSVC and CMake.
 
-For the packages and the extension: Node.js 18+ with npm, and VS Code
-1.101+.
+For the packages and the extension: Node.js 20+ with npm (vsce, which
+packages the extension, needs 20), and VS Code 1.101+.
 
 Development happens on macOS; the CLIs are also built on Windows with MSVC.
 
@@ -139,8 +153,9 @@ CI must have git installed. lap itself never needs git.
 
 ## Build and install
 
-From the repository root, in this order: the extension and its MCP servers
-run the CLIs from `PATH`.
+From the repository root, in this order. The extension built here is the
+package without CLIs, so it and its MCP servers run the ones you build,
+from `PATH` or wherever the settings point.
 
 1. **The CLIs**, with CMake. On macOS and Linux, into `/usr/local/bin`:
 
