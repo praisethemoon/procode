@@ -93,6 +93,13 @@ set_source_files_properties(${KB_TS_SOURCES} PROPERTIES
 # system's ICU headers: Apple's on macOS, none on a Linux without libicu-dev.
 set_source_files_properties(src/third_party/tree-sitter/lib/src/lib.c PROPERTIES
     INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/tree-sitter/lib/src)
+# The runtime does not keep to C's aliasing rules: gcc's -O3 on aarch64 (the
+# linux-arm64 release build) turns that into a crash on the first parse.
+# -O1, -O2, clang, and every other target happened to be fine.
+if(NOT MSVC)
+    set_property(SOURCE src/third_party/tree-sitter/lib/src/lib.c APPEND
+        PROPERTY COMPILE_OPTIONS -fno-strict-aliasing)
+endif()
 
 add_executable(kb ${KB_LIB_SOURCES} src/main.c)
 # Embedding runs its matrix products on every core (plat_parallel).
