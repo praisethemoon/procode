@@ -24,7 +24,7 @@ import { HtmlNode, parseHtml } from "../src/view/html";
 import { headingId, headingText, lineId } from "../src/view/headings";
 import { languageFor, renderingFor } from "../src/view/mime";
 import { Markdown } from "./Markdown";
-import { link } from "./rpc";
+import { DocLink } from "./links";
 
 /* ---------------------------------------------------------------- code */
 
@@ -90,25 +90,14 @@ function HtmlPart(props: { node: HtmlNode }): JSX.Element {
     if (node.kind === "text") {
         return <>{node.text}</>;
     }
-    /* An anchor is a button here for the reason it is one in the markdown
-     * renderer: nothing in this webview navigates, and a URL out of somebody
-     * else's page goes to the host to be checked and confirmed. */
+    /* An anchor is followed inside the store only (`DocLink`): nothing in
+     * this webview navigates, and a page written by somebody else sends the
+     * reader nowhere the store has not been. */
     if (node.tag === "a") {
-        const href = node.href ?? "";
         return (
-            <button
-                type="button"
-                className="kb-link"
-                title={href}
-                onClick={(e) => {
-                    e.stopPropagation();
-                    if (href !== "") {
-                        link(href);
-                    }
-                }}
-            >
+            <DocLink to={node.href ?? ""}>
                 <HtmlChildren nodes={node.children} />
-            </button>
+            </DocLink>
         );
     }
     if (node.tag === "br" || node.tag === "hr") {

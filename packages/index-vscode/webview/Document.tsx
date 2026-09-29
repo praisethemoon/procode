@@ -21,16 +21,27 @@
  * chunk's heading and stops there.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { KbChunk, KbDirAdded, KbDocument, KbSourceRead, KbSourceRefreshed, isStale } from "kb-js/pure";
+import {
+    KbChunk,
+    KbDirAdded,
+    KbDocument,
+    KbSourceRead,
+    KbSourceRefreshed,
+    addressIndex,
+    documentAddress,
+    isStale,
+} from "kb-js/pure";
 
 import { documentFacts, formatDate, metaEntries } from "../src/view/facts";
 import { revealId } from "../src/view/headings";
 import { documentLocation, localPath } from "../src/view/locator";
 import { mimeLabel, renderingFor } from "../src/view/mime";
 import { RefreshOutcome, folderMessage, outcomeMessage } from "../src/refresh";
+import { followLink } from "../src/view/links";
 import { Body } from "./Body";
+import { DocLinks, DocLinksContext, scrollToFragment } from "./links";
 import { Codicon, Resolved, StaleBadge, useQuery } from "./parts";
 import { call, link, notify, onHostEvent, open, setTitle, tag } from "./rpc";
 
@@ -64,6 +75,12 @@ function useReveal(read: Read | null): void {
 
     useEffect(() => {
         if (read === null || typeof read.text !== "string" || pending === null) {
+            return;
+        }
+        /* A link from another page lands on a place, not a chunk. */
+        if (pending.startsWith("#")) {
+            scrollToFragment(pending.slice(1));
+            setPending(null);
             return;
         }
         const chunk = (read.chunks ?? []).find((c) => c.id === pending);
@@ -145,9 +162,25 @@ function Provenance(props: { document: KbDocument; onRefresh: () => void }): JSX
     );
 }
 
+/* The links of one document: resolved against its own address, looked up in
+ * the store's index. */
+function linksFor(document: KbDocument, index: ReadonlyMap<string, string>): DocLinks {
+    const base = documentAddress(document);
+    return { follow: (href) => followLink(href, base, index, document.id) };
+}
+
 export function DocumentView(props: { reference: string }): JSX.Element {
     const { state, refresh } = useQuery<Read>("get", { id: props.reference });
     useReveal(state.status === "ok" ? state.value : null);
+
+    /* Where every filed document lives, for the links in this one: one `ls`,
+     * asked again when the store changes. Until it answers, only links to
+     * this page itself are followed. */
+    const all = useQuery<KbDocument[]>("ls", {});
+    const index = useMemo(
+        () => (all.state.status === "ok" ? addressIndex(all.state.value) : new Map<string, string>()),
+        [all.state],
+    );
 
     useEffect(() => {
         if (state.status === "ok") {
@@ -178,7 +211,9 @@ export function DocumentView(props: { reference: string }): JSX.Element {
                     <div className="kb-scroll">
                         <Provenance document={read.document} onRefresh={onRefresh} />
                         {typeof read.text === "string" ? (
-                            <Body text={read.text} mime={read.document.mime} />
+                            <DocLinksContext.Provider value={linksFor(read.document, index)}>
+                                <Body text={read.text} mime={read.document.mime} />
+                            </DocLinksContext.Provider>
                         ) : (
                             <div className="kb-empty">
                                 The store has this document's metadata and not its text. The blob it

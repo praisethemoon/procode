@@ -137,6 +137,25 @@ heading and stops there — the chunk already carries its heading and span
 (`index-api.md` §1.2), so the navigation is free, while marking up the text is
 a feature with a maintenance cost and no reader asking for it.
 
+**Links are followed inside the store only.** A link in a Markdown or HTML
+document is resolved against the document's own address: its source's URL
+for a page fetched from the web, or its folder's locator joined with its
+`path` as a `file:` URL (`index-api.md` §2.1). Then:
+
+- a fragment of this page (`#setup`, or a link back to the page) scrolls to
+  the heading it names, matched the way pages spell anchors
+  (`#getting-started` finds "Getting Started");
+- a link to another filed document opens that document, at the fragment's
+  heading when there is one. Addresses match whatever their spelling: a
+  trailing `/` or `index.html` does not stop a match, the query does;
+- anything else is **not followed**: it reads as its text, with a dotted
+  underline and a tooltip naming where it pointed. Nothing opens, not even
+  behind a confirmation. A `kb:` reference in Markdown opens its tab.
+
+The address table comes from one `kb ls`, asked again when the store changes.
+The header's link to the original (§3.1) is not a link in the document and is
+unchanged.
+
 Read-only. Editing an indexed copy of someone else's documentation would make
 the content hash meaningless and the provenance a lie.
 

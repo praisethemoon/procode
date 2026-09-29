@@ -207,8 +207,8 @@ test("nothing in this package sets innerHTML from data", () => {
 });
 
 test("nothing renders an anchor whose href comes from a document", () => {
-    /* A markdown or HTML link is rendered as a button that hands its href to
-     * the host, never as an `<a href>`. An anchor would put a URL somebody else
+    /* A markdown or HTML link is rendered as a button that follows it inside
+     * the store, or as text, never as an `<a href>`. An anchor would put a URL somebody else
      * wrote into the DOM of this webview — which is not sandboxed — and
      * `javascript:` in an href is a click away from running there. */
     for (const { file, text } of sources()) {

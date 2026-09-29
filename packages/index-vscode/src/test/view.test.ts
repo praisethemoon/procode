@@ -36,6 +36,7 @@ import {
     oldestFetch,
 } from "../view/facts";
 import { headingId, headingText } from "../view/headings";
+import { anchorSlug, followLink, headingMatches } from "../view/links";
 import { languageFor, mimeLabel, renderingFor } from "../view/mime";
 import { lines, tokenize } from "../view/code";
 import { RENDERABLE_TAGS, decodeEntities, parseHtml, safeHref } from "../view/html";
@@ -681,4 +682,40 @@ test("the rail and a search say how many chunks are not embedded, in words that 
     assert.equal(unembeddedNote(0), null);
     assert.equal(unembeddedNote(812), "812 chunks are not embedded yet — semantic results may be missing them.");
     assert.equal(unembeddedNote(1), "1 chunk is not embedded yet — semantic results may be missing it.");
+});
+
+/* index-ui.md §3.2: a link in a filed document is followed only inside the store. */
+const LINK_INDEX = new Map<string, string>([
+    ["https://docs.example.com/guide", "D-1"],
+    ["https://docs.example.com/api/files", "D-2"],
+    ["file:///home/me/proj/src/util.h", "D-3"],
+]);
+
+test("a bare fragment, or a link back to this page, scrolls here", () => {
+    const base = "https://docs.example.com/guide/";
+    assert.deepEqual(followLink("#Set%20up", base, LINK_INDEX, "D-1"), { kind: "here", fragment: "Set up" });
+    assert.deepEqual(followLink("index.html#faq", base, LINK_INDEX, "D-1"), { kind: "here", fragment: "faq" });
+});
+
+test("a relative or absolute link to a filed document opens it, at its fragment", () => {
+    const base = "https://docs.example.com/guide/";
+    assert.deepEqual(followLink("../api/files#open", base, LINK_INDEX, "D-1"), { kind: "document", id: "D-2", fragment: "open" });
+    assert.deepEqual(followLink("https://docs.example.com/api/files/", base, LINK_INDEX, "D-1"), { kind: "document", id: "D-2", fragment: "" });
+    assert.deepEqual(followLink("util.h", "file:///home/me/proj/src/main.c", LINK_INDEX, "D-9"), { kind: "document", id: "D-3", fragment: "" });
+});
+
+test("anything outside the store is not followed, whatever its scheme", () => {
+    const base = "https://docs.example.com/guide/";
+    assert.deepEqual(followLink("https://elsewhere.example.org/", base, LINK_INDEX, "D-1"), { kind: "outside", url: "https://elsewhere.example.org/" });
+    assert.equal(followLink("javascript:alert(1)", base, LINK_INDEX, "D-1").kind, "outside");
+    assert.equal(followLink("mailto:someone@example.com", base, LINK_INDEX, "D-1").kind, "outside");
+    assert.equal(followLink("../other", null, LINK_INDEX, "D-1").kind, "outside");
+});
+
+test("a fragment finds its heading the way pages spell anchors", () => {
+    assert.equal(anchorSlug("Getting Started!"), "getting-started");
+    assert.equal(headingMatches("Getting Started", "getting-started"), true);
+    assert.equal(headingMatches("open_files()", "open-files"), true);
+    assert.equal(headingMatches("Getting Started", "install"), false);
+    assert.equal(headingMatches("Anything", ""), false);
 });

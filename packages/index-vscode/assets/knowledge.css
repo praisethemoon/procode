@@ -425,6 +425,14 @@ html, body {
 .kb-link:hover { color: var(--bk-color-link-hover); text-decoration: underline; }
 .kb-link:focus-visible { outline: 1px solid var(--bk-color-focus); outline-offset: 1px; }
 
+/* A link out of the store: its text, not followed. A dotted underline in the
+ * muted colour says it was a link; the tooltip says where it pointed. */
+.kb-link-outside {
+  text-decoration: underline dotted var(--bk-color-foreground-muted);
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
 /* The locator can be a very long URL, and it is the one fact on the header line
  * that must not push the badge off the end of it. */
 .kb-locator {

@@ -16,9 +16,9 @@
  *
  * NO ANCHOR EVER REACHES THE DOM, which is why the `a` component is overridden.
  * This webview is not sandboxed, and a `javascript:` URL somebody else wrote
- * would be one click from running in it. A `kb:` reference opens its tab and
- * everything else goes to the host, which checks the scheme and confirms before
- * the system handler sees it.
+ * would be one click from running in it. A `kb:` reference opens its tab;
+ * every other link is followed only to another filed document (`DocLink`),
+ * and a link that leads outside the store is shown, not followed.
  *
  * EVERY HEADING CARRIES AN ID, which is the whole of §3.2's navigation: a
  * search result scrolls to the matching chunk's heading, and the id is made
@@ -30,7 +30,8 @@ import remarkGfm from "remark-gfm";
 
 import { KB_SCHEME, parseTarget } from "../src/uri";
 import { headingId, headingText } from "../src/view/headings";
-import { link, open } from "./rpc";
+import { DocLink } from "./links";
+import { open } from "./rpc";
 
 /* One array, defined once, so every surface renders the same dialect. */
 const PLUGINS = [remarkGfm];
@@ -43,30 +44,29 @@ const PLUGINS = [remarkGfm];
  *
  * So `kb:` is added back and EVERYTHING ELSE STILL GOES THROUGH THE DEFAULT.
  * Returning the URL unchanged would have been shorter and would have handed
- * `javascript:` to the click handler; the host refuses that too, and two
- * refusals is the right number for a URL out of somebody else's page. */
+ * `javascript:` to the link resolver; it would not follow that either, and
+ * two refusals is the right number for a URL out of somebody else's page. */
 function urlTransform(url: string): string {
     return url.toLowerCase().startsWith(`${KB_SCHEME}:`) ? url : defaultUrlTransform(url);
 }
 
-/* It is a button because it is one: nothing here navigates, and the two things
- * a link can mean — a place in this store, and the world — are two different
- * calls to the host. */
+/* A `kb:` reference is a place in this store and opens its tab. Every other
+ * link is resolved against the page it is on and followed inside the store
+ * only (`DocLink`); nothing here navigates. */
 function Link(props: { href?: string; children?: React.ReactNode }): JSX.Element {
     const href = typeof props.href === "string" ? props.href : "";
     const target = href.toLowerCase().startsWith(`${KB_SCHEME}:`) ? parseTarget(href) : null;
+    if (target === null) {
+        return <DocLink to={href}>{props.children}</DocLink>;
+    }
     return (
         <button
             type="button"
             className="kb-link"
-            title={target === null ? href : href}
+            title={href}
             onClick={(e) => {
                 e.stopPropagation();
-                if (target !== null) {
-                    open(target.sort === "entity" ? target.id : target.place);
-                } else if (href !== "") {
-                    link(href);
-                }
+                open(target.sort === "entity" ? target.id : target.place);
             }}
         >
             {props.children}

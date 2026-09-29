@@ -28,6 +28,8 @@ export {
     staleOf,
 } from "./stale";
 
+export { addressIndex, addressKey, documentAddress } from "./address";
+
 export {
     arr,
     bool,
