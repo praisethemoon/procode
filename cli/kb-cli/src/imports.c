@@ -203,6 +203,8 @@ static const char *edge(Arena *a, const char *from, const char *to) {
 }
 
 static size_t unique(const char **v, size_t n) {
+    if (n == 0)
+        return 0; /* v is NULL then, and qsort must not be handed a NULL */
     qsort(v, n, sizeof(char *), cmp_str);
     size_t k = 0;
     for (size_t i = 0; i < n; i++)

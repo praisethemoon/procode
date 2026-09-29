@@ -1109,8 +1109,14 @@ cp -R .lap/log "$WORK/many-clone/.lap/"
 cd "$WORK/many-clone"
 sed 's/^line 7 of/LINE 7 OF/' f42.txt > f42.new && mv f42.new f42.txt
 # Loading the log once per file grew with files x log size; one load stays
-# small. Linux enforces the cap; elsewhere this only checks the answer.
-out=$( (ulimit -v 524288 2>/dev/null; "$LAP" status) 2>&1)
+# small. Linux enforces the cap; elsewhere this only checks the answer. Under
+# AddressSanitizer (ASAN_OPTIONS set, as ci's sanitizers job sets it) the cap
+# is left off: ASan reserves terabytes of address space before main runs.
+if [ -n "${ASAN_OPTIONS:-}" ]; then
+    out=$("$LAP" status 2>&1)
+else
+    out=$( (ulimit -v 524288 2>/dev/null; "$LAP" status) 2>&1)
+fi
 printf '%s' "$out" | grep -q "modified  f42.txt" || fail "the edit to f42.txt was not found: $out"
 [ "$(printf '%s\n' "$out" | grep -c 'modified')" -eq 1 ] || fail "files other than f42.txt were reported: $out"
 [ ! -e .lap/index ] || fail "status, a reader, wrote the index"
@@ -3316,15 +3322,23 @@ expect_grep '"error":"lines_mismatch","message":"--lines 4-5 runs past edit 2' \
 
 t "an interrupt in the middle of a commit waits until the commit is written, then ends it"
 echo "hello" > sig.txt
-# job control, so the background commit does not start with SIGINT ignored
-out=$(sh -c 'set -m; LAP_TEST_PAUSE=commit "$1" commit sig.txt -i "a greeting to interrupt" -b "says hello once" --no-session & p=$!; sleep 1; kill -INT $p; wait $p; echo "exit=$?"' sh "$LAP" 2>/dev/null)
-echo "$out" | grep -q "exit=130" || fail "an interrupted commit did not end as SIGINT does: $out"
+out=$(sh -c 'LAP_TEST_PAUSE=commit "$1" commit sig.txt -i "a greeting to interrupt" -b "says hello once" --no-session & p=$!; sleep 1; kill -TERM $p; wait $p; echo "exit=$?"' sh "$LAP" 2>/dev/null)
+echo "$out" | grep -q "exit=143" || fail "a commit sent SIGTERM did not end as SIGTERM does: $out"
 echo "$out" | grep -q "sig.txt: line 1 (insertion)" || fail "the interrupted commit's line was not printed: $out"
 expect_not_grep "sig.txt" "$LAP" status
-echo "bye" >> sig.txt
-out=$(sh -c 'LAP_TEST_PAUSE=commit "$1" commit sig.txt -i "a farewell to interrupt" -b "says bye after hello" --no-session & p=$!; sleep 1; kill -TERM $p; wait $p; echo "exit=$?"' sh "$LAP" 2>/dev/null)
-echo "$out" | grep -q "exit=143" || fail "a commit sent SIGTERM did not end as SIGTERM does: $out"
-expect_not_grep "sig.txt" "$LAP" status
+# SIGINT only where this sh lets a background job receive it. Some start one
+# with SIGINT ignored whatever `set -m` asks (dash without a terminal), and
+# lap rightly keeps a signal it was started ignoring ignored; a sleep started
+# the same way says which kind of sh this is.
+probe=$(sh -c 'set -m; sleep 5 & p=$!; sleep 0.3; kill -INT $p; wait $p; echo $?' 2>/dev/null)
+if [ "$probe" = 130 ]; then
+    echo "bye" >> sig.txt
+    out=$(sh -c 'set -m; LAP_TEST_PAUSE=commit "$1" commit sig.txt -i "a farewell to interrupt" -b "says bye after hello" --no-session & p=$!; sleep 1; kill -INT $p; wait $p; echo "exit=$?"' sh "$LAP" 2>/dev/null)
+    echo "$out" | grep -q "exit=130" || fail "an interrupted commit did not end as SIGINT does: $out"
+    expect_not_grep "sig.txt" "$LAP" status
+else
+    echo "skip: this sh starts background jobs with SIGINT ignored, so only SIGTERM was sent"
+fi
 expect_grep "chain ok" "$LAP" verify --deep
 
 t "a part short of the end of a file without a final newline is committed with one"
