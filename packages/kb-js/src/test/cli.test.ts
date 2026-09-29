@@ -613,7 +613,8 @@ test("a folder through this package: filed, filed again, and a file gone kept or
         const first = await work.kb.addDir(tree, { collection: "code" });
         /* The locator is the folder with its links resolved, which on macOS
          * is /private/var rather than the /var that os.tmpdir() answers. */
-        assert.equal(first.root, fs.realpathSync(tree));
+        // kb writes paths with / on every platform, Windows included.
+        assert.equal(first.root, fs.realpathSync(tree).replace(/\\/g, "/"));
         assert.match(first.source ?? "", /^S-\d+$/);
         assert.equal(first.collection, "code");
         assert.equal(first.files, 2);

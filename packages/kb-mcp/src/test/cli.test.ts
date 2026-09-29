@@ -219,7 +219,8 @@ test("a folder filed through kb_add, relative to the server's directory, and a g
         fs.writeFileSync(path.join(tree, "src", "ring.c"), "int zzring(void) { return 1; }\n");
 
         const first = payload(await call(work, "kb_add", { dir: "../tree", collection: "code" }));
-        assert.equal(first["root"], fs.realpathSync(tree));
+        // kb writes paths with / on every platform, Windows included.
+        assert.equal(first["root"], fs.realpathSync(tree).replace(/\\/g, "/"));
         assert.equal(first["files"], 2);
         assert.equal(first["added"], 2);
         assert.match(String(first["source"]), /^S-\d+$/);
