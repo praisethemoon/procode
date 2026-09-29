@@ -1,6 +1,7 @@
 # Run by hand before a release (Actions → ci → Run workflow): both CLIs built
 # and tested with CMake, then every npm package built and tested against those
-# CLIs, on macOS, Linux and Windows. release.yml tests the CLIs it ships but
+# CLIs, on macOS, Linux (x64, and arm64 when the repository is public) and
+# Windows. release.yml tests the CLIs it ships but
 # not the packages, so this is where npm test runs on every platform. It does
 # not run on push, to spend no Actions minutes between releases. The tests
 # need git (lap's branch and merge tests skip without it, and a skip passes),
@@ -21,7 +22,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Linux arm64 as well, where gcc -O3 once miscompiled what every other
+        # target built fine; GitHub gives arm64 runners to public repositories
+        # only, so a private one runs without it, as release.yml does.
+        os: ${{ fromJSON(github.event.repository.private && '["ubuntu-latest", "macos-latest", "windows-latest"]' || '["ubuntu-latest", "ubuntu-24.04-arm", "macos-latest", "windows-latest"]') }}
     steps:
       - uses: actions/checkout@v7
 

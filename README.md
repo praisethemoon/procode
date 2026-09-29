@@ -274,7 +274,10 @@ inside the project:
 
 Before a release, run **ci** by hand (Actions → ci → Run workflow,
 [ci.yml](.github/workflows/ci.yml)): it builds and tests both CLIs with CMake
-and `ctest`, then every package with `npm test`, on macOS, Linux and Windows.
+and `ctest`, then every package with `npm test`, on macOS, Linux and Windows,
+and on Linux arm64 too once the repository is public (GitHub gives arm64
+runners only to public repositories), in the same Release build a release
+uses.
 It does not run on push, so no Actions minutes are spent between releases;
 the release itself tests the CLIs it ships, but not the packages.
 
