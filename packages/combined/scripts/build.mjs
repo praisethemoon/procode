@@ -140,8 +140,10 @@ if (dup) {
 }
 
 const manifest = {
-    name: "procode",
-    // The Marketplace refuses "procode" alone: that display name is taken.
+    // The Marketplace refuses "procode" as a name and as a display name: both are
+    // taken. The id is praisethemoon.procode-tools; commands, views and the .vsix
+    // file names keep "procode".
+    name: "procode-tools",
     displayName: "procode - progressive coding",
     description: "Progressive coding: very opinionated tools for working alongside AI coding agents. Order and code you understand and can reason about.",
     version: VERSION,
