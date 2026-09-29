@@ -155,7 +155,8 @@ const manifest = {
     // Questions go to GitHub issues, not the Marketplace's own Q&A tab.
     qna: "https://github.com/praisethemoon/procode/issues",
     repository: { type: "git", url: "https://github.com/praisethemoon/procode.git" },
-    homepage: "https://github.com/praisethemoon/procode#readme",
+    // The site explains every part for users; the repository link stays beside it.
+    homepage: "https://praisethemoon.github.io/procode/",
     bugs: { url: "https://github.com/praisethemoon/procode/issues" },
     icon: "icon.png",
     main: "./out/extension.js",

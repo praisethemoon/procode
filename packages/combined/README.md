@@ -8,6 +8,9 @@ bar, holding four views: **Board**, **Lap History**, **techdocs** and **Knowledg
 The tools can generally be used with any agent (Humans included too!), but only Claude 
 Code is tested.
 
+Everything, in more detail, is on the website:
+[praisethemoon.github.io/procode](https://praisethemoon.github.io/procode/).
+
 ## Before You Install
 
 procode runs two small CLIs, `lap` and `kb`. The packages for macOS, Linux and
