@@ -150,6 +150,10 @@ const manifest = {
     engines: { vscode: "^1.101.0" },
     categories: ["AI", "Visualization", "Other"],
     keywords: ["claude", "claude code", "agents", "mcp", "kanban", "tickets", "edit history", "knowledge base", "reports"],
+    // Early: shown with a Preview badge until procode is called stable.
+    preview: true,
+    // Questions go to GitHub issues, not the Marketplace's own Q&A tab.
+    qna: "https://github.com/praisethemoon/procode/issues",
     repository: { type: "git", url: "https://github.com/praisethemoon/procode.git" },
     homepage: "https://github.com/praisethemoon/procode#readme",
     bugs: { url: "https://github.com/praisethemoon/procode/issues" },
