@@ -308,6 +308,10 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string
     try {
         switch (m.type) {
             case "ready":
+                /* A new tab is focused before its page loads, which leaves
+                 * keyboard shortcuts dead until it is left and come back to;
+                 * focusing it again once loaded is what coming back does. */
+                if (panel.active) panel.reveal(undefined, false);
                 if (id.startsWith(REVIEW)) {
                     await pushReview(id, panel);
                     return;

@@ -125,7 +125,12 @@ function open(ctx: vscode.ExtensionContext, id: string): void {
     panel.iconPath = new vscode.ThemeIcon("preview");
     panel.webview.html = viewerHtml(title);
     panel.webview.onDidReceiveMessage((m: { type?: string }) => {
-        if (m?.type === "ready") load(ctx, id, panel);
+        if (m?.type !== "ready") return;
+        /* A new tab is focused before its page loads, which leaves keyboard
+         * shortcuts dead until it is left and come back to; focusing it again
+         * once loaded is what coming back does. */
+        if (panel.active) panel.reveal(undefined, false);
+        load(ctx, id, panel);
     });
     panel.onDidDispose(() => panels.delete(id));
     panels.set(id, panel);
