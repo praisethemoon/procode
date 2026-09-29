@@ -31,14 +31,20 @@
 #define BOOL_FLAGS help_bools("links")
 
 /* "supersedes, cites, analogue_of, implements or see_also" — built from the
- * one table so a type added there cannot be missing from the message. */
+ * one table so a type added there cannot be missing from the message, and
+ * without `imports`, which is kb's to write and not the reader's. */
 static const char *type_list(Arena *a) {
+    const char *hand[LINK_TYPE_COUNT];
+    int32_t n = 0;
+    for (int32_t i = 0; LINK_TYPES[i]; i++)
+        if (strcmp(LINK_TYPES[i], LINK_IMPORTS) != 0)
+            hand[n++] = LINK_TYPES[i];
     StrBuf sb;
     sb_init(&sb, a);
-    for (int32_t i = 0; LINK_TYPES[i]; i++) {
+    for (int32_t i = 0; i < n; i++) {
         if (i)
-            sb_puts(&sb, LINK_TYPES[i + 1] ? ", " : " or ");
-        sb_puts(&sb, LINK_TYPES[i]);
+            sb_puts(&sb, i + 1 < n ? ", " : " or ");
+        sb_puts(&sb, hand[i]);
     }
     return sb_finish(&sb);
 }
@@ -77,8 +83,17 @@ static int32_t links_write(Arena *a, int32_t argc, char **argv, bool json,
     }
     const char *rel = link_type_canon(rel_in);
     if (!rel) {
-        err_out(json, "usage", "\"%s\" is not a link type; the five are %s",
+        err_out(json, "usage", "\"%s\" is not a link type; the types are %s",
                 rel_in, type_list(a));
+        return KB_EXIT_ERR;
+    }
+    if (strcmp(rel, LINK_IMPORTS) == 0) {
+        /* An imports link says what a file's code says, and kb add --dir
+         * keeps it so; one made or removed by hand would be undone by the
+         * next filing of the folder. */
+        err_out(json, "usage",
+                "imports links are kept by kb add --dir from the files' code, "
+                "not made or removed by hand");
         return KB_EXIT_ERR;
     }
     char err[512];

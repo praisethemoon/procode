@@ -32,6 +32,7 @@ const EDGE_CLASS: Readonly<Record<string, string>> = {
     analogue_of: "kb-e-analogue",
     implements: "kb-e-implements",
     see_also: "kb-e-see",
+    imports: "kb-e-imports",
 };
 
 /* Collections cycle through the theme's accent colours, never fixed ones,
@@ -162,7 +163,8 @@ function GraphView(props: { data: Data }): JSX.Element {
             {graph.nodes.length === 0 ? (
                 <div className="kb-empty">
                     No links {collection ? `in ${collection}` : "yet"}. Documents are linked with <code>kb links add</code> or an
-                    agent's <code>kb_links</code>: supersedes, cites, analogue_of, implements, see_also.
+                    agent's <code>kb_links</code>: supersedes, cites, analogue_of, implements, see_also. A folder filed
+                    with <code>kb add --dir</code> links its files by what they import.
                 </div>
             ) : placed === null ? (
                 <div className="kb-empty">Laying out {graph.nodes.length} documents…</div>

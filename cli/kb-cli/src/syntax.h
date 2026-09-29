@@ -129,6 +129,26 @@ typedef struct {
 bool syntax_symbols(Arena *a, SyntaxLang l, const char *text, size_t len,
                     SyntaxSymbol **out, size_t *n);
 
+/* WHAT A FILE IMPORTS, as its code spells it, for imports.h to resolve to
+ * files. Only where the grammar says it is an import, so one in a comment or
+ * a string is not:
+ *
+ *   C           #include "x.h" ("x.h"), #include <x.h> ("x.h", system)
+ *   TS/TSX/JS   import … from "./x", export … from "./x", import x =
+ *               require("./x"), require("./x"), import("./x")  ("./x")
+ *   Python      import a.b (a.b), from .m import x (.m), from . import x
+ *               (.x), from ..p.q import x (..p.q)
+ *
+ * Other languages have none yet. False when the parse was stopped; a file
+ * with errors in it still gives what it could read. */
+typedef struct {
+    const char *spec;
+    bool system; /* C's <…>: looked for among the folder's own files only */
+} SyntaxImport;
+
+bool syntax_imports(Arena *a, SyntaxLang l, const char *text, size_t len,
+                    SyntaxImport **out, size_t *n);
+
 /* The generated patterns, per language (syntax_tags.c). */
 extern const char *const *const SYNTAX_TAGS[SYNTAX_COUNT];
 

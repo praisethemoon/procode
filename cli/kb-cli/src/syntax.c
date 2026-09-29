@@ -583,3 +583,152 @@ bool syntax_symbols(Arena *a, SyntaxLang l, const char *text, size_t len,
     *n = k;
     return true;
 }
+
+/* ---- imports ------------------------------------------------------------ */
+
+typedef struct {
+    Arena *a;
+    const char *text;
+    SyntaxImport *v;
+    size_t n, cap;
+} Imports;
+
+static void import_add(Imports *im, const char *spec, size_t len, bool system) {
+    if (len == 0 || len > 1024)
+        return;
+    ARENA_GROW(im->a, im->v, im->n, im->cap, SyntaxImport);
+    im->v[im->n].spec = arena_strndup(im->a, spec, len);
+    im->v[im->n].system = system;
+    im->n++;
+}
+
+/* A string node's text without its quotes (or C's angle brackets). */
+static void import_quoted(Imports *im, TSNode s, bool system) {
+    uint32_t b = ts_node_start_byte(s), e = ts_node_end_byte(s);
+    if (e - b < 2)
+        return;
+    import_add(im, im->text + b + 1, e - b - 2, system);
+}
+
+static bool node_is(TSNode n, const char *type) {
+    return !ts_node_is_null(n) && strcmp(ts_node_type(n), type) == 0;
+}
+
+static bool node_text_is(const Imports *im, TSNode n, const char *want) {
+    uint32_t b = ts_node_start_byte(n), e = ts_node_end_byte(n);
+    return strlen(want) == e - b && memcmp(im->text + b, want, e - b) == 0;
+}
+
+static void imports_c(Imports *im, TSNode n) {
+    if (!node_is(n, "preproc_include"))
+        return;
+    TSNode path = ts_node_child_by_field_name(n, "path", 4);
+    if (node_is(path, "string_literal"))
+        import_quoted(im, path, false);
+    else if (node_is(path, "system_lib_string"))
+        import_quoted(im, path, true);
+}
+
+static void imports_js(Imports *im, TSNode n) {
+    const char *t = ts_node_type(n);
+    if (strcmp(t, "import_statement") == 0 || strcmp(t, "export_statement") == 0 ||
+        strcmp(t, "import_require_clause") == 0) {
+        TSNode src = ts_node_child_by_field_name(n, "source", 6);
+        if (node_is(src, "string"))
+            import_quoted(im, src, false);
+    } else if (strcmp(t, "call_expression") == 0) {
+        TSNode fn = ts_node_child_by_field_name(n, "function", 8);
+        bool req = node_is(fn, "identifier") && node_text_is(im, fn, "require");
+        if (!req && !node_is(fn, "import"))
+            return;
+        TSNode args = ts_node_child_by_field_name(n, "arguments", 9);
+        TSNode first = ts_node_is_null(args) ? args : ts_node_named_child(args, 0);
+        if (node_is(first, "string"))
+            import_quoted(im, first, false);
+    }
+}
+
+static void import_node_text(Imports *im, TSNode n, const char *prefix) {
+    uint32_t b = ts_node_start_byte(n), e = ts_node_end_byte(n);
+    if (!prefix || !prefix[0]) {
+        import_add(im, im->text + b, e - b, false);
+        return;
+    }
+    const char *s = arena_printf(im->a, "%s%.*s", prefix, (int)(e - b), im->text + b);
+    import_add(im, s, strlen(s), false);
+}
+
+/* A name in an import: a dotted_name, or the name of an aliased_import. */
+static TSNode py_name(TSNode n) {
+    if (node_is(n, "aliased_import"))
+        return ts_node_child_by_field_name(n, "name", 4);
+    return node_is(n, "dotted_name") ? n : (TSNode){0};
+}
+
+static void imports_py(Imports *im, TSNode n) {
+    const char *t = ts_node_type(n);
+    bool plain = strcmp(t, "import_statement") == 0;
+    if (!plain && strcmp(t, "import_from_statement") != 0)
+        return;
+    const char *dots = NULL; /* "from . import x": the module is each x */
+    if (!plain) {
+        TSNode mod = ts_node_child_by_field_name(n, "module_name", 11);
+        if (node_is(mod, "dotted_name")) {
+            import_node_text(im, mod, NULL);
+            return;
+        }
+        if (!node_is(mod, "relative_import"))
+            return;
+        if (ts_node_named_child_count(mod) > 1) { /* dots and a name */
+            import_node_text(im, mod, NULL);
+            return;
+        }
+        uint32_t b = ts_node_start_byte(mod), e = ts_node_end_byte(mod);
+        dots = arena_strndup(im->a, im->text + b, e - b);
+    }
+    uint32_t nc = ts_node_child_count(n);
+    for (uint32_t i = 0; i < nc; i++) {
+        const char *field = ts_node_field_name_for_child(n, i);
+        if (!field || strcmp(field, "name") != 0)
+            continue;
+        TSNode name = py_name(ts_node_child(n, i));
+        if (!ts_node_is_null(name))
+            import_node_text(im, name, dots);
+    }
+}
+
+bool syntax_imports(Arena *a, SyntaxLang l, const char *text, size_t len,
+                    SyntaxImport **out, size_t *n) {
+    *out = NULL;
+    *n = 0;
+    void (*visit)(Imports *, TSNode) =
+        l == SYNTAX_C ? imports_c
+        : l == SYNTAX_TYPESCRIPT || l == SYNTAX_TSX || l == SYNTAX_JAVASCRIPT ? imports_js
+        : l == SYNTAX_PYTHON ? imports_py
+                             : NULL;
+    if (!visit)
+        return true;
+    bool timed_out;
+    TSTree *tree = parse(l, text, len, &timed_out);
+    if (!tree)
+        return false;
+    Imports im = {a, text, NULL, 0, 0};
+    /* Every node, depth first, with the cursor rather than recursion: an
+     * include can sit under any depth of #if, an import inside a function. */
+    TSTreeCursor cur = ts_tree_cursor_new(ts_tree_root_node(tree));
+    for (;;) {
+        visit(&im, ts_tree_cursor_current_node(&cur));
+        if (ts_tree_cursor_goto_first_child(&cur))
+            continue;
+        while (!ts_tree_cursor_goto_next_sibling(&cur)) {
+            if (!ts_tree_cursor_goto_parent(&cur))
+                goto walked;
+        }
+    }
+walked:
+    ts_tree_cursor_delete(&cur);
+    ts_tree_delete(tree);
+    *out = im.v;
+    *n = im.n;
+    return true;
+}

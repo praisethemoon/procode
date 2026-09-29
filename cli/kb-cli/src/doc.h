@@ -103,11 +103,14 @@ typedef struct {
     const char *created_at;
 } Link;
 
-/* §6's five, and nothing else is a link type. One table, so the writer that
- * validates and the reader that prints cannot drift apart. */
+/* §6's six, and nothing else is a link type. One table, so the writer that
+ * validates and the reader that prints cannot drift apart. The sixth,
+ * `imports`, is kb's own: `kb add --dir` keeps it from the files' code
+ * (imports.h), and nobody writes it by hand. */
 extern const char *const LINK_TYPES[];
-#define LINK_TYPE_COUNT 5
-/* The canonical spelling, or NULL when `rel` is not one of the five. Returning
+#define LINK_TYPE_COUNT 6
+#define LINK_IMPORTS "imports"
+/* The canonical spelling, or NULL when `rel` is not one of the six. Returning
  * the table's own pointer means an accepted type is stored as the table spells
  * it rather than as the caller typed it. */
 const char *link_type_canon(const char *rel);

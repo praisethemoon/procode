@@ -56,7 +56,7 @@ obj/%.o: %.c
 
 SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/errdet.c src/platform.c \
            src/doc.c src/store.c src/chunk.c src/token.c src/fts.c \
-           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/bpe.c src/gitignore.c src/dirscan.c src/syntax.c src/syntax_tags.c src/embed.c src/modelrec.c src/vectors.c \
+           src/snippet.c src/gguf.c src/quant.c src/wpm.c src/bpe.c src/gitignore.c src/dirscan.c src/syntax.c src/syntax_tags.c src/imports.c src/embed.c src/modelrec.c src/vectors.c \
            src/third_party/utf8proc/utf8proc.c \
            src/rank.c src/cmd_common.c \
            src/cmd_init.c src/cmd_add.c src/cmd_ls.c src/cmd_get.c \

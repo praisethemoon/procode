@@ -716,6 +716,14 @@ html, body {
 .kb-e-see {
     stroke: var(--bk-color-border);
 }
+/* A file to the files it imports: the code's own structure, in the info
+ * colour and thin, so a folder's many imports do not drown the links a
+ * person made. */
+.kb-e-imports {
+    stroke: var(--bk-color-info);
+    stroke-width: 0.9;
+    stroke-opacity: 0.8;
+}
 .kb-arrowhead {
     fill: var(--bk-color-foreground-muted);
 }

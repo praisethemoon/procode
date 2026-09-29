@@ -251,7 +251,9 @@ const KB_LINKS: ToolDefinition = {
     description:
         "Read or state a relationship between two documents. analogue_of is the one that motivated this: " +
         "IOCP and io_uring and kqueue solve the same problem three ways, and no amount of semantic " +
-        "similarity will state that. Links connect documents only.",
+        "similarity will state that. Links connect documents only. A list also shows imports links: " +
+        "kb add --dir keeps them from a folder's code (a file to the files it imports or includes), and " +
+        "they cannot be added here.",
     inputSchema: {
         type: "object",
         properties: {

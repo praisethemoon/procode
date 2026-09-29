@@ -29,6 +29,7 @@ void test_bpe(void);
 void test_modernbert(void);
 void test_gitignore(void);
 void test_syntax(void);
+void test_imports(void);
 void test_q8(void);
 void test_help(void);
 
@@ -78,6 +79,7 @@ int main(int argc, char **argv) {
     test_modernbert();
     test_gitignore();
     test_syntax();
+    test_imports();
     test_q8();
     test_help();
     printf("unit tests: %d passed, %d failed\n", t_pass, t_fail);

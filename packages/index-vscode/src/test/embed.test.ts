@@ -87,6 +87,7 @@ function stub(pending: number, embeds: { n: number }): Kb {
         skipped: { ignored: 0, hidden: 0, vendored: 0, generated: 0, binary: 0, large: 0, unreadable: 0, otherTypes: 0 },
         embedded: 12,
         pending,
+        imports: { linked: 0, unlinked: 0 },
     };
     const done: KbEmbedded = { embedded: pending, kept: 12, skipped: 0, pending: 0 };
     return {

@@ -85,6 +85,7 @@ export {
     KbModelConfig,
     KbModelStatus,
     KbStatus,
+    HAND_LINK_TYPES,
     LINK_TYPES,
     LinkType,
     RETRIEVAL_PATHS,

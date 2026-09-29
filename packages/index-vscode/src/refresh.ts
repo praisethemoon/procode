@@ -85,5 +85,9 @@ export function folderMessage(r: KbDirAdded): string {
         r.missing.length === 0
             ? ""
             : ` ${plural(r.missing.length, "file")} gone from the folder ${r.missing.length === 1 ? "is" : "are"} still filed: ${r.missing.join(", ")}.`;
-    return `Filed ${name} into ${r.collection} as ${r.source}: ${plural(r.files, "file")}, ${parts.join(", ")}.${missing}`;
+    const links =
+        r.imports.linked + r.imports.unlinked === 0
+            ? ""
+            : ` Imports: ${r.imports.linked} linked, ${r.imports.unlinked} unlinked.`;
+    return `Filed ${name} into ${r.collection} as ${r.source}: ${plural(r.files, "file")}, ${parts.join(", ")}.${missing}${links}`;
 }

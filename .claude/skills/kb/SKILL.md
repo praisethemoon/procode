@@ -41,7 +41,7 @@ short; read it as whichever of the two you have.
 | `kb_get` | One chunk (`C-n`) whole with `expand` neighbours, or one document (`D-n`) with its text. |
 | `kb_add` | File `documents` (each with `title`, `content`, `collection`, and when known `url`, `mime`, `meta`), all or none; or a whole folder with `dir` and `collection`. |
 | `kb_collections` | The topics, with their counts and when each was last added to. |
-| `kb_links` | Read a document's links (`op: "list"`), or state one (`op: "add"`): `supersedes`, `cites`, `analogue_of`, `implements`, `see_also`. |
+| `kb_links` | Read a document's links (`op: "list"`), or state one (`op: "add"`): `supersedes`, `cites`, `analogue_of`, `implements`, `see_also`. A list also shows `imports`, which a folder filed with `dir` gets from its code (a file to the files it imports); those are kb's, not added by hand. |
 | `kb_stale` | Documents older than a threshold, which may be out of date. |
 
 ## Practices

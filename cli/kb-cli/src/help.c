@@ -190,7 +190,7 @@ const HelpCmd HELP_CMDS[] = {
      F_LINKS, cmd_links, true, "links"},
     {"links add", "links add <D-n> <type> <D-m> [--json]",
      "link two documents: supersedes | cites | analogue_of |\n"
-     "implements | see_also",
+     "implements | see_also (imports links are kb add --dir's)",
      F_JSON_ONLY, NULL, false, NULL},
     {"links delete", "links delete <D-n> <type> <D-m> [--json]",
      "remove a link", F_JSON_ONLY, NULL, false, NULL},

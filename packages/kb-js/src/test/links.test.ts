@@ -23,7 +23,7 @@ import { linkArgv, linksArgv, statsArgv } from "../argv";
 import { Kb } from "../client";
 import { KbError } from "../errors";
 import { readLink, readLinks, readStats } from "../shape";
-import { LINK_TYPES, isLinkType } from "../types";
+import { HAND_LINK_TYPES, LINK_TYPES, isLinkType } from "../types";
 import { FakeAnswer, FakeKb, ok, refusal } from "./fake";
 import { DOCUMENT, DOCUMENT_OLD } from "./fixtures";
 
@@ -41,11 +41,13 @@ async function withKb<T>(
 
 /* ------------------------------------------------------------- the argv */
 
-test("§6's five types are transcribed whole and in the document's order", () => {
+test("§6's six types are transcribed whole and in the document's order, five of them for hands", () => {
     assert.deepEqual(
         [...LINK_TYPES],
-        ["supersedes", "cites", "analogue_of", "implements", "see_also"],
+        ["supersedes", "cites", "analogue_of", "implements", "see_also", "imports"],
     );
+    assert.deepEqual([...HAND_LINK_TYPES], ["supersedes", "cites", "analogue_of", "implements", "see_also"]);
+    assert.equal(isLinkType("imports"), true);
     assert.equal(isLinkType("analogue_of"), true);
     assert.equal(isLinkType("relates_to"), false);
     assert.equal(isLinkType(7), false);

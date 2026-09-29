@@ -44,10 +44,15 @@ test("a folder's filing is told as its totals, and a file gone is named by what 
         skipped: { ignored: 2, hidden: 0, vendored: 1, generated: 0, binary: 0, large: 1, unreadable: 0, otherTypes: 0 },
         embedded: 14,
         pending: 0,
+        imports: { linked: 0, unlinked: 0 },
     };
     assert.equal(
         folderMessage(filed),
         "Filed kb-cli into code as S-4: 92 files, 3 added, 1 updated, 88 unchanged, 1 forgotten, 4 skipped.",
+    );
+    assert.match(
+        folderMessage({ ...filed, imports: { linked: 12, unlinked: 2 } }),
+        /4 skipped\. Imports: 12 linked, 2 unlinked\.$/,
     );
     assert.match(
         folderMessage({ ...filed, files: 1, forgotten: [], missing: ["src/old.c"] }),

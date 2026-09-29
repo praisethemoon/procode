@@ -309,6 +309,9 @@ export interface KbDirAdded {
     /* Chunks left to embed when the budget ran out (§2); `kb embed` finishes
      * them. Zero from a binary that predates the budget. */
     readonly pending: number;
+    /* The folder's imports links (§6) this filing made and withdrew to match
+     * its files' code. Zero from a binary that predates them. */
+    readonly imports: { readonly linked: number; readonly unlinked: number };
 }
 
 /* `kb get` with `--include text,chunks,links`. The document is always there;
@@ -365,7 +368,11 @@ export interface KbChunkRead {
 /* §6's small, optional layer over documents. Not a graph database: links
  * connect documents only, and entity nodes are deliberately absent until there
  * is a traversal retrieval cannot answer. */
-export const LINK_TYPES = ["supersedes", "cites", "analogue_of", "implements", "see_also"] as const;
+export const LINK_TYPES = ["supersedes", "cites", "analogue_of", "implements", "see_also", "imports"] as const;
+
+/* The ones a person or an agent writes. `imports` is kb's own: `kb add --dir`
+ * keeps it from the folder's code, and `kb links add` refuses it. */
+export const HAND_LINK_TYPES: readonly LinkType[] = LINK_TYPES.filter((t) => t !== "imports");
 
 export type LinkType = (typeof LINK_TYPES)[number];
 

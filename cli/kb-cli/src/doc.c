@@ -84,7 +84,7 @@ char *doc_encode_touch(Arena *a, const char *id, const char *fetched_at,
 }
 
 const char *const LINK_TYPES[] = {"supersedes", "cites", "analogue_of",
-                                  "implements", "see_also", NULL};
+                                  "implements", "see_also", "imports", NULL};
 
 const char *link_type_canon(const char *rel) {
     if (!rel)

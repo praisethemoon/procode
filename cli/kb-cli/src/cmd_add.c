@@ -1,6 +1,7 @@
 #include "cmd.h"
 #include "help.h"
 #include "dirscan.h"
+#include "imports.h"
 #include "modelrec.h"
 #include "vectors.h"
 
@@ -703,6 +704,16 @@ int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
         return KB_EXIT_FATAL;
     }
 
+    /* What each file imports, as links between the folder's documents,
+     * rewritten to match the code as it now is (imports.h). */
+    size_t linked = 0, unlinked = 0;
+    if (!imports_sync(a, &s, source_id, scan.v, scan.n, gone_ids, forget ? ngone : 0,
+                      &linked, &unlinked, err, sizeof err)) {
+        store_close(&s);
+        err_out(json, "internal", "%s", err);
+        return KB_EXIT_FATAL;
+    }
+
     VecSync vs;
     memset(&vs, 0, sizeof vs);
     bool embedded = false;
@@ -745,10 +756,11 @@ int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
                   "],\"skipped\":{\"ignored\":%zu,\"hidden\":%zu,"
                   "\"vendored\":%zu,\"generated\":%zu,\"binary\":%zu,"
                   "\"large\":%zu,\"unreadable\":%zu,\"otherTypes\":%zu},"
-                  "\"embedded\":%zu,\"pending\":%zu}",
+                  "\"embedded\":%zu,\"pending\":%zu,"
+                  "\"imports\":{\"linked\":%zu,\"unlinked\":%zu}}",
                   scan.ignored, scan.hidden, scan.vendored, scan.generated,
                   scan.binary, scan.large, scan.unreadable, scan.other,
-                  vs.embedded, vs.pending);
+                  vs.embedded, vs.pending, linked, unlinked);
     } else {
         sb_printf(&sb, "%s  ", source_id ? source_id : "-");
         sb_puts_safe(&sb, collection);
@@ -764,6 +776,8 @@ int32_t add_dir(Arena *a, bool json, const char *dir, const char *collection,
                   scan.binary, scan.large, scan.other);
         if (scan.unreadable)
             sb_printf(&sb, ", %zu unreadable", scan.unreadable);
+        if (linked || unlinked)
+            sb_printf(&sb, "\nimports: %zu linked, %zu unlinked", linked, unlinked);
         if (vs.embedded)
             sb_printf(&sb, "\nembedded %zu chunk%s", vs.embedded,
                       vs.embedded == 1 ? "" : "s");

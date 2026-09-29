@@ -465,6 +465,10 @@ export function readDirAdded(payload: Record<string, unknown>): KbDirAdded {
         },
         embedded: num(payload["embedded"]),
         pending: num(payload["pending"]),
+        imports: {
+            linked: num(obj(payload["imports"])["linked"]),
+            unlinked: num(obj(payload["imports"])["unlinked"]),
+        },
     };
 }
 

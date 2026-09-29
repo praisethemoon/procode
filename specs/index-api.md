@@ -221,11 +221,13 @@ first five lines), not text (a NUL byte, or not UTF-8), empty, or over 1 MiB
   "forgotten": ["D-51"], "missing": [],
   "skipped": { "ignored": 2, "hidden": 0, "vendored": 1, "generated": 0,
                "binary": 0, "large": 1, "unreadable": 0, "otherTypes": 0 },
-  "embedded": 14 }
+  "embedded": 14, "pending": 0, "imports": { "linked": 12, "unlinked": 2 } }
 ```
 
 A code file's document carries its language and definitions in `meta`:
 `{"language": "c", "symbols": [{"name", "kind", "line"}, ...]}`, the first 500.
+Each filing also keeps the folder's `imports` links (§6), a file to the files
+it imports; `imports` in the answer says how many it made and withdrew.
 
 The whole folder is one locked section, one keyword rebuild and one embedding
 pass. Progress goes to standard error when it is a terminal.
@@ -359,7 +361,20 @@ A small, optional layer over documents. Not a graph database.
 | `DELETE /links/{from}/{type}/{to}` | remove one |
 
 `type` is one of `supersedes`, `cites`, `analogue_of`, `implements`,
-`see_also`.
+`see_also`, `imports`.
+
+**`imports` is kb's own.** It links a file of a folder filed with `kb add
+--dir` (§2.1) to each file of the same folder it imports or includes, read
+from the tree-sitter parse kb already makes: C's `#include`, TypeScript's and
+JavaScript's `import`, `export … from`, `require()` and `import()`, Python's
+`import` and `from … import`. Each filing of the folder works out the set its
+files' code calls for and writes only the difference, a link for an edge that
+is new and an unlink for one that is gone; a file forgotten takes its edges
+with it, and a file kept with `--no-forget` keeps them. An import that names
+no file of the folder (the standard library, a system header, a package)
+makes no link. `POST /links` and its `DELETE` refuse `imports`, since the next
+filing would undo them, and never touch it; every other type is left alone
+by a filing.
 
 Links connect documents only. Entity nodes — an API symbol, a concept, a
 platform as first-class things — are **deliberately absent** until there is a

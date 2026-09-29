@@ -2121,6 +2121,42 @@ has "refresh" "$out" '"forgotten":\["D-'
 has "refresh" "$out" '"unchanged":4'
 has "now gone" "$(kbd search zzkeep --mode keyword --json)" '"count":0'
 
+t "add --dir links each file to the files it imports, and filing again keeps the links true"
+mkdir -p "$WORK/dirs/imp/src/util" "$WORK/dirs/imp/web/lib" "$WORK/dirs/imp/py/pkg"
+(
+    cd "$WORK/dirs/imp"
+    printf '#include "util/str.h"\n#include <stdio.h>\nint main(void) { return 0; }\n' > src/main.c
+    printf '#include "../common.h"\nint len(const char *s);\n' > src/util/str.h
+    printf '#define COMMON 1\n' > src/common.h
+    printf "import { f } from './lib/f';\nimport React from 'react';\nconst c = require('./c.js');\n" > web/app.ts
+    printf 'export const f = 1;\n' > web/lib/f.ts
+    printf 'module.exports = 3;\n' > web/c.js
+    printf 'import os\nfrom . import helper\n' > py/pkg/main.py
+    printf 'x = 1\n' > py/pkg/helper.py
+)
+# the id of a file of the folder, by its path
+imp_id() { kbd ls --collection imp --json | tr '{' '\n' | grep "\"path\":\"$1\"" | sed 's/.*"id":"\(D-[0-9]*\)".*/\1/'; }
+edge() { printf '"type":"imports","from":"%s","to":"%s"' "$(imp_id "$1")" "$(imp_id "$2")"; }
+out=$(kbd add --dir imp --collection imp --json)
+has "imports" "$out" '"imports":{"linked":5,"unlinked":0}'
+links=$(kbd links --all --json)
+has "C: quoted include beside the file" "$links" "$(edge src/main.c src/util/str.h)"
+has "C: .. out of a folder" "$links" "$(edge src/util/str.h src/common.h)"
+has "TS: extension added" "$links" "$(edge web/app.ts web/lib/f.ts)"
+has "JS: require" "$links" "$(edge web/app.ts web/c.js)"
+has "Python: from . import" "$links" "$(edge py/pkg/main.py py/pkg/helper.py)"
+has "kb links shows them" "$(kbd links "$(imp_id src/main.c)" --json)" '"type":"imports"'
+out=$(kbd add --dir imp --collection imp --json)
+has "unchanged, nothing written" "$out" '"imports":{"linked":0,"unlinked":0}'
+printf "import { f } from './lib/f';\n" > "$WORK/dirs/imp/web/app.ts"
+rm "$WORK/dirs/imp/src/util/str.h"
+out=$(kbd add --dir imp --collection imp --json)
+has "an import dropped, a file forgotten" "$out" '"imports":{"linked":0,"unlinked":3}'
+links=$(kbd links --all --json)
+hasnt "the dropped require" "$links" "$(edge web/app.ts web/c.js)"
+has "the kept import" "$links" "$(edge web/app.ts web/lib/f.ts)"
+has "imports are not made by hand" "$(kbd links add "$(imp_id web/app.ts)" imports "$(imp_id web/c.js)" --json)" '"error":"usage"'
+
 t "a subfolder of a repository is filed under the repository's .gitignore"
 out=$(kbd add --dir tree/pkg --collection sub --json)
 has "sub" "$out" '"files":1,"added":1'

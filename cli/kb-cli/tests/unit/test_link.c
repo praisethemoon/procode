@@ -15,13 +15,14 @@ static char *jn(Arena *a, const char *base, const char *rest) {
     return arena_printf(a, "%s/%s", base, rest);
 }
 
-/* ---- the five ---------------------------------------------------------- */
+/* ---- the six ----------------------------------------------------------- */
 
 static void test_types(void) {
-    t_begin("links: §6's five are exactly the types that exist");
-    ASSERT_EQ_I(LINK_TYPE_COUNT, 5);
+    t_begin("links: §6's six are exactly the types that exist");
+    ASSERT_EQ_I(LINK_TYPE_COUNT, 6);
     static const char *const want[] = {"supersedes", "cites", "analogue_of",
-                                       "implements", "see_also", NULL};
+                                       "implements", "see_also", "imports",
+                                       NULL};
     for (int32_t i = 0; want[i]; i++)
         ASSERT_EQ_S(LINK_TYPES[i], want[i]);
     ASSERT_TRUE(LINK_TYPES[LINK_TYPE_COUNT] == NULL);
