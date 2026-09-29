@@ -38,7 +38,7 @@ import { formatBytes, formatDate } from "../src/view/facts";
 import { HOME, PAGE, Place, collectionsShown, cut, documentRow, documentsQuery, openCollection, searchScope } from "../src/view/rail";
 import { FolderNode, buildTree, folderOpen, showsTree } from "../src/view/tree";
 import { Codicon, Resolved, StaleBadge, useDebounced, useQuery } from "./parts";
-import { finishEmbedding, onHostEvent, open, tag } from "./rpc";
+import { finishEmbedding, onHostEvent, open, tag, typed } from "./rpc";
 
 /* §2's debounce. Short enough that the list feels like it is following the
  * typing and long enough that a word costs one search rather than five. */
@@ -55,7 +55,7 @@ function hasStore(status: KbStatus): boolean {
 
 /* ------------------------------------------------------------- the row */
 
-function KnowledgeRow(props: { row: Row }): JSX.Element {
+export function KnowledgeRow(props: { row: Row }): JSX.Element {
     const row = props.row;
     const clamped = row.line !== row.lineFull;
     return (
@@ -423,7 +423,7 @@ function SearchList(props: {
     );
 }
 
-function List(props: { rows: readonly Row[] }): JSX.Element {
+export function List(props: { rows: readonly Row[] }): JSX.Element {
     return (
         <div className="kb-list">
             {props.rows.map((row, i) => (
@@ -451,6 +451,8 @@ export function Sidebar(): JSX.Element {
         setFolds((all) => new Map(all).set(collection, new Map(all.get(collection) ?? []).set(path, isOpen)));
     const settled = useDebounced(q, DEBOUNCE_MS);
     const status = useQuery<KbStatus>("status");
+    /* The search page, opened from the title bar, starts from this text. */
+    useEffect(() => typed(settled), [settled]);
 
     /* §4: "a collection row opens the sidebar scoped to it." The host reveals
      * this view and then says which one. */

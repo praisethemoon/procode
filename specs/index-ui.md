@@ -176,6 +176,17 @@ Picking a result opens the document. This is the path for a reader who already
 knows roughly what they are looking for and does not want to leave the
 keyboard.
 
+**The search page**, `kb:/search`, is the same search with room for its
+results, for a reader who wants to look through them. `Knowledge: Open Search
+Page`, also the search button first on the sidebar's title bar, opens it (or
+focuses it), starting from whatever the sidebar's search bar holds. It shows
+one search box in the middle until the first search; then the box moves to a
+bar at the top and the results fill the page below it. Beside the box, the
+collections to search: **All** (the default), or any of them picked, sent as
+one comma list. The rows are §2's rows, unmarked as §2 has every row; a row
+opens its document at the passage. No store, nothing matched, embeddings still
+pending and `model_mismatch` read as they do in the sidebar.
+
 ## 6. URIs
 
 ```
@@ -183,6 +194,7 @@ kb:/D-241          a document
 kb:/S-3            a source, with its documents
 kb:/collections    the collection list
 kb:/graph          the links between documents, drawn
+kb:/search         the search page (§5)
 ```
 
 `kb:/graph` draws index-api §6's links: a document is a node coloured by its

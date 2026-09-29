@@ -65,6 +65,8 @@ export interface HostContext {
     open(reference: string, chunk: string | null, preview: boolean): void;
     /* §4: "a collection row opens the sidebar scoped to it." */
     scope(collection: string): void;
+    /* The sidebar's search text, as it settles; the search page starts from it. */
+    typed(q: string): void;
     /* A tab's name, from the view that has just read the document. */
     retitle(reference: string, title: string): void;
     /* Settled graph layouts, by `layoutKey`. */
@@ -243,6 +245,9 @@ export function handleRequest(ctx: HostContext, surface: Surface, raw: unknown):
             return;
         case "scope":
             ctx.scope(request.collection);
+            return;
+        case "typed":
+            ctx.typed(request.q);
             return;
         case "title":
             ctx.retitle(request.reference, request.title);

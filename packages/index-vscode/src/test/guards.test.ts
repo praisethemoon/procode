@@ -152,15 +152,18 @@ test("the document editor is read-only, and says so in the type it implements", 
     /* The rename field in the collections tab is the ONE input in this package
      * that writes: it edits a collection's NAME, which §4 puts there on
      * purpose. It is an `<input>` and not a `<textarea>`. The rail's search
-     * field is the other `<input>`, and it writes nothing: it is the query, a
-     * single element in the sidebar with the bar's class, and no other file
-     * holds one. */
+     * field and the search page's box are the others, and they write nothing:
+     * each is the query, and no other file holds one. */
     const inputs = sources().filter(
         (s) => s.file.startsWith("webview") && /<input\b/.test(s.text),
     );
     assert.deepEqual(
         inputs.map((s) => s.file).sort(),
-        [path.join("webview", "Collections.tsx"), path.join("webview", "Sidebar.tsx")].sort(),
+        [
+            path.join("webview", "Collections.tsx"),
+            path.join("webview", "Search.tsx"),
+            path.join("webview", "Sidebar.tsx"),
+        ].sort(),
         "an editable field appeared outside the collections tab, where §4 puts the only two writes",
     );
     const rail = inputs.find((s) => s.file.endsWith("Sidebar.tsx"))!.text;
@@ -715,7 +718,7 @@ test("every operation the surface can ask is one the host answers", () => {
     /* And nothing else: a `case` naming an operation the protocol does not have
      * is dead code that reads as a feature. */
     for (const c of cases) {
-        if (["call", "open", "link", "scope", "title", "notify", "addFiles", "addFolder", "init", "settings", "embed", "layoutGet", "layoutPut"].includes(c)) {
+        if (["call", "open", "link", "scope", "typed", "title", "notify", "addFiles", "addFolder", "init", "settings", "embed", "layoutGet", "layoutPut"].includes(c)) {
             continue; /* the request kinds, which share the file */
         }
         assert.ok(
@@ -911,7 +914,13 @@ test("the extension's activation and contributions name what this package builds
     const titleBar = (pkg.contributes.menus["view/title"] as { command: string; when: string }[])
         .filter((m) => m.when === "view == knowledge.documents")
         .map((m) => m.command);
-    for (const needed of ["knowledge.addCurrentFile", "knowledge.addFolder", "knowledge.addUrl", "knowledge.refreshStale"]) {
+    for (const needed of [
+        "knowledge.searchPage",
+        "knowledge.addCurrentFile",
+        "knowledge.addFolder",
+        "knowledge.addUrl",
+        "knowledge.refreshStale",
+    ]) {
         assert.ok(titleBar.includes(needed), `${needed} is not on the sidebar's title bar (§2)`);
     }
     /* §5's command is a COMMAND and not a title-bar button: it is for a reader

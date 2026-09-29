@@ -56,6 +56,8 @@ export function activate(context: vscode.ExtensionContext): void {
             return run(client, ...args);
         };
 
+    /* What the sidebar's search bar holds, for the search page to start from. */
+    let typed = "";
     const ctx: HostContext = {
         extensionUri: context.extensionUri,
         client: () => {
@@ -68,6 +70,9 @@ export function activate(context: vscode.ExtensionContext): void {
         announce: () => announce(),
         open: (reference, chunk, preview) => void editors.provider.open(reference, chunk, preview),
         scope: (collection) => void rail.sidebar.scope(collection),
+        typed: (q) => {
+            typed = q;
+        },
         retitle: (reference, title) => editors.provider.retitle(reference, title),
         layouts: layoutShelf(context.workspaceState),
     };
@@ -161,6 +166,10 @@ export function activate(context: vscode.ExtensionContext): void {
             editors.provider.open("collections", null, false),
         ),
         vscode.commands.registerCommand("knowledge.graph", () => editors.provider.open("graph", null, false)),
+        /* The search page, starting from what the sidebar holds. */
+        vscode.commands.registerCommand("knowledge.searchPage", () =>
+            editors.provider.open("search", typed.trim() === "" ? null : typed.trim(), false),
+        ),
         vscode.commands.registerCommand(
             "knowledge.addCurrentFile",
             withClient((kb) => addCurrentFile(kb, announce)),

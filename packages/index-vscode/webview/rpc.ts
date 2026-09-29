@@ -112,6 +112,11 @@ export function link(href: string): void {
     send({ kind: "link", href });
 }
 
+/* The sidebar's search text, once typing settles, for the search page. */
+export function typed(q: string): void {
+    send({ kind: "typed", q });
+}
+
 /* §4: "a collection row opens the sidebar scoped to it." */
 export function addFiles(collection: string | null = null): void {
     send({ kind: "addFiles", collection });

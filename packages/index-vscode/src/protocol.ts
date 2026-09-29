@@ -78,13 +78,17 @@ export type Request =
      * result scrolls to the matching chunk's heading" — it is NOT part of the
      * URI, because `kb:/D-241?chunk=C-1` and `kb:/D-241` would be two
      * resources and therefore two tabs for one document, which is the failure
-     * §6 names by hand. */
+     * §6 names by hand. It is where the tab starts: a chunk id, `#fragment` for
+     * a place on a document, or on the search page the query to run. */
     | { kind: "open"; reference: string; chunk: string | null; preview: boolean }
     /* §3.1's source locator, as a link that opens the original: a local
      * file in VS Code, a web page externally. */
     | { kind: "link"; href: string }
     /* §4: "a collection row opens the sidebar scoped to it." */
     | { kind: "scope"; collection: string }
+    /* What the sidebar's search bar holds, once typing settles, so the search
+     * page opened from the title bar or the command starts from it. */
+    | { kind: "typed"; q: string }
     /* What the tab is called. A title read from the store rather than stored
      * on the tab is what keeps a renamed document from carrying a stale name
      * until it is closed — and the view is what has just read it, so it says
@@ -145,6 +149,7 @@ export function isRequest(data: unknown): data is Request {
         kind === "open" ||
         kind === "link" ||
         kind === "scope" ||
+        kind === "typed" ||
         kind === "title" ||
         kind === "notify" ||
         kind === "addFiles" ||

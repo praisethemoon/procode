@@ -65,6 +65,11 @@
         "title": "Knowledge: Search"
       },
       {
+        "command": "knowledge.searchPage",
+        "title": "Knowledge: Open Search Page",
+        "icon": "$(search)"
+      },
+      {
         "command": "knowledge.collections",
         "title": "Knowledge: Collections",
         "icon": "$(library)"
@@ -111,6 +116,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "knowledge.searchPage",
+          "when": "view == knowledge.documents",
+          "group": "navigation@0"
+        },
         {
           "command": "knowledge.addCurrentFile",
           "when": "view == knowledge.documents",

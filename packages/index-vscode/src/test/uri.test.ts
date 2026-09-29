@@ -62,11 +62,12 @@ test("a padded identifier names nothing rather than its unpadded neighbour", () 
     assert.ok(ten !== null && ten.sort === "entity" && ten.id === "D-10", "a trailing zero is fine");
 });
 
-test("collections and the graph are the places, and the only ones", () => {
+test("collections, the graph and the search page are the places, and the only ones", () => {
     assert.deepEqual(parseTarget("collections"), { sort: "place", place: "collections" });
     assert.deepEqual(parseTarget("kb:/COLLECTIONS"), { sort: "place", place: "collections" });
     assert.deepEqual(parseTarget("kb:/graph"), { sort: "place", place: "graph" });
-    assert.deepEqual([...PLACES], ["collections", "graph"]);
+    assert.deepEqual(parseTarget("kb:/search"), { sort: "place", place: "search" });
+    assert.deepEqual([...PLACES], ["collections", "graph", "search"]);
 });
 
 test("a chunk is a reference and is not a place", () => {

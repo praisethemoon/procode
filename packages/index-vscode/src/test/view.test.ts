@@ -37,6 +37,7 @@ import {
 } from "../view/facts";
 import { headingId, headingText } from "../view/headings";
 import { anchorSlug, followLink, headingMatches } from "../view/links";
+import { searchPageQuery, toggleCollection } from "../view/search";
 import { languageFor, mimeLabel, renderingFor } from "../view/mime";
 import { lines, tokenize } from "../view/code";
 import { RENDERABLE_TAGS, decodeEntities, parseHtml, safeHref } from "../view/html";
@@ -718,4 +719,16 @@ test("a fragment finds its heading the way pages spell anchors", () => {
     assert.equal(headingMatches("open_files()", "open-files"), true);
     assert.equal(headingMatches("Getting Started", "install"), false);
     assert.equal(headingMatches("Anything", ""), false);
+});
+
+/* The search page (kb:/search). */
+test("the search page asks every collection by default, or the chosen ones as one comma list", () => {
+    assert.deepEqual(searchPageQuery("  io_uring submit ", []), { k: 50, q: "io_uring submit" });
+    assert.deepEqual(searchPageQuery("submit", ["io-uring", "papers"]), { k: 50, q: "submit", collection: "io-uring,papers" });
+});
+
+test("a collection is picked and unpicked in the order it was picked", () => {
+    assert.deepEqual(toggleCollection([], "a"), ["a"]);
+    assert.deepEqual(toggleCollection(["a", "b"], "a"), ["b"]);
+    assert.deepEqual(toggleCollection(["b"], "a"), ["b", "a"]);
 });

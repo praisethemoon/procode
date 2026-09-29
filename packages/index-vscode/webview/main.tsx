@@ -14,6 +14,7 @@ import { parseTarget } from "../src/uri";
 import { Collections } from "./Collections";
 import { Graph } from "./Graph";
 import { DocumentView, SourceView } from "./Document";
+import { SearchPage } from "./Search";
 import { Sidebar } from "./Sidebar";
 import { tag } from "./rpc";
 
@@ -31,7 +32,7 @@ function Entity(props: { reference: string }): JSX.Element {
         );
     }
     if (target.sort === "place") {
-        return target.place === "graph" ? <Graph /> : <Collections />;
+        return target.place === "graph" ? <Graph /> : target.place === "search" ? <SearchPage /> : <Collections />;
     }
     if (target.kind === "source") {
         return <SourceView reference={target.id} />;
