@@ -31,8 +31,7 @@ skill); this extension just shows what they did, as they do it.
   chunks came) refreshes the tree as the agent commits; a torn in-progress
   log line is tolerated silently.
 
-The log is parsed directly (append-only JSONL, schema in
-[cli/lap-cli/SPEC.md](../../cli/lap-cli/SPEC.md)). The CLI is run only to resolve a
+The log is parsed directly (append-only JSONL). The CLI is run only to resolve a
 followed reference (`lap show <ref> --json`); where `lap` is not installed or
 cannot answer, the log's own hashes resolve it the same way.
 

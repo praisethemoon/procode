@@ -49,7 +49,7 @@ inside VS Code.
 
 ![lap-vscode](assets/lap.webp)
 
-More in [lap's README](cli/lap-cli/README.md) and its [SPEC](cli/lap-cli/SPEC.md).
+More in [lap's README](cli/lap-cli/README.md)
 
 ## <img src="packages/coboard-vscode/media/board.svg" alt="" width="22" height="22"> Coboard
 
@@ -368,7 +368,7 @@ for yours, renames are two commits) are in
 
 | part | path | what it is |
 |---|---|---|
-| **lap** | [cli/lap-cli/](cli/lap-cli/) | The edit recorder. It sits below git and never touches it. C11, no dependencies. [SPEC](cli/lap-cli/SPEC.md) |
+| **lap** | [cli/lap-cli/](cli/lap-cli/) | The edit recorder. It sits below git and never touches it. C11, no dependencies. |
 | **kb** | [cli/kb-cli/](cli/kb-cli/) | The knowledge base: one store per workspace in `.kb/`, keyword and semantic search, provenance and links. C11. |
 | **coboard** | [packages/coboard/](packages/coboard/) | The board: an append-only `.coboard/log.jsonl` (commit it) and an MCP server. |
 | **techdocs** | [packages/techdocs/](packages/techdocs/) | The `.techdocs/` store and its MCP server. [Format](specs/techdocs.md) |
