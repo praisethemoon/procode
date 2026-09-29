@@ -51,6 +51,10 @@ jobs:
         shell: bash
         run: |
           if [[ -f test.log ]] && grep -qE '^\s*not ok' test.log; then
+            echo "$(grep -cE '^\s*not ok' test.log) failing, each with the file it is in:"
+            grep -A8 -E '^\s*not ok' test.log | grep -E "^\s*not ok|location:" | sed -E 's/^ +//'
+            echo
+            echo "In detail:"
             grep -nE -A30 '^\s*not ok' test.log
           else
             echo "No test reported 'not ok': the failure is in an earlier step or outside a test."
