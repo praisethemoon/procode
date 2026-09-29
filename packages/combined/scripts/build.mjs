@@ -141,7 +141,8 @@ if (dup) {
 
 const manifest = {
     name: "procode",
-    displayName: "procode",
+    // The Marketplace refuses "procode" alone: that display name is taken.
+    displayName: "procode - progressive coding",
     description: "Progressive coding: very opinionated tools for working alongside AI coding agents. Order and code you understand and can reason about.",
     version: VERSION,
     publisher: "praisethemoon",
