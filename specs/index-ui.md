@@ -86,7 +86,8 @@ A search row carries:
 
 Rows are not highlighted and matches are not marked up. The row says which
 document it is; reading it is the next step, and the reader does that in the
-document.
+document. (The search page, §5, is where results are read side by side, and
+there the query is marked.)
 
 **Empty**: "Nothing indexed yet. Research lands here when an agent files what
 it read."
@@ -183,8 +184,11 @@ focuses it), starting from whatever the sidebar's search bar holds. It shows
 one search box in the middle until the first search; then the box moves to a
 bar at the top and the results fill the page below it. Beside the box, the
 collections to search: **All** (the default), or any of them picked, sent as
-one comma list. The rows are §2's rows, unmarked as §2 has every row; a row
-opens its document at the passage. No store, nothing matched, embeddings still
+one comma list. Each result reads as a search engine's does: the document's
+title with its score (the reranker's when it ran, else the fused one, and
+every score kb gave on hover), the section the match is in (its chunk's
+heading, or a code chunk's signature), and the snippet with the query's words
+marked; a result opens its document at the passage. No store, nothing matched, embeddings still
 pending and `model_mismatch` read as they do in the sidebar.
 
 ## 6. URIs
@@ -209,7 +213,8 @@ document that already has a tab focuses it.
 ## 7. Not included
 
 - **Editing.** The store holds fetched copies; the originals are elsewhere.
-- **Match highlighting.** §3.2.
+- **Match highlighting** in the sidebar and in a document (§2, §3.2); the
+  search page marks the query (§5).
 - **A graph view.** `index-api.md` §6 keeps links minimal and §12 leaves entity
   nodes unresolved; a visualisation of a schema that has not settled would
   settle it by accident.

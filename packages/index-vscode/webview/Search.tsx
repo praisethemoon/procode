@@ -2,8 +2,10 @@
  *
  * ONE BOX IN THE MIDDLE UNTIL THE FIRST SEARCH, then the box at the top and the
  * results filling the page. Beside the box, the collections to search: All,
- * or the ones picked. The rows are the sidebar's (`KnowledgeRow`), so a
- * result reads the same wherever it was found, unmarked as §2 has every row.
+ * or the ones picked. Each result is shown as a search engine shows one:
+ * its title and score, the section the match is in, and the snippet with
+ * the query's words marked (index-ui.md §5; the sidebar's rows stay as §2
+ * has them).
  *
  * WHAT IT SEARCHES FOR FIRST arrives the way a chunk arrives at a document:
  * the host's `reveal`, which here carries the query typed in the sidebar.
@@ -13,11 +15,11 @@ import { useEffect, useState } from "react";
 
 import { KbCollection, KbHit } from "kb-js/pure";
 
-import { searchRows, unembeddedNote } from "../src/view/rows";
-import { searchPageQuery, toggleCollection } from "../src/view/search";
-import { Codicon, Resolved, useQuery } from "./parts";
-import { onHostEvent, tag } from "./rpc";
-import { List } from "./Sidebar";
+import { formatDate } from "../src/view/facts";
+import { unembeddedNote } from "../src/view/rows";
+import { markTerms, scoreLabel, searchPageQuery, sectionOf, toggleCollection } from "../src/view/search";
+import { Codicon, Resolved, StaleBadge, useQuery } from "./parts";
+import { onHostEvent, open } from "./rpc";
 
 function CollectionPicker(props: { chosen: readonly string[]; onChoose: (next: string[]) => void }): JSX.Element {
     const { state } = useQuery<KbCollection[]>("collections");
@@ -49,6 +51,61 @@ function CollectionPicker(props: { chosen: readonly string[]; onChoose: (next: s
     );
 }
 
+/* One result, as a search engine shows one: the document's title with its
+ * score, the section the match is in, the snippet with the query's words
+ * marked, and where it came from. Opening it lands on the passage. */
+function Hit(props: { hit: KbHit; q: string }): JSX.Element {
+    const h = props.hit;
+    const section = sectionOf(h.heading);
+    const score = scoreLabel(h.scores);
+    const go = (): void => open(h.document, h.chunk);
+    return (
+        <div
+            className="kb-hit"
+            role="button"
+            tabIndex={0}
+            onClick={go}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    go();
+                }
+            }}
+        >
+            <div className="kb-hit-head">
+                <span className="kb-hit-title">{h.title === "" ? h.document : h.title}</span>
+                {h.stale ? <StaleBadge /> : null}
+                <span className="kb-hit-score" title={score.detail}>
+                    {score.text}
+                </span>
+            </div>
+            {section === null ? null : (
+                <div className="kb-hit-section" title={section}>
+                    <Codicon name="list-tree" />
+                    {section}
+                </div>
+            )}
+            <div className="kb-hit-snippet">
+                {markTerms(h.snippet, props.q).map((m, i) =>
+                    m.hit ? <mark key={i}>{m.text}</mark> : <span key={i}>{m.text}</span>,
+                )}
+            </div>
+            <div className="kb-row-meta">
+                <span className="kb-chip">{h.collection === "" ? "—" : h.collection}</span>
+                <span className="kb-ref">{h.document}</span>
+                <span className="kb-when" title={h.fetchedAt}>
+                    {formatDate(h.fetchedAt)}
+                </span>
+                {h.matched.map((m) => (
+                    <span key={m} className={`kb-match kb-match-${m}`}>
+                        {m}
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function Results(props: { q: string; chosen: readonly string[] }): JSX.Element {
     const { state } = useQuery<{ hits: KbHit[]; count: number; unembedded?: number }>(
         "search",
@@ -57,15 +114,21 @@ function Results(props: { q: string; chosen: readonly string[] }): JSX.Element {
     return (
         <Resolved state={state} loading="Searching…">
             {(result) => {
-                const rows = searchRows(result.hits, Date.now(), tag.staleAfterDays);
                 const note = unembeddedNote(result.unembedded);
                 return (
                     <>
                         {note === null ? null : <div className="kb-notice kb-unembedded">{note}</div>}
-                        {rows.length === 0 ? (
+                        {result.hits.length === 0 ? (
                             <div className="kb-empty">Nothing matched “{props.q}”.</div>
                         ) : (
-                            <List rows={rows} />
+                            <div className="kb-hits">
+                                {result.hits.map((h, i) => (
+                                    <Hit key={`${h.chunk}:${i}`} hit={h} q={props.q} />
+                                ))}
+                                <div className="kb-count">
+                                    {result.hits.length} match{result.hits.length === 1 ? "" : "es"}
+                                </div>
+                            </div>
                         )}
                     </>
                 );

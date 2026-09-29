@@ -37,7 +37,7 @@ import {
 } from "../view/facts";
 import { headingId, headingText } from "../view/headings";
 import { anchorSlug, followLink, headingMatches } from "../view/links";
-import { searchPageQuery, toggleCollection } from "../view/search";
+import { markTerms, scoreLabel, searchPageQuery, sectionOf, toggleCollection } from "../view/search";
 import { languageFor, mimeLabel, renderingFor } from "../view/mime";
 import { lines, tokenize } from "../view/code";
 import { RENDERABLE_TAGS, decodeEntities, parseHtml, safeHref } from "../view/html";
@@ -731,4 +731,36 @@ test("a collection is picked and unpicked in the order it was picked", () => {
     assert.deepEqual(toggleCollection([], "a"), ["a"]);
     assert.deepEqual(toggleCollection(["a", "b"], "a"), ["b"]);
     assert.deepEqual(toggleCollection(["b"], "a"), ["b", "a"]);
+});
+
+test("the search page marks the query's words in a snippet, whatever their case", () => {
+    assert.deepEqual(markTerms("The Submission Queue is polled", "queue poll"), [
+        { text: "The Submission ", hit: false },
+        { text: "Queue", hit: true },
+        { text: " is ", hit: false },
+        { text: "poll", hit: true },
+        { text: "ed", hit: false },
+    ]);
+    assert.deepEqual(markTerms("a b c", "a"), [{ text: "a b c", hit: false }]);
+    assert.deepEqual(markTerms("x (here) y", "(here"), [
+        { text: "x ", hit: false },
+        { text: "(here", hit: true },
+        { text: ") y", hit: false },
+    ]);
+    assert.deepEqual(markTerms("", "x"), []);
+});
+
+test("a hit's section is its chunk's heading on one line, or nothing", () => {
+    assert.equal(sectionOf("  Setup \n and   install "), "Setup and install");
+    assert.equal(sectionOf(null), null);
+    assert.equal(sectionOf("   "), null);
+    assert.equal(sectionOf("x".repeat(200))?.length, 160);
+});
+
+test("a hit's score is the one it was ranked by, with every score on hover", () => {
+    assert.deepEqual(scoreLabel({ bm25: 12.44, vector: 0.712, fused: 0.0328 }), {
+        text: "score 0.03",
+        detail: "keyword 12.4 · semantic 0.71 · fused 0.03",
+    });
+    assert.deepEqual(scoreLabel({ fused: 0.5, rerank: 1.84 }), { text: "rerank 1.84", detail: "fused 0.50 · rerank 1.84" });
 });

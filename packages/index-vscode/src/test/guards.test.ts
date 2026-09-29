@@ -677,7 +677,9 @@ test("a snippet is clamped and never carries markup, in what ships", () => {
         "the shipped bundle has no ellipsis in it, so oneLine's length clamp did not survive",
     );
     for (const { file, text: src } of sources()) {
-        if (isChecker(file) || !file.startsWith("webview")) {
+        /* The search page is the one place the reader asked for the query's
+         * words to be marked (§5); the sidebar's rows and a document are not. */
+        if (isChecker(file) || !file.startsWith("webview") || file === path.join("webview", "Search.tsx")) {
             continue;
         }
         /* The ELEMENT, terminated, with the prose stripped — `<Markdown` is a

@@ -872,3 +872,60 @@ html, body {
   border-color: var(--bk-color-primary);
   color: var(--bk-color-primary-foreground);
 }
+
+/* A result on the search page: title and score, section, marked snippet. */
+.kb-hit {
+  padding: var(--bk-gap-sm, 8px) var(--bk-spacing-2, 8px);
+  border-bottom: 1px solid var(--bk-color-divider);
+  cursor: pointer;
+}
+.kb-hit:hover { background: var(--bk-color-hover); }
+.kb-hit:focus-visible { outline: 1px solid var(--bk-color-focus); outline-offset: -1px; }
+
+.kb-hit-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--bk-gap-sm, 8px);
+}
+.kb-hit-title {
+  font-size: var(--bk-font-size-md);
+  font-weight: var(--bk-font-weight-semibold);
+  color: var(--bk-color-link);
+}
+.kb-hit-score {
+  margin-left: auto;
+  font-family: var(--bk-font-family-mono);
+  font-size: var(--bk-font-size-xs);
+  color: var(--bk-color-foreground-muted);
+  white-space: nowrap;
+}
+
+.kb-hit-section {
+  display: flex;
+  align-items: center;
+  gap: var(--bk-spacing-1, 4px);
+  margin-top: 2px;
+  font-size: var(--bk-font-size-sm);
+  color: var(--bk-color-foreground-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.kb-hit-snippet {
+  margin: var(--bk-spacing-1, 4px) 0;
+  color: var(--bk-color-foreground);
+  line-height: var(--bk-line-height-normal);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The query's words in a result's snippet (search page only, §5). */
+.kb-hit-snippet mark {
+  background: var(--bk-color-selected);
+  color: var(--bk-color-selected-foreground);
+  border-radius: var(--bk-radius-sm, 2px);
+  padding: 0 1px;
+}
