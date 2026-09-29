@@ -917,10 +917,17 @@ Then, by the number of pending edits in the file:
 - 0 → error `no_changes`.
 - 1 → committed.
 - \>1 → error `multiple_edits` listing numbered regions; retry
-  with `--edit N` (pick from the list) or `--lines A-B` (must exactly match
-  one region's range as shown by `lap status`: current-file lines, or
-  last-committed lines for pure deletions). Remaining edits stay pending and
-  are re-detected (with fresh coordinates) on the next run.
+  with `--edit N` (pick from the list) or `--lines A-B`. `--lines` names
+  one region whole by its range as shown by `lap status` (current-file
+  lines, or last-committed lines for pure deletions), or **any part of a
+  pure insertion** (a region that adds lines and replaces none): lines
+  A–B, all inside it, committed on their own at the place the whole
+  insertion would take. Parts can be taken in any number and any order.
+  A range that runs past an insertion's edge, or touches a region that
+  replaces lines (which old lines would go with a part of the new?), is
+  refused with `lines_mismatch`, naming the edit. Remaining edits stay
+  pending and are re-detected (with fresh coordinates) on the next run: a
+  part taken from the middle of an insertion leaves two.
 - New file (lap has never recorded it) → `create`:
   - Without flags, its whole content — up to **50 lines**
     (`LAP_LARGE_CREATE_LINES`). A longer one is refused with
@@ -935,7 +942,7 @@ Then, by the number of pending edits in the file:
     the file's own final-newline state. From then on the file is known:
     the rest shows as ordinary pending edits against that part (lines
     above, lines below; blank gap lines join their neighbouring edit), and
-    `--lines` there has its usual meaning.
+    `--lines` there has its usual meaning: any part of them, in any order.
   - `--edit N` is refused with `bad_edit_index`: a new file has no pending
     edits to number.
 - Deleted file → `delete`, the file whole: `--lines` (`bad_lines`) and
@@ -1208,7 +1215,7 @@ lap cannot write): the message says which file.
 | `internal` | init | *internal*: an unexpected failure |
 | `io_error` | branch, merge | *internal*: a file lap needed to write |
 | `large_create` | commit | a new file of more than 50 lines committed whole without `--whole-file` |
-| `lines_mismatch` | commit | the range given is not the edit's |
+| `lines_mismatch` | commit | the range names no edit, runs past an insertion's edge, or touches a replacement without naming it whole |
 | `log_unreadable` | most readers, merge, rebuild | the history could not be read or parsed |
 | `merge_in_branch` | merge | the merge target is itself a branch that must merge first |
 | `message_required` | session start | no purpose given |

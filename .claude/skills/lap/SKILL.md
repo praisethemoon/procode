@@ -151,8 +151,9 @@ lap commit src/foo.c -i "<goal>" -b "<what the second edit does>" --edit 1   # r
 
 After each commit the remaining edits are re-detected and renumbered — run
 `lap status` (or read the fresh error listing) rather than reusing old
-numbers or old line ranges. `--lines A-B` also works and must exactly match
-a listed range.
+numbers or old line ranges. `--lines A-B` also works: it names a listed
+range whole, or any part of an added run of lines (an edit that only adds
+lines). An edit that replaces lines is taken whole.
 
 ## Other situations
 
@@ -160,8 +161,10 @@ a listed range.
   genuinely task-independent commits (e.g. committing `.lapignore` itself).
 - **A new file is committed in parts.** `lap commit f.c --lines A-B`
   creates it with just those lines (any range); lap then lists the rest
-  as ordinary pending edits, which you commit with `--edit 1` as usual —
-  each part with its own behavior, sharing the intent. Up to 50 lines
+  as ordinary pending edits, and `--lines` takes any part of them, in any
+  order (or `--edit 1` for a whole one). Split along the file's natural
+  seams — types, one function or a few — each part with its own behavior,
+  sharing the intent. Up to 50 lines
   may go in whole without flags; a larger new file committed whole is
   refused (`large_create`) unless you pass `--whole-file`, which is only
   for a file that is one piece (generated output, a fixture, data — or

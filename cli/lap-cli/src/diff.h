@@ -36,6 +36,27 @@ typedef struct {
  */
 Regions diff_lines(Arena *a, Lines oldl, Lines newl);
 
+/* What `--lines A-B` names among a file's regions. A region is named whole
+ * by its range (in the current file, or in the last-committed one for a pure
+ * deletion); a pure insertion can also be named in part, any range inside
+ * it, which is then committed on its own. A replacement cannot: which of its
+ * old lines would go with a part of its new ones?
+ */
+typedef enum {
+    LINES_PICK_OK,
+    LINES_PICK_NONE,        /* the range touches no region */
+    LINES_PICK_CROSSES,     /* it runs past the edge of an insertion */
+    LINES_PICK_REPLACEMENT, /* it is part of a region that replaces lines */
+} LinesPick;
+
+/* On LINES_PICK_OK, *out is the region to commit (a part of an insertion
+ * keeps the insertion's old_start: in the committed file the part lands
+ * where the whole would). *which is the index of the region the range
+ * lies in, or touches, for any result but LINES_PICK_NONE.
+ */
+LinesPick regions_pick_lines(const Regions *rs, int32_t a, int32_t b,
+                             Region *out, int32_t *which);
+
 /* Replaces base[old_start, old_start+old_lines) with repl, returns the new
  * Lines with eof_nl set to eof_nl_after. Bounds are validated; out-of-range
  * input returns base unchanged.

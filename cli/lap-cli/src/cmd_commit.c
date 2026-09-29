@@ -21,22 +21,6 @@ static bool parse_lines_arg(const char *s, int32_t *out_a, int32_t *out_b) {
     return true;
 }
 
-/* Matches --lines A-B against a region: the region's range in the current
- * file, or (for pure deletions, which occupy no current lines) its range in
- * the last-committed file.
- */
-static bool region_matches_lines(const Region *r, int32_t a, int32_t b) {
-    if (r->new_lines > 0) {
-        if (a == r->new_start && b == r->new_start + r->new_lines - 1)
-            return true;
-    }
-    if (r->old_lines > 0 && r->new_lines == 0) {
-        if (a == r->old_start && b == r->old_start + r->old_lines - 1)
-            return true;
-    }
-    return false;
-}
-
 static void print_multi_edit_error(Arena *a, bool json, const char *rel,
                                    const Regions *rg) {
     if (json) {
@@ -360,6 +344,8 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
             goto done;
         }
         Region *chosen = NULL;
+        Region part;
+        bool partial = false;
         if (fd.regions.count == 1 && !edit_arg && !lines_arg) {
             chosen = &fd.regions.v[0];
         } else if (edit_arg) {
@@ -380,17 +366,32 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
                         "--lines expects <start>-<end> (1-based, inclusive)");
                 goto done;
             }
-            for (int32_t i = 0; i < fd.regions.count; i++) {
-                if (region_matches_lines(&fd.regions.v[i], la, lb)) {
-                    chosen = &fd.regions.v[i];
-                    break;
-                }
-            }
-            if (!chosen) {
-                err_out(json, "lines_mismatch",
-                        "--lines %s does not match a detected edit; run "
-                        "\"lap status\" to see the current edit ranges",
-                        lines_arg);
+            int32_t which = -1;
+            LinesPick got = regions_pick_lines(&fd.regions, la, lb, &part, &which);
+            if (got == LINES_PICK_OK) {
+                const Region *r = &fd.regions.v[which];
+                partial = part.new_start != r->new_start ||
+                          part.new_lines != r->new_lines;
+                chosen = &part;
+            } else {
+                const Region *r = which >= 0 ? &fd.regions.v[which] : NULL;
+                int32_t rs = r ? r->new_start : 0;
+                int32_t re = r ? r->new_start + r->new_lines - 1 : 0;
+                if (got == LINES_PICK_REPLACEMENT)
+                    err_out(json, "lines_mismatch",
+                            "--lines %s touches edit %d (lines %d-%d), which "
+                            "replaces lines: commit it whole with --edit %d",
+                            lines_arg, which + 1, rs, re, which + 1);
+                else if (got == LINES_PICK_CROSSES)
+                    err_out(json, "lines_mismatch",
+                            "--lines %s runs past edit %d (lines %d-%d): a part "
+                            "must lie inside one added run of lines",
+                            lines_arg, which + 1, rs, re);
+                else
+                    err_out(json, "lines_mismatch",
+                            "--lines %s does not match a detected edit; run "
+                            "\"lap status\" to see the current edit ranges",
+                            lines_arg);
                 goto done;
             }
         } else {
@@ -415,10 +416,14 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         rec.new_n = chosen->new_lines;
         /* the committed file's trailing-newline state: the working file's if
          * this region reaches the end of both files, else the shadow's */
-        bool touches_end =
-            chosen->new_start + chosen->new_lines - 1 >= fd.work.count ||
-            chosen->old_start + chosen->old_lines - 1 >= fd.shadow.count;
-        rec.eof_nl = touches_end ? fd.work.eof_nl : fd.shadow.eof_nl;
+        bool ends_work = chosen->new_start + chosen->new_lines - 1 >= fd.work.count;
+        bool ends_shadow = chosen->old_start + chosen->old_lines - 1 >= fd.shadow.count;
+        rec.eof_nl = ends_work || ends_shadow ? fd.work.eof_nl : fd.shadow.eof_nl;
+        /* A part that stops before the working file's end is followed there
+         * by more lines, so its last line ends in a newline; if it lands at
+         * the committed file's end, that newline is the file's last. */
+        if (partial && !ends_work)
+            rec.eof_nl = ends_shadow ? true : fd.shadow.eof_nl;
     }
 
     const char *pick = whole_file_pick_error(rec.op, edit_arg, lines_arg);

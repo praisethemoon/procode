@@ -170,7 +170,7 @@ expect_grep "1 edit" "$LAP" status
 expect_ok "$LAP" commit notes.txt -i "uppercase gamma in this test" -b "applies test step 107" --edit 1
 expect_grep "clean" "$LAP" status
 
-t "--lines must match a detected region exactly"
+t "--lines names a whole edit; a range over two edits is refused"
 printf 'ALPHA\nbeta2\nGAMMA\ndelta\n' > notes.txt
 expect_fail "$LAP" commit notes.txt -i "bad range in this test" -b "applies test step 112" --lines 1-4
 expect_ok "$LAP" commit notes.txt -i "lower beta again" -b "applies test step 113" --lines 2-2
@@ -3289,6 +3289,38 @@ expect_ok "$LAP" commit f.c --edit 1 -i "three small functions, one commit each"
 expect_not_grep "f.c" "$LAP" status
 expect_grep "chain ok" "$LAP" verify --deep
 [ "$("$LAP" log --json | grep -o '"id":"L[0-9]*"' | wc -l | tr -d ' ')" = 3 ] || fail "not three commits"
+
+t "--lines takes any part of an added run: a new file in parts, top, bottom, then middle"
+seq 1 90 > p.txt
+expect_ok "$LAP" commit p.txt --lines 1-30 -i "ninety numbers in parts" -b "one to thirty, the top" --no-session
+expect_ok "$LAP" commit p.txt --lines 61-90 -i "ninety numbers in parts" -b "sixty-one to ninety, the bottom" --no-session
+expect_ok "$LAP" commit p.txt --lines 40-50 -i "ninety numbers in parts" -b "forty to fifty, from the middle" --no-session
+expect_grep "2 edits" "$LAP" status
+expect_ok "$LAP" commit p.txt --edit 2 -i "ninety numbers in parts" -b "fifty-one to sixty close the lower gap" --no-session
+expect_ok "$LAP" commit p.txt --edit 1 -i "ninety numbers in parts" -b "thirty-one to thirty-nine close the upper gap" --no-session
+expect_not_grep "p.txt" "$LAP" status
+[ "$(cat .lap/shadow/p.txt)" = "$(seq 1 90)" ] || fail "the committed file is not the working file"
+expect_grep "chain ok" "$LAP" verify --deep
+expect_grep "forty to fifty" "$LAP" search --file p.txt --line 45
+
+t "a part of an insertion into an existing file leaves the rest as two edits; replacements and edges are refused"
+printf 'a\nb\nc\nd\ne\n' > q.txt
+expect_ok "$LAP" commit q.txt -i "five letters to edit" -b "a to e, a line each" --no-session
+printf 'a\nB\nc\nx\ny\nz\nd\ne\n' > q.txt
+expect_ok "$LAP" commit q.txt --lines 5-5 -i "letters from the end" -b "y goes between c and d" --no-session
+expect_grep "3 edits" "$LAP" status
+expect_grep '"error":"lines_mismatch","message":"--lines 1-2 touches edit 1 (lines 2-2), which replaces lines' \
+    "$LAP" commit q.txt --lines 1-2 -i "letters from the end" -b "capital b" --no-session --json
+expect_grep '"error":"lines_mismatch","message":"--lines 4-5 runs past edit 2' \
+    "$LAP" commit q.txt --lines 4-5 -i "letters from the end" -b "x and y" --no-session --json
+
+t "a part short of the end of a file without a final newline is committed with one"
+printf 'one\ntwo\nthree' > r.txt
+expect_ok "$LAP" commit r.txt --lines 1-1 -i "three words, no final newline" -b "one comes first" --no-session
+expect_ok "$LAP" commit r.txt --lines 2-2 -i "three words, no final newline" -b "two follows one" --no-session
+expect_ok "$LAP" commit r.txt --edit 1 -i "three words, no final newline" -b "three ends it without a newline" --no-session
+expect_not_grep "r.txt" "$LAP" status
+expect_grep "chain ok" "$LAP" verify --deep
 
 t "a range outside a new file, --edit on it, and --lines on a deleted file are refused, and nothing is written"
 printf 'a\nb\n' > g.c

@@ -285,3 +285,37 @@ Lines lines_replace(Arena *a, Lines base, int32_t old_start,
         out.lines[w++] = base.lines[i];
     return out;
 }
+
+static bool region_named_whole(const Region *r, int32_t a, int32_t b) {
+    if (r->new_lines > 0)
+        return a == r->new_start && b == r->new_start + r->new_lines - 1;
+    return r->old_lines > 0 && a == r->old_start &&
+           b == r->old_start + r->old_lines - 1;
+}
+
+LinesPick regions_pick_lines(const Regions *rs, int32_t a, int32_t b,
+                             Region *out, int32_t *which) {
+    for (int32_t i = 0; i < rs->count; i++) {
+        if (region_named_whole(&rs->v[i], a, b)) {
+            *out = rs->v[i];
+            *which = i;
+            return LINES_PICK_OK;
+        }
+    }
+    for (int32_t i = 0; i < rs->count; i++) {
+        const Region *r = &rs->v[i];
+        if (r->new_lines == 0)
+            continue;
+        int32_t end = r->new_start + r->new_lines - 1;
+        if (b < r->new_start || a > end)
+            continue;
+        *which = i;
+        if (r->old_lines > 0)
+            return LINES_PICK_REPLACEMENT;
+        if (a < r->new_start || b > end)
+            return LINES_PICK_CROSSES;
+        *out = (Region){r->old_start, 0, a, b - a + 1};
+        return LINES_PICK_OK;
+    }
+    return LINES_PICK_NONE;
+}

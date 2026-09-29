@@ -147,15 +147,23 @@ with its own behavior. After each commit the remaining edits are
 re-detected and **renumbered**, so read the fresh listing (or `lap status`)
 rather than reusing old numbers.
 
-A **new file** is committed in parts the same way. `--lines A-B` creates it
-with just those lines; the rest then show as pending edits:
+A **new file** is committed in parts the same way, along its natural seams
+(types, functions). `--lines A-B` creates it with just those lines; the rest
+then show as pending edits, and `--lines` takes any part of them, in any
+order:
 
 ```sh
 lap commit src/parse.c --lines 40-72 -i "a parser for the config format" \
     -b "parse_value reads one scalar or list"
-lap commit src/parse.c --edit 1 -i "a parser for the config format" \
+lap commit src/parse.c --lines 80-120 -i "a parser for the config format" \
     -b "parse_file walks the lines and collects the values"
+lap commit src/parse.c --edit 1 -i "a parser for the config format" \
+    -b "the types the parser fills in"
 ```
+
+Any run of added lines can be split this way, in a new file or an old one.
+An edit that replaces lines is committed whole: a part of it would not say
+which old lines it replaces.
 
 A new file of more than 50 lines committed whole is refused
 (`large_create`); `--whole-file` commits it anyway, for a file that is one
@@ -206,7 +214,7 @@ with amendments needs this version of lap or later.
 |---|---|
 | `lap init` | create a repository in the current directory |
 | `lap status` | pending edits per file, numbered |
-| `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several; on a new file `--lines A-B` creates it with that part, and one over 50 lines needs parts or `--whole-file`; `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
+| `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several, `--lines` also any part of an added run; on a new file `--lines A-B` creates it with that part, and one over 50 lines needs parts or `--whole-file`; `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
 | `lap amend <commit> -i "intent" -b "behavior"` | correct what a commit of this folder says; nothing written changes (`-F`, `--force-message` as for commit) |
 | `lap log` | commits, newest first, each with its intent and behavior (`--session`, `--file`, `-n`; `--intent-only` / `--behavior-only` for one) |
 | `lap show <commit>` | one commit in full, by id, hash or hash prefix (`--full-file` reconstructs the file) |

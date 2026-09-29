@@ -25,7 +25,8 @@ static const HelpFlag F_COMMIT[] = {
      "pick the n-th pending edit (lap status numbers them);\n"
      "refused on a new or deleted file, which has none"},
     {"--lines", NULL, "<a>-<b>",
-     "pick the edit covering these lines; on a new file,\n"
+     "pick the edit covering these lines, or any part of an\n"
+     "added run of lines (parts in any order); on a new file,\n"
      "create it with just these lines (any range), the rest\n"
      "then pending as edits; refused on a deleted file"},
     {"--whole-file", NULL, NULL,

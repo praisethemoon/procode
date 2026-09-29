@@ -261,5 +261,40 @@ void test_diff(void) {
     }
     ASSERT_EQ_I(exact_failures, 0);
 
+    /* old: a b c d e; new: a B c x y z d e (b replaced, x y z inserted) */
+    Regions pr = diff_lines(a, mk(a, "a\nb\nc\nd\ne\n"),
+                            mk(a, "a\nB\nc\nx\ny\nz\nd\ne\n"));
+    Region part;
+    int32_t which = -1;
+
+    t_begin("pick lines: a whole region is named by its range");
+    ASSERT_EQ_I(pr.count, 2);
+    ASSERT_EQ_I(regions_pick_lines(&pr, 4, 6, &part, &which), LINES_PICK_OK);
+    ASSERT_EQ_I(which, 1);
+    ASSERT_EQ_I(part.new_start, 4);
+    ASSERT_EQ_I(part.new_lines, 3);
+
+    t_begin("pick lines: any part of an insertion, placed where the whole would go");
+    ASSERT_EQ_I(regions_pick_lines(&pr, 5, 6, &part, &which), LINES_PICK_OK);
+    ASSERT_EQ_I(which, 1);
+    ASSERT_EQ_I(part.old_start, pr.v[1].old_start);
+    ASSERT_EQ_I(part.old_lines, 0);
+    ASSERT_EQ_I(part.new_start, 5);
+    ASSERT_EQ_I(part.new_lines, 2);
+    ASSERT_EQ_I(regions_pick_lines(&pr, 5, 5, &part, &which), LINES_PICK_OK);
+    ASSERT_EQ_I(part.new_lines, 1);
+
+    t_begin("pick lines: a range past an insertion's edge is refused");
+    ASSERT_EQ_I(regions_pick_lines(&pr, 5, 7, &part, &which), LINES_PICK_CROSSES);
+    ASSERT_EQ_I(which, 1);
+
+    t_begin("pick lines: a range touching a replacement is refused unless whole");
+    ASSERT_EQ_I(regions_pick_lines(&pr, 1, 2, &part, &which), LINES_PICK_REPLACEMENT);
+    ASSERT_EQ_I(which, 0);
+    ASSERT_EQ_I(regions_pick_lines(&pr, 2, 2, &part, &which), LINES_PICK_OK);
+
+    t_begin("pick lines: a range on unchanged lines names nothing");
+    ASSERT_EQ_I(regions_pick_lines(&pr, 7, 8, &part, &which), LINES_PICK_NONE);
+
     arena_free(a);
 }

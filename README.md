@@ -18,7 +18,7 @@ Lap is an edit recorder. Like git, lap records changes, but its goal is to
 capture not only the change, but also the intent behind it and the behavior
 it gives the code. Every edit an agent makes is its own commit, grouped into
 sessions, so you can come back later and see what happened and why. A new
-file is committed in parts too (`--lines` picks the first part), so a large
+file is committed in parts too (`--lines` picks each part, in any order), so a large
 one never lands as a single unexplained blob.
 
 `lap` is available as a CLI and as an agent skill that teaches the agent
