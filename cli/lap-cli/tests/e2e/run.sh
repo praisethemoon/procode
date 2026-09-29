@@ -3314,6 +3314,19 @@ expect_grep '"error":"lines_mismatch","message":"--lines 1-2 touches edit 1 (lin
 expect_grep '"error":"lines_mismatch","message":"--lines 4-5 runs past edit 2' \
     "$LAP" commit q.txt --lines 4-5 -i "letters from the end" -b "x and y" --no-session --json
 
+t "an interrupt in the middle of a commit waits until the commit is written, then ends it"
+echo "hello" > sig.txt
+# job control, so the background commit does not start with SIGINT ignored
+out=$(sh -c 'set -m; LAP_TEST_PAUSE=commit "$1" commit sig.txt -i "a greeting to interrupt" -b "says hello once" --no-session & p=$!; sleep 1; kill -INT $p; wait $p; echo "exit=$?"' sh "$LAP" 2>/dev/null)
+echo "$out" | grep -q "exit=130" || fail "an interrupted commit did not end as SIGINT does: $out"
+echo "$out" | grep -q "sig.txt: line 1 (insertion)" || fail "the interrupted commit's line was not printed: $out"
+expect_not_grep "sig.txt" "$LAP" status
+echo "bye" >> sig.txt
+out=$(sh -c 'LAP_TEST_PAUSE=commit "$1" commit sig.txt -i "a farewell to interrupt" -b "says bye after hello" --no-session & p=$!; sleep 1; kill -TERM $p; wait $p; echo "exit=$?"' sh "$LAP" 2>/dev/null)
+echo "$out" | grep -q "exit=143" || fail "a commit sent SIGTERM did not end as SIGTERM does: $out"
+expect_not_grep "sig.txt" "$LAP" status
+expect_grep "chain ok" "$LAP" verify --deep
+
 t "a part short of the end of a file without a final newline is committed with one"
 printf 'one\ntwo\nthree' > r.txt
 expect_ok "$LAP" commit r.txt --lines 1-1 -i "three words, no final newline" -b "one comes first" --no-session

@@ -20,6 +20,7 @@ set(LAP_LIB_SOURCES
     src/sha256.c
     src/json.c
     src/platform.c
+    src/signals.c
     src/ignore.c
     src/diff.c
     src/rec.c

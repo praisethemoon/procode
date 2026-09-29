@@ -1284,6 +1284,16 @@ since the whole history goes with them.
   the log tail; the next **writer** detects the mismatch and heals —
   rebuilding counters, the active session, *and the entire shadow tree*
   from a full replay. Readers that hit the mismatch heal in memory only.
+- **An interrupt waits for the write.** From the moment a command holds
+  the lock until it has released it, SIGINT, SIGTERM and SIGHUP (on
+  Windows, Ctrl-C and Ctrl-Break) are remembered, not acted on. The
+  command finishes its writes, releases the lock, then ends as the first
+  signal would have ended it (130 for SIGINT, 143 for SIGTERM), after
+  what it printed is flushed. Waiting *for* the lock can still be
+  interrupted, and so can every reader. A signal the process was started
+  ignoring stays ignored; `kill -9` cannot be held off, and is left to the
+  heal above. Tests pause a commit between its log append and its shadow
+  update with `LAP_TEST_PAUSE=commit`, to interrupt it exactly there.
 - **Names are durable before anything depends on them.** After creating a
   chunk, writing one whole into `.lap/log/`, publishing a conversion's
   `log/` or writing `.lap/lineage`, the folder itself is synced, so a power

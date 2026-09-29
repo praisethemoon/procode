@@ -839,6 +839,7 @@ PlatLock *plat_lock(Arena *a, const char *path) {
                                FILE_ATTRIBUTE_NORMAL, NULL);
         if (h != INVALID_HANDLE_VALUE) {
             l->h = h;
+            plat_signals_hold();
             return l;
         }
         Sleep(50);
@@ -853,6 +854,7 @@ PlatLock *plat_lock(Arena *a, const char *path) {
         return NULL;
     }
     l->fd = fd;
+    plat_signals_hold();
     return l;
 #endif
 }
@@ -866,6 +868,7 @@ PlatLock *plat_trylock(Arena *a, const char *path) {
     if (h == INVALID_HANDLE_VALUE)
         return NULL;
     l->h = h;
+    plat_signals_hold();
     return l;
 #else
     int fd = open(path, O_CREAT | O_WRONLY, 0666);
@@ -876,6 +879,7 @@ PlatLock *plat_trylock(Arena *a, const char *path) {
         return NULL;
     }
     l->fd = fd;
+    plat_signals_hold();
     return l;
 #endif
 }
@@ -889,4 +893,5 @@ void plat_unlock(PlatLock *l) {
     flock(l->fd, LOCK_UN);
     close(l->fd);
 #endif
+    plat_signals_release();
 }

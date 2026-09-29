@@ -133,4 +133,17 @@ PlatLock *plat_lock(Arena *a, const char *path);
 PlatLock *plat_trylock(Arena *a, const char *path);
 void plat_unlock(PlatLock *l);
 
+/* While a lock is held, an interrupt waits. SIGINT, SIGTERM and SIGHUP (on
+ * Windows, Ctrl-C and Ctrl-Break) that arrive are remembered, not acted on,
+ * so a writer is never stopped between its steps; when the last lock is
+ * released the first one remembered takes effect, and the process ends as
+ * it would have. A signal the process was started ignoring stays ignored.
+ * plat_lock and plat_trylock hold, plat_unlock releases; they nest. */
+void plat_signals_hold(void);
+void plat_signals_release(void);
+
+/* Tests only: when LAP_TEST_PAUSE names this point, sleep there a moment,
+ * so a test can interrupt a writer in the middle of its writes. */
+void plat_test_pause(const char *point);
+
 #endif /* LAP_PLATFORM_H */

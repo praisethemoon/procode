@@ -20,7 +20,7 @@ LDFLAGS ?=
 PREFIX ?= /usr/local
 DESTDIR ?=
 
-SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/platform.c \
+SRC_LIB := src/arena.c src/str.c src/sha256.c src/json.c src/platform.c src/signals.c \
            src/ignore.c src/diff.c src/rec.c src/msg.c src/statcache.c src/repo.c src/cmd_common.c \
            src/cmd_init.c src/cmd_status.c src/cmd_commit.c src/cmd_log.c \
            src/cmd_show.c src/cmd_search.c src/cmd_session.c src/cmd_verify.c \

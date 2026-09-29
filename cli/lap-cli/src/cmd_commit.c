@@ -469,6 +469,8 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         rc = LAP_EXIT_FATAL;
         goto done;
     }
+    /* between the log and the caches: where an interrupt used to hurt */
+    plat_test_pause("commit");
 
     /* Update the shadow, THEN persist state: a crash anywhere in between
      * leaves state.json behind the log tail, which the next writer detects
