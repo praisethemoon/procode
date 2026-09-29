@@ -73,6 +73,9 @@ uint64_t hist_chunk_limit(void);
 /* Tests only: run by hist_open between listing the chunks and looking for
  * the old single-file log, where a conversion can publish its chunks. */
 extern void (*hist_open_between)(void);
+/* Tests only: run by hist_open between taking the old single-file log's
+ * size and reading it, where a conversion can remove it. */
+extern void (*hist_open_sized)(void);
 bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
                char *err, size_t errsz);
 

@@ -373,6 +373,12 @@ static void publish_between(void) {
     remove(path);
 }
 
+static void remove_legacy(void) {
+    char path[256];
+    snprintf(path, sizeof path, "%s/%s", T_LAPDIR, LAP_LOG_NAME);
+    remove(path);
+}
+
 static void test_legacy(Arena *a) {
     char err[256];
     Hist h;
@@ -413,6 +419,19 @@ static void test_legacy(Arena *a) {
     ASSERT_TRUE(!h.legacy);
     ASSERT_EQ_I(h.n, 1);
     ASSERT_EQ_S(read_history(a), "pub1\n");
+
+    t_begin("hist: an old file a conversion removes after its size was "
+            "taken is read from the chunks, never as an error");
+    clear_chunks();
+    put_file("main.000001.jsonl", "gone1\n");
+    put_legacy("gone1\n");
+    hist_open_sized = remove_legacy;
+    bool opened = hist_open(a, T_LAPDIR, "main", &h, err, sizeof err);
+    hist_open_sized = NULL;
+    ASSERT_TRUE(opened);
+    ASSERT_TRUE(!h.legacy);
+    ASSERT_EQ_I(h.n, 1);
+    ASSERT_EQ_S(read_history(a), "gone1\n");
     clear_chunks();
     put_legacy("aaaa\nbbbb\ncccc\n");
     ASSERT_TRUE(hist_open(a, T_LAPDIR, "main", &h, err, sizeof err));

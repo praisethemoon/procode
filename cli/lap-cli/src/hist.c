@@ -116,6 +116,7 @@ static bool list_chunks(Arena *a, const char *lapdir, const char *lineage,
 }
 
 void (*hist_open_between)(void);
+void (*hist_open_sized)(void);
 
 bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
                char *err, size_t errsz) {
@@ -133,6 +134,8 @@ bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
          * chunks in between, so they are listed again */
         return h->n > 0 || list_chunks(a, lapdir, lineage, h, err, errsz);
     }
+    if (hist_open_sized)
+        hist_open_sized();
     /* Both shapes: a conversion between publishing its chunks and removing
      * the old file (they hold all of it), or an older lap's interrupted
      * one (they do not). The old file is read unless the chunks hold all
@@ -141,6 +144,11 @@ bool hist_open(Arena *a, const char *lapdir, const char *lineage, Hist *h,
         char *old, *have;
         size_t old_len;
         if (!plat_read_file_max(a, legacy, &old, &old_len, (size_t)-1)) {
+            /* gone since its size was taken: a conversion removes it last,
+             * after publishing chunks that hold all of it, which may not be
+             * the ones listed, so they are listed again */
+            if (!plat_is_file(legacy))
+                return list_chunks(a, lapdir, lineage, h, err, errsz);
             snprintf(err, errsz, "cannot read %s", legacy);
             return false;
         }
