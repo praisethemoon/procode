@@ -53,13 +53,16 @@ const fake = {
         },
     },
     ProgressLocation: { Notification: 15 },
-    workspace: { fs: { readFile: async (u: { fsPath: string }) => fs.readFileSync(u.fsPath) } },
+    workspace: {
+        fs: { readFile: async (u: { fsPath: string }) => fs.readFileSync(u.fsPath) },
+        workspaceFolders: undefined as { uri: { scheme: string; fsPath: string } }[] | undefined,
+    },
     Uri: { file: (p: string) => ({ fsPath: p }) },
 };
 
 type Commands = typeof import("../commands");
 
-function load(): Pick<Commands, "addFolder" | "refreshDocument"> {
+function load(): Pick<Commands, "addFolder" | "indexWorkspace" | "refreshDocument"> {
     const original = Module._load;
     Module._load = (req, parent, isMain) => (req === "vscode" ? fake : original(req, parent, isMain));
     try {
@@ -132,4 +135,63 @@ test("a folder is added whole, and added again forgets what is gone", { skip: !K
     } finally {
         fs.rmSync(dir, { recursive: true, force: true });
     }
+});
+
+test("Index This Workspace files each open folder into its own collection, with no dialog", { skip: !KB && noCli("kb") }, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-workspace-"));
+    try {
+        const alpha = path.join(dir, "alpha");
+        const beta = path.join(dir, "beta");
+        fs.mkdirSync(alpha);
+        fs.mkdirSync(beta);
+        fs.writeFileSync(path.join(alpha, "a.md"), "# A\n\nzzalpha\n");
+        fs.writeFileSync(path.join(beta, "b.md"), "# B\n\nzzbeta\n");
+        const kb = new Kb({ bin: KB, cwd: alpha, env: TEST_ENV });
+        await kb.init();
+        const { indexWorkspace } = load();
+        opened.length = 0;
+        told.length = 0;
+        warned.length = 0;
+        progress.length = 0;
+        let announced = 0;
+
+        // No folder open: nothing filed, and the reader is told why.
+        fake.workspace.workspaceFolders = undefined;
+        await indexWorkspace(kb, () => announced++);
+        assert.equal(announced, 0);
+        assert.equal(warned.length, 1);
+        assert.match(warned[0], /^Open a folder first/);
+
+        // Two folders (and one that is not on disk): each filed into a
+        // collection named after it, and no dialog shown.
+        fake.workspace.workspaceFolders = [
+            { uri: { scheme: "file", fsPath: alpha } },
+            { uri: { scheme: "vscode-remote", fsPath: "/elsewhere" } },
+            { uri: { scheme: "file", fsPath: beta } },
+        ];
+        await indexWorkspace(kb, () => announced++);
+        assert.equal(opened.length, 0, "a dialog was shown");
+        assert.deepEqual(progress, ["Filing alpha into alpha…", "Filing beta into beta…"]);
+        assert.equal(announced, 2);
+        const sources = await kb.sources({ kind: "dir" });
+        assert.deepEqual(sources.map((s) => s.collection).sort(), ["alpha", "beta"]);
+        assert.equal((await kb.search("zzbeta")).count, 1);
+
+        // Again: nothing changed, so everything is unchanged.
+        await indexWorkspace(kb, () => announced++);
+        assert.match(told.at(-1) ?? "", /0 added, 0 updated, 1 unchanged, 0 forgotten/);
+        fake.workspace.workspaceFolders = undefined;
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("Index This Workspace is a command with a button on the Knowledge toolbar", () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8")) as {
+        contributes: { commands: { command: string; icon?: string }[]; menus: Record<string, { command: string; when?: string }[]> };
+    };
+    const command = manifest.contributes.commands.find((c) => c.command === "knowledge.indexWorkspace");
+    assert.ok(command?.icon, "declared, with an icon");
+    const button = manifest.contributes.menus["view/title"].find((m) => m.command === "knowledge.indexWorkspace");
+    assert.equal(button?.when, "view == knowledge.documents");
 });

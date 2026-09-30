@@ -37,7 +37,7 @@ import { HostContext, layoutShelf } from "./host";
 import { KnowledgeEditor } from "./editor";
 import { NO_FOLDER, Settings, makeClient, noFolder, readSettings, workspaceRoot } from "./session";
 import { Sidebar } from "./sidebar";
-import { addCurrentFile, addFiles, addFolder, addUrl, finishEmbedding, refreshStale } from "./commands";
+import { addCurrentFile, addFiles, addFolder, addUrl, finishEmbedding, indexWorkspace, refreshStale } from "./commands";
 import { quickSearch } from "./quickopen";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -185,6 +185,10 @@ export function activate(context: vscode.ExtensionContext): void {
             withClient((kb, collection?: unknown) =>
                 addFolder(kb, announce, typeof collection === "string" && collection ? collection : undefined),
             ),
+        ),
+        vscode.commands.registerCommand(
+            "knowledge.indexWorkspace",
+            withClient((kb) => indexWorkspace(kb, announce)),
         ),
         vscode.commands.registerCommand(
             "knowledge.addUrl",

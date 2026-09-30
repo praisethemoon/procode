@@ -364,19 +364,39 @@ export async function addFolder(kb: Kb, announce: () => void, collection?: strin
     if (into === undefined || into.length === 0) {
         return;
     }
-    const name = path.basename(folder.fsPath);
+    await fileFolder(kb, announce, folder.fsPath, into);
+}
+
+/* One folder filed with progress shown, and the totals told once it is done. */
+async function fileFolder(kb: Kb, announce: () => void, folder: string, into: string): Promise<void> {
+    const name = path.basename(folder);
     try {
         const filed = await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
                 title: `Filing ${name} into ${into}…`,
             },
-            () => kb.addDir(folder.fsPath, { collection: into }),
+            () => kb.addDir(folder, { collection: into }),
         );
         announce();
         tell(kb, announce, folderMessage(filed), filed.pending);
     } catch (e) {
         report(e, `file ${name}`);
+    }
+}
+
+/* The open workspace folders filed as Add Folder files one, with nothing to
+ * pick: each into a collection named after the folder, so a multi-root
+ * workspace keeps its folders apart. Running it again is how the index is kept
+ * current, since kb files only what changed and forgets what is gone. */
+export async function indexWorkspace(kb: Kb, announce: () => void): Promise<void> {
+    const folders = (vscode.workspace.workspaceFolders ?? []).filter((f) => f.uri.scheme === "file");
+    if (folders.length === 0) {
+        void vscode.window.showWarningMessage("Open a folder first: Index This Workspace files the folders open in this window.");
+        return;
+    }
+    for (const f of folders) {
+        await fileFolder(kb, announce, f.uri.fsPath, path.basename(f.uri.fsPath));
     }
 }
 

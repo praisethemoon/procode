@@ -95,6 +95,11 @@
         "icon": "$(new-folder)"
       },
       {
+        "command": "knowledge.indexWorkspace",
+        "title": "Knowledge: Index This Workspace",
+        "icon": "$(repo)"
+      },
+      {
         "command": "knowledge.addUrl",
         "title": "Knowledge: Add A URL",
         "icon": "$(link)"
@@ -120,6 +125,11 @@
           "command": "knowledge.searchPage",
           "when": "view == knowledge.documents",
           "group": "navigation@0"
+        },
+        {
+          "command": "knowledge.indexWorkspace",
+          "when": "view == knowledge.documents",
+          "group": "navigation@1"
         },
         {
           "command": "knowledge.addCurrentFile",
