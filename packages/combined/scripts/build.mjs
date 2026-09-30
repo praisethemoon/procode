@@ -140,7 +140,7 @@ if (dup) {
 }
 
 const manifest = {
-    name: "progressive-coding",
+    name: "procode-tools",
     displayName: "Progressive Coding",
     description: "Progressive coding: very opinionated tools for working alongside AI coding agents. Order and code you understand and can reason about.",
     version: VERSION,
