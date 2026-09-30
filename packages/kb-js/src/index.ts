@@ -11,6 +11,8 @@
  */
 
 export { Kb, KbSearchResult } from "./client";
+export { fetchPage, titleOf } from "./fetch";
+export type { FetchedPage } from "./fetch";
 export {
     AddDirOptions,
     AddOptions,

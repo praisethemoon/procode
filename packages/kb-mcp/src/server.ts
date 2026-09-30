@@ -54,7 +54,8 @@ export const INSTRUCTIONS =
     "A local, offline knowledge base of documentation, source and papers, searched with kb_search and read " +
     "with kb_get. Search it BEFORE fetching anything from the network: research done earlier is indexed here " +
     "rather than discarded. File what you read back with kb_add as you go, so the second question on a topic " +
-    "is answered from disk. It also holds folders of code filed whole (kb_add with dir), searchable by name " +
+    "is answered from disk; for a web page, give kb_add its URL (urls) rather than its text, and the page itself " +
+    "is filed. It also holds folders of code filed whole (kb_add with dir), searchable by name " +
     "and by meaning. For a question where the best passage matters more than a second of latency, pass " +
     "rerank: true to kb_search. It returns passages with their provenance — it does not summarise or answer; " +
     "that is your work.";

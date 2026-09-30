@@ -163,8 +163,12 @@ const KB_GET: ToolDefinition = {
 const KB_ADD: ToolDefinition = {
     name: "kb_add",
     description:
-        "File content you have already read into the knowledge base, so the next question on the topic is " +
-        "answered from disk instead of fetched again. Hand over the text you have; nothing is re-fetched. " +
+        "File what you have read into the knowledge base, so the next question on the topic is " +
+        "answered from disk instead of fetched again. Hand over text you have as documents; " +
+        "for a web page, pass its address in urls instead of its text: the server fetches the page and files it " +
+        "as it is, under its URL, so the store holds the page and not your summary of it, and it can be refreshed " +
+        "later. Each URL gets its own answer (filed, updated, unchanged, or failed with the reason), and one that " +
+        "fails does not stop the others. " +
         "Filing is idempotent by content hash. All the documents of one call are filed together or not at " +
         "all: if the store refuses one, none is filed. Documents go to this workspace's store; if the workspace has " +
         "none this fails, and creating one is the user's decision, not yours. " +
@@ -212,6 +216,28 @@ const KB_ADD: ToolDefinition = {
                 },
                 description: "The documents to file. Give either documents or dir, not both.",
             },
+            urls: {
+                type: "array",
+                minItems: 1,
+                items: {
+                    type: "object",
+                    properties: {
+                        url: { type: "string", description: "The page's address, http or https." },
+                        collection: {
+                            type: "string",
+                            description:
+                                "The topic scope to file it under, such as win32-iocp. Created on first use. Flat: collections do not nest.",
+                        },
+                        title: {
+                            type: "string",
+                            description: "What the document is called. Left out, the page's own title is used.",
+                        },
+                    },
+                    required: ["url", "collection"],
+                    additionalProperties: false,
+                },
+                description: "Web pages to fetch and file as they are. Give urls on its own, without documents or dir.",
+            },
             dir: {
                 type: "string",
                 description:
@@ -224,7 +250,7 @@ const KB_ADD: ToolDefinition = {
                     "With dir: the topic scope every file of the folder is filed under. Documents name their own.",
             },
         },
-        /* Either `documents` or `dir` with `collection`, which a flat
+        /* One of `documents`, `urls`, or `dir` with `collection`, which a flat
          * `required` cannot say; `call.ts` checks it and names the missing
          * half. */
         additionalProperties: false,

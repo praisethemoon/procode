@@ -126,15 +126,15 @@ test("kb_get takes one id and not a list of them", () => {
     assert.deepEqual(findTool("kb_get")?.inputSchema["required"], ["id"]);
 });
 
-test("kb_add takes documents or a folder, and nothing that names a destination", () => {
+test("kb_add takes documents, web pages or a folder, and nothing that names a destination", () => {
     /* There is one store, the one the server's working directory finds, and a
      * write lands in it or is refused. An argument that chose somewhere else —
      * the `store` that once picked a tier — would be a second answer to a
-     * question the working directory already answered. `dir` is where the
-     * content comes FROM, and `collection` is the folder's topic. */
+     * question the working directory already answered. `dir` and `urls` are
+     * where the content comes FROM, and `collection` is the folder's topic. */
     const schema = findTool("kb_add")?.inputSchema ?? {};
     const properties = schema["properties"] as Record<string, unknown>;
-    assert.deepEqual(Object.keys(properties), ["documents", "dir", "collection"]);
+    assert.deepEqual(Object.keys(properties), ["documents", "urls", "dir", "collection"]);
     /* Neither form is required on its own, so the schema cannot say "one of";
      * `call.ts` does. */
     assert.equal("required" in schema, false);
@@ -144,6 +144,9 @@ test("kb_add takes documents or a folder, and nothing that names a destination",
     >;
     assert.equal("store" in (item["properties"] as Record<string, unknown>), false);
     assert.deepEqual((item["required"] as string[]).sort(), ["collection", "content", "title"]);
+    const page = (properties["urls"] as Record<string, unknown>)["items"] as Record<string, unknown>;
+    assert.deepEqual(Object.keys(page["properties"] as Record<string, unknown>), ["url", "collection", "title"]);
+    assert.deepEqual((page["required"] as string[]).sort(), ["collection", "url"]);
 });
 
 test("kb_add offers no way to forget, and says a folder's gone files are missing", () => {

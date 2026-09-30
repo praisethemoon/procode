@@ -26,10 +26,13 @@ short; read it as whichever of the two you have.
 2. **Read the passage whole.** A hit is a snippet; `kb_get` its chunk id
    (`C-n`) for the passage with its neighbours, or a document id (`D-n`)
    for the whole text. Answer from what you read, not from the snippet.
-3. **File what you read.** When you had to fetch after all, `kb_add` what you
-   read, in the collection for its topic, with its `url` and `mime`, as you
-   go rather than at the end. Filing is idempotent by content, so filing a
-   page twice is harmless.
+3. **File what you read.** When you had to fetch after all, file it as you
+   go rather than at the end, in the collection for its topic. For a web
+   page, give `kb_add` its address in `urls`: the page itself is fetched and
+   filed under its URL, rather than your summary of it (a web-fetch tool
+   often hands back a summary, not the page). Text you wrote or were handed
+   goes in `documents`, with its `url` and `mime` when known. Filing is
+   idempotent by content, so filing a page twice is harmless.
 4. **Cite.** Name the passage an answer rests on (its document id and URL),
    so the user can check it.
 
@@ -39,7 +42,7 @@ short; read it as whichever of the two you have.
 |---|---|
 | `kb_search` | Ranked snippets for a query: keyword and semantic, fused. `mode: "keyword"` for an exact name or identifier; `rerank: true` when the best passage matters more than a second of latency; `collection` to narrow the scope. |
 | `kb_get` | One chunk (`C-n`) whole with `expand` neighbours, or one document (`D-n`) with its text. |
-| `kb_add` | File `documents` (each with `title`, `content`, `collection`, and when known `url`, `mime`, `meta`), all or none; or a whole folder with `dir` and `collection`. |
+| `kb_add` | File web pages by address with `urls` (each `url` and `collection`, optionally `title`), fetched and filed as they are, each with its own result; or `documents` (each with `title`, `content`, `collection`, and when known `url`, `mime`, `meta`), all or none; or a whole folder with `dir` and `collection`. |
 | `kb_collections` | The topics, with their counts and when each was last added to. |
 | `kb_links` | Read a document's links (`op: "list"`), or state one (`op: "add"`): `supersedes`, `cites`, `analogue_of`, `implements`, `see_also`. A list also shows `imports`, which a folder filed with `dir` gets from its code (a file to the files it imports); those are kb's, not added by hand. |
 | `kb_stale` | Documents older than a threshold, which may be out of date. |

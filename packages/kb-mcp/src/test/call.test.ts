@@ -15,6 +15,8 @@
  */
 
 import * as assert from "node:assert/strict";
+import * as http from "node:http";
+import { AddressInfo } from "node:net";
 import { test as base } from "node:test";
 
 /* The stand-in kb (fake.ts) is a #! script, which Windows cannot start, so
@@ -552,6 +554,105 @@ test("a folder the store cannot file is a refusal the agent can read", async () 
         assert.equal(answer["kind"], "refused");
         assert.equal(answer["error"], "not_found");
         assert.equal(fake.calls().length, 1);
+    });
+});
+
+/* ------------------------------------------------------------ kb_add urls */
+
+const PAGE_A = "<!doctype html><html><head><title>Spill slots</title></head><body>x19 is callee-saved.</body></html>";
+const PAGE_B = "# Deques\n\nChase-Lev, stolen from the top.\n";
+
+/* The pages kb_add fetches, served from this machine. */
+async function pages(): Promise<{ base: string; close(): Promise<void> }> {
+    const server = http.createServer((req, res) => {
+        if (req.url === "/a.html") {
+            res.writeHead(200, { "content-type": "text/html; charset=utf-8", etag: '"a1"' });
+            res.end(PAGE_A);
+        } else if (req.url === "/b.md") {
+            res.writeHead(200, { "content-type": "text/markdown" });
+            res.end(PAGE_B);
+        } else {
+            res.writeHead(404);
+            res.end("not here");
+        }
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const { port } = server.address() as AddressInfo;
+    return { base: `http://127.0.0.1:${port}`, close: () => new Promise((r) => server.close(() => r())) };
+}
+
+test("kb_add with urls fetches each page and files it as served, and a failed one does not stop the rest", async () => {
+    const s = await pages();
+    try {
+        await withKb(
+            [
+                { stdout: ok({ ...ADDED, document: "D-1", mime: "text/html", created: true, pending: 0 }) },
+                { stdout: ok({ ...ADDED, document: "D-2", created: false, reindexed: false, pending: 3 }) },
+            ],
+            async (kb, fake) => {
+                const result = await callTool(kb, "kb_add", {
+                    urls: [
+                        { url: `${s.base}/a.html`, collection: "jit" },
+                        { url: `${s.base}/gone`, collection: "jit" },
+                        { url: `${s.base}/b.md`, collection: "sched", title: "Work stealing" },
+                    ],
+                });
+                assert.equal(result.isError, undefined, "some were filed, so this is not an error");
+                const answer = body(result);
+                assert.equal(answer["filed"], 2);
+                assert.equal(answer["failed"], 1);
+                assert.equal(answer["pending"], 3, "the store's count after the last filing");
+                const results = answer["results"] as Record<string, unknown>[];
+                assert.deepEqual(results.map((r) => [r["ok"], r["outcome"] ?? null]), [[true, "filed"], [false, null], [true, "unchanged"]]);
+                assert.match(String(results[1]["because"]), /answered 404/);
+                assert.equal(results[0]["title"], "Spill slots", "the page's own title");
+                assert.equal(results[2]["title"], "Work stealing", "the title given wins");
+
+                // Two filings, one per page that arrived, each with the page's bytes on stdin.
+                const calls = fake.calls();
+                assert.equal(calls.length, 2);
+                assert.equal(calls[0].stdin, PAGE_A);
+                assert.equal(flag(calls[0].argv, "--url"), `${s.base}/a.html`);
+                assert.equal(flag(calls[0].argv, "--mime"), "text/html");
+                assert.equal(flag(calls[0].argv, "--etag"), '"a1"');
+                assert.equal(flag(calls[0].argv, "--title"), "Spill slots");
+                assert.equal(flag(calls[0].argv, "--collection"), "jit");
+                assert.equal(calls[1].stdin, PAGE_B);
+                assert.equal(flag(calls[1].argv, "--mime"), "text/markdown");
+                assert.equal(flag(calls[1].argv, "--etag"), undefined, "no ETag served, none sent");
+                assert.equal(flag(calls[1].argv, "--title"), "Work stealing");
+            },
+        );
+    } finally {
+        await s.close();
+    }
+});
+
+test("kb_add with urls where nothing could be filed is an error result the agent can read", async () => {
+    const s = await pages();
+    try {
+        await withKb([], async (kb, fake) => {
+            const result = await callTool(kb, "kb_add", { urls: [{ url: `${s.base}/gone`, collection: "jit" }] });
+            assert.equal(result.isError, true);
+            assert.equal(body(result)["filed"], 0);
+            assert.equal(fake.calls().length, 0, "nothing reached the store");
+        });
+    } finally {
+        await s.close();
+    }
+});
+
+test("kb_add's urls stand alone and each needs url and collection", async () => {
+    await withKb([], async (kb) => {
+        for (const [args, why] of [
+            [{ urls: [{ url: "https://x.test/", collection: "c" }], documents: [{ title: "t", content: "c", collection: "c" }] }, /on its own/],
+            [{ urls: [{ url: "https://x.test/", collection: "c" }], collection: "c" }, /on its own/],
+            [{ urls: [] }, /non-empty array/],
+            [{ urls: [{ url: "https://x.test/" }] }, /needs url and collection/],
+            [{ urls: [{ url: "https://x.test/", collection: "c", mime: "text/html" }] }, /no argument called "mime"/],
+        ] as const) {
+            await assert.rejects(callTool(kb, "kb_add", args), (e: unknown) => e instanceof RpcError && e.code === INVALID_PARAMS && why.test(e.message));
+        }
     });
 });
 

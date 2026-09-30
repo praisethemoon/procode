@@ -33,6 +33,7 @@ import {
     Kb,
     SearchMode,
     SearchOptions,
+    fetchPage,
     isKbCrash,
     isKbError,
 } from "kb-js";
@@ -342,7 +343,83 @@ async function addDir(kb: Kb, args: Record<string, unknown>): Promise<ToolResult
     return rows(await kb.addDir(dir, { collection, forget: false }));
 }
 
+/* Web pages by URL: each fetched here (kb itself never goes online) and filed
+ * as it arrived, under its URL, with its type and ETag, so the store holds the
+ * page and not a summary of it, and Knowledge's Refresh can fetch it again.
+ * The pages are fetched together and filed one by one; each has its own
+ * answer, and a page that fails is reported without stopping the others. */
+async function addUrls(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    if (given(args["documents"]) || given(args["dir"]) || given(args["collection"])) {
+        throw bad("kb_add", 'give "urls" on its own: each entry names its own collection.');
+    }
+    const list = args["urls"];
+    if (!Array.isArray(list) || list.length === 0) {
+        throw bad("kb_add", '"urls" must be a non-empty array.');
+    }
+    const wanted = list.map((entry, i) => {
+        const where = `urls[${i}]`;
+        if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+            throw bad("kb_add", `${where} must be an object.`);
+        }
+        const u = entry as Record<string, unknown>;
+        for (const key of Object.keys(u)) {
+            if (!["url", "collection", "title"].includes(key)) {
+                throw bad("kb_add", `${where} has no argument called "${key}".`);
+            }
+        }
+        const url = asString("kb_add", `${where}.url`, u["url"]);
+        const collection = asString("kb_add", `${where}.collection`, u["collection"]);
+        if (url === undefined || url.trim() === "" || collection === undefined || collection.trim() === "") {
+            throw bad("kb_add", `${where} needs url and collection.`);
+        }
+        return { url: url.trim(), collection, title: asString("kb_add", `${where}.title`, u["title"]) };
+    });
+
+    const pages = await Promise.allSettled(wanted.map((w) => fetchPage(w.url)));
+    const results: Record<string, unknown>[] = [];
+    let pending = 0;
+    for (const [i, w] of wanted.entries()) {
+        const page = pages[i];
+        if (page.status === "rejected") {
+            results.push({ url: w.url, ok: false, because: (page.reason as Error).message });
+            continue;
+        }
+        if (page.value.notModified) {
+            continue; // not asked for conditionally, so not reachable; keeps the type honest
+        }
+        const fetched = page.value;
+        try {
+            const filed = await kb.add(fetched.text, {
+                title: w.title?.trim() || fetched.title,
+                collection: w.collection,
+                url: w.url,
+                mime: fetched.mime,
+                etag: fetched.etag,
+            });
+            pending = filed.pending;
+            results.push({
+                url: w.url,
+                ok: true,
+                outcome: filed.created ? "filed" : filed.reindexed ? "updated" : "unchanged",
+                document: filed.document,
+                title: w.title?.trim() || fetched.title,
+                collection: filed.collection,
+                mime: filed.mime,
+                bytes: filed.bytes,
+            });
+        } catch (e) {
+            results.push({ url: w.url, ok: false, because: whyItFailed(e) });
+        }
+    }
+    const filed = results.filter((r) => r["ok"] === true).length;
+    const answer: ToolResult = rows({ filed, failed: results.length - filed, results, pending });
+    return filed === 0 ? { ...answer, isError: true } : answer;
+}
+
 async function add(kb: Kb, args: Record<string, unknown>): Promise<ToolResult> {
+    if (given(args["urls"])) {
+        return addUrls(kb, args);
+    }
     if (given(args["dir"])) {
         return addDir(kb, args);
     }
