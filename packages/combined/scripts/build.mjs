@@ -140,11 +140,8 @@ if (dup) {
 }
 
 const manifest = {
-    // The Marketplace refuses "procode" as a name and as a display name: both are
-    // taken. The id is praisethemoon.procode-tools; commands, views and the .vsix
-    // file names keep "procode".
-    name: "procode-tools",
-    displayName: "procode - progressive coding",
+    name: "progressive-coding",
+    displayName: "Progressive Coding",
     description: "Progressive coding: very opinionated tools for working alongside AI coding agents. Order and code you understand and can reason about.",
     version: VERSION,
     publisher: "praisethemoon",
@@ -152,7 +149,7 @@ const manifest = {
     license: "MIT",
     engines: { vscode: "^1.101.0" },
     categories: ["AI", "Visualization", "Other"],
-    keywords: ["claude", "claude code", "agents", "mcp", "kanban", "tickets", "edit history", "knowledge base", "reports"],
+    keywords: ["coding agent", "agents", "mcp", "kanban", "tickets", "edit history", "knowledge base", "reports"],
     // Early: shown with a Preview badge until procode is called stable.
     preview: true,
     // Questions go to GitHub issues, not the Marketplace's own Q&A tab.
