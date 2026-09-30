@@ -12,14 +12,14 @@ test("zoom steps up and down through fixed levels, stops at both ends, and 100% 
     assert.equal(zoomIn(100), 110);
     assert.equal(zoomOut(100), 90);
     assert.equal(zoomOut(zoomIn(100)), 100, "in then out comes back");
-    assert.equal(zoomIn(200), 200, "the largest step stays");
-    assert.equal(zoomOut(50), 50, "the smallest step stays");
+    assert.equal(zoomIn(400), 400, "the largest step stays");
+    assert.equal(zoomOut(20), 20, "the smallest step stays");
     // A level between steps lands on the neighbouring steps.
     assert.equal(zoomIn(105), 110);
     assert.equal(zoomOut(105), 100);
     // Walking up from the bottom visits every step once.
-    const seen = [50];
-    while (seen[seen.length - 1] < 200) seen.push(zoomIn(seen[seen.length - 1]));
+    const seen = [20];
+    while (seen[seen.length - 1] < 400) seen.push(zoomIn(seen[seen.length - 1]));
     assert.deepEqual(seen, [...ZOOM_STEPS]);
 });
 
