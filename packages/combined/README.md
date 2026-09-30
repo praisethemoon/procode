@@ -1,15 +1,38 @@
-# procode
+# Progressive Coding
 
-`procode`, short for progressive coding, is a set of (very opinionated) tools 
-for working alongside AI coding agents. The agent works through CLIs and MCP servers; 
-this extension is where you follow along. It adds one **procode** icon to the activity 
-bar, holding four views: **Board**, **Lap History**, **techdocs** and **Knowledge**.
+Progressive Coding (`procode` for short) is a set of tools for working
+alongside AI coding agents in VS Code. It adds one **procode** icon to the activity bar,
+holding four views: **Board**, **Lap History**, **techdocs** and **Knowledge**, and it
+gives agents three MCP servers (`coboard`, `kb` and `techdocs`) with no setup.
+The agent works through those servers; the views are where you follow along.
 
-The tools can generally be used with any agent (Humans included too!), but only Claude 
-Code is tested.
+## What this extension installs and runs
+
+- **Two command-line tools, `lap` and `kb`.** The packages for macOS, Linux and Windows
+  include them as native executables. Each time VS Code starts, the extension places
+  them in `~/.procode/bin`: copied from the package, or linked when a setting names
+  your own build. It only rewrites them when they changed, and never deletes anything
+  there; after uninstalling, delete `~/.procode` yourself if you like. The source code
+  of these binaries is available in the [Github Repo](https://github.com/praisethemoon/procode): 
+- **The views run `lap` and `kb`** to read the project's edit history and knowledge base.
+- **Three MCP servers** (Node scripts run by VS Code's own runtime) are registered with
+  VS Code; VS Code's agent starts them when it uses them, and the `coboard` and `kb`
+  servers run `lap` and `kb` in turn.
+- **Files in your project, only when you run a command:** **procode: Set Up MCP for
+  Claude Code** writes `.mcp.json`, and **procode: Add Skills for Claude Code** writes
+  `.claude/skills/`. When a newer version ships, procode offers to update them.
+
+## Privacy
+
+`procode` collects no data and has no telemetry. Nothing leaves your machine.
+The only feature that requires network access is **Knowledge's Add URL**, which will index 
+the URL you have request into your local knowledge base.
 
 Everything, in more detail, is on the website:
 [praisethemoon.github.io/procode](https://praisethemoon.github.io/procode/).
+procode is developed and tested mostly with Claude Code (see
+[Set up Claude Code](#set-up-claude-code-in-a-project)); the tools can generally be used
+with any agent (humans included too!).
 
 ## Before You Install
 
@@ -90,16 +113,14 @@ repository ([Build and install](https://github.com/praisethemoon/procode#build-a
 procode uses the ones the settings **Board › Lap Path** and **Knowledge ›
 Cli Path** name when you set them, else its own, else the ones on PATH.
 
-procode keeps `lap` and `kb` in `~/.procode/bin`, the path its skills tell
-agents to use: copies of the ones it ships, or links to yours when a setting
-names them. It refreshes them when VS Code starts, and never deletes
-anything there: after uninstalling procode, delete `~/.procode` yourself if
-you like.
+`~/.procode/bin` (see [What this extension installs and runs](#what-this-extension-installs-and-runs))
+is the path procode's skills tell agents to use, so an agent finds the same
+`lap` and `kb` the views use.
 
 ## Set up Claude Code in a project
 
-VS Code's own agent should get procode's MCP servers without any setup. For Claude
-Code, once per project:
+VS Code's agent mode gets procode's MCP servers without any setup. Claude Code
+reads a project's own files instead, so it needs these steps once per project:
 
 1. Open the project's folder in VS Code.
 2. Open the Command Palette (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>, or
