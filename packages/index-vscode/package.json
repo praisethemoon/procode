@@ -2,7 +2,7 @@
   "name": "index-vscode",
   "displayName": "Knowledge",
   "description": "The kb knowledge base as a reader's surface: find a document, read it, see where it came from.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "publisher": "praisethemoon",
   "author": {

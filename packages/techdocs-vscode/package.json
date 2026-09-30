@@ -2,7 +2,7 @@
   "name": "techdocs-vscode",
   "displayName": "techdocs",
   "description": "Pages agents publish into the workspace's .techdocs/ directory, listed, filtered and rendered in the editor's theme through baukasten's design tokens.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "publisher": "praisethemoon",
   "author": {

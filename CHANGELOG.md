@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-09-30
+
+### Extension
+
+- The extension is called Progressive Coding in the VS Code Marketplace and Open VSX. Its id stays `praisethemoon.procode-tools`, so 0.1.0 updates in place.
 
 ### Board
 

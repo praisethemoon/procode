@@ -148,7 +148,7 @@ const manifest = {
     author: { name: "Soulaymen Chouri", email: "doit@praisethemoon.org" },
     license: "MIT",
     engines: { vscode: "^1.101.0" },
-    categories: ["AI", "Visualization", "Other"],
+    categories: ["AI", "Other"],
     keywords: ["coding agent", "agents", "mcp", "kanban", "tickets", "edit history", "knowledge base", "reports"],
     // Early: shown with a Preview badge until procode is called stable.
     preview: true,

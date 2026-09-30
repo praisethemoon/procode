@@ -2,7 +2,7 @@
   "name": "kb-js",
   "displayName": "kb-js",
   "description": "Typed reader for the kb knowledge base: shells out to the kb CLI and parses --json. It does not reimplement retrieval (index-api.md §10).",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "publisher": "praisethemoon",
   "author": {

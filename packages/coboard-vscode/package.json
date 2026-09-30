@@ -2,7 +2,7 @@
   "name": "coboard-vscode",
   "displayName": "Board",
   "description": "A small board of epics, milestones and tickets that developers and agents work on together, linked to lap sessions.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "publisher": "praisethemoon",
   "author": {

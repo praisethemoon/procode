@@ -9,7 +9,7 @@
 # the plain Makefile stays the quick path on POSIX.
 
 cmake_minimum_required(VERSION 3.16)
-project(kb VERSION 0.1.0 LANGUAGES C)
+project(kb VERSION 0.1.1 LANGUAGES C)
 
 find_package(Threads REQUIRED)
 
