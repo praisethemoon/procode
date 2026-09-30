@@ -16,9 +16,12 @@
  * why: editing an indexed copy of somebody else's documentation would make the
  * content hash meaningless and the provenance a lie. The editor is registered
  * as a `CustomReadonlyEditorProvider` so VSCode does not offer a save either.
+ * The toolbar's Save As writes a copy of the stored text to another file; the
+ * document itself stays as filed.
  *
  * NO MATCH HIGHLIGHTING. §3.2. Opening a search result scrolls to the matching
- * chunk's heading and stops there.
+ * chunk's heading and stops there. Highlighting is the reader's to ask for,
+ * with VS Code's find widget (⌘F / Ctrl+F, or the toolbar's search button).
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -35,6 +38,8 @@ import {
 } from "kb-js/pure";
 
 import { documentFacts, formatDate, metaEntries } from "../src/view/facts";
+import { documentName } from "../src/view/savename";
+import { ZOOM_DEFAULT, ZOOM_STEPS, zoomIn, zoomOut } from "../src/view/zoom";
 import { revealId } from "../src/view/headings";
 import { documentLocation, localPath } from "../src/view/locator";
 import { mimeLabel, renderingFor } from "../src/view/mime";
@@ -43,7 +48,7 @@ import { followLink } from "../src/view/links";
 import { Body } from "./Body";
 import { DocLinks, DocLinksContext, scrollToFragment } from "./links";
 import { Codicon, Resolved, StaleBadge, useQuery } from "./parts";
-import { call, link, notify, onHostEvent, open, setTitle, tag } from "./rpc";
+import { call, find, link, notify, onHostEvent, open, saveAs, setTitle, tag } from "./rpc";
 
 interface Read {
     document: KbDocument;
@@ -162,6 +167,67 @@ function Provenance(props: { document: KbDocument; onRefresh: () => void }): JSX
     );
 }
 
+/* The bar across the top of a document tab: what is open, and what can be
+ * done with it. It stays put while the page scrolls under it. Zoom scales the
+ * page only; find is VS Code's own widget, which ⌘F / Ctrl+F also opens. */
+function Toolbar(props: { document: KbDocument; zoom: number; onZoom: (level: number) => void }): JSX.Element {
+    const name = documentName(props.document) || props.document.id;
+    const { zoom, onZoom } = props;
+    return (
+        <div className="kb-toolbar" role="toolbar" aria-label="Document">
+            <span className="kb-toolbar-name" title={name}>
+                <Codicon name="file" />
+                <span className="kb-toolbar-text">{name}</span>
+            </span>
+            <span className="kb-toolbar-actions">
+                <button type="button" className="kb-tool" title="Find (⌘F / Ctrl+F)" aria-label="Find" onClick={find}>
+                    <Codicon name="search" />
+                </button>
+                <span className="kb-toolbar-sep" aria-hidden="true" />
+                <button
+                    type="button"
+                    className="kb-tool"
+                    title="Zoom out"
+                    aria-label="Zoom out"
+                    disabled={zoom <= ZOOM_STEPS[0]}
+                    onClick={() => onZoom(zoomOut(zoom))}
+                >
+                    <Codicon name="zoom-out" />
+                </button>
+                <button
+                    type="button"
+                    className="kb-tool kb-zoom-level"
+                    title="Reset zoom to 100%"
+                    aria-label={`Zoom ${zoom}%, reset to 100%`}
+                    onClick={() => onZoom(ZOOM_DEFAULT)}
+                >
+                    {zoom}%
+                </button>
+                <button
+                    type="button"
+                    className="kb-tool"
+                    title="Zoom in"
+                    aria-label="Zoom in"
+                    disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]}
+                    onClick={() => onZoom(zoomIn(zoom))}
+                >
+                    <Codicon name="zoom-in" />
+                </button>
+                <span className="kb-toolbar-sep" aria-hidden="true" />
+                <button
+                    type="button"
+                    className="kb-tool"
+                    title="Save the stored text to a file"
+                    onClick={() => saveAs(props.document.id)}
+                >
+                    <Codicon name="save-as" />
+                    Save As…
+                </button>
+            </span>
+        </div>
+    );
+}
+
 /* The links of one document: resolved against its own address, looked up in
  * the store's index. */
 function linksFor(document: KbDocument, index: ReadonlyMap<string, string>): DocLinks {
@@ -172,6 +238,8 @@ function linksFor(document: KbDocument, index: ReadonlyMap<string, string>): Doc
 export function DocumentView(props: { reference: string }): JSX.Element {
     const { state, refresh } = useQuery<Read>("get", { id: props.reference });
     useReveal(state.status === "ok" ? state.value : null);
+    /* Kept for as long as the tab is open; the tab keeps its page while hidden. */
+    const [zoom, setZoom] = useState<number>(ZOOM_DEFAULT);
 
     /* Where every filed document lives, for the links in this one: one `ls`,
      * asked again when the store changes. Until it answers, only links to
@@ -208,19 +276,24 @@ export function DocumentView(props: { reference: string }): JSX.Element {
         <div className="kb-view kb-doc">
             <Resolved state={state} loading="Reading the document…">
                 {(read) => (
-                    <div className="kb-scroll">
-                        <Provenance document={read.document} onRefresh={onRefresh} />
-                        {typeof read.text === "string" ? (
-                            <DocLinksContext.Provider value={linksFor(read.document, index)}>
-                                <Body text={read.text} mime={read.document.mime} />
-                            </DocLinksContext.Provider>
-                        ) : (
-                            <div className="kb-empty">
-                                The store has this document's metadata and not its text. The blob it
-                                points at is missing, which <code>kb rebuild</code> is what repairs.
+                    <>
+                        <Toolbar document={read.document} zoom={zoom} onZoom={setZoom} />
+                        <div className="kb-scroll">
+                            <div className="kb-zoomed" style={{ zoom: zoom / 100 }}>
+                                <Provenance document={read.document} onRefresh={onRefresh} />
+                                {typeof read.text === "string" ? (
+                                    <DocLinksContext.Provider value={linksFor(read.document, index)}>
+                                        <Body text={read.text} mime={read.document.mime} />
+                                    </DocLinksContext.Provider>
+                                ) : (
+                                    <div className="kb-empty">
+                                        The store has this document's metadata and not its text. The blob it
+                                        points at is missing, which <code>kb rebuild</code> is what repairs.
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    </>
                 )}
             </Resolved>
         </div>

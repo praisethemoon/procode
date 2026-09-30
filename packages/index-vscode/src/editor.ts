@@ -84,6 +84,9 @@ export class KnowledgeEditor implements vscode.CustomReadonlyEditorProvider<Know
                  * Rebuilding the React tree on every tab switch would also
                  * re-read the whole document from the store. */
                 retainContextWhenHidden: true,
+                /* ⌘F / Ctrl+F: VS Code's find widget, with its highlighting,
+                 * next and previous, and match count, over the rendered page. */
+                enableFindWidget: true,
             },
         });
         return { provider, disposable };

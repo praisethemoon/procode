@@ -278,6 +278,13 @@ export function handleRequest(ctx: HostContext, surface: Surface, raw: unknown):
                 ctx.layouts.put(request.key, request.positions);
             }
             return;
+        case "saveAs":
+            void vscode.commands.executeCommand("knowledge.saveDocumentAs", request.reference);
+            return;
+        case "find":
+            /* VS Code's own find widget, which the editor enables. */
+            void vscode.commands.executeCommand("editor.action.webvieweditor.showFind");
+            return;
         default:
             void vscode.window
                 .showWarningMessage(

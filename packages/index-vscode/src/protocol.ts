@@ -113,7 +113,11 @@ export type Request =
      * settling again. The host answers a `layoutGet` with a `result` whose
      * value is what was put, or null. */
     | { kind: "layoutGet"; id: number; key: string }
-    | { kind: "layoutPut"; key: string; positions: StoredPositions };
+    | { kind: "layoutPut"; key: string; positions: StoredPositions }
+    /* A document tab's toolbar: save the stored text to a file the reader
+     * picks, and open VS Code's find widget over the page. */
+    | { kind: "saveAs"; reference: string }
+    | { kind: "find" };
 
 /* Positions as they cross and are kept: [id, x, y] per node. */
 export type StoredPositions = [string, number, number][];
@@ -159,7 +163,9 @@ export function isRequest(data: unknown): data is Request {
         kind === "embed" ||
         kind === "confirm" ||
         kind === "layoutGet" ||
-        kind === "layoutPut"
+        kind === "layoutPut" ||
+        kind === "saveAs" ||
+        kind === "find"
     );
 }
 

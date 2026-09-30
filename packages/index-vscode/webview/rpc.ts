@@ -153,6 +153,16 @@ export function notify(level: "info" | "warning" | "error", message: string): vo
     send({ kind: "notify", level, message });
 }
 
+/* A document's stored text saved to a file, through the host's dialog. */
+export function saveAs(reference: string): void {
+    send({ kind: "saveAs", reference });
+}
+
+/* VS Code's find widget over this page, as ⌘F / Ctrl+F opens it. */
+export function find(): void {
+    send({ kind: "find" });
+}
+
 /* The graph's settled positions, kept by the host under a `layoutKey`. */
 export function cachedLayout(key: string): Promise<StoredPositions | null> {
     return ask<StoredPositions | null>((id) => ({ kind: "layoutGet", id, key }));

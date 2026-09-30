@@ -28,6 +28,7 @@ import { Kb, KbDocument, KbError, isKbError } from "kb-js";
 
 import { extractPdf, isPdf } from "./pdf";
 import { RefreshOutcome, folderMessage, refreshPlan } from "./refresh";
+import { saveName } from "./view/savename";
 
 /* VSCode's language identifiers, mapped onto the mimes `kb add` files under.
  *
@@ -383,6 +384,36 @@ async function fileFolder(kb: Kb, announce: () => void, folder: string, into: st
     } catch (e) {
         report(e, `file ${name}`);
     }
+}
+
+/* A document's stored text written to a file the reader picks, as kb holds
+ * it; the document in the store is not touched. The dialog starts in the
+ * first workspace folder with the name the document is known by. Returns the
+ * path written, or null when nothing was. */
+export async function saveDocumentAs(kb: Kb, id: string): Promise<string | null> {
+    let read;
+    try {
+        read = await kb.get(id, { text: true });
+    } catch (e) {
+        report(e, `read ${id}`);
+        return null;
+    }
+    if (typeof read.text !== "string") {
+        void vscode.window.showWarningMessage(`${id} has no stored text to save: its blob is missing, which kb rebuild repairs.`);
+        return null;
+    }
+    const name = saveName(read.document);
+    const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file")?.uri;
+    const target = await vscode.window.showSaveDialog({
+        defaultUri: folder ? vscode.Uri.joinPath(folder, name) : vscode.Uri.file(name),
+        saveLabel: "Save",
+        title: `Save ${id} as`,
+    });
+    if (target === undefined) {
+        return null;
+    }
+    await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(read.text));
+    return target.fsPath;
 }
 
 /* The open workspace folders filed as Add Folder files one, with nothing to

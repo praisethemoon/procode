@@ -377,6 +377,56 @@ html, body {
 
 .kb-doc .kb-scroll { padding: var(--bk-padding-md); }
 
+/* The bar across the top of a document tab: its name on the left, find, zoom
+ * and Save As on the right. Outside the scroll area, so it stays put; the zoom
+ * scales .kb-zoomed below it, never the bar. */
+.kb-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--bk-gap-sm, 8px);
+  min-height: 28px;
+  padding: 2px var(--bk-spacing-3, 12px);
+  border-bottom: 1px solid var(--bk-color-border);
+  background: var(--bk-color-background);
+  font-size: var(--bk-font-size-sm, 12px);
+}
+
+.kb-toolbar-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bk-gap-xs, 4px);
+  color: var(--bk-color-foreground-muted);
+}
+
+.kb-toolbar-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.kb-toolbar-actions { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 2px; }
+
+.kb-toolbar-sep { width: 1px; align-self: stretch; margin: 4px var(--bk-gap-xs, 4px); background: var(--bk-color-border); }
+
+.kb-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bk-gap-xs, 4px);
+  height: 22px;
+  padding: 0 var(--bk-spacing-1, 4px);
+  border: 0;
+  border-radius: var(--bk-radius-sm, 3px);
+  background: none;
+  color: var(--bk-color-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.kb-tool:hover:not(:disabled) { background: var(--bk-color-hover); }
+.kb-tool:focus-visible { outline: 1px solid var(--bk-color-focus); outline-offset: -1px; }
+.kb-tool:disabled { opacity: 0.4; cursor: default; }
+
+.kb-zoom-level { min-width: 3.2em; justify-content: center; font-variant-numeric: tabular-nums; }
+
 /* §3.1: the provenance, always visible. Not a collapsible and not a hover — a
  * passage whose age and origin are unknown is a passage that will eventually be
  * trusted when it should not be. */
