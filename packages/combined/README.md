@@ -13,7 +13,7 @@ The agent works through those servers; the views are where you follow along.
   them in `~/.procode/bin`: copied from the package, or linked when a setting names
   your own build. It only rewrites them when they changed, and never deletes anything
   there; after uninstalling, delete `~/.procode` yourself if you like. The source code
-  of these binaries is available in the [Github Repo](https://github.com/praisethemoon/procode): 
+  of these binaries is available in the [GitHub repository](https://github.com/praisethemoon/procode).
 - **The views run `lap` and `kb`** to read the project's edit history and knowledge base.
 - **Three MCP servers** (Node scripts run by VS Code's own runtime) are registered with
   VS Code; VS Code's agent starts them when it uses them, and the `coboard` and `kb`
@@ -25,8 +25,8 @@ The agent works through those servers; the views are where you follow along.
 ## Privacy
 
 `procode` collects no data and has no telemetry. Nothing leaves your machine.
-The only feature that requires network access is **Knowledge's Add URL**, which will index 
-the URL you have request into your local knowledge base.
+The only feature that requires network access is **Knowledge's Add URL**, which will index
+the URL you have requested into your local knowledge base.
 
 Everything, in more detail, is on the website:
 [praisethemoon.github.io/procode](https://praisethemoon.github.io/procode/).

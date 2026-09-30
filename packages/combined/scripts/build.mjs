@@ -142,7 +142,7 @@ if (dup) {
 const manifest = {
     name: "procode-tools",
     displayName: "Progressive Coding",
-    description: "A set of tools, for progressive coding with AI Agents.",
+    description: "A set of tools, for progressive coding with AI Agents. Installs and runs its own lap and kb command-line tools (in ~/.procode/bin), provides MCP servers. This extension collects no data.",
     version: VERSION,
     publisher: "praisethemoon",
     author: { name: "Soulaymen Chouri", email: "doit@praisethemoon.org" },
