@@ -12,7 +12,7 @@ import { ViewMode, columns, moves } from "../src/kanban";
 import { sessionKey } from "../src/protocol";
 import type { Choices, Fields, Sessions } from "../src/protocol";
 import { CommitLine, CommitText, Description, IdLink, InlineText, Markdown, Pick, Progress, QuickAdd, SessionSummary, StatusBadge } from "./parts";
-import { send } from "./rpc";
+import { open, opener, send } from "./rpc";
 
 const opts = (xs: readonly string[]) => xs.map((x) => ({ value: x, label: x }));
 
@@ -188,9 +188,9 @@ function Kanban(props: { tickets: readonly Summary[]; showMilestone?: boolean })
                                 e.dataTransfer.setData("text/plain", t.id);
                                 e.dataTransfer.effectAllowed = "move";
                             }}
-                            onClick={() => send({ type: "open", id: t.id })}
+                            {...opener(t.id)}
                             onKeyDown={(e) => {
-                                if (e.key === "Enter") send({ type: "open", id: t.id });
+                                if (e.key === "Enter") open(t.id, e.metaKey || e.ctrlKey);
                             }}
                         >
                             <div className="cb-card-title">{t.title}</div>

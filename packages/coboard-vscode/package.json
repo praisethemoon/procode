@@ -44,6 +44,8 @@
       { "command": "coboard.newMilestone", "title": "New Milestone", "category": "Board", "icon": "$(milestone)" },
       { "command": "coboard.newTicket", "title": "New Ticket", "category": "Board", "icon": "$(new-file)" },
       { "command": "coboard.open", "title": "Open", "category": "Board" },
+      { "command": "coboard.back", "title": "Go Back", "category": "Board" },
+      { "command": "coboard.forward", "title": "Go Forward", "category": "Board" },
       { "command": "coboard.delete", "title": "Delete", "category": "Board" },
       { "command": "coboard.archive", "title": "Archive", "category": "Board", "icon": "$(archive)" },
       { "command": "coboard.archiveWithNote", "title": "Archive with Note…", "category": "Board" },
@@ -75,6 +77,8 @@
       ],
       "commandPalette": [
         { "command": "coboard.open", "when": "false" },
+        { "command": "coboard.back", "when": "false" },
+        { "command": "coboard.forward", "when": "false" },
         { "command": "coboard.newMilestone", "when": "false" },
         { "command": "coboard.newTicket", "when": "false" },
         { "command": "coboard.delete", "when": "false" },
@@ -88,6 +92,10 @@
         { "command": "coboard.collapseAll", "when": "false" }
       ]
     },
+    "keybindings": [
+      { "command": "coboard.back", "key": "alt+left", "mac": "ctrl+-", "linux": "ctrl+alt+-", "when": "activeWebviewPanelId == 'coboard.item'" },
+      { "command": "coboard.forward", "key": "alt+right", "mac": "ctrl+shift+-", "linux": "ctrl+shift+-", "when": "activeWebviewPanelId == 'coboard.item'" }
+    ],
     "configuration": {
       "title": "Board",
       "properties": {

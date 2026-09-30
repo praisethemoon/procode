@@ -158,7 +158,65 @@ class Sidebar implements vscode.WebviewViewProvider {
 
 /* ------------------------------------------------------------------ tabs */
 
+/* Every tab by what it shows now: an item's id, or REVIEW+session. An item
+ * tab moves from item to item as its links are followed, and its key with
+ * it, so an item is still never in two tabs. */
 const panels = new Map<string, vscode.WebviewPanel>();
+
+/* A tab's place: what it shows and, as in a browser, the items Back and
+ * Forward return to. A review tab has one too, and never moves. */
+interface Place {
+    id: string;
+    readonly back: string[];
+    readonly forward: string[];
+}
+const places = new Map<vscode.WebviewPanel, Place>();
+
+function track(ctx: vscode.ExtensionContext, tree: Sidebar, panel: vscode.WebviewPanel, key: string): void {
+    const at: Place = { id: key, back: [], forward: [] };
+    places.set(panel, at);
+    panels.set(key, panel);
+    panel.onDidDispose(() => {
+        panels.delete(at.id);
+        places.delete(panel);
+    });
+    panel.webview.onDidReceiveMessage((m: ToHost) => void onMessage(ctx, tree, panel, m));
+}
+
+function iconFor(id: string): vscode.ThemeIcon {
+    return new vscode.ThemeIcon(id.startsWith("E") ? "project" : id.startsWith("M") ? "milestone" : "issues");
+}
+
+/* An item tab shows `to` in place of what it showed; the caller has put the
+ * item it leaves on Back's or Forward's list. */
+function moveTo(panel: vscode.WebviewPanel, at: Place, to: string): void {
+    panels.delete(at.id);
+    at.id = to;
+    panels.set(to, panel);
+    panel.iconPath = iconFor(to);
+    push(to, panel);
+    if (to.startsWith("T-")) void pushSessions(to, panel);
+}
+
+/* Back or Forward in an item tab. An item already open in another tab is not
+ * shown twice: that tab comes forward and the entry is used up, so the next
+ * press goes past it. With nowhere left to go, VS Code's own Go Back or Go
+ * Forward runs, which is what the same key does everywhere else. */
+function travel(panel: vscode.WebviewPanel | undefined, go: "back" | "forward"): void {
+    const at = panel ? places.get(panel) : undefined;
+    const to = at ? (go === "back" ? at.back : at.forward).pop() : undefined;
+    if (!panel || !at || to === undefined) {
+        void vscode.commands.executeCommand(go === "back" ? "workbench.action.navigateBack" : "workbench.action.navigateForward");
+        return;
+    }
+    const other = panels.get(to);
+    if (other) {
+        other.reveal();
+        return;
+    }
+    (go === "back" ? at.forward : at.back).push(at.id);
+    moveTo(panel, at, to);
+}
 
 function choices(all: Item[]): Choices {
     const summaries = search(all, "");
@@ -246,9 +304,7 @@ function openReview(ctx: vscode.ExtensionContext, tree: Sidebar, of: ReviewOf): 
         localResourceRoots: [media],
     });
     panel.iconPath = new vscode.ThemeIcon("git-pull-request");
-    panels.set(key, panel);
-    panel.onDidDispose(() => panels.delete(key));
-    panel.webview.onDidReceiveMessage((m: ToHost) => void onMessage(ctx, tree, key, panel, m));
+    track(ctx, tree, panel, key);
     panel.webview.html = html(panel.webview, media, "board.js", key);
 }
 
@@ -280,11 +336,21 @@ ${css}
 </html>`;
 }
 
-function open(ctx: vscode.ExtensionContext, tree: Sidebar, id: string): void {
+/* `from`: the item tab a plain click on a link came from, which then shows
+ * the item itself; left out, the item gets a tab of its own. Either way an
+ * item that already has a tab is shown there. */
+function open(ctx: vscode.ExtensionContext, tree: Sidebar, id: string, from?: vscode.WebviewPanel): void {
     const key = id.trim().toUpperCase();
     const existing = panels.get(key);
     if (existing) {
         existing.reveal();
+        return;
+    }
+    const at = from ? places.get(from) : undefined;
+    if (from && at && !at.id.startsWith(REVIEW)) {
+        at.back.push(at.id);
+        at.forward.length = 0;
+        moveTo(from, at, key);
         return;
     }
     const media = vscode.Uri.joinPath(ctx.extensionUri, "out", "media");
@@ -293,14 +359,14 @@ function open(ctx: vscode.ExtensionContext, tree: Sidebar, id: string): void {
         retainContextWhenHidden: true,
         localResourceRoots: [media],
     });
-    panel.iconPath = new vscode.ThemeIcon(key.startsWith("E") ? "project" : key.startsWith("M") ? "milestone" : "issues");
-    panels.set(key, panel);
-    panel.onDidDispose(() => panels.delete(key));
-    panel.webview.onDidReceiveMessage((m: ToHost) => void onMessage(ctx, tree, key, panel, m));
+    panel.iconPath = iconFor(key);
+    track(ctx, tree, panel, key);
     panel.webview.html = html(panel.webview, media, "board.js", key);
 }
 
-async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string, panel: vscode.WebviewPanel, m: ToHost): Promise<void> {
+async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, panel: vscode.WebviewPanel, m: ToHost): Promise<void> {
+    /* read per message: an item tab's item changes as it is navigated */
+    const id = places.get(panel)?.id ?? "";
     const fail = (e: unknown) => {
         const msg: ToView = { type: "error", message: (e as Error).message };
         void panel.webview.postMessage(msg);
@@ -320,7 +386,10 @@ async function onMessage(ctx: vscode.ExtensionContext, tree: Sidebar, id: string
                 if (id.startsWith("T-")) await pushSessions(id, panel);
                 return;
             case "open":
-                open(ctx, tree, m.id);
+                open(ctx, tree, m.id, m.newTab ? undefined : panel);
+                return;
+            case "history":
+                travel(panel, m.go);
                 return;
             case "review":
                 openReview(ctx, tree, {
@@ -485,6 +554,10 @@ export function activate(ctx: vscode.ExtensionContext): void {
         const id = idOf(arg);
         if (id) open(ctx, tree, id);
     });
+    /* Bound to Go Back's and Go Forward's keys while a board tab is active. */
+    const active = () => [...places.keys()].find((p) => p.active);
+    reg("coboard.back", () => travel(active(), "back"));
+    reg("coboard.forward", () => travel(active(), "forward"));
     reg("coboard.newEpic", async () => {
         const title = await ask("New epic: title");
         if (!title) return;

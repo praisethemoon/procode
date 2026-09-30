@@ -48,7 +48,11 @@ export type Fields = {
 
 export type ToHost =
     | { readonly type: "ready" }
-    | { readonly type: "open"; readonly id: string }
+    /* A link in a tab: newTab false shows the item in that tab, true (⌘- or
+     * Ctrl-click, the middle button) in a tab of its own. */
+    | { readonly type: "open"; readonly id: string; readonly newTab: boolean }
+    /* The mouse's back and forward buttons, pressed in a tab. */
+    | { readonly type: "history"; readonly go: "back" | "forward" }
     | { readonly type: "update"; readonly id: string; readonly fields: Fields }
     | { readonly type: "create"; readonly kind: "milestone" | "ticket"; readonly title: string; readonly epic?: string; readonly milestone?: string }
     | { readonly type: "move"; readonly id: string; readonly epic?: string; readonly milestone?: string | null }

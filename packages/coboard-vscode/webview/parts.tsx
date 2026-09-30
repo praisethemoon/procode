@@ -11,7 +11,7 @@ import type { Counts } from "coboard/model";
 import { TICKET_STATUSES } from "coboard/model";
 import { shortHash } from "../src/commits";
 import { commitRefs, linkTarget, linkifyIds } from "../src/linkify";
-import { open, send } from "./rpc";
+import { opener, send } from "./rpc";
 
 /* A link that opens an item. Shown as the bare id in monospace, or as
  * whatever children it is given (a title) in the body font. */
@@ -20,10 +20,7 @@ export function IdLink(props: { id: string; children?: ReactNode }): JSX.Element
         <a
             className={props.children === undefined ? "cb-id" : "cb-link"}
             href={`#${props.id}`}
-            onClick={(e) => {
-                e.preventDefault();
-                open(props.id);
-            }}
+            {...opener(props.id)}
         >
             {props.children ?? props.id}
         </a>

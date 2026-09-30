@@ -34,6 +34,18 @@ let content: { provideTextDocumentContent(uri: { toString(): string }): string }
 const LAP = cliBin("lap");
 let sidebar: { resolveWebviewView(view: unknown): void } | null = null;
 let onMessage: ((m: unknown) => void) | null = null;
+/* Every tab the host opened, in order, each with what it was sent and how
+ * to send it a message from its page. */
+interface FakePanel {
+    title: string;
+    active: boolean;
+    iconPath?: { id: string };
+    revealed: number;
+    disposed: boolean;
+    sent: { type: string; id?: string }[];
+    send(m: unknown): void;
+}
+const made: FakePanel[] = [];
 /* The editor groups, as vscode.diff fills them: a column's tabs. */
 class TabInputTextDiff {
     constructor(public original: { toString(): string }, public modified: { toString(): string }) {}
@@ -83,19 +95,44 @@ const fake = {
             sidebar = p;
             return { dispose() {} };
         },
-        createWebviewPanel: () => ({
-            title: "",
-            viewColumn: 1,
-            reveal() {},
-            onDidDispose() {},
-            webview: {
-                cspSource: "vscode-resource:",
-                html: "",
-                asWebviewUri: (u: { fsPath: string }) => u.fsPath,
-                postMessage: (m: unknown) => posted.push(m),
-                onDidReceiveMessage: (fn: (m: unknown) => void) => (onMessage = fn),
-            },
-        }),
+        createWebviewPanel: (_type: string, title: string) => {
+            let handler: (m: unknown) => void = () => {};
+            const gone: (() => void)[] = [];
+            const p = {
+                title,
+                viewColumn: 1,
+                active: false,
+                revealed: 0,
+                disposed: false,
+                sent: [] as FakePanel["sent"],
+                reveal() {
+                    p.revealed++;
+                },
+                onDidDispose(fn: () => void) {
+                    gone.push(fn);
+                },
+                dispose() {
+                    p.disposed = true;
+                    for (const fn of gone) fn();
+                },
+                send: (m: unknown) => handler(m),
+                webview: {
+                    cspSource: "vscode-resource:",
+                    html: "",
+                    asWebviewUri: (u: { fsPath: string }) => u.fsPath,
+                    postMessage: (m: FakePanel["sent"][number]) => {
+                        posted.push(m);
+                        p.sent.push(m);
+                    },
+                    onDidReceiveMessage: (fn: (m: unknown) => void) => {
+                        handler = fn;
+                        onMessage = fn;
+                    },
+                },
+            };
+            made.push(p);
+            return p;
+        },
         tabGroups: {
             get all() {
                 return [...groups].map(([viewColumn, tabs]) => ({ viewColumn, tabs }));
@@ -161,6 +198,8 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
         "coboard.newMilestone",
         "coboard.newTicket",
         "coboard.open",
+        "coboard.back",
+        "coboard.forward",
         "coboard.delete",
         "coboard.archive",
         "coboard.archiveWithNote",
@@ -252,6 +291,76 @@ test("the bundled host activates, draws the tree and serves a tab", async () => 
     await commands.get("coboard.close")!({ webviewSection: "epic", id: "E-1", coboardDone: false });
     assert.equal(warnings.length, asked);
     assert.equal(b.get("E-1").status, "done");
+});
+
+test("a link followed in a tab shows the item there; ⌘-click, the middle button and an open item get tabs of their own", async () => {
+    const b = new Board(root);
+    const tab = (title: string) => made.find((p) => !p.disposed && p.title === title)!;
+    const count = () => made.filter((p) => !p.disposed).length;
+    const lastData = (p: FakePanel) => p.sent.filter((m) => m.type === "data").at(-1)!;
+    const back = executed.length;
+
+    // A plain click: the milestone's tab becomes the ticket's, with its icon.
+    const t = tab("M-1");
+    const n = count();
+    t.send({ type: "open", id: "t-1", newTab: false });
+    assert.equal(count(), n, "no new tab");
+    assert.equal(t.title, "T-1");
+    assert.equal(t.iconPath!.id, "issues");
+    assert.equal(lastData(t).id, "T-1");
+
+    // An item that already has a tab is shown there, whichever way it is clicked.
+    const t3 = tab("T-3");
+    const seen = t3.revealed;
+    t.send({ type: "open", id: "T-3", newTab: false });
+    t.send({ type: "open", id: "T-3", newTab: true });
+    assert.deepEqual([t.title, t3.revealed - seen, count()], ["T-1", 2, n]);
+
+    // ⌘-click or the middle button: a tab of its own.
+    t.send({ type: "open", id: "T-2", newTab: true });
+    assert.equal(count(), n + 1);
+    assert.equal(t.title, "T-1");
+    assert.ok(tab("T-2"));
+
+    // A refresh reaches the tab under its new item.
+    b.update("T-1", { title: "Renamed" });
+    await commands.get("coboard.refresh")!();
+    assert.equal((lastData(t) as unknown as { view: { ticket: { title: string } } }).view.ticket.title, "Renamed");
+
+    // Back from the mouse, Forward from the key, and Back past the start runs
+    // VS Code's own Go Back.
+    t.send({ type: "history", go: "back" });
+    assert.equal(t.title, "M-1");
+    t.active = true;
+    await commands.get("coboard.forward")!();
+    assert.equal(t.title, "T-1");
+    await commands.get("coboard.back")!();
+    await commands.get("coboard.back")!();
+    assert.equal(t.title, "M-1");
+    assert.deepEqual(executed.slice(back).map((c) => c[0]), ["workbench.action.navigateBack"]);
+
+    // Forward to an item opened meanwhile in another tab brings that tab
+    // forward and uses the entry up; the next press is VS Code's.
+    t.send({ type: "open", id: "T-1", newTab: true });
+    const t1 = tab("T-1");
+    const before = t1.revealed;
+    await commands.get("coboard.forward")!();
+    assert.deepEqual([t.title, t1.revealed - before], ["M-1", 1]);
+    await commands.get("coboard.forward")!();
+    assert.equal(executed.at(-1)![0], "workbench.action.navigateForward");
+    t.active = false;
+
+    // Deleting the item a tab was moved to closes that tab, and the others
+    // are still found by their items.
+    b.create({ kind: "ticket", title: "Doomed", milestone: "M-1" });
+    t.send({ type: "open", id: "T-4", newTab: false });
+    assert.equal(t.title, "T-4");
+    warningAnswer = "Delete";
+    await commands.get("coboard.delete")!("T-4");
+    assert.equal(t.disposed, true);
+    const again = t1.revealed;
+    await commands.get("coboard.open")!("T-1");
+    assert.equal(t1.revealed - again, 1);
 });
 
 test("clicking a lap edit on a ticket opens it as a diff at the edited line", { skip: !LAP && noCli("lap") }, async () => {
