@@ -11,6 +11,7 @@
         "packages/coboard-vscode",
         "packages/techdocs",
         "packages/techdocs-vscode",
+        "packages/ask",
         "packages/combined"
     ],
     "scripts": {

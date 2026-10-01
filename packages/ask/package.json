@@ -1,0 +1,44 @@
+{
+  "name": "ask",
+  "displayName": "ask",
+  "description": "Questions an agent asks as a form in the person's editor, one per page, answered in any order — and the MCP server agents ask through. Forms live in the workspace's .ask/ directory.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "praisethemoon",
+  "author": {
+    "name": "Soulaymen Chouri",
+    "email": "doit@praisethemoon.org"
+  },
+  "license": "MIT",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    },
+    "./store": {
+      "types": "./out/store.d.ts",
+      "default": "./out/store.js"
+    }
+  },
+  "bin": {
+    "ask-mcp": "./bin/ask-mcp"
+  },
+  "files": [
+    "out",
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test \"out/test/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}

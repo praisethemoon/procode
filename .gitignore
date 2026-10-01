@@ -11,6 +11,7 @@ packages/coboard/out/
 packages/coboard-vscode/out/
 packages/techdocs/out/
 packages/techdocs-vscode/out/
+packages/ask/out/
 packages/combined/dist/
 site/dist/
 *.vsix
