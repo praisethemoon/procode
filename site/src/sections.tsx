@@ -317,25 +317,48 @@ kb stale --older-than 90d                        # what may be out of date
                 <Code>index/</Code> is machine-local and ignored, and <Code>kb rebuild</Code> recreates it.
             </Paragraph>
 
-            <Heading level={3}>Installing an embedding model</Heading>
+            <Heading level={3}>Installing the models</Heading>
             <Paragraph>
-                Keyword search works without any model. Semantic search needs an embedding model in{" "}
-                <Code>~/.kb/models/</Code>, one folder shared by every workspace. kb only reads it and never downloads
-                anything, so you put the file there yourself.
+                Keyword search works without any model. Semantic search needs an embedding model, and{" "}
+                <Code>--rerank</Code> a reranker, in <Code>~/.kb/models/</Code>, one folder shared by every workspace.
+                kb only reads it and never downloads anything, so you put the files there yourself, once.
             </Paragraph>
             <Paragraph>
-                <strong>The quick way: nomic-embed-text-v1.5</strong>, which can be downloaded as it is:
+                <strong>The quick way: one download.</strong>{" "}
+                <Link href="https://procode.s3.fr-par.scw.cloud/kb-models.zip">kb-models.zip</Link> (632 MB) holds all
+                three models and unzips straight into the folder:
             </Paragraph>
             <Block>{`
-mkdir -p ~/.kb/models && curl -fL -o ~/.kb/models/nomic-embed-text-v1.5.Q4_K_M.gguf \\
-  https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf
-shasum -a 256 ~/.kb/models/nomic-embed-text-v1.5.Q4_K_M.gguf
-# d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac
+mkdir -p ~/.kb/models && cd ~/.kb/models
+curl -fLO https://procode.s3.fr-par.scw.cloud/kb-models.zip   # or: wget https://procode.s3.fr-par.scw.cloud/kb-models.zip
+unzip -o kb-models.zip && rm kb-models.zip
+shasum -a 256 -c SHA256SUMS                                   # Linux: sha256sum -c SHA256SUMS
 `}</Block>
+            <Paragraph>On Windows, in PowerShell:</Paragraph>
+            <Block>{`
+New-Item -ItemType Directory -Force "$HOME\\.kb\\models" | Out-Null; Set-Location "$HOME\\.kb\\models"
+Invoke-WebRequest https://procode.s3.fr-par.scw.cloud/kb-models.zip -OutFile kb-models.zip
+Expand-Archive kb-models.zip -DestinationPath . -Force; Remove-Item kb-models.zip
+`}</Block>
+            <ul>
+                <li>
+                    <strong>gte-modernbert-base</strong>: the default embedder, one model for prose and code alike.
+                </li>
+                <li>
+                    <strong>gte-reranker-modernbert-base</strong>: the reranker <Code>--rerank</Code> uses.
+                </li>
+                <li>
+                    <strong>nomic-embed-text-v1.5</strong>: a smaller alternative embedder.
+                </li>
+            </ul>
             <Paragraph>
-                <strong>The default: gte-modernbert-base</strong>, one embedder for prose and code alike. It is
-                converted from its Hugging Face weights with a script in the repository, which needs Python. The
-                conversion is deterministic, so the same revision always gives the same file:
+                All three are Apache-2.0. The zip's <Code>LICENSE</Code> and <Code>NOTICE.md</Code> say where each
+                comes from and how it was converted, and <Code>SHA256SUMS</Code> lists their checksums.
+            </Paragraph>
+            <Paragraph>
+                <strong>Building them yourself.</strong> The two gte files are converted from their Hugging Face
+                weights with a script in the repository, which needs Python. The conversion is deterministic, so the
+                same revision always gives the same file:
             </Paragraph>
             <Block>{`
 cd cli/kb-cli/tools/modernbert
@@ -845,7 +868,9 @@ const faq: Section = {
             <Faq q="Do I need an embedding model for kb?">
                 <Paragraph>
                     No. Keyword search works without one. A model adds semantic search: finding passages that mean the
-                    same thing in other words. See <Link href="#kb">kb</Link>.
+                    same thing in other words. All of kb's models come in one download,{" "}
+                    <Link href="https://procode.s3.fr-par.scw.cloud/kb-models.zip">kb-models.zip</Link>, unzipped into{" "}
+                    <Code>~/.kb/models/</Code>; see <Link href="#kb">kb</Link>.
                 </Paragraph>
             </Faq>
             <Faq q="Which platforms are supported?">

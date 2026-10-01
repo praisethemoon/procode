@@ -243,19 +243,35 @@ from `PATH` or wherever the settings point.
 4. **Stores.** `lap init`, `kb init` in the project root. The board and
    `.techdocs/` are created on first write.
 
-**kb's embedding model** (for semantic search; keyword search works
-without it) lives in `~/.kb/models/`, shared by every workspace. kb only
-reads it and never downloads anything. The default, gte-modernbert-base, is
-converted from its Hugging Face weights by
-`cli/kb-cli/tools/modernbert/convert.py` (steps and checksums in
-`MODERNBERT.md` beside it). nomic-embed-text-v1.5 can be used as it is:
+**kb's models** (for semantic search and reranking; keyword search works
+without them) live in `~/.kb/models/`, shared by every workspace. kb only
+reads that folder and never downloads anything, so you put them there once.
+They come as one download, [kb-models.zip](https://procode.s3.fr-par.scw.cloud/kb-models.zip)
+(632 MB), which unzips straight into the folder:
 
 ```sh
-mkdir -p ~/.kb/models && curl -fL -o ~/.kb/models/nomic-embed-text-v1.5.Q4_K_M.gguf \
-  https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf
-shasum -a 256 ~/.kb/models/nomic-embed-text-v1.5.Q4_K_M.gguf
-# d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac
+mkdir -p ~/.kb/models && cd ~/.kb/models
+curl -fLO https://procode.s3.fr-par.scw.cloud/kb-models.zip   # or: wget https://procode.s3.fr-par.scw.cloud/kb-models.zip
+unzip -o kb-models.zip && rm kb-models.zip
+shasum -a 256 -c SHA256SUMS                                   # Linux: sha256sum -c SHA256SUMS
 ```
+
+On Windows, in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.kb\models" | Out-Null; Set-Location "$HOME\.kb\models"
+Invoke-WebRequest https://procode.s3.fr-par.scw.cloud/kb-models.zip -OutFile kb-models.zip
+Expand-Archive kb-models.zip -DestinationPath . -Force; Remove-Item kb-models.zip
+```
+
+It holds gte-modernbert-base (the default embedder, for prose and code),
+gte-reranker-modernbert-base (the reranker `--rerank` uses) and
+nomic-embed-text-v1.5 (a smaller alternative embedder), all Apache-2.0: its
+`LICENSE` and `NOTICE.md` say where each comes from and how it was
+converted, and `SHA256SUMS` lists their checksums. To build the two gte
+files yourself instead, `cli/kb-cli/tools/modernbert/convert.py` converts
+them from their Hugging Face weights (steps and checksums in `MODERNBERT.md`
+beside it); the conversion is deterministic, so you get the same bytes.
 
 **Without VS Code**, point any MCP client at the servers directly, started
 inside the project:

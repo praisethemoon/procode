@@ -101,8 +101,18 @@ each other.
 ![Knowledge](https://raw.githubusercontent.com/praisethemoon/procode/master/assets/kb.webp)
 
 This uses the `kb` CLI, which procode ships for macOS, Linux and Windows. Keyword
-search works as it is; semantic search also needs an embedding model, which you
-download once, more details in the main readme.
+search works as it is; semantic search and reranking also need kb's models,
+which you download once: unzip
+[kb-models.zip](https://procode.s3.fr-par.scw.cloud/kb-models.zip) (632 MB,
+Apache-2.0) into `~/.kb/models/`:
+
+```sh
+mkdir -p ~/.kb/models && cd ~/.kb/models
+curl -fLO https://procode.s3.fr-par.scw.cloud/kb-models.zip && unzip -o kb-models.zip && rm kb-models.zip
+```
+
+The commands for Windows and the checksums are on the
+[website](https://praisethemoon.github.io/procode/#kb).
 
 ## Requirements
 
