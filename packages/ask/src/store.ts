@@ -133,6 +133,33 @@ export class Ask {
         writeAtomic(path.join(this.formDir(id), ANSWER), JSON.stringify(ans, null, 2) + "\n");
     }
 
+    /** The editor tab's answer, checked, for the steps the form asked. False
+     *  when the form was already answered or cancelled: the first word stands. */
+    submit(id: string, raw: unknown, now = new Date()): boolean {
+        const req = this.request(id);
+        if (this.answer(id)) return false;
+        const parsed = parseAnswer(raw);
+        const asked = new Set(req.steps.map((s) => s.id));
+        const steps = Object.fromEntries(Object.entries(parsed.steps).filter(([k]) => asked.has(k)));
+        const ans: Answer = { status: parsed.status, answeredAt: now.toISOString(), steps };
+        writeAtomic(path.join(this.formDir(id), ANSWER), JSON.stringify(ans, null, 2) + "\n");
+        return true;
+    }
+
+    /** Forms with no answer yet, oldest first. */
+    pending(): Request[] {
+        let names: string[];
+        try {
+            names = fs.readdirSync(this.dir).filter(isFormId);
+        } catch {
+            return [];
+        }
+        return names
+            .filter((id) => !fs.existsSync(path.join(this.dir, id, ANSWER)) && fs.existsSync(path.join(this.dir, id, REQUEST)))
+            .map((id) => this.request(id))
+            .sort((a, b) => Number(a.id.slice(2)) - Number(b.id.slice(2)));
+    }
+
     /** Waits for the form's answer. Polling, not fs.watch: the answer is
      *  written by another process, sometimes on a network or synced
      *  filesystem, and a quarter second is nothing next to a person typing. */

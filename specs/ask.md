@@ -92,4 +92,42 @@ at about 60 seconds, per anthropics/claude-code#63379.)
 
 ## 5. The editor tab
 
-To be specified with T-272.
+`ask-vscode` watches every workspace folder for `.ask/F-*/request.json` and
+opens a tab for each new form. On startup it opens forms with no answer that
+are under 30 minutes old, since their agent may still be waiting. **ask: Open
+Pending Questions** opens the rest.
+
+**Layout.** On the left, the steps, each marked answered, open, skipped or
+needs more, with **Review and submit** last. On the right, one step: its
+title, its Markdown body, the answer, and two fields that open on demand,
+**Add a note** and **I need more on this**. A footer has Back, Skip and
+Next. The review page lists every step with its answer, and any step can be
+opened from there.
+
+**States.** A step is open until it is touched. It is answered once it holds
+an answer (a choice, a filled-in Other, or text). It is skipped when the
+person skips it: an answer already in it is set aside, not sent, but kept,
+and touching the step brings it back. It needs more when the "I need more"
+field has text. That wins over an answer, and both are sent. When the form is
+submitted, open steps are sent as skipped. Answers carried over with `from`
+start filled in. A carried-over label that the step no longer offers is
+dropped.
+
+**Keys.** Outside a text field, `1`–`9` pick the options in order, and the
+number after the last option picks Other. Enter goes to the next step and
+⇧Enter goes back. In a text field, ⌘/Ctrl+Enter goes to the next step and
+Escape leaves the field. On the review page, ⌘/Ctrl+Enter submits. Plain
+Enter never submits.
+
+**Rendering.** Markdown goes through react-markdown with GFM and no raw-HTML
+plugin. An option's preview shows beside the options, for the option under
+the mouse or keyboard focus, else the one picked. It is a `srcdoc` frame
+sandboxed with nothing allowed: no scripts, opaque origin, no network. It is
+styled with baukasten's tokens, the theme's `--vscode-*` values and techdocs'
+`page.css`, and is rebuilt when the theme changes.
+
+**Closing.** Submit writes `answer.json` (`Ask.submit`, which keeps only the
+steps asked, and only the first answer). Closing the tab without submitting
+cancels the form. An answer that appears from elsewhere, such as the agent's
+call being cancelled, turns the tab into a notice that nothing more will
+reach the agent.

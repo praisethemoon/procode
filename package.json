@@ -12,6 +12,7 @@
         "packages/techdocs",
         "packages/techdocs-vscode",
         "packages/ask",
+        "packages/ask-vscode",
         "packages/combined"
     ],
     "scripts": {

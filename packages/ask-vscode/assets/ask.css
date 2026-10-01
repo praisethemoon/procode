@@ -1,0 +1,441 @@
+/* A form's tab. Colours, type and spacing come from baukasten's VS Code token
+ * layer, so the tab follows the user's theme. */
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    color: var(--bk-color-foreground);
+    background: var(--bk-color-background);
+    font-family: var(--bk-font-family-sans);
+    font-size: var(--vscode-font-size);
+}
+
+#root {
+    height: 100%;
+}
+
+.ask-muted {
+    color: var(--bk-color-foreground-muted);
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.ask {
+    display: grid;
+    grid-template-columns: minmax(180px, 260px) 1fr;
+    height: 100%;
+}
+
+.ask-page {
+    overflow-y: auto;
+    outline: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.ask-step {
+    flex: 1;
+    width: 100%;
+    max-width: 920px;
+    box-sizing: border-box;
+    margin: 0 auto;
+    padding: var(--bk-spacing-6) var(--bk-spacing-8) var(--bk-spacing-4);
+}
+
+.ask-step h1 {
+    margin: var(--bk-spacing-2) 0 var(--bk-spacing-3);
+    font-size: var(--bk-font-size-2xl);
+    font-weight: var(--bk-font-weight-semibold);
+    line-height: var(--bk-line-height-tight);
+}
+
+.ask-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: var(--bk-spacing-3);
+    font-size: var(--bk-font-size-sm);
+    color: var(--bk-color-foreground-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* ---------------------------------------------------------------- the rail */
+
+.ask-rail {
+    border-right: 1px solid var(--bk-color-border);
+    background: var(--bk-color-background-secondary);
+    overflow-y: auto;
+    padding: var(--bk-spacing-4) 0;
+}
+
+.ask-rail-head {
+    padding: 0 var(--bk-spacing-4) var(--bk-spacing-3);
+    font-size: var(--bk-font-size-sm);
+}
+
+.ask-rail-title {
+    font-weight: var(--bk-font-weight-semibold);
+    font-size: var(--bk-font-size-md);
+    margin-bottom: var(--bk-spacing-1);
+}
+
+.ask-rail ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.ask-rail-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--bk-spacing-2);
+    width: 100%;
+    padding: var(--bk-spacing-2) var(--bk-spacing-4);
+    border: 0;
+    border-left: 2px solid transparent;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ask-rail-item:hover {
+    background: var(--bk-color-list-hover);
+}
+
+.ask-rail-item.is-here {
+    background: var(--bk-color-list-active);
+    color: var(--bk-color-list-active-foreground);
+    border-left-color: var(--bk-color-focus);
+}
+
+.ask-rail-item:focus-visible {
+    outline: 1px solid var(--bk-color-focus);
+    outline-offset: -1px;
+}
+
+.ask-rail-review {
+    margin-top: var(--bk-spacing-2);
+    border-top: 1px solid var(--bk-color-divider);
+}
+
+.ask-icon,
+.ask-state .codicon {
+    flex: none;
+    margin-top: 2px;
+}
+
+.ask-icon.is-answered,
+.ask-state.is-answered {
+    color: var(--bk-color-success);
+}
+
+.ask-icon.is-needs_more,
+.ask-state.is-needs_more {
+    color: var(--bk-color-warning);
+}
+
+.ask-icon.is-open,
+.ask-icon.is-skipped,
+.ask-state.is-open,
+.ask-state.is-skipped {
+    color: var(--bk-color-foreground-muted);
+}
+
+.ask-state {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bk-spacing-1);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ---------------------------------------------------------------- Markdown */
+
+.ask-prose {
+    line-height: var(--bk-line-height-relaxed);
+}
+
+.ask-prose > :first-child {
+    margin-top: 0;
+}
+
+.ask-prose > :last-child {
+    margin-bottom: 0;
+}
+
+.ask-prose code {
+    font-family: var(--bk-font-family-mono);
+    background: var(--bk-color-code-background);
+    color: var(--bk-color-code-foreground);
+    padding: 0 0.3em;
+    border-radius: var(--bk-radius-sm);
+}
+
+.ask-prose pre {
+    background: var(--bk-color-code-background);
+    padding: var(--bk-spacing-3);
+    border-radius: var(--bk-radius-md);
+    overflow-x: auto;
+}
+
+.ask-prose pre code {
+    padding: 0;
+    background: none;
+}
+
+.ask-prose table {
+    border-collapse: collapse;
+}
+
+.ask-prose th,
+.ask-prose td {
+    border: 1px solid var(--bk-color-border);
+    padding: var(--bk-spacing-1) var(--bk-spacing-2);
+}
+
+.ask-prose a {
+    color: var(--bk-color-link);
+}
+
+/* ---------------------------------------------------------------- answers */
+
+.ask-answer {
+    margin-top: var(--bk-spacing-5);
+}
+
+.ask-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bk-spacing-2);
+}
+
+.ask-option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--bk-spacing-3);
+    padding: var(--bk-spacing-3);
+    border: 1px solid var(--bk-color-border);
+    border-radius: var(--bk-radius-md);
+    background: var(--bk-color-background);
+    cursor: pointer;
+}
+
+.ask-option:hover {
+    border-color: var(--bk-color-border-hover);
+    background: var(--bk-color-hover);
+}
+
+.ask-option:focus-visible {
+    outline: 1px solid var(--bk-color-focus);
+    outline-offset: 1px;
+}
+
+.ask-option.is-on {
+    border-color: var(--bk-color-focus);
+    background: var(--bk-color-selected);
+}
+
+.ask-option > .codicon {
+    flex: none;
+    margin-top: 2px;
+    color: var(--bk-color-foreground-muted);
+}
+
+.ask-option.is-on > .codicon {
+    color: var(--bk-color-focus);
+}
+
+.ask-option-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.ask-option-label {
+    font-weight: var(--bk-font-weight-semibold);
+}
+
+.ask-option-text .ask-prose {
+    margin-top: var(--bk-spacing-1);
+    color: var(--bk-color-foreground-muted);
+}
+
+.ask-key {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5em;
+    height: 1.5em;
+    border: 1px solid var(--bk-color-border);
+    border-radius: var(--bk-radius-sm);
+    font-family: var(--bk-font-family-mono);
+    font-size: var(--bk-font-size-sm);
+    color: var(--bk-color-foreground-muted);
+}
+
+.ask-option.is-on .ask-key {
+    border-color: var(--bk-color-focus);
+    color: var(--bk-color-foreground);
+}
+
+.ask-other {
+    flex-direction: column;
+    cursor: default;
+}
+
+.ask-other-pick {
+    display: flex;
+    align-items: center;
+    gap: var(--bk-spacing-3);
+    border: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+/* Options on the left, the focused option's preview on the right; one
+ * column when the tab is narrow. */
+.ask-with-preview {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.4fr);
+    gap: var(--bk-spacing-4);
+    align-items: start;
+}
+
+@media (max-width: 760px) {
+    .ask-with-preview {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ask-preview-pane {
+    margin: 0;
+    position: sticky;
+    top: 0;
+    border: 1px solid var(--bk-color-border);
+    border-radius: var(--bk-radius-md);
+    overflow: hidden;
+}
+
+.ask-preview-pane figcaption {
+    padding: var(--bk-spacing-1) var(--bk-spacing-3);
+    font-size: var(--bk-font-size-sm);
+    color: var(--bk-color-foreground-muted);
+    border-bottom: 1px solid var(--bk-color-border);
+    background: var(--bk-color-background-secondary);
+}
+
+.ask-preview {
+    display: block;
+    width: 100%;
+    height: 360px;
+    border: 0;
+    resize: vertical;
+    background: var(--bk-color-background);
+}
+
+.ask-extras {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--bk-spacing-2);
+    margin-top: var(--bk-spacing-5);
+}
+
+.ask-extra {
+    display: block;
+    width: 100%;
+}
+
+.ask-extra-label {
+    display: flex;
+    align-items: center;
+    gap: var(--bk-spacing-1);
+    margin-bottom: var(--bk-spacing-1);
+    font-size: var(--bk-font-size-sm);
+    color: var(--bk-color-foreground-muted);
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.ask-footer {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--bk-spacing-2);
+    padding: var(--bk-spacing-3) var(--bk-spacing-8);
+    border-top: 1px solid var(--bk-color-border);
+    background: var(--bk-color-background);
+}
+
+.ask-hints {
+    flex: 1;
+    text-align: right;
+    font-size: var(--bk-font-size-sm);
+    margin-right: var(--bk-spacing-2);
+}
+
+/* ---------------------------------------------------------------- review */
+
+.ask-review-list {
+    list-style: none;
+    margin: var(--bk-spacing-4) 0;
+    padding: 0;
+    border: 1px solid var(--bk-color-border);
+    border-radius: var(--bk-radius-md);
+}
+
+.ask-review-list li + li {
+    border-top: 1px solid var(--bk-color-divider);
+}
+
+.ask-review-row {
+    display: grid;
+    grid-template-columns: auto minmax(120px, 1fr) 2fr;
+    gap: var(--bk-spacing-3);
+    width: 100%;
+    padding: var(--bk-spacing-3);
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ask-review-row:hover {
+    background: var(--bk-color-list-hover);
+}
+
+.ask-review-title {
+    font-weight: var(--bk-font-weight-semibold);
+}
+
+.ask-review-answer {
+    color: var(--bk-color-foreground-muted);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.ask-submit {
+    display: flex;
+    align-items: center;
+    gap: var(--bk-spacing-3);
+}
+
+.ask-closed {
+    max-width: 560px;
+    margin: 15vh auto 0;
+    padding: 0 var(--bk-spacing-6);
+    text-align: center;
+}

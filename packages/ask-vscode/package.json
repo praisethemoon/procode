@@ -1,0 +1,50 @@
+{
+  "name": "ask-vscode",
+  "displayName": "ask",
+  "description": "Questions an agent asks through the ask MCP server, shown as a form in an editor tab: one question per page, answered in any order, with Markdown and sandboxed HTML previews.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "praisethemoon",
+  "author": {
+    "name": "Soulaymen Chouri",
+    "email": "doit@praisethemoon.org"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "ask.openPending", "title": "Open Pending Questions", "category": "ask", "icon": "$(comment-discussion)" }
+    ]
+  },
+  "scripts": {
+    "compile": "npm run compile --workspace ask && tsc -p ./ && tsc -p tsconfig.webview.json && node scripts/build.mjs",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test \"out/test/*.test.js\"",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "ask": "*",
+    "baukasten-ui": "^0.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.4.0"
+  }
+}
