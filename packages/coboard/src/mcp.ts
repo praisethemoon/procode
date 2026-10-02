@@ -14,7 +14,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
 
-import { ticketSessions, sessionCommits, sessionCommand } from "./lap";
+import { endTicketSession } from "./finish";
+import { lapRoot, lapRun, ticketSessions, sessionCommits, sessionCommand } from "./lap";
 import { ARCHIVED_MODES, ArchivedMode, PRIORITIES, SIZES, TICKET_STATUSES } from "./model";
 import { search, view } from "./query";
 import { Board, BoardError, CreateInput, Fields, locateBoard, staleParentMessage } from "./store";
@@ -27,6 +28,7 @@ Always refer to items by these ids. Descriptions and comments are Markdown; ment
 Ticket statuses: ${TICKET_STATUSES.join(", ")}. Sizes: ${SIZES.join(", ")}. Priorities: ${PRIORITIES.join(", ")}.
 When you work on a ticket, move it to "doing", and record your edits in a lap session linked to it: ${sessionCommand("T-<n>")}.
 board_sessions then shows the work done for a ticket.
+When the work is done, ticket_finish closes it in one step: it ends the session with its summary, comments, sets the status, and hands back the git command that commits exactly the session's files, for you to run.
 Finished work can be archived (board_archive) to keep lists short: an archived epic or milestone takes everything under it, lists and search leave archived items out unless asked (archived: "include" or "only"), board_get still reads them, and board_unarchive brings them back. Archive only what is finished or abandoned, and say why. Never delete.`;
 
 type Json = Record<string, unknown>;
@@ -226,6 +228,66 @@ export const TOOLS: readonly Tool[] = [
                 sessions.push({ ...session, commits: c.value });
             }
             return { ticket, sessions, ...(errors.length ? { lapError: errors.join("; ") } : {}), link: sessionCommand(ticket) };
+        },
+    },
+    {
+        name: "ticket_finish",
+        description:
+            "Finish a ticket in one step: end its active lap session with a summary, comment on the ticket (session, summary, tests, what was not verified), set its status, and return the git command that commits exactly the files the session touched plus lap's and the board's logs. It never runs git: run the command (or adjust it) yourself. Refused, changing nothing, when the ticket has no active session or a file the session touched has edits lap has not recorded.",
+        inputSchema: schema(
+            {
+                ticket: str,
+                done: { type: "string", description: "What was done: the session summary's Done, and the comment's." },
+                decided: { type: "string", description: "What was decided and why (optional)." },
+                left: { type: "string", description: "What was left undone (optional)." },
+                subject: { type: "string", description: "The git commit's subject; the ticket id is added at the end." },
+                tests: { type: "string", description: "What was tested, with counts (optional, for the comment)." },
+                not_verified: { type: "string", description: "What was not verified (optional, for the comment)." },
+                status: { type: "string", enum: ["done", "review"], description: 'The ticket\'s status after: "done" (default) or "review".' },
+            },
+            ["ticket", "done", "subject"],
+        ),
+        call: async (args, ctx) => {
+            const board = writeBoard(ctx);
+            const ticket = String(args["ticket"] ?? "").trim().toUpperCase();
+            const item = board.get(ticket);
+            if (item.kind !== "ticket") throw new BoardError("invalid", `${ticket} is not a ticket`);
+            const status = String(args["status"] ?? "done");
+            if (status !== "done" && status !== "review") throw new BoardError("invalid", `status must be done or review, not "${status}"`);
+            const root = lapRoot(ctx.cwd);
+            if (!root) throw new BoardError("no_lap", `no lap repository at or above ${ctx.cwd}: nothing records ${ticket}'s work`);
+            const opt = (k: string) => (typeof args[k] === "string" ? (args[k] as string) : undefined);
+            const ended = await endTicketSession(
+                lapRun(ctx.cwd),
+                {
+                    ticket,
+                    done: String(args["done"]),
+                    decided: opt("decided"),
+                    left: opt("left"),
+                    subject: String(args["subject"]),
+                    tests: opt("tests"),
+                    notVerified: opt("not_verified"),
+                },
+                path.resolve(board.root) === root,
+            );
+            // the session has ended: a failure from here says what is done
+            try {
+                board.comment(ticket, ended.comment, ctx.author);
+                board.update(ticket, { status });
+            } catch (e) {
+                throw new BoardError(
+                    "partly_done",
+                    `${ended.session} ended, but the board could not be written (${(e as Error).message}): comment and set ${ticket}'s status by hand; git command: ${ended.git.command}`,
+                );
+            }
+            return {
+                ticket,
+                session: ended.session,
+                status,
+                git: { cwd: root, paths: ended.git.paths, message: ended.git.message, command: ended.git.command },
+                ...(ended.otherPending.length ? { otherPending: ended.otherPending } : {}),
+                next: `Review and run the git command in ${root}; it stages only the files ${ended.session} touched, and lap's and the board's logs.`,
+            };
         },
     },
 ];

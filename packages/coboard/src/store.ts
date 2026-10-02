@@ -48,7 +48,22 @@ export const LOG_FILE = "log.jsonl";
 
 export class BoardError extends Error {
     constructor(
-        readonly code: "not_found" | "invalid" | "in_use" | "no_board" | "locked" | "unwritable" | "stale_parent",
+        readonly code:
+            | "not_found"
+            | "invalid"
+            | "in_use"
+            | "no_board"
+            | "locked"
+            | "unwritable"
+            | "stale_parent"
+            /* ticket_finish's: no lap here, lap refused, no active session,
+             * unrecorded edits, and a board write that failed after the
+             * session ended */
+            | "no_lap"
+            | "lap"
+            | "no_session"
+            | "pending_edits"
+            | "partly_done",
         message: string,
     ) {
         super(message);

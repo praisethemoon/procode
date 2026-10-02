@@ -233,6 +233,7 @@ test("mcp: the tools create, move, comment, search and get by id", async () => {
         "board_archive",
         "board_unarchive",
         "board_sessions",
+        "ticket_finish",
     ]);
 
     assert.equal((await call(dir, "board_list", {})).text, "[]", "no board yet reads as empty");

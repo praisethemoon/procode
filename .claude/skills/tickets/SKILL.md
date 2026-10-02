@@ -3,7 +3,7 @@ name: tickets
 description: The workflow for working a ticket in this repository — coboard board, lap session, git — from picking it up to closing it. Use whenever you start, continue or finish work on a board ticket (T-<n>), or the user asks you to work on tickets.
 compatibility: Requires the coboard MCP server, the lap CLI (cli/lap-cli) and git.
 metadata:
-  version: "3"
+  version: "4"
 ---
 
 # tickets — one ticket, start to finish
@@ -61,25 +61,30 @@ with procode installed, else `lap` on PATH); this is the loop around it.
    (`npm run build --workspace combined && node packages/combined/scripts/check.mjs`).
    UI: render it (headless Chrome over the real bundle) in a light and a
    dark theme.
-6. **Nothing pending, then end.** `lap status` must show no edits of
-   yours before `lap session end`. If you end with fragments pending,
-   start a follow-up session tagged with the same ticket and commit them,
-   each with its intent and behavior. End with the session's summary —
-   `--done`, `--decided`, `--left`, each when it says something (the lap
-   skill says what goes in each): it is the short factual record the
-   ticket's session review shows first.
-7. **git.** Stage by path — never `git add -A` or `.` — including
-   `.lap/log/` and `.coboard/log.jsonl`. One commit:
-   `git commit -m "<what changed> (T-<n>)"`. **No `Co-Authored-By` or any
-   AI attribution line.**
-8. **Close it.** `board_comment T-<n>` with: the lap session (as
-   `<branch>/S<n>` when the work was in a branch folder) and git hash,
-   what changed (as the reader needs it, not a diff), what was decided and
-   why, test counts, and anything not verified. It may quote the session's
-   summary, and adds what only the board needs: the git hash, the test
-   counts, what was not verified. Then
-   `board_update T-<n> status=done`. Close a milestone or epic when its
-   last ticket closes.
+6. **Finish it: `ticket_finish`.** Once every edit of the session is
+   committed in lap, one call closes the ticket:
+   `ticket_finish {ticket, done, decided?, left?, subject, tests?,
+   not_verified?, status?}`. It refuses, changing nothing, when the ticket
+   has no active session or a file the session touched has edits lap has
+   not recorded: commit them, then call it again. Otherwise it ends the
+   session with the summary (`done`, `decided`, `left`, each when it says
+   something; the lap skill says what goes in each), comments on the
+   ticket (the session, the summary, `tests` with counts, `not_verified`),
+   and sets the status (`done`, or `review` when the user should look
+   first). Close a milestone or epic when its last ticket closes.
+7. **git: run the command it hands back.** `ticket_finish` never runs
+   git. Its answer holds `git.command`, which stages exactly the files
+   the session touched plus `.lap/log` (and `.coboard/log.jsonl` when the
+   board is in this folder) and commits with `"<subject> (T-<n>)"`. Read
+   it, then run it in `git.cwd`. Never widen it to `git add -A` or `.`,
+   and add **no `Co-Authored-By` or any AI attribution line**. Pending
+   files it lists as `otherPending` are not this ticket's: leave them.
+
+Without the coboard server (or with a lap from before summaries), do it by
+hand: `lap status` clean for your files, `lap session end --done …`, stage
+by path with `.lap/log/` and `.coboard/log.jsonl`, one commit, then
+`board_comment` (the session, git hash, what changed, decided, tests, not
+verified) and `board_update status=done`.
 
 ## Rules
 

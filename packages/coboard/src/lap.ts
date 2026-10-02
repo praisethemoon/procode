@@ -12,6 +12,8 @@
  */
 
 import { execFile } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 import type { LapSummary } from "./summary";
 
@@ -101,6 +103,23 @@ function run(cwd: string, args: string[]): Promise<Record<string, unknown>> {
             }
         });
     });
+}
+
+/* One lap command with --json, run in cwd: lap's answer, or a rejection
+ * with lap's message. */
+export function lapRun(cwd: string): (args: string[]) => Promise<Record<string, unknown>> {
+    return (args) => run(cwd, args);
+}
+
+/* The folder holding the .lap/ that owns cwd (the nearest one up), or null. */
+export function lapRoot(cwd: string): string | null {
+    let dir = path.resolve(cwd);
+    for (;;) {
+        if (fs.existsSync(path.join(dir, ".lap"))) return dir;
+        const up = path.dirname(dir);
+        if (up === dir) return null;
+        dir = up;
+    }
 }
 
 /* The sessions tagged with this ticket, oldest first: this folder's, and
