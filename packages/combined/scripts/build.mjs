@@ -8,6 +8,10 @@
  *   npm run package --workspace combined -- --target darwin-arm64 --bin <dir>
  *       one platform's procode-<version>-<target>.vsix, carrying the lap
  *       and kb found in <dir> (relative to where npm was run)
+ *   npm run package --workspace combined -- --with-ask
+ *       also carries ask, the experimental question form (specs/ask.md):
+ *       its tab in out/parts/ask.js and its server in out/mcp/ask.js. Without
+ *       the flag the package has nothing of it.
  *
  * dist/ holds:
  *   package.json   generated: the four extensions' contributions merged, plus
@@ -36,7 +40,8 @@ const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repo = path.resolve(here, "..", "..");
 const dist = path.join(here, "dist");
 const VERSION = JSON.parse(fs.readFileSync(path.join(here, "package.json"), "utf8")).version;
-const PARTS = ["lap-vscode", "index-vscode", "coboard-vscode", "techdocs-vscode"];
+const WITH_ASK = process.argv.includes("--with-ask");
+const PARTS = ["lap-vscode", "index-vscode", "coboard-vscode", "techdocs-vscode", ...(WITH_ASK ? ["ask-vscode"] : [])];
 
 /* A platform package: --target and --bin go together, and the CLIs are
  * checked against the target before anything is built. */
@@ -224,7 +229,14 @@ await esbuild.build({
     logLevel: "warning",
     external: ["vscode"],
 });
+// An optional part's host bundle, already self-contained (its own build
+// inlined its store), loaded by src/extension.ts when present.
+if (WITH_ASK) {
+    fs.mkdirSync(path.join(dist, "out", "parts"));
+    fs.copyFileSync(path.join(repo, "packages", "ask-vscode", "out", "extension.js"), path.join(dist, "out", "parts", "ask.js"));
+}
 for (const [name, entry] of [
+    ...(WITH_ASK ? [["ask", `require(${JSON.stringify(path.join(repo, "packages/ask/out/mcp.js"))}).main();`]] : []),
     ["coboard", `require(${JSON.stringify(path.join(repo, "packages/coboard/out/mcp.js"))}).main();`],
     ["techdocs", `require(${JSON.stringify(path.join(repo, "packages/techdocs/out/mcp.js"))}).main();`],
     [
@@ -252,7 +264,9 @@ if (process.argv.includes("--package")) {
     // A .vsix that would fail to start is not worth producing.
     const checked = TARGET ? ["--target", TARGET] : [];
     execFileSync(process.execPath, [path.join(here, "scripts", "check.mjs"), ...checked], { cwd: here, stdio: "inherit" });
-    const out = path.join(here, TARGET ? `procode-${VERSION}-${TARGET}.vsix` : `procode-${VERSION}.vsix`);
+    // A build with ask is named for it, so it is never mistaken for the one to publish.
+    const name = ["procode", VERSION, ...(TARGET ? [TARGET] : []), ...(WITH_ASK ? ["ask"] : [])].join("-");
+    const out = path.join(here, `${name}.vsix`);
     const target = TARGET ? ["--target", TARGET] : [];
     node(bin("@vscode", "vsce", "vsce"), ["package", "--no-dependencies", ...target, "--out", out], dist);
     console.log(`combined: packaged ${out}`);

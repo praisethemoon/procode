@@ -13,6 +13,9 @@
  *   node scripts/check.mjs      (after npm run build --workspace combined)
  *   node scripts/check.mjs --target <vsce target>   (after a platform build)
  *
+ * A build made with --with-ask is checked with ask in it: its tab's command
+ * registered and its server defined; any other build must carry nothing of it.
+ *
  * Works only in a directory under the system temp dir, and deletes nothing. */
 
 import * as assert from "node:assert/strict";
@@ -27,6 +30,7 @@ const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(here, "dist");
 const manifest = JSON.parse(fs.readFileSync(path.join(dist, "package.json"), "utf8"));
 const folder = fs.mkdtempSync(path.join(os.tmpdir(), "procode-check-"));
+const withAsk = fs.existsSync(path.join(dist, "out", "mcp", "ask.js"));
 fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify({ mcpServers: { other: { command: "x" } } }));
 
 /* ~/.procode/bin, in the check's own folder so the real one is never
@@ -196,7 +200,19 @@ for (const c of manifest.contributes.commands) {
     assert.ok(registered.has(c.command), `${c.command} is contributed and registered`);
 }
 const defs = await mcpProvider.provideMcpServerDefinitions();
-assert.deepEqual(defs.map((d) => d.label), ["coboard: the board", "kb: the knowledge base", "techdocs: pages agents publish"]);
+assert.deepEqual(defs.map((d) => d.label), [
+    "coboard: the board",
+    "kb: the knowledge base",
+    "techdocs: pages agents publish",
+    ...(withAsk ? ["ask: questions as a form"] : []),
+]);
+if (withAsk) {
+    assert.ok(registered.has("ask.openPending"), "ask's tab started with the other parts");
+    assert.ok(fs.existsSync(path.join(dist, "out", "media", "ask.js")), "ask's webview is in out/media");
+} else {
+    assert.equal(fs.existsSync(path.join(dist, "out", "parts")), false, "a build without --with-ask carries no optional part");
+    assert.doesNotMatch(JSON.stringify(manifest), /"ask\./, "nor anything of ask in its manifest");
+}
 for (const d of defs) {
     assert.equal(d.command, process.execPath);
     assert.ok(fs.existsSync(d.args[0]), `${d.args[0]} exists`);
@@ -311,7 +327,7 @@ earlier.mcpServers.artifacts = { command: "x", args: ["/old/procode/out/mcp/arti
 fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify(earlier));
 registered.get("procode.setUpClaudeMcp")();
 const written = JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8"));
-assert.deepEqual(Object.keys(written.mcpServers).sort(), ["coboard", "kb", "other", "techdocs"]);
+assert.deepEqual(Object.keys(written.mcpServers).sort(), [...(withAsk ? ["ask"] : []), "coboard", "kb", "other", "techdocs"]);
 assert.equal(written.mcpServers.other.command, "x", "an unrelated server is kept as it was");
 assert.equal(written.mcpServers.kb.args[0], defs[1].args[0], "Claude Code runs the same script as VS Code's agent");
 assert.equal(written.mcpServers.coboard.env.COBOARD_AUTHOR, "claude", "Claude Code's board comments are signed");
@@ -401,5 +417,5 @@ ext.checkSkills(ctx);
 assert.ok(!infos.some((m) => /are available/.test(m)), "a changed copy is not offered one");
 assert.ok(infos.some((m) => /lap are shipped; this project's copies were changed/.test(m)), "it is only mentioned");
 
-console.log(`check: ${registered.size} commands registered, ${defs.length} MCP servers, no errors`);
+console.log(`check: ${registered.size} commands registered, ${defs.length} MCP servers${withAsk ? " (with ask)" : ""}, no errors`);
 console.log(`check: workspace ${folder}`);

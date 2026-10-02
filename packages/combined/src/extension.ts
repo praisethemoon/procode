@@ -26,12 +26,25 @@ interface Part {
     deactivate?(): unknown;
 }
 
-/* The built extensions, bundled into this one by esbuild. */
+/* Parts a build adds only when asked to (scripts/build.mjs --with-ask). Each
+ * is its own bundle in out/parts/, found when the extension loads, so a build
+ * without one carries nothing of it and this file names it only here. */
+const OPTIONAL = ["ask"] as const;
+
+function optionalParts(): [string, Part][] {
+    return OPTIONAL.map((name) => [name, path.join(__dirname, "parts", `${name}.js`)] as const)
+        .filter(([, file]) => fs.existsSync(file))
+        .map(([name, file]) => [name, require(file) as Part]);
+}
+
+/* The built extensions, bundled into this one by esbuild, then any optional
+ * part this build carries. */
 const PARTS: readonly [string, Part][] = [
     ["Lap History", require("../../lap-vscode/out/extension.js") as Part],
     ["Knowledge", require("../../index-vscode/out/extension.js") as Part],
     ["Board", require("../../coboard-vscode/out/extension.js") as Part],
     ["techdocs", require("../../techdocs-vscode/out/extension.js") as Part],
+    ...optionalParts(),
 ];
 
 /* The settings that can name each CLI, first match wins: lap's own view has
@@ -106,6 +119,10 @@ export function servers(ctx: vscode.ExtensionContext): Server[] {
             args: [script("techdocs")],
             env: { ...node },
         },
+        // Only in a build made with --with-ask.
+        ...(fs.existsSync(script("ask"))
+            ? [{ name: "ask", label: "ask: questions as a form", command: process.execPath, args: [script("ask")], env: { ...node } }]
+            : []),
     ];
 }
 
@@ -205,8 +222,9 @@ function setUpClaudeMcp(ctx: vscode.ExtensionContext): void {
         return;
     }
     fs.writeFileSync(file, JSON.stringify(withServers(current, servers(ctx).map(forClaude)), null, 2) + "\n");
+    const names = servers(ctx).map((s) => s.name);
     void vscode.window.showInformationMessage(
-        "procode: coboard, kb and techdocs are in .mcp.json. Restart Claude Code in this project (or check /mcp) to pick them up.",
+        `procode: ${names.slice(0, -1).join(", ")} and ${names.at(-1)} are in .mcp.json. Restart Claude Code in this project (or check /mcp) to pick them up.`,
     );
 }
 
