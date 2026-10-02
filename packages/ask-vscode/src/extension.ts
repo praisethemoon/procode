@@ -8,6 +8,10 @@
  * opens at once, its answer goes back as the call's result, and nothing is
  * written to disk. Closing a tab without submitting cancels its form; a call
  * its agent cancels shows the tab closed.
+ *
+ * The server runs while the procode › MCP › ask setting is on (the default),
+ * and stops and starts again as it changes. Stopping cancels the forms its
+ * calls were waiting on.
  */
 
 import * as crypto from "node:crypto";
@@ -27,15 +31,60 @@ interface Open {
 
 const forms = new Forms();
 const open = new Map<string, Open>();
-let served: Served | null = null;
-let ready: (url: string | undefined) => void = () => {};
-const listening = new Promise<string | undefined>((resolve) => (ready = resolve));
+/** The server as last asked for: starting or running, or null while off. */
+let server: Promise<Served | null> | null = null;
+const serving = new Set<(url: string | undefined) => void>();
 
-/** The address of this window's ask server, once it is listening (undefined
- *  if it could not start): what procode writes into .mcp.json and hands
- *  VS Code's own agent. */
+/** The address of this window's ask server once it is listening; undefined
+ *  while it is off or when it could not start. What procode writes into
+ *  .mcp.json and hands VS Code's own agent. */
 export function whenServed(): Promise<string | undefined> {
-    return listening;
+    return (server ?? Promise.resolve(null)).then((s) => s?.url);
+}
+
+/** Called with the address each time the server starts, and with undefined
+ *  each time it stops. */
+export function onServing(fn: (url: string | undefined) => void): () => void {
+    serving.add(fn);
+    return () => serving.delete(fn);
+}
+
+function announce(url: string | undefined): void {
+    for (const fn of serving) fn(url);
+}
+
+function enabled(): boolean {
+    return vscode.workspace.getConfiguration("procode.mcp").get<boolean>("ask", true) !== false;
+}
+
+/* A stop still closing, which a start waits for so it gets the same port. */
+let stopping: Promise<void> = Promise.resolve();
+
+function start(): void {
+    if (server) return;
+    const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file")?.uri.fsPath ?? "";
+    server = stopping.then(() => serve({ ctx: { forms }, port: portFor(folder) })).then(
+        (s) => {
+            announce(s.url);
+            return s;
+        },
+        (e) => {
+            void vscode.window.showErrorMessage(`ask: its MCP server could not start: ${(e as Error).message}`);
+            return null;
+        },
+    );
+}
+
+function stop(): Promise<void> {
+    const was = server;
+    server = null;
+    if (!was) return stopping;
+    stopping = was.then(async (s) => {
+        if (!s) return;
+        await s.close();
+        announce(undefined);
+    });
+    return stopping;
 }
 
 function previewParts(media: vscode.Uri): PreviewParts {
@@ -121,21 +170,16 @@ export function activate(ctx: vscode.ExtensionContext): void {
         entry.done = true;
         void entry.panel.webview.postMessage({ type: "closed", status: answer.status } satisfies ToView);
     });
-    const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file")?.uri.fsPath ?? "";
-    void serve({ ctx: { forms }, port: portFor(folder) }).then(
-        (s) => {
-            served = s;
-            ready(s.url);
-        },
-        (e) => {
-            ready(undefined);
-            void vscode.window.showErrorMessage(`ask: its MCP server could not start: ${(e as Error).message}`);
-        },
-    );
+    if (enabled()) start();
     ctx.subscriptions.push(
         { dispose: offOpen },
         { dispose: offAnswer },
-        { dispose: () => void served?.close() },
+        { dispose: () => void stop() },
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (!e.affectsConfiguration("procode.mcp.ask")) return;
+            if (enabled()) start();
+            else void stop();
+        }),
         vscode.commands.registerCommand("ask.openPending", () => {
             const pending = forms.pending();
             if (!pending.length) void vscode.window.showInformationMessage("ask: no questions are waiting for an answer.");
@@ -144,6 +188,6 @@ export function activate(ctx: vscode.ExtensionContext): void {
     );
 }
 
-export function deactivate(): Promise<void> | undefined {
-    return served?.close();
+export function deactivate(): Promise<void> {
+    return stop();
 }

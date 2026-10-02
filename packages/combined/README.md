@@ -137,6 +137,8 @@ reads a project's own files instead, so it needs these steps once per project:
    <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on macOS) and run
    **procode: Set Up MCP for Claude Code**. It adds the `coboard`, `kb` and
    `techdocs` servers to the project's `.mcp.json` and keeps any others there.
+   To run only some of them, use **procode: Choose MCP Servers…** (or the
+   procode › MCP settings) first: a server that is off is left out.
 3. Run **procode: Add Skills for Claude Code**. It adds the skills that teach
    Claude to use the tools to the project's `.claude/skills/`: pick the ones
    you want (`lap`, `kb` and `techdocs` are ticked; `tickets` is procode's own

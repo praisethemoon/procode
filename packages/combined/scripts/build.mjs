@@ -112,8 +112,31 @@ for (const part of PARTS) {
 contributes.commands.push(
     { command: "procode.setUpClaudeMcp", title: "Set Up MCP for Claude Code (This Project's .mcp.json)", category: "procode" },
     { command: "procode.addClaudeSkills", title: "Add Skills for Claude Code (This Project's .claude/skills)", category: "procode" },
+    { command: "procode.chooseMcpServers", title: "Choose MCP Servers…", category: "procode" },
 );
 contributes.mcpServerDefinitionProviders = [{ id: "procode.mcp", label: "procode" }];
+/* A switch per MCP server (src/extension.ts, "on and off"), ask's only in a
+ * build that carries it. */
+const MCP_SWITCHES = [
+    ["coboard", "the board: epics, milestones, tickets and their lap sessions"],
+    ["kb", "the knowledge base: search and file documentation"],
+    ["techdocs", "pages agents publish for you to read"],
+    ...(WITH_ASK ? [["ask", "questions as a form in an editor tab (its server runs inside VS Code)"]] : []),
+];
+(contributes.configuration ??= []).push({
+    title: "procode",
+    properties: Object.fromEntries(
+        MCP_SWITCHES.map(([name, what], i) => [
+            `procode.mcp.${name}`,
+            {
+                type: "boolean",
+                default: true,
+                order: i,
+                markdownDescription: `Run the **${name}** MCP server: ${what}. Off, it is left out of VS Code's agent, and **procode: Set Up MCP for Claude Code** takes it out of \`.mcp.json\`.`,
+            },
+        ]),
+    ),
+});
 
 /* One activity-bar icon for the whole extension. Each part brings its own
  * container for when it runs alone; here their views move into procode's,

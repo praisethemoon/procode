@@ -15,17 +15,19 @@ import * as vscode from "vscode";
 
 import { forClaude } from "./claude";
 import { CLIS, Cli, missingMessage, resolveCli, serverNeeds } from "./clis";
-import { outdated, withServers } from "./mcpjson";
+import { outdated, withServers, writtenEntries } from "./mcpjson";
 import { commandFor, exeName, place, procodeBinDir, sourceOf } from "./procodebin";
 import { ShippedSkill, behind, folderHash, install, shippedSkills, stateOf } from "./skills";
 
-export { commandFor, folderHash, forClaude, outdated, place, resolveCli, sourceOf, withServers };
+export { commandFor, folderHash, forClaude, outdated, place, resolveCli, sourceOf, withServers, writtenEntries };
 
 interface Part {
     activate(ctx: vscode.ExtensionContext): unknown;
     deactivate?(): unknown;
     /** ask's: the address its MCP server listens on, once it does. */
     whenServed?(): Promise<string | undefined>;
+    /** ask's: told each time its server starts (with the address) or stops. */
+    onServing?(fn: (url: string | undefined) => void): () => void;
 }
 
 /* Parts a build adds only when asked to (scripts/build.mjs --with-ask). Each
@@ -98,7 +100,45 @@ export type Server =
     /* ask's, which runs inside this extension and is reached over HTTP. */
     | { readonly name: string; readonly label: string; readonly url: string; readonly timeout?: number };
 
+/* ------------------------------------------------------- on and off
+ *
+ * Each server has a switch, procode › MCP › <name>, on by default. A server
+ * that is off is left out of VS Code's agent and out of what Set Up MCP for
+ * Claude Code writes, which also takes out the entry it once wrote for it;
+ * ask's server stops listening (ask-vscode follows its own switch). */
+
+/* The servers this build can run, in the order they are listed. */
+export function mcpNames(): string[] {
+    return ["coboard", "kb", "techdocs", ...(ASK ? ["ask"] : [])];
+}
+
+export function mcpEnabled(name: string): boolean {
+    return vscode.workspace.getConfiguration("procode.mcp").get<boolean>(name, true) !== false;
+}
+
+/* The servers that are on. */
 export function servers(ctx: vscode.ExtensionContext): Server[] {
+    return allServers(ctx).filter((s) => mcpEnabled(s.name));
+}
+
+/* Lets the person tick the servers they want, and sets the switches: for the
+ * workspace when a folder is open (servers are a per-project choice), else
+ * for the user. */
+async function chooseMcpServers(): Promise<void> {
+    const picked = await vscode.window.showQuickPick(
+        mcpNames().map((name) => ({ label: name, picked: mcpEnabled(name) })),
+        { canPickMany: true, title: "procode: MCP servers to run", placeHolder: "Ticked servers run; the others are off" },
+    );
+    if (!picked) return;
+    const on = new Set(picked.map((p) => p.label));
+    const target = vscode.workspace.workspaceFolders?.length ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+    const config = vscode.workspace.getConfiguration("procode.mcp");
+    for (const name of mcpNames()) {
+        if (on.has(name) !== mcpEnabled(name)) await config.update(name, on.has(name), target);
+    }
+}
+
+function allServers(ctx: vscode.ExtensionContext): Server[] {
     const script = (name: string) => path.join(ctx.extensionPath, "out", "mcp", `${name}.js`);
     const node = { ELECTRON_RUN_AS_NODE: "1" };
     return [
@@ -133,7 +173,7 @@ export function servers(ctx: vscode.ExtensionContext): Server[] {
 
 /* The settings the definitions are made from: the CLIs handed to the
  * servers, and the board folder handed to coboard's. */
-export const MCP_SETTINGS = ["knowledge.cliPath", "coboard.lapPath", "coboard.boardFolder"] as const;
+export const MCP_SETTINGS = ["knowledge.cliPath", "coboard.lapPath", "coboard.boardFolder", "procode.mcp"] as const;
 
 /* VS Code's own agent finds the servers without any configuration. Each runs
  * in the workspace folder, which is where it finds that workspace's .coboard/
@@ -146,7 +186,7 @@ function registerWithVsCode(ctx: vscode.ExtensionContext): void {
     }
     const changed = new vscode.EventEmitter<void>();
     // ask's server comes up after activation: VS Code is told when it does.
-    void ASK?.whenServed?.().then(() => changed.fire());
+    ASK?.onServing?.(() => changed.fire());
     ctx.subscriptions.push(
         changed,
         vscode.workspace.onDidChangeConfiguration((e) => {
@@ -230,11 +270,31 @@ async function setUpClaudeMcp(ctx: vscode.ExtensionContext): Promise<void> {
         void vscode.window.showErrorMessage(`procode: ${file} is not a JSON object, so it was left alone. Fix it and run this again.`);
         return;
     }
-    fs.writeFileSync(file, JSON.stringify(withServers(current, servers(ctx).map(forClaude)), null, 2) + "\n");
-    const names = servers(ctx).map((s) => s.name);
+    const on = servers(ctx);
+    const off = mcpNames().filter((n) => !mcpEnabled(n));
+    const removed = writtenEntries(current, off);
+    fs.writeFileSync(file, JSON.stringify(withServers(current, on.map(forClaude), off), null, 2) + "\n");
+    const list = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
+    const said = [
+        ...(on.length ? [`${list(on.map((s) => s.name))} ${on.length === 1 ? "is" : "are"} in .mcp.json`] : []),
+        ...(removed.length ? [`${list(removed)} (turned off) ${removed.length === 1 ? "was" : "were"} taken out`] : []),
+    ];
     void vscode.window.showInformationMessage(
-        `procode: ${names.slice(0, -1).join(", ")} and ${names.at(-1)} are in .mcp.json. Restart Claude Code in this project (or check /mcp) to pick them up.`,
+        `procode: ${said.join("; ") || "no MCP server is on, and .mcp.json has none of procode's"}. Restart Claude Code in this project (or check /mcp) to pick this up.`,
     );
+}
+
+/* After the switches change: when .mcp.json holds procode's entries, offer
+ * to bring it in line, so Claude Code follows what VS Code's agent does. */
+function offerMcpUpdate(ctx: vscode.ExtensionContext): void {
+    const file = mcpJsonPath();
+    const current = file ? readMcpJson(file) : null;
+    if (!current || writtenEntries(current, mcpNames()).length === 0) return;
+    void vscode.window
+        .showInformationMessage("procode: the MCP servers that are on changed. Update .mcp.json for Claude Code too?", "Update .mcp.json")
+        .then((choice) => {
+            if (choice === "Update .mcp.json") void setUpClaudeMcp(ctx);
+        });
 }
 
 function checkClaudeMcp(ctx: vscode.ExtensionContext): void {
@@ -434,7 +494,7 @@ function installClis(ctx: vscode.ExtensionContext): void {
 
 export function activate(ctx: vscode.ExtensionContext): void {
     installClis(ctx);
-    void ASK?.whenServed?.().then((url) => {
+    ASK?.onServing?.((url) => {
         askUrl = url;
     });
     for (const [name, part] of PARTS) {
@@ -448,6 +508,10 @@ export function activate(ctx: vscode.ExtensionContext): void {
     registerWithVsCode(ctx);
     ctx.subscriptions.push(
         vscode.commands.registerCommand("procode.setUpClaudeMcp", () => setUpClaudeMcp(ctx)),
+        vscode.commands.registerCommand("procode.chooseMcpServers", () => chooseMcpServers()),
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration("procode.mcp")) offerMcpUpdate(ctx);
+        }),
         vscode.commands.registerCommand("procode.addClaudeSkills", () => addClaudeSkills(ctx)),
     );
     // After ask's server listens, so its entry is checked too.

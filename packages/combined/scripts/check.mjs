@@ -9,6 +9,9 @@
  *   - "Set Up MCP for Claude Code" writes .mcp.json and keeps other servers
  *   - user-scope registration asks a stand-in `claude` on PATH, never the real
  *     one: the first time, after an update, and not again once current
+ *   - each MCP server's switch: one turned off leaves VS Code's agent and
+ *     the .mcp.json entry procode wrote (not one set up by hand), and ask's
+ *     server stops and starts with its own
  *
  *   node scripts/check.mjs      (after npm run build --workspace combined)
  *   node scripts/check.mjs --target <vsce target>   (after a platform build)
@@ -33,6 +36,8 @@ const dist = path.join(here, "dist");
 const manifest = JSON.parse(fs.readFileSync(path.join(dist, "package.json"), "utf8"));
 const folder = fs.mkdtempSync(path.join(os.tmpdir(), "procode-check-"));
 const withAsk = fs.existsSync(path.join(dist, "out", "parts", "ask.js"));
+/* ask's server's address, once the check has found it. */
+let askAt;
 fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify({ mcpServers: { other: { command: "x" } } }));
 
 /* ~/.procode/bin, in the check's own folder so the real one is never
@@ -74,6 +79,7 @@ const emitter = class {
     dispose() {}
 };
 const configListeners = [];
+const changeOf = (key) => ({ affectsConfiguration: (k) => k === key || key.startsWith(`${k}.`) });
 const folderListeners = [];
 const handler = {
     get(target, key) {
@@ -109,6 +115,7 @@ const vscode = new Proxy(
                 Object.assign(this, { label, command, args, env, version });
             }
         },
+        ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
         McpHttpServerDefinition: class {
             constructor(label, uri, headers, version) {
                 Object.assign(this, { label, uri, headers, version });
@@ -158,7 +165,12 @@ const vscode = new Proxy(
                 getConfiguration: (section) => ({
                     get: (k, d) => (`${section}.${k}` in settings ? settings[`${section}.${k}`] : d),
                     inspect: (k) => ({ globalValue: settings[`${section}.${k}`] }),
-                    update: async () => undefined,
+                    // Sets the value and tells the listeners, as VS Code does.
+                    update: async (k, v) => {
+                        const key = `${section}.${k}`;
+                        settings[key] = v;
+                        for (const fn of [...configListeners]) fn(changeOf(key));
+                    },
                 }),
             },
             handler,
@@ -220,7 +232,7 @@ if (withAsk) {
     // ask's server runs inside the extension: VS Code is given its address,
     // and it answers there.
     const askDef = defs.pop();
-    const url = askDef.uri.toString();
+    const url = (askAt = askDef.uri.toString());
     assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/procode\/ask\/mcp$/);
     assert.equal(askDef.version, manifest.version);
     const listed = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
@@ -245,8 +257,7 @@ assert.equal(defs[1].env.KB_BIN, path.join(procodeBin, osExe("kb")), "kb is hand
 // VS Code to ask again, once; any other setting does not.
 let asked = 0;
 mcpProvider.onDidChangeMcpServerDefinitions(() => asked++);
-const changeOf = (key) => ({ affectsConfiguration: (k) => k === key || key.startsWith(`${k}.`) });
-for (const key of ["knowledge.cliPath", "coboard.lapPath", "coboard.boardFolder"]) {
+for (const key of ["knowledge.cliPath", "coboard.lapPath", "coboard.boardFolder", "procode.mcp.kb"]) {
     const before = asked;
     for (const fn of configListeners) fn(changeOf(key));
     assert.equal(asked, before + 1, `a change to ${key} asks for the definitions again, once`);
@@ -361,6 +372,53 @@ assert.deepEqual(ext.outdated({ mcpServers: { artifacts: theirs } }, []), []);
 assert.deepEqual(ext.withServers({ mcpServers: { artifacts: theirs } }, []).mcpServers, { artifacts: theirs });
 
 assert.equal(registered.has("procode.registerClaudeMcp"), false, "Claude Code is set up per project only");
+
+// ------------------------------------------------------------ on and off
+// Every server has a switch, contributed on by default; ask's only with ask.
+const switches = manifest.contributes.configuration.flatMap((c) => Object.keys(c.properties ?? {})).filter((k) => k.startsWith("procode.mcp."));
+assert.deepEqual(switches, ["coboard", "kb", "techdocs", ...(withAsk ? ["ask"] : [])].map((n) => `procode.mcp.${n}`));
+const mcpFile = () => JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8")).mcpServers;
+const labels = async () => (await mcpProvider.provideMcpServerDefinitions()).map((d) => d.label.split(":")[0]);
+const choose = async (keep) => {
+    const before = pick;
+    pick = (items) => items.filter((i) => keep.includes(i.label));
+    await registered.get("procode.chooseMcpServers")();
+    pick = before;
+};
+// kb turned off in the picker: the switch is set, VS Code's agent loses it,
+// and since .mcp.json has procode's entries, an update is offered.
+infos.length = 0;
+await choose(["coboard", "techdocs", "ask"]);
+assert.equal(settings["procode.mcp.kb"], false);
+assert.deepEqual(await labels(), ["coboard", "techdocs", ...(withAsk ? ["ask"] : [])], "a server turned off leaves VS Code's agent");
+assert.ok(infos.some((m) => /MCP servers that are on changed/.test(m)), "an update of .mcp.json is offered");
+// The setup takes procode's kb entry out and keeps everything else.
+await registered.get("procode.setUpClaudeMcp")();
+assert.deepEqual(Object.keys(mcpFile()).sort(), [...(withAsk ? ["ask"] : []), "coboard", "other", "techdocs"]);
+assert.match(infos.at(-1), /kb \(turned off\) was taken out/);
+// A kb entry set up by hand is not procode's to take out.
+fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify({ mcpServers: { ...mcpFile(), kb: { command: "my-kb" } } }));
+await registered.get("procode.setUpClaudeMcp")();
+assert.deepEqual(mcpFile().kb, { command: "my-kb" }, "a hand-made entry stays");
+assert.deepEqual(ext.writtenEntries({ mcpServers: { kb: { command: "my-kb" } } }, ["kb"]), []);
+if (withAsk) {
+    // ask's switch stops its server, and turning it back on restarts it on the same port.
+    const answers = async () => fetch(askAt, { method: "POST", headers: { "content-type": "application/json" }, body: '{"jsonrpc":"2.0","id":1,"method":"ping"}' }).then((r) => r.status, () => "refused");
+    assert.equal(await answers(), 200);
+    await choose(["coboard", "techdocs"]);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(await answers(), "refused", "ask's server stops when it is turned off");
+    assert.deepEqual(await labels(), ["coboard", "techdocs"]);
+    await choose(["coboard", "techdocs", "ask"]);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(await answers(), 200, "and listens again, at the same address, when turned back on");
+    assert.deepEqual(await labels(), ["coboard", "techdocs", "ask"]);
+}
+await choose(mcpNamesAll());
+function mcpNamesAll() {
+    return ["coboard", "kb", "techdocs", ...(withAsk ? ["ask"] : [])];
+}
+assert.deepEqual(await labels(), mcpNamesAll(), "all back on");
 
 // ------------------------------------------------------------ Claude skills
 // The package carries the skills whole, and the command adds them to the

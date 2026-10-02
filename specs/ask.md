@@ -104,8 +104,10 @@ the call gives up at 25 minutes with the form still open.
 
 ## 5. The editor tab
 
-`ask-vscode` starts the MCP server (§4) when the window opens, and opens a
-tab the moment an agent opens a form. **ask: Open Pending Questions** brings
+`ask-vscode` starts the MCP server (§4) when the window opens, while the
+procode › MCP › ask setting is on (the default), and stops and restarts it
+as the setting changes; stopping cancels the forms its calls waited on. It
+opens a tab the moment an agent opens a form. **ask: Open Pending Questions** brings
 back the tab of a form still waiting. In the combined extension, **procode:
 Set Up MCP for Claude Code** writes the server's address into `.mcp.json`
 as an `http` entry, and VS Code's own agent is given it too.

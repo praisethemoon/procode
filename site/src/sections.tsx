@@ -631,6 +631,7 @@ const commands: Section = {
                 head={["Command", "What it does"]}
                 rows={[
                     [<strong>procode: Set Up MCP for Claude Code</strong>, <>Adds <Code>coboard</Code>, <Code>kb</Code> and <Code>techdocs</Code> to the project's <Code>.mcp.json</Code>.</>],
+                    [<strong>procode: Choose MCP Servers…</strong>, <>Turns each MCP server on or off (also under the procode › MCP settings). One that is off is left out of VS Code's agent and of <Code>.mcp.json</Code>.</>],
                     [<strong>procode: Add Skills for Claude Code</strong>, <>Adds the skills you pick to the project's <Code>.claude/skills/</Code>.</>],
                     [<strong>Board: New Epic / New Milestone / New Ticket</strong>, "Adds an item to the board."],
                     [<strong>Board: Archive / Archive with Note… / Unarchive</strong>, "Takes finished work out of the lists, or brings it back."],

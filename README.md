@@ -228,7 +228,7 @@ from `PATH` or wherever the settings point.
       on macOS, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> elsewhere) and
       run **procode: Set Up MCP for Claude Code**. It adds `coboard`, `kb`
       and `techdocs` to the project's `.mcp.json` and keeps any other
-      servers.
+      servers. **procode: Choose MCP Servers…** turns any of them off.
    3. Run **procode: Add Skills for Claude Code** the same way. It adds the
       skills that teach Claude to use the tools to the project's
       `.claude/skills/`: lap, kb and techdocs are ticked; tickets is this

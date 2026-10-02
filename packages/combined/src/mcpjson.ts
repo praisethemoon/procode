@@ -1,7 +1,8 @@
 /* Claude Code's `.mcp.json`: the project's MCP servers, one entry per name.
  * Pure functions over the parsed file, so the rules are testable without
- * VS Code: add or replace our entries and keep everything else, and tell
- * when an entry points at a copy of procode that is no longer installed. */
+ * VS Code: add or replace our entries, drop the ones procode wrote for
+ * servers that are turned off, keep everything else, and tell when an entry
+ * points at a copy of procode that is no longer installed. */
 
 /* A server Claude Code starts (stdio), or one it connects to (HTTP: ask's,
  * which runs inside VS Code). */
@@ -19,18 +20,28 @@ type Json = Record<string, unknown>;
  * procode's) is replaced by the new one; one set up by hand is left alone. */
 export const RETIRED = ["artifacts"] as const;
 
+/* An entry procode wrote: a stdio one running procode's script of that
+ * name, or an http one at ask's path. */
 function writtenByProcode(e: unknown, name: string): boolean {
-    const args = typeof e === "object" && e !== null && Array.isArray((e as Json)["args"]) ? ((e as Json)["args"] as unknown[]) : [];
+    if (typeof e !== "object" || e === null) return false;
+    const url = (e as Json)["url"];
+    if (typeof url === "string") return url.endsWith(HTTP_PATH);
+    const args = Array.isArray((e as Json)["args"]) ? ((e as Json)["args"] as unknown[]) : [];
     const script = typeof args[0] === "string" ? args[0].replace(/\\/g, "/") : "";
     return script.endsWith(`/out/mcp/${name}.js`);
 }
 
-/* The file with our servers written in; every other key and server is kept
- * exactly as it was. */
-export function withServers(file: Json, servers: readonly ServerEntry[]): Json {
+function serversOf(file: Json): Json {
     const existing = file["mcpServers"];
-    const mcpServers: Json = typeof existing === "object" && existing !== null && !Array.isArray(existing) ? { ...(existing as Json) } : {};
-    for (const name of RETIRED) {
+    return typeof existing === "object" && existing !== null && !Array.isArray(existing) ? (existing as Json) : {};
+}
+
+/* The file with our servers written in, and the entries procode wrote for
+ * the servers named in `off` taken out; every other key and server is kept
+ * exactly as it was, an entry of an `off` name set up by hand included. */
+export function withServers(file: Json, servers: readonly ServerEntry[], off: readonly string[] = []): Json {
+    const mcpServers: Json = { ...serversOf(file) };
+    for (const name of [...RETIRED, ...off]) {
         if (writtenByProcode(mcpServers[name], name)) delete mcpServers[name];
     }
     for (const s of servers) {
@@ -38,6 +49,12 @@ export function withServers(file: Json, servers: readonly ServerEntry[]): Json {
             "url" in s ? { type: "http", url: s.url, ...(s.timeout ? { timeout: s.timeout } : {}) } : { command: s.command, args: s.args, env: s.env };
     }
     return { ...file, mcpServers };
+}
+
+/* The names, among `names`, whose entry in the file procode wrote. */
+export function writtenEntries(file: Json, names: readonly string[]): string[] {
+    const servers = serversOf(file);
+    return names.filter((n) => writtenByProcode(servers[n], n));
 }
 
 /* Names of our servers whose entry was written by procode but runs something
