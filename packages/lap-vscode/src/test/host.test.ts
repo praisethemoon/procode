@@ -71,6 +71,7 @@ const fake = {
             return { dispose() {} };
         },
         createStatusBarItem: () => ({ show() {}, hide() {}, dispose() {} }),
+        onDidChangeWindowState: () => ({ dispose() {} }),
         showWarningMessage: (m: string) => void warnings.push(m),
     },
     comments: { createCommentController: () => ({ dispose() {} }) },

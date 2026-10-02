@@ -15,6 +15,7 @@ import * as vscode from "vscode";
 import { askBranchList, BranchRow, BranchView, branchView, LapExec, lapBin, ListGate, onAnyChange, parseBranchList, tendFolder } from "./branches";
 import { IncrementalLog, branchProblem, folderFiles, hasHistory, historyProblem, listSignature, ownFiles, readStream } from "./chunks";
 import { EMPTY_FILTER, HistoryFilter, pageOf, query } from "./history";
+import { Badge, PendingCount } from "./pending";
 import {
     CommitRec,
     LapLog,
@@ -281,6 +282,9 @@ class BranchSource {
  * crosses. */
 class HistoryView implements vscode.WebviewViewProvider {
     private view: vscode.WebviewView | null = null;
+    /* The pending-edits badge, kept for a view VS Code makes later: a
+     * webview view exists only once it has been shown. */
+    private badge: Badge | undefined;
     private filter: HistoryFilter = EMPTY_FILTER;
     private page = 0;
     /* A commit to reveal once the view, not yet shown, first asks. */
@@ -295,6 +299,7 @@ class HistoryView implements vscode.WebviewViewProvider {
 
     resolveWebviewView(view: vscode.WebviewView): void {
         this.view = view;
+        view.badge = this.badge;
         const media = vscode.Uri.joinPath(this.extensionUri, "out", "media");
         view.webview.options = { enableScripts: true, localResourceRoots: [media] };
         view.webview.html = historyHtml(view.webview, media);
@@ -322,6 +327,11 @@ class HistoryView implements vscode.WebviewViewProvider {
         view.onDidDispose(() => {
             this.view = null;
         });
+    }
+
+    setBadge(badge: Badge | undefined): void {
+        this.badge = badge;
+        if (this.view) this.view.badge = badge;
     }
 
     /* The page for the view's last query, against the log as it is now;
@@ -690,8 +700,42 @@ export function activate(context: vscode.ExtensionContext): void {
             history.push();
             updateStatus();
             branches.refresh();
+            pending.schedule();
         }, 200);
     };
+
+    /* The badge: files with edits lap has not recorded, recounted after
+     * the files or lap's log change (an agent writes files without VS Code
+     * saving them, so a watcher, not save events) and when the window comes
+     * back into focus. */
+    const pending = new PendingCount(
+        (done) => {
+            const root = tree.repoRoot;
+            if (!root) return done(null);
+            execFile(lap(), ["status", "--json"], { cwd: root, timeout: 10_000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) =>
+                done(err ? null : String(stdout)),
+            );
+        },
+        (badge) => history.setBadge(badge),
+    );
+    const files = vscode.workspace.createFileSystemWatcher("**/*");
+    const touched = (uri: vscode.Uri): void => {
+        // lap's own folder is followed by the log watcher below, and these
+        // are never lap's to record.
+        if (/[\\/](\.lap|\.git|node_modules)([\\/]|$)/.test(uri.fsPath)) return;
+        pending.schedule();
+    };
+    files.onDidChange(touched);
+    files.onDidCreate(touched);
+    files.onDidDelete(touched);
+    context.subscriptions.push(
+        pending,
+        files,
+        vscode.window.onDidChangeWindowState((w) => {
+            if (w.focused) pending.schedule();
+        }),
+    );
+    pending.run();
 
     const watcher = vscode.workspace.createFileSystemWatcher(
         "**/.lap/{log.jsonl,log/*.jsonl}",
@@ -718,6 +762,7 @@ export function activate(context: vscode.ExtensionContext): void {
             history.push();
             updateStatus();
             branches.refresh(true);
+            pending.run();
         }),
         vscode.commands.registerCommand("lap.toggleGrouping", async () => {
             await tree.toggleGrouping();
