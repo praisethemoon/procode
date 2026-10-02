@@ -72,6 +72,19 @@
         "${workspaceFolder}/packages/techdocs-vscode/out/**/*.js"
       ],
       "preLaunchTask": "prepare: all extensions"
+    },
+    {
+      "name": "Run procode (combined, with ask)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/combined/dist",
+        "--disable-extensions",
+        "${workspaceFolder}/.playground"
+      ],
+      "env": { "PATH": "${workspaceFolder}/cli/lap-cli/bin:${workspaceFolder}/cli/kb-cli/bin:${env:PATH}" },
+      "outFiles": ["${workspaceFolder}/packages/combined/dist/out/**/*.js"],
+      "preLaunchTask": "prepare: combined with ask"
     }
   ]
 }

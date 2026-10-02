@@ -96,6 +96,22 @@
       ],
       "dependsOrder": "sequence",
       "problemMatcher": []
+    },
+    {
+      "label": "build: combined with ask",
+      "detail": "Builds packages/combined/dist with ask in it (--with-ask): the one extension, with procode's own commands and the ask tab and server.",
+      "type": "shell",
+      "command": "node packages/combined/scripts/build.mjs --with-ask",
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare: combined with ask",
+      "dependsOn": [
+        "playground",
+        "build: combined with ask"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
     }
   ]
 }
