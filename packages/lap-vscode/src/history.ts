@@ -32,7 +32,7 @@ export const RANGE_LABELS: Readonly<Record<Range, string>> = {
     all: "All",
 };
 
-export const OPS = ["edit", "create", "delete"] as const;
+export const OPS = ["edit", "create", "delete", "untrack"] as const;
 export const STATES = ["active", "open", "ended", "none"] as const;
 export type SessionState = (typeof STATES)[number];
 

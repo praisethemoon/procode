@@ -35,7 +35,8 @@ typedef struct {
     const char *session; /* commit only; NULL when committed --no-session */
     const char *file;    /* commit only; repo-relative */
     const char *ts;      /* ISO-8601 UTC */
-    const char *op;      /* commit only: "edit" | "create" | "delete" */
+    const char *op;      /* commit only: "edit" | "create" | "delete" |
+                            "untrack" */
     const char *msg;      /* session_start: the session's purpose */
     const char *intent;   /* commit: why the edit exists */
     const char *behavior; /* commit: what this edit makes the code do */
@@ -174,6 +175,12 @@ bool rec_replay_file(Arena *a, const RecLog *log, const char *rel,
 /* Applies one commit record to a file state. The single definition of what
  * a record means; every replay path goes through it. */
 void rec_apply(Arena *a, Lines *cur, const Rec *rec);
+
+/* Whether a commit's op takes its file out of the tracked set: "delete"
+ * (the file was removed) or "untrack" (lap stopped following it; the file
+ * stays on disk). Either way the file is gone from lap's view, and a later
+ * "create" starts it afresh. */
+bool rec_op_gone(const char *op);
 
 /* "S12" -> 12; 0 for anything that is not a session id (NULL, empty,
  * trailing garbage). Both the index and the scan paths parse session

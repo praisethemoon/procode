@@ -20,7 +20,7 @@ export interface CommitRec {
     user: string | null;
     session: string | null;
     file: string;
-    op: string; /* "edit" | "create" | "delete" */
+    op: string; /* "edit" | "create" | "delete" | "untrack" */
     oldStart: number;
     oldLines: number;
     newStart: number;
@@ -340,6 +340,7 @@ export function mdProse(text: string): string {
 
 /* Human region label, mirroring the CLI's region_describe(). */
 export function regionLabel(c: CommitRec): string {
+    if (c.op === "untrack") return "untracked (the file was not changed)";
     if (c.newLines === 0 && c.oldLines > 0) {
         return c.oldLines === 1
             ? `line ${c.oldStart} (deleted)`
@@ -413,7 +414,9 @@ export interface FileState {
 }
 
 function applyCommit(state: FileState, c: CommitRec): void {
-    if (c.op === "delete") {
+    /* an untrack takes the file out of lap's view, as a delete does: a
+     * later create starts it afresh */
+    if (c.op === "delete" || c.op === "untrack") {
         state.lines = [];
         state.eofNl = true;
         state.exists = false;

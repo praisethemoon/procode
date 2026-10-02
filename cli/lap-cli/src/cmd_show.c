@@ -220,11 +220,18 @@ int32_t cmd_show(Arena *a, int32_t argc, char **argv) {
             sb_puts(&sb, "  behavior:\n");
             sb_indented(&sb, "    ", rec->earlier_behavior[i]);
         }
-        sb_puts(&sb, "diff:\n");
-        render_commit_diff(&sb, rec);
+        bool untrack = strcmp(rec->op, "untrack") == 0;
+        if (untrack) {
+            sb_puts(&sb, "diff: none (lap stopped tracking the file; the "
+                         "file itself was not changed)\n");
+        } else {
+            sb_puts(&sb, "diff:\n");
+            render_commit_diff(&sb, rec);
+        }
         if (have_content) {
             if (deleted) {
-                sb_puts(&sb, "file after this commit: (deleted)\n");
+                sb_printf(&sb, "file after this commit: (%s)\n",
+                          untrack ? "untracked" : "deleted");
             } else {
                 sb_puts(&sb, "file after this commit:\n");
                 for (int32_t i = 0; i < content.count; i++) {

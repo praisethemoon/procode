@@ -611,6 +611,13 @@ async function openCommitDiff(
     comments: CommitComments,
 ): Promise<void> {
     const before = stateUri(commit.id, "before", commit.file);
+    if (commit.op === "untrack") {
+        /* nothing changed in the file: show it as lap last had it, with
+         * the commit's thread, rather than a diff of every line removed */
+        await vscode.commands.executeCommand("vscode.open", before, { preview: true });
+        comments.show(commit, session, before);
+        return;
+    }
     const after = stateUri(commit.id, "after", commit.file);
     await vscode.commands.executeCommand(
         "vscode.diff",

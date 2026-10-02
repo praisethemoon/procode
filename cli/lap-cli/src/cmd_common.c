@@ -223,8 +223,10 @@ void print_commit_human(StrBuf *sb, const Rec *rec, bool with_region,
         region_describe(&shown, desc, sizeof desc);
         sb_printf(sb, "%-8s ", rec->op);
         sb_text(sb, rec->file, strlen(rec->file));
-        sb_puts(sb, "  ");
-        sb_field(sb, S_MUTED, desc, 0);
+        if (strcmp(rec->op, "untrack") != 0) { /* an untrack has no lines */
+            sb_puts(sb, "  ");
+            sb_field(sb, S_MUTED, desc, 0);
+        }
         sb_putc(sb, '\n');
     } else {
         sb_text(sb, rec->file, strlen(rec->file));

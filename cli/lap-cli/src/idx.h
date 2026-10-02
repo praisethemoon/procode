@@ -23,7 +23,15 @@ enum {
     IDX_UNKNOWN, /* a record type a newer lap wrote */
     IDX_AMEND
 };
-enum { IDX_OP_EDIT, IDX_OP_CREATE, IDX_OP_DELETE };
+enum { IDX_OP_EDIT, IDX_OP_CREATE, IDX_OP_DELETE, IDX_OP_UNTRACK };
+
+/* rec_op_gone for an index entry's op. */
+static inline bool idx_op_gone(uint8_t op) {
+    return op == IDX_OP_DELETE || op == IDX_OP_UNTRACK;
+}
+
+/* A commit's op as the index stores it. */
+uint8_t idx_op_of(const char *op);
 
 typedef struct {
     char magic[8];    /* "LAPIDX04" */

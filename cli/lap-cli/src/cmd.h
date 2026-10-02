@@ -23,6 +23,7 @@ int32_t cmd_rr(Arena *a, int32_t argc, char **argv);
 int32_t cmd_branch(Arena *a, int32_t argc, char **argv);
 int32_t cmd_merge(Arena *a, int32_t argc, char **argv);
 int32_t cmd_amend(Arena *a, int32_t argc, char **argv);
+int32_t cmd_untrack(Arena *a, int32_t argc, char **argv);
 
 /* ---- shared helpers (cmd_common.c) ----
  *
@@ -156,9 +157,13 @@ int32_t merge_unknown_records(const RecLog *log, const int32_t *lof,
                               const char **type);
 
 /* The files a history tracks: each file whose last commit in log is not a
- * delete, in the order they first appear. What the index knows, read from
- * the history when there is no index. */
+ * delete or an untrack, in the order they first appear. What the index
+ * knows, read from the history when there is no index. */
 size_t log_tracked_files(Arena *a, const RecLog *log, const char ***out);
+/* The files r tracks: from the index when it covers the history, else
+ * from the log. False with a reason in err when the log cannot be read. */
+bool tracked_files(Arena *a, Repo *r, const char ***out, size_t *n,
+                   char *err, size_t errsz);
 
 /* Post-write cache maintenance; failures warn, never fail the command. */
 void caches_sync_warn(Arena *a, const Repo *r);

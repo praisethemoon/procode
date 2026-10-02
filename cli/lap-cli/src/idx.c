@@ -19,6 +19,13 @@ static void cache_path(const Repo *r, const char *name, char *out,
     snprintf(out, outsz, "%s/%s", r->lapdir, name);
 }
 
+uint8_t idx_op_of(const char *op) {
+    return strcmp(op, "create") == 0    ? IDX_OP_CREATE
+           : strcmp(op, "delete") == 0  ? IDX_OP_DELETE
+           : strcmp(op, "untrack") == 0 ? IDX_OP_UNTRACK
+                                        : IDX_OP_EDIT;
+}
+
 uint64_t idx_epoch(const char *ts) {
     struct tm tm;
     memset(&tm, 0, sizeof tm);
@@ -467,9 +474,7 @@ bool idx_sync(Arena *a, const Repo *r, char *err, size_t errsz) {
             case REC_COMMIT: {
                 e.kind = IDX_COMMIT;
                 s.idx.h.commits++;
-                e.op = strcmp(rec.op, "create") == 0   ? IDX_OP_CREATE
-                       : strcmp(rec.op, "delete") == 0 ? IDX_OP_DELETE
-                                                       : IDX_OP_EDIT;
+                e.op = idx_op_of(rec.op);
                 e.session = rec_session_no(rec.session);
                 e.old_start = (uint32_t)rec.old_start;
                 e.old_lines = (uint32_t)rec.old_lines;
@@ -598,9 +603,7 @@ bool idx_matches_log(Arena *a, const Repo *r, const Idx *idx, char *why,
                 break;
             }
             if (rec.type == REC_COMMIT) {
-                uint8_t op = strcmp(rec.op, "create") == 0   ? IDX_OP_CREATE
-                             : strcmp(rec.op, "delete") == 0 ? IDX_OP_DELETE
-                                                             : IDX_OP_EDIT;
+                uint8_t op = idx_op_of(rec.op);
                 if (e->file_id >= (uint32_t)idx->npaths ||
                     strcmp(idx->paths[e->file_id], rec.file) != 0 ||
                     e->op != op) {

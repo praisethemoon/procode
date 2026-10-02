@@ -62,15 +62,15 @@ static int cmp_tracked(const void *pa, const void *pb) {
     return strcmp(((const Tracked *)pa)->path, ((const Tracked *)pb)->path);
 }
 
-/* Every file whose last commit is not a delete is tracked: from the index,
- * each with its head. */
+/* Every file whose last commit is not a delete or an untrack is tracked:
+ * from the index, each with its head. */
 static size_t tracked_from_index(Arena *a, const Idx *ix, Tracked **out) {
     Tracked *t = (Tracked *)arena_alloc(
         a, (size_t)(ix->npaths ? ix->npaths : 1) * sizeof(Tracked));
     size_t nt = 0;
     for (int32_t f = 0; f < ix->npaths; f++) {
         int64_t head = ix->heads[f].head;
-        if (head >= 0 && ix->v[head].op != IDX_OP_DELETE)
+        if (head >= 0 && !idx_op_gone(ix->v[head].op))
             t[nt++] = (Tracked){ix->paths[f], head};
     }
     *out = t;
@@ -89,8 +89,7 @@ size_t log_tracked_files(Arena *a, const RecLog *log, const char ***out) {
             continue;
         if (!strmap_get(&last, c->file))
             order[norder++] = c->file;
-        strmap_put(a, &last, c->file,
-                   strcmp(c->op, "delete") == 0 ? "d" : "");
+        strmap_put(a, &last, c->file, rec_op_gone(c->op) ? "d" : "");
     }
     size_t n = 0;
     for (size_t i = 0; i < norder; i++) {
@@ -99,6 +98,26 @@ size_t log_tracked_files(Arena *a, const RecLog *log, const char ***out) {
     }
     *out = order;
     return n;
+}
+
+bool tracked_files(Arena *a, Repo *r, const char ***out, size_t *n,
+                   char *err, size_t errsz) {
+    Idx *ix = idx_ready(a, r);
+    if (ix) {
+        Tracked *t;
+        *n = tracked_from_index(a, ix, &t);
+        const char **paths =
+            (const char **)arena_alloc(a, (*n ? *n : 1) * sizeof(char *));
+        for (size_t i = 0; i < *n; i++)
+            paths[i] = t[i].path;
+        *out = paths;
+        return true;
+    }
+    RecLog log;
+    if (!repo_log_load(a, r, &log, err, errsz))
+        return false;
+    *n = log_tracked_files(a, &log, out);
+    return true;
 }
 
 /* The same from the history itself, when there is no index (a clone holds
@@ -222,6 +241,12 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         }
     }
 
+    /* Tracked files .lapignore names now: still tracked, which is what
+     * people trip on, so status says how to stop. Only files the walk did
+     * not see are candidates, so this costs nothing on a clean tree. */
+    const char **ignored = NULL;
+    size_t nignored = 0, icap = 0;
+
     /* Each file is read and diffed in fa, emptied before the next: what the
      * output needs is copied into sb as the file is reported. */
     Arena *fa = arena_new(1 << 16);
@@ -233,6 +258,14 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
         if (prev && strcmp(prev, rel) == 0)
             continue; /* dedupe overlap between walks */
         prev = rel;
+        if (!f->walked && ignore_match(sw.ig, rel, false)) {
+            char wpath[LAP_PATH_MAX];
+            snprintf(wpath, sizeof wpath, "%s/%s", repo.root, rel);
+            if (plat_is_file(wpath)) {
+                ARENA_GROW(a, ignored, nignored, icap, const char *);
+                ignored[nignored++] = rel;
+            }
+        }
 
         bool cacheable = f->walked && f->head >= 0;
         if (cacheable) {
@@ -363,9 +396,25 @@ int32_t cmd_status(Arena *a, int32_t argc, char **argv) {
     }
 
     if (json) {
+        sb_puts(&sb, "],\"tracked_ignored\":[");
+        for (size_t i = 0; i < nignored; i++) {
+            if (i)
+                sb_putc(&sb, ',');
+            json_escape_c(&sb, ignored[i]);
+        }
         sb_puts(&sb, "]}");
         puts(sb_finish(&sb));
     } else {
+        if (nignored) {
+            sb_printf(&sb, "tracked but ignored by %s (lap untrack <path> "
+                           "stops tracking %s):\n",
+                      LAP_IGNORE_NAME, nignored == 1 ? "it" : "them");
+            for (size_t i = 0; i < nignored; i++) {
+                sb_puts(&sb, "  ");
+                sb_text(&sb, ignored[i], strlen(ignored[i]));
+                sb_putc(&sb, 0x0a);
+            }
+        }
         if (dirty == 0)
             sb_puts(&sb, "clean: working tree matches the last commit\n");
         else

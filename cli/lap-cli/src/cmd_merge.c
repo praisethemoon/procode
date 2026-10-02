@@ -847,7 +847,7 @@ int32_t cmd_merge(Arena *a, int32_t argc, char **argv) {
         if (last >= 0) {
             changed[f] = true;
             results[f] = p.result;
-            gone[f] = strcmp(mine[last]->op, "delete") == 0;
+            gone[f] = rec_op_gone(mine[last]->op);
         }
         if (p.placed < (int32_t)n) {
             size_t s2 = nstop, s3 = nstop;

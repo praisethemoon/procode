@@ -46,6 +46,7 @@ set(LAP_LIB_SOURCES
     src/adopt.c
     src/cmd_merge.c
     src/cmd_amend.c
+    src/cmd_untrack.c
     src/tty.c
     src/help.c
 )

@@ -25,6 +25,9 @@
  * change and, together, leave the parent's text there: a change both sides
  * made in several steps. Near is not identical: one line different, or a
  * run that stops short of the parent's text, is a conflict.
+ *
+ * An untrack carries no text, so it never conflicts: it is always placed,
+ * and is already done where the parent no longer tracks the file.
  */
 #ifndef LAP_ADOPT_H
 #define LAP_ADOPT_H

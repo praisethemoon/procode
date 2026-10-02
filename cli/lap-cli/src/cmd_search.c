@@ -78,7 +78,7 @@ static int32_t blame_line(const RecLog *log, const char *rel, int32_t line) {
         const Rec *rec = &log->v[i];
         if (rec->type != REC_COMMIT || strcmp(rec->file, rel) != 0)
             continue;
-        if (strcmp(rec->op, "delete") == 0)
+        if (rec_op_gone(rec->op))
             return -1;
         if (line >= rec->new_start && line < rec->new_start + rec->new_lines)
             return i;
@@ -96,7 +96,7 @@ static int64_t blame_chain(const Idx *ix, const char *rel, int32_t line) {
     for (int64_t e = fid >= 0 ? ix->heads[fid].head : -1; e >= 0;
          e = ix->v[e].prev_same_file) {
         const IdxEntry *en = &ix->v[e];
-        if (en->op == IDX_OP_DELETE)
+        if (idx_op_gone(en->op))
             return -1;
         if (line >= (int32_t)en->new_start &&
             line < (int32_t)(en->new_start + en->new_lines))

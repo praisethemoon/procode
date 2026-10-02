@@ -524,8 +524,12 @@ uint32_t rec_session_no(const char *id) {
     return *end == '\0' && v > 0 && v <= UINT32_MAX ? (uint32_t)v : 0;
 }
 
+bool rec_op_gone(const char *op) {
+    return op && (strcmp(op, "delete") == 0 || strcmp(op, "untrack") == 0);
+}
+
 void rec_apply(Arena *a, Lines *cur, const Rec *rec) {
-    if (strcmp(rec->op, "delete") == 0) {
+    if (rec_op_gone(rec->op)) {
         cur->lines = NULL;
         cur->count = 0;
         cur->eof_nl = true;
@@ -569,7 +573,7 @@ bool rec_replay_file(Arena *a, const RecLog *log, const char *rel,
         if (rec->type != REC_COMMIT || strcmp(rec->file, rel) != 0)
             continue;
         seen = true;
-        if (strcmp(rec->op, "delete") == 0) {
+        if (rec_op_gone(rec->op)) {
             cur.lines = NULL;
             cur.count = 0;
             cur.eof_nl = true;

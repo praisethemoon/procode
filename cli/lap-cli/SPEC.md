@@ -157,7 +157,7 @@ Record types:
 {"type":"commit","id":"L7","user":"jane",      // who committed (see below);
                                                // absent in pre-user logs
  "session":"S2",                               // session null if --no-session
- "file":"src/foo.c","op":"edit",               // op: edit | create | delete
+ "file":"src/foo.c","op":"edit",               // op: edit | create | delete | untrack
  "old_start":10,"old_lines":2,"new_start":10,"new_lines":3,
  "eof_nl":true,                                 // trailing-\n state after commit
  "old_text":["..."],"new_text":["..."],         // full replaced/replacement lines
@@ -224,7 +224,12 @@ Region semantics: replace old lines `[old_start, old_start+old_lines)` with
 `new_text`. Starts are 1-based; `old_lines == 0` is a pure insertion before
 `old_start`, `new_lines == 0` a pure deletion. `create` records the whole
 file as one insertion (empty history = one big change, like git); `delete`
-records the entire removed content. `new_start` is a **committed-file**
+records the entire removed content. `untrack` records no text at all
+(every count 0, both arrays empty): lap stopped tracking the file, which
+was not changed (§`lap untrack`). For what is tracked it means what a
+delete means — the file leaves the tracked set, and a later `create`
+starts it afresh — but nothing in it says the file is gone, and no lap
+command ever touches a working file for it. `new_start` is a **committed-file**
 coordinate: the committed state is the previous state with only this region
 applied, so `new_start == old_start` by construction — never the
 working-file position, which may be shifted by other still-pending edits.
@@ -884,7 +889,7 @@ Active session, then every file with pending changes: `new` (line count),
 A file lap cannot read — no permission on it, or on a folder above it — is
 `unreadable`, never `deleted` or clean, and so is a folder it cannot open
 (listed as `<folder>/`, since what is in it is unknown). Only a path that
-is not there is deleted. A tracked file is one whose last commit is not a delete, as the
+is not there is deleted. A tracked file is one whose last commit is not a delete or an untrack, as the
 index says or, without it (a fresh clone's `.lap/` holds only `log/`), as
 the history says: the output is the same with every cache or none.
 
@@ -897,6 +902,13 @@ is the downward half of the rule every command follows upward: the nearest
 `.lap/` owns a file. Files this repository recorded there before that
 folder got its own `.lap/` stay tracked, as files ignored after they were
 recorded do.
+
+**A tracked file `.lapignore` now names** is still tracked (§`.lapignore`),
+which is easy to miss, so status lists each such file still on disk under
+`tracked but ignored by .lapignore`, with the command that stops tracking
+it (`lap untrack <path>`). Only tracked files the walk did not see are
+candidates, so a tree without any costs nothing. `--json` gives them as
+`"tracked_ignored":[…]`, empty when there are none.
 
 ### `lap commit <file> (-i "intent" -b "behavior" | -F <file|->) [--edit N | --lines A-B | --whole-file] [--force-message] [--no-session] [--dry-run] [--branch B]`
 Records exactly one edit. The message comes from `-i`/`--intent` and
@@ -984,6 +996,39 @@ amendment, or `S<n>`, naming the record's type), `same_message` (the commit alre
 that), `unknown_ref`/`ambiguous_ref`. Prints `[L42 fa9cebd] amended (<n>)`
 and the new intent's first line; `--json` returns the commit's `id`,
 `hash` and `amended` (the count).
+
+### `lap untrack <path>... -i "intent" [--force] [--no-session] [--branch B]`
+Stops tracking files lap recorded, as `git rm --cached` does, without
+starting a new history: the way out for a file recorded before
+`.lapignore` named it. A path is a tracked file, or a folder (the
+repository's root included), which means every tracked file under it;
+patterns are the shell's. Each file gets one commit, op `untrack`, in the
+active session (or with `--no-session` outside any), with the intent
+given and the behavior "lap stops tracking this file; it stays on disk
+and its history stays readable". The file's shadow copy goes; the file
+itself is never touched, here or wherever the record is replayed (a
+clone, a `lap rebuild`, a branch's `lap merge`), which is where it parts
+from git, whose removal deletes the file for everyone who pulls it.
+
+Everything is checked before anything is written, and one refusal writes
+nothing: `not_tracked` (a path that is no tracked file and holds none),
+`pending_edits` (a file with edits lap has not recorded — changed,
+deleted or unreadable — which would leave lap unseen; `--force` untracks
+it anyway, and the edits stay on disk), `usage` (no path, or no intent),
+`no_session`. A file `.lapignore` does not name will show in `lap status`
+as new; untrack says so (`--json`: `"not_ignored":[…]`). Prints
+`[L42 fa9cebd] S3 <file>: untracked "<intent>"` per file; `--json`
+returns `{"ok":true,"session":…,"untracked":[{"id","hash","file"}],
+"not_ignored":[…]}`.
+
+Earlier history stays readable: `lap log --file`, `lap show` and
+`lap search --msg` find the file's commits, and `lap show` of the untrack
+says it has no diff. Blame (`search --line`) answers for a file's current
+lines, and an untracked file has none. To track the file again, take it
+out of `.lapignore` (or never put it there): it shows as `new`, and
+committing it records a `create`. A branch's untrack is adopted by
+`lap merge` whatever this folder's lines are, and is already done where
+this folder no longer tracks the file.
 
 ### `lap log [--session S] [--file F] [-n N] [--intent-only | --behavior-only] [--branch B]`
 Commits newest-first: id, short hash, timestamp, session, op, file, range;
@@ -1267,9 +1312,9 @@ segments. Negation (`!`) is not supported. Always ignored: `.lap/`, `.git`
 
 `.lapignore` keeps lap from recording files it has not recorded yet. A
 file recorded before it was ignored stays tracked: its edits still show
-in `lap status`, so none is lost unseen. To shed tracked files for good,
-start a new history (a fresh `.lap/` from `lap init`): rare, and blunt,
-since the whole history goes with them.
+in `lap status`, so none is lost unseen, and status names it under
+`tracked but ignored`. `lap untrack <path>` stops tracking it, keeping its
+history and the file.
 
 ## Concurrency & crash safety
 

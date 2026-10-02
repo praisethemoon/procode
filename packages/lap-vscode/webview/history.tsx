@@ -190,7 +190,7 @@ function FilterBar(props: { filter: HistoryFilter; users: readonly string[]; onC
 
 /* ------------------------------------------------------------------ rows */
 
-const OP_ICON: Record<string, string> = { create: "diff-added", delete: "diff-removed" };
+const OP_ICON: Record<string, string> = { create: "diff-added", delete: "diff-removed", untrack: "eye-closed" };
 
 const FORCED = "forced: the message checks were skipped (--force-message)";
 

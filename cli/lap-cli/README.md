@@ -216,6 +216,7 @@ with amendments needs this version of lap or later.
 | `lap status` | pending edits per file, numbered |
 | `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several, `--lines` also any part of an added run; on a new file `--lines A-B` creates it with that part, and one over 50 lines needs parts or `--whole-file`; `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
 | `lap amend <commit> -i "intent" -b "behavior"` | correct what a commit of this folder says; nothing written changes (`-F`, `--force-message` as for commit) |
+| `lap untrack <path>... -i "intent"` | stop tracking files lap recorded, such as ones `.lapignore` names now (a folder: every tracked file in it); they stay on disk and their history stays readable (`--force` for files with edits lap has not recorded) |
 | `lap log` | commits, newest first, each with its intent and behavior (`--session`, `--file`, `-n`; `--intent-only` / `--behavior-only` for one) |
 | `lap show <commit>` | one commit in full, by id, hash or hash prefix (`--full-file` reconstructs the file) |
 | `lap search` | blame a line (`--file F --line N`), find text (`--text`), intents and behaviors (`--msg`), sessions, time ranges |
@@ -288,10 +289,9 @@ there whatever nobody edits by hand — build output, dependencies, and
 vendored or generated code (a copied-in parser can be megabytes, and every
 update of it would be another whole-file record). `.lapignore` keeps lap from recording files it has not recorded yet. A
 file recorded before it was ignored stays tracked: its edits still show
-in `lap status`, so none is lost unseen. To shed tracked files for good,
-start a new history (a fresh `.lap/` from `lap init`): rare, and blunt,
-since the whole history goes with them. Details in
-[SPEC.md](SPEC.md).
+in `lap status`, so none is lost unseen, and status names it as tracked
+but ignored. `lap untrack <path>` stops tracking it, keeping its history
+and the file on disk. Details in [SPEC.md](SPEC.md).
 
 ## Branches and merging
 

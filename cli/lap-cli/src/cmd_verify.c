@@ -277,7 +277,7 @@ static void deep_indexed(Arena *a, Repo *repo, Idx *idx, DeepCheck *dc) {
                 break;
             }
             rec_apply(fa, &cur, &rec);
-            exists = idx->v[e].op != IDX_OP_DELETE;
+            exists = !idx_op_gone(idx->v[e].op);
             if ((n - i + 1) % COMPACT_EVERY == 0) {
                 /* the snapshot list moves along */
                 Arena *fresh = arena_new(1 << 16);

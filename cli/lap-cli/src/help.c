@@ -49,6 +49,16 @@ static const HelpFlag F_AMEND[] = {
     JSON_FLAG,
     END};
 
+static const HelpFlag F_UNTRACK[] = {
+    {"-i", "--intent", "\"intent\"", "why lap stops tracking these files"},
+    {"--force", NULL, NULL,
+     "untrack files with edits lap has not recorded (they\n"
+     "stay on disk, outside lap)"},
+    {"--no-session", NULL, NULL, "untrack outside any session"},
+    BRANCH_WRITE,
+    JSON_FLAG,
+    END};
+
 static const HelpFlag F_LOG[] = {
     {"--session", NULL, "<S>", "only that session's commits (S<n> or <branch>/S<n>)"},
     {"--file", NULL, "<F>", "only that file's commits"},
@@ -179,6 +189,12 @@ const HelpCmd HELP_CMDS[] = {
      "correct what a commit of this folder says; its code and every\n"
      "written record stay as they are",
      F_AMEND, cmd_amend, false},
+    {"untrack", NULL,
+     "untrack <path>... -i \"intent\" [--force] [--no-session]\n"
+     "[--branch <name>] [--json]",
+     "stop tracking files lap recorded (a folder: every tracked file in\n"
+     "it); they stay on disk and their history stays readable",
+     F_UNTRACK, cmd_untrack, false},
     {"log", NULL, "log [--session S] [--file F] [-n N] [--intent-only | --behavior-only]\n"
      "[--branch <name>] [--json]",
      "commits newest first: id, short hash, time, session, file, then\n"

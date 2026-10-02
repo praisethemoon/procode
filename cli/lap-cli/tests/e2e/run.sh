@@ -52,7 +52,7 @@ cd "$WORK" || exit 1
 # ---------------------------------------------------------------- help
 t "lap --help lists every command and flag SPEC.md documents"
 HELP=$("$LAP" --help)
-for w in init status commit amend log show search session rr verify rebuild \
+for w in init status commit amend untrack log show search session rr verify rebuild \
     "branch start" "branch list" "branch forget" "move <branch> <path>" merge \
     -F --edit --lines --force-message --no-session --dry-run "--branch <name>" \
     --full-file --file --line --text --added --removed --msg --session --since \
@@ -69,7 +69,7 @@ printf '%s\n' "$HELP" | grep -F -e "session list" | grep -qF -e "--branch" ||
     fail "the help does not give session list --branch"
 
 t "--help, -h and lap help <command> answer for every command and subcommand, outside a repository"
-for c in init status commit amend log show search session "session start" \
+for c in init status commit amend untrack log show search session "session start" \
     "session end" "session list" "session current" verify rebuild rr review \
     branch "branch start" "branch list" "branch forget" "branch move" merge; do
     # shellcheck disable=SC2086
@@ -3437,6 +3437,85 @@ history | tail -1 | grep -q '^{"type":"session_end","id":"S3","ts":' || fail "an
 expect_grep '"summary":null' "$LAP" rr S3 --json
 expect_not_grep "done:" "$LAP" rr S3 --no-diff
 expect_grep "chain ok" "$LAP" verify
+cd "$WORK"
+
+# ------------------------------------------------------------ untrack
+t "a file recorded before it was ignored is named by status, and lap untrack stops tracking it"
+mkdir "$WORK/untrack" && cd "$WORK/untrack" || exit 1
+"$LAP" init >/dev/null 2>&1
+"$LAP" session start "set up the project" >/dev/null 2>&1
+mkdir gen
+printf 'kept\n' > keep.txt
+printf 'one\n' > gen/one.txt
+printf 'two\n' > gen/two.txt
+for f in keep.txt gen/one.txt gen/two.txt; do
+    "$LAP" commit "$f" -i "add $f to the project" -b "the project has $f" >/dev/null 2>&1
+done
+printf 'gen/\n' >> .lapignore
+"$LAP" commit .lapignore -i "generated output is not ours to record" -b "lap leaves gen/ alone" --whole-file >/dev/null 2>&1
+expect_grep "tracked but ignored by .lapignore" "$LAP" status
+expect_grep "^  gen/one.txt" "$LAP" status
+expect_grep '"tracked_ignored":\["gen/one.txt","gen/two.txt"\]' "$LAP" status --json
+
+t "untrack refuses what it cannot do, whole: a path lap does not track, a file with unrecorded edits, no intent, no session"
+expect_grep '"error":"not_tracked"' "$LAP" untrack nope.txt -i "x" --json
+expect_grep '"error":"not_tracked"' "$LAP" untrack gen nope.txt -i "x" --json
+printf 'one, changed\n' > gen/one.txt
+expect_grep '"error":"pending_edits"' "$LAP" untrack gen -i "generated output" --json
+expect_grep "gen/one.txt has edits lap has not recorded" "$LAP" untrack gen -i "generated output"
+expect_grep '"error":"usage"' "$LAP" untrack gen --json
+expect_grep '"error":"usage"' "$LAP" untrack gen -i "   " --json
+"$LAP" session end >/dev/null 2>&1
+expect_grep '"error":"no_session"' "$LAP" untrack gen -i "generated output" --json
+"$LAP" session start "stop tracking generated output" >/dev/null 2>&1
+[ "$(history | grep -c '"op":"untrack"')" = 0 ] || fail "a refused untrack wrote a record"
+
+t "untrack --force on a folder: one untrack commit per file, in the session, and the files stay on disk"
+out=$("$LAP" untrack gen -i "generated output is not ours to track" --force --json 2>&1)
+printf '%s\n' "$out" | grep -q '"ok":true,"session":"S2","untracked":\[{"id":"L5"' || fail "untrack --json: $out"
+printf '%s\n' "$out" | grep -q '"not_ignored":\[\]' || fail "ignored files reported as not ignored: $out"
+[ "$(history | grep -c '"op":"untrack"')" = 2 ] || fail "not one untrack record per file: $(history | grep untrack)"
+history | grep '"file":"gen/one.txt","op":"untrack"' | grep -q '"session":"S2"' || fail "the untrack is not in the session"
+[ -f gen/one.txt ] && [ -f gen/two.txt ] || fail "untrack touched the working files"
+grep -qx 'one, changed' gen/one.txt || fail "untrack changed a working file"
+expect_grep "clean" "$LAP" status
+expect_not_grep "tracked but ignored" "$LAP" status
+expect_grep '"tracked_ignored":\[\]' "$LAP" status --json
+expect_grep "untrack  gen/one.txt" "$LAP" log -n 2
+expect_not_grep "lines 0" "$LAP" log -n 2
+expect_grep "diff: none" "$LAP" show L5
+expect_grep '"op":"untrack"' "$LAP" log -n 1 --json
+expect_grep '"error":"not_tracked"' "$LAP" untrack gen/one.txt -i "again" --json
+
+t "the history before an untrack stays readable"
+expect_grep "add gen/one.txt to the project" "$LAP" log --file gen/one.txt
+expect_grep "add gen/one.txt" "$LAP" search --file gen/one.txt --msg "project"
+expect_grep "add gen/one.txt" "$LAP" show L2
+
+t "untracking a file that is not ignored warns that it will show as new"
+printf 'notes\n' > notes.txt
+"$LAP" commit notes.txt -i "keep notes beside the code" -b "the project has notes" >/dev/null 2>&1
+expect_grep "not in .lapignore, so lap status will show it as new" "$LAP" untrack notes.txt -i "notes are mine, not the project's"
+expect_grep "new       notes.txt" "$LAP" status
+
+t "an untracked file comes back as new once it is not ignored, and committing it starts it afresh"
+grep -v '^gen/$' .lapignore > .lapignore.next && mv .lapignore.next .lapignore
+expect_grep "new       gen/two.txt" "$LAP" status
+expect_ok "$LAP" commit gen/two.txt -i "two is the project's after all" -b "the project has gen/two.txt again"
+history | tail -1 | grep -q '"file":"gen/two.txt","op":"create"' || fail "tracking again is not a create: $(history | tail -1)"
+expect_not_grep "gen/two.txt" "$LAP" status
+
+t "replay agrees: a rebuild, a deep verify, and a clone holding only the log see the same tracked files"
+before=$("$LAP" status --json)
+expect_ok "$LAP" rebuild
+[ "$("$LAP" status --json)" = "$before" ] || fail "status changed across a rebuild"
+expect_grep "0 mismatches" "$LAP" verify --deep
+mkdir "$WORK/untrack-clone" && mkdir "$WORK/untrack-clone/.lap" &&
+    cp -R .lap/log "$WORK/untrack-clone/.lap/" && cp -R gen keep.txt notes.txt .lapignore "$WORK/untrack-clone/"
+(cd "$WORK/untrack-clone" && "$LAP" status --json) | grep -q '"path":"gen/one.txt","state":"new"' ||
+    fail "a clone tracks an untracked file: $(cd "$WORK/untrack-clone" && "$LAP" status 2>&1)"
+(cd "$WORK/untrack-clone" && "$LAP" status --json) | grep -q 'gen/two.txt' &&
+    fail "a clone does not track a file committed again"
 cd "$WORK"
 
 # ------------------------------------------------------------ summary

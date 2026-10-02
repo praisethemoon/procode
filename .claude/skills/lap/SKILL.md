@@ -3,7 +3,7 @@ name: lap
 description: Record fine-grained edit history with the lap CLI while coding. Use whenever a lap repository (.lap directory) exists in the project, or the user asks to track edits with lap. Teaches the session -> edit -> commit cadence, one-edit-per-commit recovery, and history search.
 compatibility: Requires the lap CLI (cli/lap-cli): at ~/.procode/bin/lap when procode's VS Code extension is installed, else on PATH.
 metadata:
-  version: "3"
+  version: "4"
 ---
 
 # lap — fine-grained edit recording
@@ -192,9 +192,11 @@ lines). An edit that replaces lines is taken whole.
 - Binary files are not tracked; add noisy build output to `.lapignore`.
   `.lapignore` keeps lap from recording files it has not recorded yet. A
   file recorded before it was ignored stays tracked: its edits still show
-  in `lap status`, so none is lost unseen. To shed tracked files for good,
-  start a new history (a fresh `.lap/` from `lap init`): rare, and blunt,
-  since the whole history goes with them.
+  in `lap status`, which lists it under `tracked but ignored`. To stop
+  tracking it, `lap untrack <path> -i "<why>"` (a folder: every tracked
+  file in it): one commit per file in the session, the file stays on disk
+  and its history stays readable. It refuses a file with edits lap has
+  not recorded; commit them first, or ask the user before `--force`.
 - `lap status --json`, and `--json` on every command, when you want to
   parse output.
 - Output is coloured only at a terminal, so piped output is plain. If you

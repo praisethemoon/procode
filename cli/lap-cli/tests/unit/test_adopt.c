@@ -459,5 +459,40 @@ void test_adopt(void) {
     ASSERT_EQ_S(p.why, "the parent deleted the file");
     ASSERT_EQ_I(p.result.count, 0);
 
+    t_begin("adopt: a branch's untrack is placed whatever the parent's lines, "
+            "and a create after it starts the file afresh");
+    Rec *un = (Rec *)arena_alloc0(a, sizeof(Rec));
+    un->type = REC_COMMIT;
+    un->op = "untrack";
+    un->eof_nl = true;
+    /* the parent changed the line the branch's edit replaces, and the branch
+     * then untracked the file: the edit conflicts, the untrack is never
+     * reached; on its own the untrack goes in over any parent change */
+    parent = lines_replace(a, base, 3, 1, L(a, "P3\n").lines, 1, true);
+    const Rec *c38[] = {un};
+    adopt_place(a, base, parent, true, c38, 1, &p);
+    ASSERT_EQ_I(p.placed, 1);
+    ASSERT_TRUE(!p.already[0]);
+    ASSERT_EQ_I(p.result.count, 0);
+    ASSERT_TRUE(p.why == NULL);
+    Rec *again = (Rec *)arena_alloc0(a, sizeof(Rec));
+    again->type = REC_COMMIT;
+    again->op = "create";
+    again->old_start = again->new_start = 1;
+    Lines fresh = L(a, "new\n");
+    again->new_text = fresh.lines;
+    again->new_n = again->new_lines = fresh.count;
+    again->eof_nl = true;
+    const Rec *c39[] = {un, again};
+    adopt_place(a, base, parent, true, c39, 2, &p);
+    ASSERT_EQ_I(p.placed, 2);
+    ASSERT_EQ_S(text(a, p.result), "new\n");
+
+    t_begin("adopt: an untrack of a file the parent no longer has is already "
+            "done");
+    adopt_place(a, base, none, false, c38, 1, &p);
+    ASSERT_EQ_I(p.placed, 1);
+    ASSERT_TRUE(p.already[0]);
+
     arena_free(a);
 }

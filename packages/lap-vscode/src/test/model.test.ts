@@ -307,3 +307,17 @@ test("localTime shows the date, a space, and the time to the second", () => {
     assert.match(shown.slice(date.length + 1), /^\d{1,2}:\d{2}:48\b/);
     assert.equal(localTime("not a time"), "not a time");
 });
+
+test("an untrack takes the file out of lap's view, and a later create starts it afresh", () => {
+    const U = `{"type":"commit","id":"L3","session":"S1","file":"src/a.c","op":"untrack","old_start":0,"old_lines":0,"new_start":0,"new_lines":0,"eof_nl":true,"old_text":[],"new_text":[],"intent":"generated now","behavior":"lap stops tracking this file; it stays on disk and its history stays readable","ts":"2026-09-20T10:00:04Z","prev":"d"}`;
+    const R = `{"type":"commit","id":"L4","session":"S1","file":"src/a.c","op":"create","old_start":1,"old_lines":0,"new_start":1,"new_lines":1,"eof_nl":true,"old_text":[],"new_text":["int z;"],"intent":"ours again","behavior":"Declares z","ts":"2026-09-20T10:00:05Z","prev":"e"}`;
+    const log = parseLog(joined(INIT, S1, C1, C2, U, R), sha);
+    assert.equal(regionLabel(log.commits[2]), "untracked (the file was not changed)");
+    const at = (id: string) => log.commits.find((c) => c.id === id)!.recIndex;
+    const untracked = replaySeeded(log, "src/a.c", at("L3"), null);
+    assert.equal(untracked.exists, false);
+    assert.deepEqual(untracked.lines, []);
+    const again = replaySeeded(log, "src/a.c", at("L4"), null);
+    assert.equal(again.exists, true);
+    assert.deepEqual(again.lines, ["int z;"]);
+});

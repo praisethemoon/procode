@@ -102,7 +102,7 @@ bool snap_replay(Arena *a, const Repo *r, const Idx *idx, const char *rel,
         if (!idx_fetch(a, r, idx, chain[i - 1], &rec))
             return false;
         rec_apply(a, &cur, &rec);
-        is_deleted = idx->v[chain[i - 1]].op == IDX_OP_DELETE;
+        is_deleted = idx_op_gone(idx->v[chain[i - 1]].op);
     }
     *out = cur;
     *deleted = is_deleted;
@@ -179,7 +179,7 @@ bool snap_rebuild_all(Arena *a, Repo *r, char *err, size_t errsz) {
                 arena_free(fa);
                 fa = fresh;
             }
-            is_deleted = idx->v[e].op == IDX_OP_DELETE;
+            is_deleted = idx_op_gone(idx->v[e].op);
             fh.head = e;
             fh.delta_bytes += idx->v[e].len;
             fh.delta_count++;

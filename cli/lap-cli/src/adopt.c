@@ -59,6 +59,22 @@ void adopt_place(Arena *a, Lines base, Lines parent, bool parent_has,
 
     for (int32_t k = 0; k < n; k++) {
         const Rec *c = commits[k];
+        if (strcmp(c->op, "untrack") == 0) {
+            /* No text, so nothing to conflict with: the file leaves lap's
+             * view here too, whatever the parent's lines are. Already done
+             * when the parent no longer tracks it. What follows (a create,
+             * tracking it again) starts from nothing on both sides. */
+            out->already[k] = !mexists;
+            merged = (Lines){NULL, 0, true};
+            branch = merged;
+            mexists = false;
+            for (int32_t i = 0; i < pr.count; i++)
+                ch[i].len = -1;
+            out->start[k] = 1;
+            out->eof_nl[k] = true;
+            out->placed = k + 1;
+            continue;
+        }
         bool del = strcmp(c->op, "delete") == 0;
         int32_t s = c->old_start < 1 ? 1 : c->old_start;
         int32_t e = s + c->old_lines;
