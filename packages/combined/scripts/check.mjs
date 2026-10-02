@@ -14,7 +14,9 @@
  *   node scripts/check.mjs --target <vsce target>   (after a platform build)
  *
  * A build made with --with-ask is checked with ask in it: its tab's command
- * registered and its server defined; any other build must carry nothing of it.
+ * registered, and its server listening inside the extension, defined for
+ * VS Code over HTTP, answering, and written into .mcp.json as an http entry;
+ * any other build must carry nothing of it.
  *
  * Works only in a directory under the system temp dir, and deletes nothing. */
 
@@ -30,7 +32,7 @@ const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(here, "dist");
 const manifest = JSON.parse(fs.readFileSync(path.join(dist, "package.json"), "utf8"));
 const folder = fs.mkdtempSync(path.join(os.tmpdir(), "procode-check-"));
-const withAsk = fs.existsSync(path.join(dist, "out", "mcp", "ask.js"));
+const withAsk = fs.existsSync(path.join(dist, "out", "parts", "ask.js"));
 fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify({ mcpServers: { other: { command: "x" } } }));
 
 /* ~/.procode/bin, in the check's own folder so the real one is never
@@ -100,10 +102,16 @@ const vscode = new Proxy(
             file: (p) => ({ fsPath: p, path: p, scheme: "file", toString: () => `file://${p}` }),
             joinPath: (b, ...p) => ({ fsPath: path.join(b.fsPath, ...p), path: path.join(b.fsPath, ...p) }),
             from: (c) => ({ ...c, toString: () => `${c.scheme}:${c.path}` }),
+            parse: (u) => ({ toString: () => u }),
         },
         McpStdioServerDefinition: class {
             constructor(label, command, args, env, version) {
                 Object.assign(this, { label, command, args, env, version });
+            }
+        },
+        McpHttpServerDefinition: class {
+            constructor(label, uri, headers, version) {
+                Object.assign(this, { label, uri, headers, version });
             }
         },
         commands: {
@@ -209,6 +217,14 @@ assert.deepEqual(defs.map((d) => d.label), [
 if (withAsk) {
     assert.ok(registered.has("ask.openPending"), "ask's tab started with the other parts");
     assert.ok(fs.existsSync(path.join(dist, "out", "media", "ask.js")), "ask's webview is in out/media");
+    // ask's server runs inside the extension: VS Code is given its address,
+    // and it answers there.
+    const askDef = defs.pop();
+    const url = askDef.uri.toString();
+    assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/procode\/ask\/mcp$/);
+    assert.equal(askDef.version, manifest.version);
+    const listed = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
+    assert.deepEqual((await listed.json()).result.tools.map((t) => t.name), ["ask", "ask_wait"], "ask's server answers at that address");
 } else {
     assert.equal(fs.existsSync(path.join(dist, "out", "parts")), false, "a build without --with-ask carries no optional part");
     assert.doesNotMatch(JSON.stringify(manifest), /"ask\./, "nor anything of ask in its manifest");
@@ -325,9 +341,13 @@ assert.equal(ext.place({ kind: "link", file: pkgLap }, placedLap, "win32"), "cur
 const earlier = JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8"));
 earlier.mcpServers.artifacts = { command: "x", args: ["/old/procode/out/mcp/artifacts.js"] };
 fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify(earlier));
-registered.get("procode.setUpClaudeMcp")();
+await registered.get("procode.setUpClaudeMcp")();
 const written = JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8"));
 assert.deepEqual(Object.keys(written.mcpServers).sort(), [...(withAsk ? ["ask"] : []), "coboard", "kb", "other", "techdocs"]);
+if (withAsk) {
+    assert.deepEqual(Object.keys(written.mcpServers.ask), ["type", "url", "timeout"], "ask is an http entry: Claude Code connects to VS Code");
+    assert.equal(written.mcpServers.ask.timeout, 1_800_000);
+}
 assert.equal(written.mcpServers.other.command, "x", "an unrelated server is kept as it was");
 assert.equal(written.mcpServers.kb.args[0], defs[1].args[0], "Claude Code runs the same script as VS Code's agent");
 assert.equal(written.mcpServers.coboard.env.COBOARD_AUTHOR, "claude", "Claude Code's board comments are signed");
@@ -417,5 +437,7 @@ ext.checkSkills(ctx);
 assert.ok(!infos.some((m) => /are available/.test(m)), "a changed copy is not offered one");
 assert.ok(infos.some((m) => /lap are shipped; this project's copies were changed/.test(m)), "it is only mentioned");
 
-console.log(`check: ${registered.size} commands registered, ${defs.length} MCP servers${withAsk ? " (with ask)" : ""}, no errors`);
+// Stops what the parts started (ask's server among them), so the check ends.
+for (const d of ctx.subscriptions) d.dispose?.();
+console.log(`check: ${registered.size} commands registered, ${defs.length + (withAsk ? 1 : 0)} MCP servers${withAsk ? " (ask's over HTTP)" : ""}, no errors`);
 console.log(`check: workspace ${folder}`);

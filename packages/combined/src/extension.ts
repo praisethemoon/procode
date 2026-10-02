@@ -24,6 +24,8 @@ export { commandFor, folderHash, forClaude, outdated, place, resolveCli, sourceO
 interface Part {
     activate(ctx: vscode.ExtensionContext): unknown;
     deactivate?(): unknown;
+    /** ask's: the address its MCP server listens on, once it does. */
+    whenServed?(): Promise<string | undefined>;
 }
 
 /* Parts a build adds only when asked to (scripts/build.mjs --with-ask). Each
@@ -46,6 +48,11 @@ const PARTS: readonly [string, Part][] = [
     ["techdocs", require("../../techdocs-vscode/out/extension.js") as Part],
     ...optionalParts(),
 ];
+
+/* ask's part, in a build that carries it. Its MCP server runs inside it. */
+const ASK = PARTS.find(([name]) => name === "ask")?.[1];
+/* Its address once listening; read by servers(). */
+let askUrl: string | undefined;
 
 /* The settings that can name each CLI, first match wins: lap's own view has
  * lap.path besides the Board's setting. */
@@ -86,13 +93,10 @@ function boardFolder(): Record<string, string> {
  * executable with ELECTRON_RUN_AS_NODE=1), so no separate Node is needed,
  * and they are handed the CLIs the settings name. */
 
-export interface Server {
-    readonly name: string;
-    readonly label: string;
-    readonly command: string;
-    readonly args: string[];
-    readonly env: Record<string, string>;
-}
+export type Server =
+    | { readonly name: string; readonly label: string; readonly command: string; readonly args: string[]; readonly env: Record<string, string> }
+    /* ask's, which runs inside this extension and is reached over HTTP. */
+    | { readonly name: string; readonly label: string; readonly url: string; readonly timeout?: number };
 
 export function servers(ctx: vscode.ExtensionContext): Server[] {
     const script = (name: string) => path.join(ctx.extensionPath, "out", "mcp", `${name}.js`);
@@ -119,10 +123,11 @@ export function servers(ctx: vscode.ExtensionContext): Server[] {
             args: [script("techdocs")],
             env: { ...node },
         },
-        // Only in a build made with --with-ask.
-        ...(fs.existsSync(script("ask"))
-            ? [{ name: "ask", label: "ask: questions as a form", command: process.execPath, args: [script("ask")], env: { ...node } }]
-            : []),
+        // Only in a build made with --with-ask, once its server listens.
+        // Claude Code drops an HTTP call silent for 5 minutes; ask's sends
+        // progress while it waits, and the timeout (which also floors that
+        // idle limit) is a second guard, above ask's own 25-minute wait.
+        ...(askUrl ? [{ name: "ask", label: "ask: questions as a form", url: askUrl, timeout: 30 * 60_000 }] : []),
     ];
 }
 
@@ -140,6 +145,8 @@ function registerWithVsCode(ctx: vscode.ExtensionContext): void {
         return; // a VS Code older than the MCP API: the Claude Code command still works
     }
     const changed = new vscode.EventEmitter<void>();
+    // ask's server comes up after activation: VS Code is told when it does.
+    void ASK?.whenServed?.().then(() => changed.fire());
     ctx.subscriptions.push(
         changed,
         vscode.workspace.onDidChangeConfiguration((e) => {
@@ -155,6 +162,7 @@ function registerWithVsCode(ctx: vscode.ExtensionContext): void {
                  * that ships new servers says so without a constant to bump. */
                 const version = String(ctx.extension.packageJSON.version);
                 return servers(ctx).map((s) => {
+                    if ("url" in s) return new vscode.McpHttpServerDefinition(s.label, vscode.Uri.parse(s.url), {}, version);
                     const d = new vscode.McpStdioServerDefinition(s.label, s.command, s.args, s.env, version);
                     if (folder) {
                         d.cwd = folder;
@@ -210,7 +218,8 @@ function readMcpJson(file: string): Record<string, unknown> | null {
     }
 }
 
-function setUpClaudeMcp(ctx: vscode.ExtensionContext): void {
+async function setUpClaudeMcp(ctx: vscode.ExtensionContext): Promise<void> {
+    await ASK?.whenServed?.(); // so ask's address is there to write
     const file = mcpJsonPath();
     if (!file) {
         void vscode.window.showWarningMessage("procode: open a folder first; Claude Code's MCP servers are set per project.");
@@ -242,7 +251,7 @@ function checkClaudeMcp(ctx: vscode.ExtensionContext): void {
         .showWarningMessage(`procode: .mcp.json runs ${stale.join(" and ")} from an older procode that is no longer installed.`, "Update")
         .then((choice) => {
             if (choice === "Update") {
-                setUpClaudeMcp(ctx);
+                void setUpClaudeMcp(ctx);
             }
         });
 }
@@ -425,6 +434,9 @@ function installClis(ctx: vscode.ExtensionContext): void {
 
 export function activate(ctx: vscode.ExtensionContext): void {
     installClis(ctx);
+    void ASK?.whenServed?.().then((url) => {
+        askUrl = url;
+    });
     for (const [name, part] of PARTS) {
         try {
             void part.activate(ctx);
@@ -438,7 +450,8 @@ export function activate(ctx: vscode.ExtensionContext): void {
         vscode.commands.registerCommand("procode.setUpClaudeMcp", () => setUpClaudeMcp(ctx)),
         vscode.commands.registerCommand("procode.addClaudeSkills", () => addClaudeSkills(ctx)),
     );
-    checkClaudeMcp(ctx);
+    // After ask's server listens, so its entry is checked too.
+    void Promise.resolve(ASK?.whenServed?.()).then(() => checkClaudeMcp(ctx));
     checkSkills(ctx);
     checkClis();
 }

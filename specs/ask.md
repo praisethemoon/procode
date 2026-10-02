@@ -10,22 +10,25 @@ state.
 
 | binding | consumer | notes |
 |---|---|---|
-| `ask` (TypeScript) | the MCP server, the extension | form checks and the store |
-| MCP tools | agents | §4 |
-| `ask-vscode` | people | the editor tab, §5 |
+| `ask` (TypeScript) | the extension | form checks, the window's forms, the MCP server |
+| MCP tools, over HTTP | agents | §4 |
+| `ask-vscode` | people | runs the server; the editor tab, §5 |
 
 ---
 
 ## 1. Lifecycle
 
-1. The agent calls `ask`. The server writes `.ask/F-<n>/request.json` and waits.
-2. The extension sees the request and opens an editor tab for it.
-3. The person submits, or closes the tab. The tab writes `answer.json`.
-4. The server reads the answer and returns it as the call's result.
+The MCP server runs **inside the VS Code extension**, so the form an agent
+opens and the tab that answers it are in one process. Nothing is written to
+disk.
 
-If the call is cancelled, or its client goes away, the server writes a
-cancelled answer and the tab closes. A form already answered is never
-overwritten.
+1. The agent calls `ask` over HTTP. The extension opens an editor tab at once.
+2. The person submits, or closes the tab.
+3. The answer goes back as the call's result.
+
+If the call is cancelled, or its client hangs up, the form is cancelled and
+the tab says so. The first answer stands: a form already answered is never
+answered again.
 
 ## 2. The form
 
@@ -47,21 +50,19 @@ holds `choices` (the labels picked), `other`, `text`, `note` (anything the
 person adds beside the answer) and `question` (what they want to know, when
 the state is `needs_more`). Empty fields are left out.
 
-## 3. Files
+## 3. Forms in memory
 
-```
-.ask/
-  .gitignore       "*": a form is part of a conversation, not a record
-  F-1/
-    request.json   {id, title, createdAt, steps, previous?}
-    answer.json    {status: submitted|cancelled, answeredAt, steps: {<step id>: step answer}}
-```
+A window holds its forms (`Forms`): a request `{id, title, createdAt, steps,
+previous?}` and, once there is one, its answer `{status: submitted|cancelled,
+answeredAt, steps: {<step id>: step answer}}`. Ids count up from F-1 per
+window. `previous` holds the answers filled in from an earlier form (§4,
+`from`). Forms last as long as the window: a reload drops them, and any call
+still waiting fails as its connection closes.
 
-`.ask/` is found by walking up from the working directory. With none, the
-first form creates it at the enclosing git repository's root. Ids count up
-from F-1, and `mkdir` claims the number, so two servers never share one. Both
-files are written atomically (a temporary file, then a rename). `previous`
-holds the answers to fill in from an earlier form (§4, `from`).
+An earlier design wrote forms to a `.ask/` folder for a stdio server to
+pick up. It was dropped (T-277): the server and the tab disagreed about
+which folder to use when the workspace had no `.git` of its own, and the
+files showed up in lap.
 
 ## 4. MCP tools
 
@@ -82,20 +83,32 @@ id. Skipped and `needs_more` steps open fresh.
 **`ask_wait {id}`** waits again for a form that came back `waiting`, and
 returns the same result.
 
-**Waiting.** Claude Code lets a tool call run for about 28 hours. It does cut
-off a stdio call that sends nothing for 30 minutes (the idle timeout).
-Progress notifications reset that clock. The server sends one every 15
-seconds when the call carries a `progressToken`. The 25-minute limit keeps a
-client that sends no token under the idle timeout too. (Claude Code docs, MCP
-page, 2026-10-02. One known exception: the desktop app cancelled stdio calls
-at about 60 seconds, per anthropics/claude-code#63379.)
+**Transport.** Streamable HTTP at `http://127.0.0.1:<port>/procode/ask/mcp`.
+The port comes from the workspace folder's path (40000–48999), so the
+address in its `.mcp.json` stays right across restarts. While it is taken
+(another window), the next ones are tried. A client POSTs one message at a
+time. A tool call is answered with an event stream (its progress, then its
+result), any other request with JSON, and a notification with 202. GET is
+405. Requests are refused when their Host is not this address, when they
+carry an Origin (browsers do, agents do not), or when the body is not
+`application/json`. `notifications/cancelled`, or the client hanging up,
+cancels the call's form.
+
+**Waiting.** Claude Code drops an HTTP tool call that sends nothing for 5
+minutes. Only progress notifications reset that clock: SSE comments and
+silence were both cut at 300 s, while progress kept a call alive (T-277,
+Claude Code 2.1.287). Claude Code sends a `progressToken` with every call,
+and the server sends progress every 15 seconds. The `.mcp.json` entry also
+sets `timeout: 1800000`, which floors the idle limit for that server, and
+the call gives up at 25 minutes with the form still open.
 
 ## 5. The editor tab
 
-`ask-vscode` watches every workspace folder for `.ask/F-*/request.json` and
-opens a tab for each new form. On startup it opens forms with no answer that
-are under 30 minutes old, since their agent may still be waiting. **ask: Open
-Pending Questions** opens the rest.
+`ask-vscode` starts the MCP server (§4) when the window opens, and opens a
+tab the moment an agent opens a form. **ask: Open Pending Questions** brings
+back the tab of a form still waiting. In the combined extension, **procode:
+Set Up MCP for Claude Code** writes the server's address into `.mcp.json`
+as an `http` entry, and VS Code's own agent is given it too.
 
 **Layout.** On the left, the steps, each marked answered, open, skipped or
 needs more, with **Review and submit** last. On the right, one step: its
@@ -126,8 +139,8 @@ sandboxed with nothing allowed: no scripts, opaque origin, no network. It is
 styled with baukasten's tokens, the theme's `--vscode-*` values and techdocs'
 `page.css`, and is rebuilt when the theme changes.
 
-**Closing.** Submit writes `answer.json` (`Ask.submit`, which keeps only the
-steps asked, and only the first answer). Closing the tab without submitting
+**Closing.** Submit hands the answer to the window's forms (`Forms.submit`,
+which keeps only the steps asked, and only the first answer). Closing the tab without submitting
 cancels the form. An answer that appears from elsewhere, such as the agent's
 call being cancelled, turns the tab into a notice that nothing more will
 reach the agent.

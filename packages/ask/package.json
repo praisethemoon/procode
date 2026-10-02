@@ -1,7 +1,7 @@
 {
   "name": "ask",
   "displayName": "ask",
-  "description": "Questions an agent asks as a form in the person's editor, one per page, answered in any order — and the MCP server agents ask through. Forms live in the workspace's .ask/ directory.",
+  "description": "Questions an agent asks as a form in the person's editor, one per page, answered in any order \u2014 and the MCP server, over HTTP inside VS Code, that agents ask through.",
   "version": "0.1.0",
   "private": true,
   "publisher": "praisethemoon",
@@ -16,18 +16,10 @@
     ".": {
       "types": "./out/index.d.ts",
       "default": "./out/index.js"
-    },
-    "./store": {
-      "types": "./out/store.d.ts",
-      "default": "./out/store.js"
     }
   },
-  "bin": {
-    "ask-mcp": "./bin/ask-mcp"
-  },
   "files": [
-    "out",
-    "bin"
+    "out"
   ],
   "engines": {
     "node": ">=18"

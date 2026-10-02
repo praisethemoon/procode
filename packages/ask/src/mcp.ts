@@ -1,5 +1,5 @@
-/* ask as MCP tools, over stdio: newline-delimited JSON-RPC 2.0
- * (specs/ask.md §4).
+/* ask as MCP tools: JSON-RPC 2.0 messages in, replies out (specs/ask.md §4).
+ * The transport is http.ts; this file knows nothing of it.
  *
  * `ask` opens a form in the person's editor and answers when they submit
  * it. The call waits, sending progress notifications so the client knows it
@@ -8,16 +8,14 @@
  * form, and the editor tab closes.
  */
 
-import * as readline from "node:readline";
-
 import { AskError, MAX_TITLE, Request, StepAnswer, parseSteps, results } from "./form";
-import { Ask, Wait, defaultRoot, findAsk, isFormId } from "./store";
+import { Forms, Wait, isFormId } from "./forms";
 
 const VERSION = "0.1.0";
 
-/** How long one call waits before handing back a form still open. Under the
- *  30 minutes Claude Code gives a stdio tool that sends no progress, so a
- *  client that ignores progress tokens is not cut off either. */
+/** How long one call waits before handing back a form still open. Progress
+ *  keeps the call alive past Claude Code's idle limit; this bounds a call
+ *  from a client that sends no progress token, and one left open for good. */
 export const WAIT_MS = 25 * 60_000;
 const PROGRESS_MS = 15_000;
 
@@ -30,16 +28,17 @@ The call waits until the person submits. Each step comes back answered, skipped,
 type Json = Record<string, unknown>;
 
 export interface Ctx {
-    readonly cwd: string;
+    /** The window's forms. */
+    readonly forms: Forms;
     /** Sends a notification to the client (progress, here). */
     readonly notify?: (msg: Json) => void;
     /** Aborted when the client cancels the call or goes away. */
     readonly signal?: AbortSignal;
     /** The call's progress token, when the client sent one. */
     readonly progressToken?: string | number;
-    /** WAIT_MS, shorter in tests. */
+    /** WAIT_MS and PROGRESS_MS, shorter in tests. */
     readonly waitMs?: number;
-    readonly pollMs?: number;
+    readonly progressMs?: number;
 }
 
 interface Tool {
@@ -49,31 +48,25 @@ interface Tool {
     readonly call: (args: Json, ctx: Ctx) => unknown;
 }
 
-function store(ctx: Ctx): Ask {
-    return new Ask(findAsk(ctx.cwd) ?? defaultRoot(ctx.cwd));
-}
-
 /** The answers of an earlier form to fill in again: those the person gave,
  *  for the steps asked again. Skipped and needs_more steps start open. */
-function carried(ask: Ask, from: unknown, stepIds: readonly string[]): Record<string, StepAnswer> | undefined {
+function carried(forms: Forms, from: unknown, stepIds: readonly string[]): Record<string, StepAnswer> | undefined {
     if (from === undefined) return undefined;
     if (!isFormId(from)) throw new AskError("bad_id", `from must be a form id (F-<n>), not ${JSON.stringify(from)}`);
-    const before = ask.answer(from);
-    if (!before) throw new AskError("not_found", `form ${from} has no answer to carry over`);
+    const before = forms.answer(from);
+    if (!before) throw new AskError("not_found", `form ${from} has no answer to carry over in this window`);
     const out: Record<string, StepAnswer> = {};
     for (const id of stepIds) if (before.steps[id]?.state === "answered") out[id] = before.steps[id];
     return out;
 }
 
-async function waitAndReport(ask: Ask, req: Request, ctx: Ctx): Promise<Json> {
-    let lastProgress = 0;
-    const w: Wait = await ask.wait(req.id, {
+async function waitAndReport(req: Request, ctx: Ctx): Promise<Json> {
+    const w: Wait = await ctx.forms.wait(req.id, {
         timeoutMs: ctx.waitMs ?? WAIT_MS,
-        pollMs: ctx.pollMs,
+        tickMs: ctx.progressMs ?? PROGRESS_MS,
         signal: ctx.signal,
         onTick: (waited) => {
-            if (ctx.progressToken === undefined || !ctx.notify || waited - lastProgress < PROGRESS_MS) return;
-            lastProgress = waited;
+            if (ctx.progressToken === undefined || !ctx.notify) return;
             ctx.notify({
                 jsonrpc: "2.0",
                 method: "notifications/progress",
@@ -101,7 +94,7 @@ async function waitAndReport(ask: Ask, req: Request, ctx: Ctx): Promise<Json> {
         case "waiting":
             return { id: req.id, status: "waiting", next: `The form is still open. Call ask_wait with id "${req.id}" to keep waiting.` };
         case "aborted":
-            ask.cancel(req.id);
+            ctx.forms.cancel(req.id);
             return { id: req.id, status: "cancelled" };
     }
 }
@@ -153,13 +146,12 @@ export const TOOLS: readonly Tool[] = [
             if (typeof title !== "string" || !title.trim()) throw new AskError("invalid", "title is required");
             if (title.length > MAX_TITLE) throw new AskError("invalid", `title is longer than ${MAX_TITLE} characters`);
             const steps = parseSteps(args["steps"]);
-            const ask = store(ctx);
             const previous = carried(
-                ask,
+                ctx.forms,
                 args["from"],
                 steps.map((s) => s.id),
             );
-            return waitAndReport(ask, ask.create(title.trim(), steps, previous), ctx);
+            return waitAndReport(ctx.forms.create(title.trim(), steps, previous), ctx);
         },
     },
     {
@@ -170,12 +162,7 @@ export const TOOLS: readonly Tool[] = [
             properties: { id: { type: "string", description: "F-<n>" } },
             required: ["id"],
         },
-        call: async (args, ctx) => {
-            const ask = findAsk(ctx.cwd);
-            if (!ask) throw new AskError("not_found", `no form ${String(args["id"])}: this workspace has none`);
-            const store = new Ask(ask);
-            return waitAndReport(store, store.request(String(args["id"])), ctx);
-        },
+        call: async (args, ctx) => waitAndReport(ctx.forms.request(String(args["id"])), ctx),
     },
 ];
 
@@ -224,36 +211,4 @@ export async function handle(msg: Json, ctx: Ctx): Promise<Json | null> {
         default:
             return { jsonrpc: "2.0", id, error: { code: -32601, message: `unknown method ${method}` } };
     }
-}
-
-export function main(): void {
-    const write = (msg: Json) => process.stdout.write(JSON.stringify(msg) + "\n");
-    // One controller per call in flight, so notifications/cancelled can stop
-    // its wait; all of them abort when the client goes away.
-    const inflight = new Map<unknown, AbortController>();
-    const rl = readline.createInterface({ input: process.stdin });
-    rl.on("line", (line) => {
-        if (!line.trim()) return;
-        let msg: Json;
-        try {
-            msg = JSON.parse(line) as Json;
-        } catch {
-            write({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } });
-            return;
-        }
-        if (msg["method"] === "notifications/cancelled") {
-            inflight.get(((msg["params"] ?? {}) as Json)["requestId"])?.abort();
-            return;
-        }
-        const ac = new AbortController();
-        const id = msg["id"];
-        if (id !== undefined && id !== null) inflight.set(id, ac);
-        void handle(msg, { cwd: process.cwd(), notify: write, signal: ac.signal }).then((out) => {
-            inflight.delete(id);
-            if (out && !ac.signal.aborted) write(out);
-        });
-    });
-    rl.on("close", () => {
-        for (const ac of inflight.values()) ac.abort();
-    });
 }

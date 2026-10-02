@@ -3,12 +3,14 @@
  * VS Code: add or replace our entries and keep everything else, and tell
  * when an entry points at a copy of procode that is no longer installed. */
 
-export interface ServerEntry {
-    readonly name: string;
-    readonly command: string;
-    readonly args: string[];
-    readonly env: Record<string, string>;
-}
+/* A server Claude Code starts (stdio), or one it connects to (HTTP: ask's,
+ * which runs inside VS Code). */
+export type ServerEntry =
+    | { readonly name: string; readonly command: string; readonly args: string[]; readonly env: Record<string, string> }
+    | { readonly name: string; readonly url: string; readonly timeout?: number };
+
+/* The path ask's server answers on; an http entry with it is one procode wrote. */
+const HTTP_PATH = "/procode/ask/mcp";
 
 type Json = Record<string, unknown>;
 
@@ -32,7 +34,8 @@ export function withServers(file: Json, servers: readonly ServerEntry[]): Json {
         if (writtenByProcode(mcpServers[name], name)) delete mcpServers[name];
     }
     for (const s of servers) {
-        mcpServers[s.name] = { command: s.command, args: s.args, env: s.env };
+        mcpServers[s.name] =
+            "url" in s ? { type: "http", url: s.url, ...(s.timeout ? { timeout: s.timeout } : {}) } : { command: s.command, args: s.args, env: s.env };
     }
     return { ...file, mcpServers };
 }
@@ -51,6 +54,12 @@ export function outdated(file: Json, servers: readonly ServerEntry[]): string[] 
     for (const s of servers) {
         const e = (existing as Json)[s.name] as Json | undefined;
         if (!e) {
+            continue;
+        }
+        if ("url" in s) {
+            // procode's when its path is ask's; stale when this window serves elsewhere.
+            const url = typeof e["url"] === "string" ? e["url"] : "";
+            if (url.endsWith(HTTP_PATH) && url !== s.url) out.push(s.name);
             continue;
         }
         const args = Array.isArray(e["args"]) ? (e["args"] as unknown[]) : [];

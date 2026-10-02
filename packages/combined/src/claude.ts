@@ -8,5 +8,5 @@ import { ServerEntry } from "./mcpjson";
 export const CLAUDE_AUTHOR = "claude";
 
 export function forClaude(s: ServerEntry): ServerEntry {
-    return s.name === "coboard" ? { ...s, env: { ...s.env, COBOARD_AUTHOR: CLAUDE_AUTHOR } } : s;
+    return s.name === "coboard" && "env" in s ? { ...s, env: { ...s.env, COBOARD_AUTHOR: CLAUDE_AUTHOR } } : s;
 }

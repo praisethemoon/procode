@@ -1,26 +1,23 @@
-/* ask in VS Code (specs/ask.md §5): a tab for each form an agent opens.
+/* ask in VS Code (specs/ask.md §5): the MCP server agents ask through, and
+ * a tab for each form they open.
  *
- * The host watches every workspace folder for a new `.ask/F-<n>/request.json`
- * and opens a tab for it. The tab sends back the answer, which the host
- * writes with the `ask` store. Closing a tab without submitting cancels its
- * form; an answer that appears from elsewhere (the agent's call was
- * cancelled) closes the tab.
+ * THE SERVER IS IN HERE. The extension serves ask's MCP tools over HTTP on
+ * 127.0.0.1 (ask's http.ts), at a port that comes from the workspace folder,
+ * so the address written into the folder's .mcp.json stays right across
+ * restarts. A form an agent opens is an object in this process: the tab
+ * opens at once, its answer goes back as the call's result, and nothing is
+ * written to disk. Closing a tab without submitting cancels its form; a call
+ * its agent cancels shows the tab closed.
  */
 
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
-import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { Ask, Request, findAsk } from "ask";
+import { Forms, Request, Served, portFor, serve } from "ask";
 
 import type { PreviewParts } from "./preview";
 import type { ToHost, ToView } from "./protocol";
-
-/** On startup, forms this recent are opened: their agent may still be
- *  waiting (ask waits 25 minutes a call). Older ones are left for the
- *  Open Pending Questions command. */
-const RECENT_MS = 30 * 60_000;
 
 interface Open {
     readonly panel: vscode.WebviewPanel;
@@ -28,16 +25,17 @@ interface Open {
     done: boolean;
 }
 
+const forms = new Forms();
 const open = new Map<string, Open>();
+let served: Served | null = null;
+let ready: (url: string | undefined) => void = () => {};
+const listening = new Promise<string | undefined>((resolve) => (ready = resolve));
 
-function key(root: string, id: string): string {
-    return `${root}\0${id}`;
-}
-
-/** `<root>/.ask/F-<n>/<file>` → its root and form id. */
-function formOf(file: string): { root: string; id: string } {
-    const dir = path.dirname(file);
-    return { root: path.dirname(path.dirname(dir)), id: path.basename(dir) };
+/** The address of this window's ask server, once it is listening (undefined
+ *  if it could not start): what procode writes into .mcp.json and hands
+ *  VS Code's own agent. */
+export function whenServed(): Promise<string | undefined> {
+    return listening;
 }
 
 function previewParts(media: vscode.Uri): PreviewParts {
@@ -74,15 +72,13 @@ ${css}
 </html>`;
 }
 
-function show(ctx: vscode.ExtensionContext, root: string, req: Request): void {
-    const k = key(root, req.id);
-    const existing = open.get(k);
+function show(ctx: vscode.ExtensionContext, req: Request): void {
+    const existing = open.get(req.id);
     if (existing) {
         existing.panel.reveal();
         return;
     }
-    const ask = new Ask(root);
-    if (ask.answer(req.id)) return;
+    if (forms.answer(req.id)) return;
     const media = vscode.Uri.joinPath(ctx.extensionUri, "out", "media");
     const panel = vscode.window.createWebviewPanel("ask.form", req.title, vscode.ViewColumn.Active, {
         enableScripts: true,
@@ -92,16 +88,16 @@ function show(ctx: vscode.ExtensionContext, root: string, req: Request): void {
     panel.iconPath = new vscode.ThemeIcon("comment-discussion");
     panel.webview.html = html(panel.webview, media, req.title);
     const entry: Open = { panel, done: false };
-    open.set(k, entry);
+    open.set(req.id, entry);
     const post = (m: ToView) => void panel.webview.postMessage(m);
     panel.webview.onDidReceiveMessage((m: ToHost) => {
         if (m?.type === "ready") {
             post({ type: "load", request: req, preview: previewParts(media) });
         } else if (m?.type === "submit") {
             try {
-                ask.submit(req.id, m.answer);
+                forms.submit(req.id, m.answer);
             } catch (e) {
-                void vscode.window.showErrorMessage(`ask: the answer to ${req.id} was not saved: ${(e as Error).message}`);
+                void vscode.window.showErrorMessage(`ask: the answer to ${req.id} was not taken: ${(e as Error).message}`);
                 return;
             }
             entry.done = true;
@@ -111,56 +107,43 @@ function show(ctx: vscode.ExtensionContext, root: string, req: Request): void {
         }
     });
     panel.onDidDispose(() => {
-        open.delete(k);
-        if (!entry.done) ask.cancel(req.id);
+        open.delete(req.id);
+        if (!entry.done) forms.cancel(req.id);
     });
-}
-
-/** The form's answer appeared: written by this tab, or by the server after
- *  its call was cancelled. Either way the tab has nothing left to do. */
-function answered(file: string): void {
-    const { root, id } = formOf(file);
-    const entry = open.get(key(root, id));
-    if (!entry || entry.done) return;
-    entry.done = true;
-    const status = new Ask(root).answer(id)?.status ?? "cancelled";
-    void entry.panel.webview.postMessage({ type: "closed", status } satisfies ToView);
-}
-
-function pendingForms(): { root: string; req: Request }[] {
-    const out: { root: string; req: Request }[] = [];
-    for (const f of vscode.workspace.workspaceFolders ?? []) {
-        if (f.uri.scheme !== "file") continue;
-        const root = findAsk(f.uri.fsPath);
-        if (root) for (const req of new Ask(root).pending()) out.push({ root, req });
-    }
-    return out;
 }
 
 export function activate(ctx: vscode.ExtensionContext): void {
-    const requests = vscode.workspace.createFileSystemWatcher("**/.ask/F-*/request.json", false, true, true);
-    requests.onDidCreate((uri) => {
-        const { root, id } = formOf(uri.fsPath);
-        try {
-            show(ctx, root, new Ask(root).request(id));
-        } catch {
-            // a request that cannot be read is not a form
-        }
+    const offOpen = forms.on("open", (req) => show(ctx, req));
+    // Answered elsewhere: the agent's call was cancelled, or it hung up.
+    const offAnswer = forms.on("answer", (id, answer) => {
+        const entry = open.get(id);
+        if (!entry || entry.done) return;
+        entry.done = true;
+        void entry.panel.webview.postMessage({ type: "closed", status: answer.status } satisfies ToView);
     });
-    const answers = vscode.workspace.createFileSystemWatcher("**/.ask/F-*/answer.json", false, false, true);
-    answers.onDidCreate((uri) => answered(uri.fsPath));
-    answers.onDidChange((uri) => answered(uri.fsPath));
+    const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file")?.uri.fsPath ?? "";
+    void serve({ ctx: { forms }, port: portFor(folder) }).then(
+        (s) => {
+            served = s;
+            ready(s.url);
+        },
+        (e) => {
+            ready(undefined);
+            void vscode.window.showErrorMessage(`ask: its MCP server could not start: ${(e as Error).message}`);
+        },
+    );
     ctx.subscriptions.push(
-        requests,
-        answers,
+        { dispose: offOpen },
+        { dispose: offAnswer },
+        { dispose: () => void served?.close() },
         vscode.commands.registerCommand("ask.openPending", () => {
-            const forms = pendingForms();
-            if (!forms.length) void vscode.window.showInformationMessage("ask: no questions are waiting for an answer.");
-            for (const { root, req } of forms) show(ctx, root, req);
+            const pending = forms.pending();
+            if (!pending.length) void vscode.window.showInformationMessage("ask: no questions are waiting for an answer.");
+            for (const req of pending) show(ctx, req);
         }),
     );
-    const now = Date.now();
-    for (const { root, req } of pendingForms()) if (now - Date.parse(req.createdAt) < RECENT_MS) show(ctx, root, req);
 }
 
-export function deactivate(): void {}
+export function deactivate(): Promise<void> | undefined {
+    return served?.close();
+}

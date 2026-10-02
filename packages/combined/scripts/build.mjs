@@ -9,9 +9,10 @@
  *       one platform's procode-<version>-<target>.vsix, carrying the lap
  *       and kb found in <dir> (relative to where npm was run)
  *   npm run package --workspace combined -- --with-ask
- *       also carries ask, the experimental question form (specs/ask.md):
- *       its tab in out/parts/ask.js and its server in out/mcp/ask.js. Without
- *       the flag the package has nothing of it.
+ *       also carries ask, the experimental question form (specs/ask.md),
+ *       in out/parts/ask.js: its tab and its MCP server, which runs inside
+ *       the extension over HTTP. Without the flag the package has nothing
+ *       of it.
  *
  * dist/ holds:
  *   package.json   generated: the four extensions' contributions merged, plus
@@ -236,7 +237,6 @@ if (WITH_ASK) {
     fs.copyFileSync(path.join(repo, "packages", "ask-vscode", "out", "extension.js"), path.join(dist, "out", "parts", "ask.js"));
 }
 for (const [name, entry] of [
-    ...(WITH_ASK ? [["ask", `require(${JSON.stringify(path.join(repo, "packages/ask/out/mcp.js"))}).main();`]] : []),
     ["coboard", `require(${JSON.stringify(path.join(repo, "packages/coboard/out/mcp.js"))}).main();`],
     ["techdocs", `require(${JSON.stringify(path.join(repo, "packages/techdocs/out/mcp.js"))}).main();`],
     [
