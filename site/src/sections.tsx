@@ -482,6 +482,10 @@ const lapHistory: Section = {
                     scrolled to it, with the commit's description attached as an inline comment.
                 </li>
                 <li>The status bar shows the active session.</li>
+                <li>
+                    A badge on procode's icon counts the files with edits lap has not recorded yet, as git's badge
+                    counts changed files. After VS Code starts, it appears once the procode sidebar has been opened.
+                </li>
                 <li>It updates live: it watches <Code>.lap/log/</Code> and refreshes as the agent commits.</li>
             </ul>
             <Paragraph>
@@ -513,6 +517,10 @@ const knowledge: Section = {
             <Grid
                 head={["Command", "What it files"]}
                 rows={[
+                    [
+                        <strong>Knowledge: Index This Workspace</strong>,
+                        "Every open folder, each into a collection of its own (also on the view's toolbar).",
+                    ],
                     [<strong>Knowledge: Add The Current File</strong>, "The file open in the editor."],
                     [<strong>Knowledge: Add Files…</strong>, "Files you pick."],
                     [
@@ -542,6 +550,10 @@ const knowledge: Section = {
                 <li>
                     A document shows where it came from, when it was fetched, and a <em>stale</em> badge when it is
                     old. A document filed from a local file opens that file.
+                </li>
+                <li>
+                    A document's tab has a toolbar: the file name, find with highlighting, zoom from 20% to 400%, and
+                    Save As.
                 </li>
                 <li>
                     <strong>Knowledge: Graph of Links</strong> draws how documents link to each other (
@@ -655,6 +667,13 @@ const commands: Section = {
                     [<Code>lap status</Code>, "Pending edits per file, numbered."],
                     [<Code>lap commit &lt;file&gt; -i … -b …</Code>, <>Records one edit (<Code>--edit N</Code>, <Code>--lines A-B</Code> to pick one).</>],
                     [<Code>lap amend &lt;commit&gt; -i … -b …</Code>, "Corrects what a commit says, without rewriting anything."],
+                    [
+                        <Code>lap untrack &lt;path&gt;… -i …</Code>,
+                        <>
+                            Stops tracking files lap recorded, such as ones <Code>.lapignore</Code> names now (a folder: every
+                            tracked file in it). They stay on disk; their history stays readable.
+                        </>,
+                    ],
                     [<Code>lap session start | end | list | current</Code>, "Groups commits into tasks."],
                     [<Code>lap log</Code>, <>Commits, newest first (<Code>--session</Code>, <Code>--file</Code>).</>],
                     [<Code>lap show &lt;commit&gt;</Code>, <>One commit in full (<Code>--full-file</Code> rebuilds the file as of it).</>],
@@ -694,7 +713,9 @@ const commands: Section = {
                         <>
                             <Code>board_list</Code>, <Code>board_get</Code>, <Code>board_search</Code>, <Code>board_create</Code>,{" "}
                             <Code>board_update</Code>, <Code>board_move</Code>, <Code>board_comment</Code>,{" "}
-                            <Code>board_sessions</Code>, <Code>board_archive</Code>, <Code>board_unarchive</Code>
+                            <Code>board_sessions</Code>, <Code>board_archive</Code>, <Code>board_unarchive</Code>,{" "}
+                            <Code>ticket_finish</Code> (ends the ticket's lap session, comments, closes it, and hands back the
+                            git command that commits exactly its files)
                         </>,
                     ],
                     [
