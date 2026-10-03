@@ -2,7 +2,7 @@
   "name": "techdocs",
   "displayName": "techdocs",
   "description": "Pages an agent publishes into the workspace's .techdocs/ directory — HTML written against baukasten's tokens, with a title, a description, keywords and dates — and the MCP server agents publish them through.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "publisher": "praisethemoon",
   "author": {

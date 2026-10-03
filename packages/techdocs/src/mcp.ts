@@ -15,7 +15,7 @@ import * as readline from "node:readline";
 import { Techdocs, TechdocsError, MAX_DESCRIPTION, MAX_KEYWORD, MAX_KEYWORDS, MAX_TITLE, defaultRoot, findTechdocs, hasKeyword } from "./store";
 import { TEMPLATES } from "./templates";
 
-const VERSION = "0.1.1";
+const VERSION = "0.2.0";
 
 /* What an agent needs to write a page that looks right, said once, where the
  * agent reads it. The token list is the useful subset of baukasten's; the

@@ -34,7 +34,7 @@ import { Dispatch, INVALID_PARAMS, METHOD_NOT_FOUND, RpcError } from "./jsonrpc"
 import { TOOLS } from "./tools";
 
 export const SERVER_NAME = "kb-mcp";
-export const SERVER_VERSION = "0.1.1";
+export const SERVER_VERSION = "0.2.0";
 
 /* What is answered when the client's version is not one this server knows. */
 export const PROTOCOL_VERSION = "2024-11-05";

@@ -20,7 +20,7 @@ import { ARCHIVED_MODES, ArchivedMode, PRIORITIES, SIZES, TICKET_STATUSES } from
 import { search, view } from "./query";
 import { Board, BoardError, CreateInput, Fields, locateBoard, staleParentMessage } from "./store";
 
-const VERSION = "0.1.1";
+const VERSION = "0.2.0";
 
 const INSTRUCTIONS = `coboard is the project's board, shared by developers and agents.
 Epics (E-<n>) contain milestones (M-<n>); tickets (T-<n>) always belong to an epic and optionally to one of its milestones.

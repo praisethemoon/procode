@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define LAP_VERSION "0.1.1"
+#define LAP_VERSION "0.2.0"
 
 #define LAP_DIR ".lap"
 #define LAP_LOG_NAME "log.jsonl" /* the single-file log before chunks */

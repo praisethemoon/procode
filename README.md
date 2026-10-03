@@ -196,7 +196,7 @@ from `PATH` or wherever the settings point.
    npm run setup                   # npm install, then build every package
    npm test                        # every package's tests
    npm run package --workspace combined
-   code --install-extension packages/combined/procode-0.1.1.vsix
+   code --install-extension packages/combined/procode-0.2.0.vsix
    ```
 
    Then reload the VS Code window. If the CLIs are not on `PATH`, point the

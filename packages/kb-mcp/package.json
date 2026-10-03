@@ -2,7 +2,7 @@
   "name": "kb-mcp",
   "displayName": "kb-mcp",
   "description": "The kb knowledge base as MCP tools for agents: the six of index-api.md §9, spoken as JSON-RPC 2.0 over stdio.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "publisher": "praisethemoon",
   "author": {

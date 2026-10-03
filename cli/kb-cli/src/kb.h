@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define KB_VERSION "0.1.1"
+#define KB_VERSION "0.2.0"
 
 #define KB_DIR ".kb"
 #define KB_SOURCES_NAME "sources.jsonl"

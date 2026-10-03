@@ -49,7 +49,7 @@ test("initialize announces tools, a name and the instructions", async () => {
         await ask(server(), { jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
     );
     assert.deepEqual(answer["capabilities"], { tools: {} });
-    assert.deepEqual(answer["serverInfo"], { name: SERVER_NAME, version: "0.1.1" });
+    assert.deepEqual(answer["serverInfo"], { name: SERVER_NAME, version: "0.2.0" });
     assert.equal(answer["instructions"], INSTRUCTIONS);
     assert.equal(answer["protocolVersion"], PROTOCOL_VERSION);
 });
