@@ -34,6 +34,7 @@ typedef struct {
     const Str *code;           /* the edit's changed lines */
     int32_t code_n;
     bool force; /* --force-message: skips every check but the length */
+    bool whole_delete; /* the file is deleted: its behavior may repeat */
 } MsgInput;
 
 /* NULL when the message passes; otherwise the error code, with a sentence

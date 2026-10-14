@@ -765,6 +765,10 @@ count as letters, so non-ASCII words stay whole).
 
 Intent may repeat freely: it is shared by design.
 
+A whole-file delete skips checks 2–4: deleting many files for one reason
+says the same of each, rightly. Its behavior may be left out (no `-b`),
+and is then `Deletes <file>.`.
+
 `--force-message` skips checks 2–4, never check 1, for the rare honest
 near-duplicate. The commit record then carries `"forced":true`, and `show`
 and `rr` mark it, so a reviewer sees which messages bypassed the checks.
@@ -921,7 +925,8 @@ Records exactly one edit. The message comes from `-i`/`--intent` and
   lines up to the next header or the end. Text before the first header, a
   missing or repeated section, or an empty one is refused with
   `bad_message_file`.
-- A missing field is `missing_intent` or `missing_behavior`.
+- A missing field is `missing_intent` or `missing_behavior`; only a
+  deleted file may leave out `-b` (§Checks).
 - The message then passes the checks in §Messages, or the commit is
   refused.
 
@@ -1265,7 +1270,7 @@ lap cannot write): the message says which file.
 | `merge_in_branch` | merge | the merge target is itself a branch that must merge first |
 | `message_required` | session start | no purpose given |
 | `message_too_short` | commit, amend | intent or behavior under three words |
-| `missing_behavior` | commit, amend | no `-b` |
+| `missing_behavior` | commit, amend | no `-b` (on commit, for a file that is not deleted) |
 | `missing_from` | branch start | no `--from` |
 | `missing_intent` | commit, amend | no `-i` |
 | `name_taken` | branch start | the name is, or was, a branch main can see |

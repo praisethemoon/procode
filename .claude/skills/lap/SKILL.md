@@ -3,7 +3,7 @@ name: lap
 description: Record fine-grained edit history with the lap CLI while coding. Use whenever a lap repository (.lap directory) exists in the project, or the user asks to track edits with lap. Teaches the session -> edit -> commit cadence, one-edit-per-commit recovery, and history search.
 compatibility: Requires the lap CLI (cli/lap-cli): at ~/.procode/bin/lap when procode's VS Code extension is installed, else on PATH.
 metadata:
-  version: "4"
+  version: "5"
 ---
 
 # lap — fine-grained edit recording
@@ -171,7 +171,10 @@ lines). An edit that replaces lines is taken whole.
   put it in `.lapignore`). `--edit` is refused on a new file, and both
   `--edit` and `--lines` on a deleted one: there is nothing to pick.
 - Deleting a file is also a commit:
-  `rm` it, then `lap commit <file> -i "why it is gone" -b "what no longer exists"`.
+  `rm` it, then `lap commit <file> -i "why it is gone"`. `-b` is optional
+  for a delete (lap writes "Deletes <file>."), and a delete's behavior may
+  repeat the last one, so deleting many files for one reason needs no
+  `--force-message`.
 - **Renaming is two commits**, because lap tracks paths, not file identity.
   Record the old path's disappearance and the new path's appearance, and
   make each behavior name the other path:

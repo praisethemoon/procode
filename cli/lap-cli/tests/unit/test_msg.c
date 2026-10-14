@@ -4,7 +4,7 @@
 static const char *check(Arena *a, const char *intent, const char *behavior,
                          const char *prev, const char *code, bool force) {
     Str line = str_c(code ? code : "");
-    MsgInput in = {intent, behavior, prev, &line, code ? 1 : 0, force};
+    MsgInput in = {intent, behavior, prev, &line, code ? 1 : 0, force, false};
     char why[256];
     return msg_check(a, &in, why, sizeof why);
 }
@@ -56,6 +56,16 @@ void test_msg(void) {
                       true) == NULL);
     ASSERT_EQ_S(check(a, "Route the graph place.", "graph", NULL, NULL, true),
                 "message_too_short");
+
+    t_begin("msg: a whole-file delete may repeat, never be short");
+    MsgInput del = {"Retire the old example, now replaced.",
+                    "Deletes the example; it no longer exists.",
+                    "Deletes the example; it no longer exists.", NULL, 0,
+                    false, true};
+    char why[256];
+    ASSERT_TRUE(msg_check(a, &del, why, sizeof why) == NULL);
+    del.intent = "retire it";
+    ASSERT_EQ_S(msg_check(a, &del, why, sizeof why), "message_too_short");
 
     t_begin("msg: -F file sections, in either order, trimmed");
     const char *intent, *behavior;

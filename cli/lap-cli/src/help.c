@@ -18,7 +18,8 @@ static const HelpFlag F_JSON_ONLY[] = {JSON_FLAG, END};
 
 static const HelpFlag F_COMMIT[] = {
     {"-i", "--intent", "\"intent\"", "why the edit exists"},
-    {"-b", "--behavior", "\"behavior\"", "what this edit makes the code do"},
+    {"-b", "--behavior", "\"behavior\"",
+     "what this edit makes the code do (optional for a deleted file)"},
     {"-F", NULL, "<file>",
      "read both from Intent:/Behavior: sections of a file\n(- = stdin)"},
     {"--edit", NULL, "<n>",

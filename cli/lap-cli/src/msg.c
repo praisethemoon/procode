@@ -112,7 +112,8 @@ const char *msg_check(Arena *a, const MsgInput *in, char *why,
                  MSG_MIN_WORDS);
         return "message_too_short";
     }
-    if (in->force)
+    /* Deleting files for one reason says the same of each, rightly. */
+    if (in->force || in->whole_delete)
         return NULL;
     WordSet b = msg_words(a, in->behavior);
     WordSet i = msg_words(a, in->intent);

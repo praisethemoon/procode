@@ -20,7 +20,8 @@ int32_t cmd_amend(Arena *a, int32_t argc, char **argv) {
         return LAP_EXIT_ERR;
     }
     const char *intent = NULL, *behavior = NULL;
-    if (!message_args(a, argc, argv, value_flags, json, &intent, &behavior))
+    if (!message_args(a, argc, argv, value_flags, json, false, &intent,
+                      &behavior))
         return LAP_EXIT_ERR;
 
     Repo repo;
@@ -74,7 +75,7 @@ int32_t cmd_amend(Arena *a, int32_t argc, char **argv) {
 
     /* the checks a commit's message passes, against this commit's session
      * and edit */
-    MsgInput check = {intent, behavior, NULL, NULL, 0, force};
+    MsgInput check = {intent, behavior, NULL, NULL, 0, force, false};
     for (int32_t i = at - 1; c->session && i >= 0; i--) {
         const Rec *p = &log.v[i];
         if (p->type == REC_SESSION_START && p->id &&

@@ -383,6 +383,22 @@ expect_grep "forced" "$LAP" show "$("$LAP" log -n 1 --json | sed 's/.*"id":"\([^
 history | grep -q '"forced":true' || fail "forced is not in the log"
 printf 'check-a\ncheck-b\ncheck-c\n' > checks.txt
 expect_ok "$LAP" commit checks.txt -i "cover the message checks" -b "appends a third line to exercise a plain commit"
+
+t "deleting files for one reason repeats its behavior unforced; -b is optional for a delete"
+printf 'one\n' > gone-a.txt; printf 'two\n' > gone-b.txt; printf 'three\n' > gone-c.txt
+expect_ok "$LAP" commit gone-a.txt -i "files the delete checks remove" -b "creates the first file to delete"
+expect_ok "$LAP" commit gone-b.txt -i "files the delete checks remove" -b "creates the second file to delete"
+expect_ok "$LAP" commit gone-c.txt -i "files the delete checks remove" -b "creates the third file to delete"
+rm gone-a.txt gone-b.txt gone-c.txt
+expect_ok "$LAP" commit gone-a.txt -i "retire the files of the delete checks" -b "deletes the file; it is no longer needed"
+expect_ok "$LAP" commit gone-b.txt -i "retire the files of the delete checks" -b "deletes the file; it is no longer needed"
+expect_not_grep '"forced":true' "$LAP" log -n 1 --json
+expect_grep "message_too_short" "$LAP" commit gone-c.txt -i "drop it" --json
+expect_ok "$LAP" commit gone-c.txt -i "retire the files of the delete checks"
+expect_grep '"behavior":"Deletes gone-c.txt."' "$LAP" log -n 1 --json
+printf 'check-a\ncheck-b\ncheck-c\ncheck-d\n' > checks.txt
+expect_grep "missing_behavior" "$LAP" commit checks.txt -i "only a delete may leave the behavior out" --json
+printf 'check-a\ncheck-b\ncheck-c\n' > checks.txt
 tail -1 "$(open_chunk)" | grep -q '"forced"' && fail "forced written on an unforced commit"
 
 t "--no-session commits skip the previous-behavior check"

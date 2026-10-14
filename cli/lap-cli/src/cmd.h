@@ -198,10 +198,12 @@ bool read_text_arg(Arena *a, const char *path, char **out, char *err,
                    size_t errsz);
 
 /* Intent and behavior from -i/-b, or from the sections of a -F file
- * (lap commit, lap amend). False after reporting the error. */
+ * (lap commit, lap amend). With behavior_optional a missing -b leaves
+ * *behavior NULL for the caller to fill. False after reporting the error. */
 bool message_args(Arena *a, int32_t argc, char **argv,
                   const char *const *value_flags, bool json,
-                  const char **intent, const char **behavior);
+                  bool behavior_optional, const char **intent,
+                  const char **behavior);
 
 /* A new or deleted file has no pending edits to pick: the error code for an
  * --edit given to either ("bad_edit_index"), or a --lines given to a delete

@@ -214,7 +214,7 @@ with amendments needs this version of lap or later.
 |---|---|
 | `lap init` | create a repository in the current directory |
 | `lap status` | pending edits per file, numbered |
-| `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several, `--lines` also any part of an added run; on a new file `--lines A-B` creates it with that part, and one over 50 lines needs parts or `--whole-file`; `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
+| `lap commit <file> -i "intent" -b "behavior"` | record one edit and print its id and short hash (`-F` for both from a file, `--edit N` / `--lines A-B` to pick among several, `--lines` also any part of an added run; on a new file `--lines A-B` creates it with that part, and one over 50 lines needs parts or `--whole-file`; `-b` optional for a deleted file, whose behavior may repeat; `--force-message` to skip the repetition checks, `--no-session` to bypass sessions) |
 | `lap amend <commit> -i "intent" -b "behavior"` | correct what a commit of this folder says; nothing written changes (`-F`, `--force-message` as for commit) |
 | `lap untrack <path>... -i "intent"` | stop tracking files lap recorded, such as ones `.lapignore` names now (a folder: every tracked file in it); they stay on disk and their history stays readable (`--force` for files with edits lap has not recorded) |
 | `lap log` | commits, newest first, each with its intent and behavior (`--session`, `--file`, `-n`; `--intent-only` / `--behavior-only` for one) |

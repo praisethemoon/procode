@@ -135,7 +135,8 @@ static void print_dry_run(Arena *a, bool json, Rec *rec, const char *rel) {
 
 bool message_args(Arena *a, int32_t argc, char **argv,
                          const char *const *value_flags, bool json,
-                         const char **intent, const char **behavior) {
+                         bool behavior_optional, const char **intent,
+                         const char **behavior) {
     const char *i = flag_value2(argc, argv, value_flags, "-i", "--intent");
     const char *b = flag_value2(argc, argv, value_flags, "-b", "--behavior");
     const char *f = flag_value(argc, argv, value_flags, "-F");
@@ -165,6 +166,11 @@ bool message_args(Arena *a, int32_t argc, char **argv,
                 "a commit needs an intent: -i \"why this edit exists\" (or "
                 "-F <file> with Intent: and Behavior: sections)");
         return false;
+    }
+    if ((!tb || !tb[0]) && behavior_optional) {
+        *intent = ti;
+        *behavior = NULL;
+        return true;
     }
     if (!tb || !tb[0]) {
         err_out(json, "missing_behavior",
@@ -220,7 +226,8 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         return LAP_EXIT_ERR;
     }
     const char *intent = NULL, *behavior = NULL;
-    if (!message_args(a, argc, argv, value_flags, json, &intent, &behavior))
+    if (!message_args(a, argc, argv, value_flags, json, true, &intent,
+                      &behavior))
         return LAP_EXIT_ERR;
     if (edit_arg && lines_arg) {
         err_out(json, "usage", "--edit and --lines are mutually exclusive");
@@ -438,7 +445,18 @@ int32_t cmd_commit(Arena *a, int32_t argc, char **argv) {
         goto done;
     }
 
-    MsgInput check = {intent, behavior, NULL, NULL, 0, force};
+    /* A delete says what it does by itself; anything else needs -b. */
+    bool whole_delete = strcmp(rec.op, "delete") == 0;
+    if (!behavior && whole_delete) {
+        behavior = arena_printf(a, "Deletes %s.", rel);
+        rec.behavior = behavior;
+    } else if (!behavior) {
+        err_out(json, "missing_behavior",
+                "a commit needs a behavior: -b \"what this edit makes the "
+                "code do\" (only a deleted file may leave it out)");
+        goto done;
+    }
+    MsgInput check = {intent, behavior, NULL, NULL, 0, force, whole_delete};
     if (rec.session)
         check.prev_behavior = session_last_behavior(a, &repo, rec.session);
     bool pure_delete = rec.new_n == 0;
