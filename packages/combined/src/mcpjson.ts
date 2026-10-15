@@ -11,7 +11,7 @@ export type ServerEntry =
     | { readonly name: string; readonly url: string; readonly timeout?: number };
 
 /* The path ask's server answers on; an http entry with it is one procode wrote. */
-const HTTP_PATH = "/procode/ask/mcp";
+export const HTTP_PATH = "/procode/ask/mcp";
 
 type Json = Record<string, unknown>;
 

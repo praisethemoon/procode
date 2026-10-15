@@ -131,13 +131,14 @@ const intro: Section = {
                     Windows include the <Code>lap</Code> and <Code>kb</Code> CLIs, so there is nothing else to install.
                 </li>
                 <li>
-                    Open your project's folder in VS Code and run <strong>procode: Set Up MCP for Claude Code</strong>{" "}
-                    from the Command Palette. It adds the <Code>coboard</Code>, <Code>kb</Code> and{" "}
-                    <Code>techdocs</Code> servers to the project's <Code>.mcp.json</Code> and keeps any others there.
+                    Open your project's folder in VS Code and run <strong>procode: Set Up MCP</strong> from the Command
+                    Palette, then pick Claude Code or Codex. It adds the <Code>coboard</Code>, <Code>kb</Code> and{" "}
+                    <Code>techdocs</Code> servers to the project's <Code>.mcp.json</Code> or{" "}
+                    <Code>.codex/config.toml</Code> and keeps any others there.
                 </li>
                 <li>
-                    Run <strong>procode: Add Skills for Claude Code</strong> and pick the skills that teach Claude to use
-                    the tools: <Code>lap</Code>, <Code>kb</Code> and <Code>techdocs</Code> are ticked;{" "}
+                    Run <strong>procode: Add Skills</strong>, pick the agent, then the skills that teach it to use the
+                    tools: <Code>lap</Code>, <Code>kb</Code> and <Code>techdocs</Code> are ticked;{" "}
                     <Code>tickets</Code> is procode's own workflow for the board, lap and git together.
                 </li>
                 <li>Start or restart Claude Code in the project, and approve the project's MCP servers when it asks.</li>
@@ -642,9 +643,9 @@ const commands: Section = {
             <Grid
                 head={["Command", "What it does"]}
                 rows={[
-                    [<strong>procode: Set Up MCP for Claude Code</strong>, <>Adds <Code>coboard</Code>, <Code>kb</Code> and <Code>techdocs</Code> to the project's <Code>.mcp.json</Code>.</>],
-                    [<strong>procode: Choose MCP Servers…</strong>, <>Turns each MCP server on or off (also under the procode › MCP settings). One that is off is left out of VS Code's agent and of <Code>.mcp.json</Code>.</>],
-                    [<strong>procode: Add Skills for Claude Code</strong>, <>Adds the skills you pick to the project's <Code>.claude/skills/</Code>.</>],
+                    [<strong>procode: Set Up MCP</strong>, <>Adds <Code>coboard</Code>, <Code>kb</Code> and <Code>techdocs</Code> to the project's <Code>.mcp.json</Code> (Claude Code) or <Code>.codex/config.toml</Code> (Codex).</>],
+                    [<strong>procode: Choose MCP Servers…</strong>, <>Turns each MCP server on or off (also under the procode › MCP settings). One that is off is left out of VS Code's agent and of the agents' files.</>],
+                    [<strong>procode: Add Skills</strong>, <>Adds the skills you pick to the project's <Code>.claude/skills/</Code> (Claude Code) or <Code>.agents/skills/</Code> (Codex).</>],
                     [<strong>Board: New Epic / New Milestone / New Ticket</strong>, "Adds an item to the board."],
                     [<strong>Board: Archive / Archive with Note… / Unarchive</strong>, "Takes finished work out of the lists, or brings it back."],
                     [<strong>Board: Close / Reopen</strong>, "Closes an epic or a milestone, or opens it again."],

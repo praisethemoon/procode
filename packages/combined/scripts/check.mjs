@@ -6,7 +6,9 @@
  *   - the MCP definitions run files that exist in dist/, with the CLIs the
  *     settings name; dist/ ships no native binary, or with --target exactly
  *     that platform's lap and kb, executable
- *   - "Set Up MCP for Claude Code" writes .mcp.json and keeps other servers
+ *   - "Set Up MCP" writes .mcp.json (Claude Code) or .codex/config.toml
+ *     (Codex) and keeps other servers, and the TOML's every other byte
+ *   - "Add Skills" writes .claude/skills or .agents/skills, picked first
  *   - user-scope registration asks a stand-in `claude` on PATH, never the real
  *     one: the first time, after an update, and not again once current
  *   - each MCP server's switch: one turned off leaves VS Code's agent and
@@ -352,7 +354,7 @@ assert.equal(ext.place({ kind: "link", file: pkgLap }, placedLap, "win32"), "cur
 const earlier = JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8"));
 earlier.mcpServers.artifacts = { command: "x", args: ["/old/procode/out/mcp/artifacts.js"] };
 fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify(earlier));
-await registered.get("procode.setUpClaudeMcp")();
+await registered.get("procode.setUpMcp")("claude");
 const written = JSON.parse(fs.readFileSync(path.join(folder, ".mcp.json"), "utf8"));
 assert.deepEqual(Object.keys(written.mcpServers).sort(), [...(withAsk ? ["ask"] : []), "coboard", "kb", "other", "techdocs"]);
 if (withAsk) {
@@ -393,12 +395,12 @@ assert.equal(settings["procode.mcp.kb"], false);
 assert.deepEqual(await labels(), ["coboard", "techdocs", ...(withAsk ? ["ask"] : [])], "a server turned off leaves VS Code's agent");
 assert.ok(infos.some((m) => /MCP servers that are on changed/.test(m)), "an update of .mcp.json is offered");
 // The setup takes procode's kb entry out and keeps everything else.
-await registered.get("procode.setUpClaudeMcp")();
+await registered.get("procode.setUpMcp")("claude");
 assert.deepEqual(Object.keys(mcpFile()).sort(), [...(withAsk ? ["ask"] : []), "coboard", "other", "techdocs"]);
 assert.match(infos.at(-1), /kb \(turned off\) was taken out/);
 // A kb entry set up by hand is not procode's to take out.
 fs.writeFileSync(path.join(folder, ".mcp.json"), JSON.stringify({ mcpServers: { ...mcpFile(), kb: { command: "my-kb" } } }));
-await registered.get("procode.setUpClaudeMcp")();
+await registered.get("procode.setUpMcp")("claude");
 assert.deepEqual(mcpFile().kb, { command: "my-kb" }, "a hand-made entry stays");
 assert.deepEqual(ext.writtenEntries({ mcpServers: { kb: { command: "my-kb" } } }, ["kb"]), []);
 if (withAsk) {
@@ -423,7 +425,7 @@ assert.deepEqual(await labels(), mcpNamesAll(), "all back on");
 // ------------------------------------------------------------ Claude skills
 // The package carries the skills whole, and the command adds them to the
 // project's .claude/skills only.
-assert.ok(registered.has("procode.addClaudeSkills"), "Add Skills for Claude Code is registered");
+assert.ok(registered.has("procode.addSkills"), "Add Skills is registered");
 for (const f of ["lap/SKILL.md", "lap/references/branches.md", "tickets/SKILL.md", "techdocs/SKILL.md"]) {
     assert.ok(fs.existsSync(path.join(dist, "skills", f)), `skills/${f} is in the package`);
 }
@@ -436,7 +438,7 @@ const tree = (d, rel = "") =>
         : [];
 const read = (f) => fs.readFileSync(f, "utf8");
 const outsideBefore = tree(folder).filter((f) => !f.startsWith(path.join(".claude", "skills")) && !f.startsWith(".claude")).map((f) => `${f}:${read(path.join(folder, f))}`);
-const addSkills = () => registered.get("procode.addClaudeSkills")();
+const addSkills = () => registered.get("procode.addSkills")("claude");
 const same = (name) => read(path.join(skills, name, "SKILL.md")) === read(path.join(dist, "skills", name, "SKILL.md"));
 
 // No .claude/ yet: it is made, and the ticked skills (not tickets) written.
@@ -488,12 +490,74 @@ fs.writeFileSync(skillMd, read(skillMd).replace(/version: "\d+"/, 'version: "0"'
 memento.set("procode.installedSkills", { ...memento.get("procode.installedSkills"), lap: ext.folderHash(path.join(skills, "lap")) });
 infos.length = 0;
 ext.checkSkills(ctx);
-assert.ok(infos.some((m) => /newer procode skills are available: lap/.test(m)), "an older copy as written is offered an update");
+assert.ok(infos.some((m) => /newer procode skills are available for Claude Code: lap/.test(m)), "an older copy as written is offered an update");
 fs.appendFileSync(skillMd, "changed by hand\n");
 infos.length = 0;
 ext.checkSkills(ctx);
 assert.ok(!infos.some((m) => /are available/.test(m)), "a changed copy is not offered one");
-assert.ok(infos.some((m) => /lap are shipped; this project's copies were changed/.test(m)), "it is only mentioned");
+assert.ok(infos.some((m) => /lap are shipped; this project's copies in .claude\/skills were changed/.test(m)), "it is only mentioned");
+
+// ------------------------------------------------------------ Codex
+// The TOML rewriting, on its own: only our tables change, every other byte stays.
+{
+    const t = ext.codexToml;
+    const theirs = '# my settings\nmodel = "o3"\n\n[mcp_servers.other]\ncommand = "x"\nargs = [\n  "[not a header]",\n]\n\n# about kb\n[mcp_servers.kb]\ncommand = "my-kb"\n\n[mcp_servers.kb.env]\nA = "1"\n\n[profiles.p]\nmodel = "o4"\n';
+    const kb = { name: "kb", command: "/n/node", args: ["/p/out/mcp/kb.js"], env: { KB: "x" } };
+    const once = t.withServers(theirs, [kb]).text;
+    assert.equal(once, theirs.replace('[mcp_servers.kb]\ncommand = "my-kb"\n\n[mcp_servers.kb.env]\nA = "1"\n\n', t.tableFor(kb) + "\n"), "kb's tables are replaced in place, all else kept");
+    assert.equal(t.withServers(once, [kb]).text, once, "writing again changes nothing");
+    assert.deepEqual(t.writtenEntries(once, ["kb", "other"]), ["kb"]);
+    assert.deepEqual(t.writtenEntries(theirs, ["kb"]), [], "a hand-made kb is not procode's");
+    assert.equal(t.withServers(theirs, [], ["kb"]).text, theirs, "and is not taken out when kb is off");
+    assert.equal(t.withServers(once, [], ["kb"]).text, theirs.replace('# about kb\n[mcp_servers.kb]\ncommand = "my-kb"\n\n[mcp_servers.kb.env]\nA = "1"\n\n', '# about kb\n'), "procode's kb is taken out when off, with its blank line");
+    assert.deepEqual(t.outdated(once, [kb]), []);
+    assert.deepEqual(t.outdated(once, [{ ...kb, args: ["/q/out/mcp/kb.js"] }]), ["kb"], "an older install's path is outdated");
+    const added = t.withServers('model = "o3"', [kb]).text;
+    assert.equal(added, 'model = "o3"\n\n' + t.tableFor(kb), "a new table goes at the end, after a blank line");
+    assert.equal(t.withServers("", [kb]).text, t.tableFor(kb));
+    const inline = '[mcp_servers]\nkb = { command = "mine" }\n';
+    assert.deepEqual(t.withServers(inline, [kb]), { text: inline, skipped: ["kb"] }, "a server defined inline is left alone");
+    assert.deepEqual(t.withServers('mcp_servers.kb.command = "mine"\n', [kb]).skipped, ["kb"], "and one defined by dotted keys");
+    const ask = { name: "ask", url: "http://127.0.0.1:9/procode/ask/mcp", timeout: 1_800_000 };
+    assert.equal(t.tableFor(ask), '[mcp_servers.ask]\nurl = "http://127.0.0.1:9/procode/ask/mcp"\ntool_timeout_sec = 1800\n');
+    assert.deepEqual(t.outdated(t.tableFor(ask), [{ ...ask, url: "http://127.0.0.1:8/procode/ask/mcp" }]), ["ask"]);
+    const tricky = 's = """\n[mcp_servers.kb]\n"""\n[mcp_servers."we.ird"]\ncommand = "x" # [c]\n';
+    assert.deepEqual(t.tables(tricky).map((x) => x.path), [[], ["mcp_servers", "we.ird"]], "headers inside strings are not headers; quoted keys keep their dots");
+}
+
+// Set Up MCP, Codex picked: .codex/config.toml gets our tables after the person's.
+const codexFile = path.join(folder, ".codex", "config.toml");
+fs.mkdirSync(path.dirname(codexFile));
+const mine = '# mine\nmodel = "o3"\n\n[mcp_servers.other]\ncommand = "x"\n';
+fs.writeFileSync(codexFile, mine);
+pick = (items) => (items[0]?.agent ? items.find((i) => i.label === "Codex") : items.filter((i) => i.picked));
+await registered.get("procode.setUpMcp")();
+const toml = read(codexFile);
+assert.ok(toml.startsWith(mine), "the person's settings and servers are kept as they were");
+for (const n of mcpNamesAll()) assert.ok(toml.includes(`[mcp_servers.${n}]\n`), `${n} is in .codex/config.toml`);
+assert.ok(toml.includes('COBOARD_AUTHOR = "codex"'), "Codex's board comments are signed");
+assert.ok(toml.includes(`args = [${JSON.stringify(defs[1].args[0])}]`), "Codex runs the same script as VS Code's agent");
+if (withAsk) assert.ok(toml.includes("tool_timeout_sec = 1800"), "ask's long calls are allowed");
+assert.match(infos.at(-1), /Codex reads .codex\/config.toml only in a project it trusts/);
+await registered.get("procode.setUpMcp")("codex");
+assert.equal(read(codexFile), toml, "running it again changes nothing");
+// kb off: both agents' files are offered an update; Codex's loses procode's kb.
+infos.length = 0;
+await choose(["coboard", "techdocs", "ask"]);
+assert.ok(infos.some((m) => /Update .codex\/config.toml for Codex too/.test(m)), "an update of .codex/config.toml is offered");
+await registered.get("procode.setUpMcp")("codex");
+assert.ok(!read(codexFile).includes("[mcp_servers.kb]") && read(codexFile).startsWith(mine), "procode's kb table is taken out, the rest kept");
+await choose(mcpNamesAll());
+
+// Add Skills, Codex picked: .agents/skills, recorded apart from Claude Code's.
+const claudeSkills = tree(path.join(folder, ".claude")).map((f) => `${f}:${read(path.join(folder, ".claude", f))}`);
+await registered.get("procode.addSkills")();
+const codexSkills = path.join(folder, ".agents", "skills");
+for (const n of ["kb", "lap", "techdocs"]) assert.equal(read(path.join(codexSkills, n, "SKILL.md")), read(path.join(dist, "skills", n, "SKILL.md")), `${n} is in .agents/skills`);
+assert.equal(fs.existsSync(path.join(codexSkills, "tickets")), false);
+assert.match(infos.at(-1), /added kb, lap, techdocs in .agents\/skills/);
+assert.ok(memento.get("procode.installedSkills.codex")?.lap, "Codex's copies are recorded under their own key");
+assert.deepEqual(tree(path.join(folder, ".claude")).map((f) => `${f}:${read(path.join(folder, ".claude", f))}`), claudeSkills, ".claude is untouched");
 
 // Stops what the parts started (ask's server among them), so the check ends.
 for (const d of ctx.subscriptions) d.dispose?.();

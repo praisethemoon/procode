@@ -13,13 +13,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { forClaude } from "./claude";
+import { AGENTS, Agent, AgentId, agent, forAgent } from "./agents";
 import { CLIS, Cli, missingMessage, resolveCli, serverNeeds } from "./clis";
-import { outdated, withServers, writtenEntries } from "./mcpjson";
+import * as codexToml from "./codextoml";
+import { ServerEntry, outdated, withServers, writtenEntries } from "./mcpjson";
 import { commandFor, exeName, place, procodeBinDir, sourceOf } from "./procodebin";
 import { ShippedSkill, behind, folderHash, install, shippedSkills, stateOf } from "./skills";
 
-export { commandFor, folderHash, forClaude, outdated, place, resolveCli, sourceOf, withServers, writtenEntries };
+export { codexToml, commandFor, folderHash, forAgent, outdated, place, resolveCli, sourceOf, withServers, writtenEntries };
 
 interface Part {
     activate(ctx: vscode.ExtensionContext): unknown;
@@ -103,8 +104,8 @@ export type Server =
 /* ------------------------------------------------------- on and off
  *
  * Each server has a switch, procode › MCP › <name>, on by default. A server
- * that is off is left out of VS Code's agent and out of what Set Up MCP for
- * Claude Code writes, which also takes out the entry it once wrote for it;
+ * that is off is left out of VS Code's agent and out of what Set Up MCP
+ * writes for an agent, which also takes out the entry it once wrote for it;
  * ask's server stops listening (ask-vscode follows its own switch). */
 
 /* The servers this build can run, in the order they are listed. */
@@ -227,127 +228,166 @@ function registerWithVsCode(ctx: vscode.ExtensionContext): void {
     );
 }
 
-/* ------------------------------------------------------------ Claude Code
+/* ------------------------------------------------------------ agents' MCP
  *
- * Claude Code reads a project's MCP servers from .mcp.json at its root, which
- * VS Code cannot fill in. This writes our two entries there — only when asked,
- * because it is a file in the user's project, and one with this machine's
- * paths in it — and keeps every other server in the file. After an update moves the
- * extension's folder, the entries it wrote point at a copy that is gone;
- * activation notices and offers to fix them. */
+ * Claude Code and Codex read a project's MCP servers from a file at its root
+ * (.mcp.json; .codex/config.toml), which VS Code cannot fill in. This writes
+ * our entries there — only when asked, because it is a file in the user's
+ * project, and one with this machine's paths in it — and keeps every other
+ * server in the file. After an update moves the extension's folder, the
+ * entries it wrote point at a copy that is gone; activation notices and
+ * offers to fix them. */
 
-function mcpJsonPath(): string | null {
-    const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file");
-    return folder ? path.join(folder.uri.fsPath, ".mcp.json") : null;
+function projectRoot(): string | null {
+    return vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file")?.uri.fsPath ?? null;
 }
 
-/* The parsed file, {} when there is none, or null when it is there and is not
- * a JSON object — which is never overwritten. */
-function readMcpJson(file: string): Record<string, unknown> | null {
+function mcpFilePath(a: Agent): string | null {
+    const root = projectRoot();
+    return root ? path.join(root, ...a.mcpFile) : null;
+}
+
+/* The agent's MCP file: its parsed object (JSON) or its text (TOML); {} or
+ * "" when there is none, and null when a .mcp.json is not a JSON object —
+ * which is never overwritten. */
+type McpDoc = { readonly json: Record<string, unknown> } | { readonly toml: string };
+
+function readMcp(a: Agent, file: string): McpDoc | null {
     let text: string;
     try {
         text = fs.readFileSync(file, "utf8");
     } catch {
-        return {};
+        return a.format === "toml" ? { toml: "" } : { json: {} };
     }
+    if (a.format === "toml") return { toml: text };
     try {
         const v = JSON.parse(text) as unknown;
-        return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+        return typeof v === "object" && v !== null && !Array.isArray(v) ? { json: v as Record<string, unknown> } : null;
     } catch {
         return null;
     }
 }
 
-async function setUpClaudeMcp(ctx: vscode.ExtensionContext): Promise<void> {
+const mcpWritten = (doc: McpDoc, names: readonly string[]) => ("json" in doc ? writtenEntries(doc.json, names) : codexToml.writtenEntries(doc.toml, names));
+const mcpOutdated = (doc: McpDoc, entries: readonly ServerEntry[]) => ("json" in doc ? outdated(doc.json, entries) : codexToml.outdated(doc.toml, entries));
+
+/* The file's new text, and the servers it defines in a way left alone. */
+function mcpWith(doc: McpDoc, entries: readonly ServerEntry[], off: readonly string[]): { text: string; skipped: string[] } {
+    if ("json" in doc) return { text: JSON.stringify(withServers(doc.json, entries, off), null, 2) + "\n", skipped: [] };
+    return codexToml.withServers(doc.toml, entries, off);
+}
+
+const list = (names: readonly string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
+
+/* Asks which agent, unless the caller knows. */
+async function pickAgent(title: string, id?: AgentId): Promise<Agent | undefined> {
+    if (id) return agent(id);
+    const picked = await vscode.window.showQuickPick(
+        AGENTS.map((a) => ({ label: a.label, agent: a })),
+        { title, placeHolder: "The agent to set up in this project" },
+    );
+    return picked?.agent;
+}
+
+async function setUpMcp(ctx: vscode.ExtensionContext, id?: AgentId): Promise<void> {
+    const a = await pickAgent("procode: Set Up MCP Servers for…", id);
+    if (!a) return;
     await ASK?.whenServed?.(); // so ask's address is there to write
-    const file = mcpJsonPath();
+    const file = mcpFilePath(a);
     if (!file) {
-        void vscode.window.showWarningMessage("procode: open a folder first; Claude Code's MCP servers are set per project.");
+        void vscode.window.showWarningMessage(`procode: open a folder first; ${a.label}'s MCP servers are set per project.`);
         return;
     }
-    const current = readMcpJson(file);
+    const name = a.mcpFile.join("/");
+    const current = readMcp(a, file);
     if (current === null) {
         void vscode.window.showErrorMessage(`procode: ${file} is not a JSON object, so it was left alone. Fix it and run this again.`);
         return;
     }
     const on = servers(ctx);
     const off = mcpNames().filter((n) => !mcpEnabled(n));
-    const removed = writtenEntries(current, off);
-    fs.writeFileSync(file, JSON.stringify(withServers(current, on.map(forClaude), off), null, 2) + "\n");
-    const list = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
+    const removed = mcpWritten(current, off);
+    const { text, skipped } = mcpWith(current, on.map((s) => forAgent(s, a)), off);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+    const written = on.map((s) => s.name).filter((n) => !skipped.includes(n));
     const said = [
-        ...(on.length ? [`${list(on.map((s) => s.name))} ${on.length === 1 ? "is" : "are"} in .mcp.json`] : []),
+        ...(written.length ? [`${list(written)} ${written.length === 1 ? "is" : "are"} in ${name}`] : []),
         ...(removed.length ? [`${list(removed)} (turned off) ${removed.length === 1 ? "was" : "were"} taken out`] : []),
+        ...(skipped.length ? [`${list(skipped)} ${skipped.length === 1 ? "is" : "are"} defined another way there, so left alone`] : []),
     ];
     void vscode.window.showInformationMessage(
-        `procode: ${said.join("; ") || "no MCP server is on, and .mcp.json has none of procode's"}. Restart Claude Code in this project (or check /mcp) to pick this up.`,
+        `procode: ${said.join("; ") || `no MCP server is on, and ${name} has none of procode's`}. ${a.mcpNote ? `${a.mcpNote}. ` : ""}${a.reload} to pick this up.`,
     );
 }
 
-/* After the switches change: when .mcp.json holds procode's entries, offer
- * to bring it in line, so Claude Code follows what VS Code's agent does. */
+/* After the switches change: for each agent whose file holds procode's
+ * entries, offer to bring it in line, so the agent follows VS Code's. */
 function offerMcpUpdate(ctx: vscode.ExtensionContext): void {
-    const file = mcpJsonPath();
-    const current = file ? readMcpJson(file) : null;
-    if (!current || writtenEntries(current, mcpNames()).length === 0) return;
-    void vscode.window
-        .showInformationMessage("procode: the MCP servers that are on changed. Update .mcp.json for Claude Code too?", "Update .mcp.json")
-        .then((choice) => {
-            if (choice === "Update .mcp.json") void setUpClaudeMcp(ctx);
-        });
+    for (const a of AGENTS) {
+        const file = mcpFilePath(a);
+        const current = file && fs.existsSync(file) ? readMcp(a, file) : null;
+        if (!current || mcpWritten(current, mcpNames()).length === 0) continue;
+        const name = a.mcpFile.join("/");
+        void vscode.window
+            .showInformationMessage(`procode: the MCP servers that are on changed. Update ${name} for ${a.label} too?`, `Update ${name}`)
+            .then((choice) => {
+                if (choice === `Update ${name}`) void setUpMcp(ctx, a.id);
+            });
+    }
 }
 
-function checkClaudeMcp(ctx: vscode.ExtensionContext): void {
-    const file = mcpJsonPath();
-    const current = file ? readMcpJson(file) : null;
-    if (!current) {
-        return;
+function checkAgentMcp(ctx: vscode.ExtensionContext): void {
+    for (const a of AGENTS) {
+        const file = mcpFilePath(a);
+        const current = file && fs.existsSync(file) ? readMcp(a, file) : null;
+        if (!current) continue;
+        const stale = mcpOutdated(current, servers(ctx).map((s) => forAgent(s, a)));
+        if (stale.length === 0) continue;
+        void vscode.window
+            .showWarningMessage(`procode: ${a.mcpFile.join("/")} runs ${stale.join(" and ")} from an older procode that is no longer installed.`, "Update")
+            .then((choice) => {
+                if (choice === "Update") void setUpMcp(ctx, a.id);
+            });
     }
-    const stale = outdated(current, servers(ctx));
-    if (stale.length === 0) {
-        return;
-    }
-    void vscode.window
-        .showWarningMessage(`procode: .mcp.json runs ${stale.join(" and ")} from an older procode that is no longer installed.`, "Update")
-        .then((choice) => {
-            if (choice === "Update") {
-                void setUpClaudeMcp(ctx);
-            }
-        });
 }
 
-/* ------------------------------------------------------------ Claude skills
+/* ------------------------------------------------------------ agents' skills
  *
- * The skills that teach Claude Code to use the tools, shipped with the
+ * The skills that teach an agent to use the tools, shipped with the
  * extension (skills/, the repository's .claude/skills as of this build) and
- * added to a project's .claude/skills on request — never to ~/.claude, and
- * never over a folder of the person's own without asking. The hash of each
- * folder procode writes is kept, so a later version can replace a copy only
- * while it is still exactly as procode wrote it. */
+ * added to a project's skills folder for that agent on request — never to
+ * the home folder, and never over a folder of the person's own without
+ * asking. The hash of each folder procode writes is kept, per agent, so a
+ * later version can replace a copy only while it is still exactly as procode
+ * wrote it. */
 
-const INSTALLED_SKILLS = "procode.installedSkills";
+const installedKey = (a: Agent) => (a.id === "claude" ? "procode.installedSkills" : `procode.installedSkills.${a.id}`);
 
-function projectSkillsDir(): string | null {
-    const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file");
-    return folder ? path.join(folder.uri.fsPath, ".claude", "skills") : null;
+function projectSkillsDir(a: Agent): string | null {
+    const root = projectRoot();
+    return root ? path.join(root, ...a.skillsDir) : null;
 }
 
 function shipped(ctx: vscode.ExtensionContext): ShippedSkill[] {
     return shippedSkills(path.join(ctx.extensionPath, "skills"));
 }
 
-function installAndRecord(ctx: vscode.ExtensionContext, skill: ShippedSkill, dir: string): void {
+function installAndRecord(ctx: vscode.ExtensionContext, a: Agent, skill: ShippedSkill, dir: string): void {
     const hash = install(skill, dir);
-    const record = { ...(ctx.workspaceState.get<Record<string, string>>(INSTALLED_SKILLS) ?? {}), [skill.name]: hash };
-    void ctx.workspaceState.update(INSTALLED_SKILLS, record);
+    const record = { ...(ctx.workspaceState.get<Record<string, string>>(installedKey(a)) ?? {}), [skill.name]: hash };
+    void ctx.workspaceState.update(installedKey(a), record);
 }
 
-async function addClaudeSkills(ctx: vscode.ExtensionContext): Promise<void> {
-    const dir = projectSkillsDir();
+async function addSkills(ctx: vscode.ExtensionContext, id?: AgentId): Promise<void> {
+    const a = await pickAgent("procode: Add Skills for…", id);
+    if (!a) return;
+    const dir = projectSkillsDir(a);
     if (!dir) {
-        void vscode.window.showWarningMessage("procode: open a folder first; Claude Code's skills are added per project.");
+        void vscode.window.showWarningMessage(`procode: open a folder first; ${a.label}'s skills are added per project.`);
         return;
     }
+    const where = a.skillsDir.join("/");
     const picked = await vscode.window.showQuickPick(
         shipped(ctx).map((skill) => ({
             label: skill.name,
@@ -356,7 +396,7 @@ async function addClaudeSkills(ctx: vscode.ExtensionContext): Promise<void> {
             picked: skill.name !== "tickets",
             skill,
         })),
-        { canPickMany: true, title: "procode: Add Skills for Claude Code", placeHolder: "The skills to add to this project's .claude/skills" },
+        { canPickMany: true, title: `procode: Add Skills for ${a.label}`, placeHolder: `The skills to add to this project's ${where}` },
     );
     if (!picked || picked.length === 0) return;
     const added: string[] = [];
@@ -369,7 +409,7 @@ async function addClaudeSkills(ctx: vscode.ExtensionContext): Promise<void> {
             let choice: string | undefined;
             for (;;) {
                 choice = await vscode.window.showWarningMessage(
-                    `.claude/skills/${skill.name} is not procode's ${skill.name} skill (version ${skill.version}).`,
+                    `${where}/${skill.name} is not procode's ${skill.name} skill (version ${skill.version}).`,
                     { modal: true, detail: "Update replaces that folder with procode's; Keep mine leaves it as it is." },
                     "Update",
                     "Keep mine",
@@ -387,11 +427,11 @@ async function addClaudeSkills(ctx: vscode.ExtensionContext): Promise<void> {
                 kept.push(skill.name);
                 continue;
             }
-            installAndRecord(ctx, skill, dir);
+            installAndRecord(ctx, a, skill, dir);
             updated.push(skill.name);
             continue;
         }
-        installAndRecord(ctx, skill, dir);
+        installAndRecord(ctx, a, skill, dir);
         added.push(skill.name);
     }
     const said = [
@@ -401,28 +441,31 @@ async function addClaudeSkills(ctx: vscode.ExtensionContext): Promise<void> {
     ].filter((x) => x);
     void vscode.window.showInformationMessage(
         said.length
-            ? `procode: ${said.join("; ")} in .claude/skills. Restart Claude Code in this project (or run /skills) to pick them up.`
-            : "procode: this project's .claude/skills already has procode's skills as shipped.",
+            ? `procode: ${said.join("; ")} in ${where}. ${a.reload} to pick them up.`
+            : `procode: this project's ${where} already has procode's skills as shipped.`,
     );
 }
 
-/* On opening a project: says when its copies of procode's skills are behind
- * the shipped ones, offering to update those still as procode wrote them. */
+/* On opening a project: says, for each agent, when its copies of procode's
+ * skills are behind the shipped ones, offering to update those still as
+ * procode wrote them. */
 export function checkSkills(ctx: vscode.ExtensionContext): void {
-    const dir = projectSkillsDir();
-    if (!dir) return;
-    const { updatable, edited } = behind(shipped(ctx), dir, ctx.workspaceState.get<Record<string, string>>(INSTALLED_SKILLS) ?? {});
-    if (updatable.length > 0) {
-        void vscode.window
-            .showInformationMessage(`procode: newer procode skills are available: ${updatable.map((s) => s.name).join(", ")}.`, "Update")
-            .then((choice) => {
-                if (choice === "Update") for (const s of updatable) installAndRecord(ctx, s, dir);
-            });
-    }
-    if (edited.length > 0) {
-        void vscode.window.showInformationMessage(
-            `procode: newer versions of ${edited.map((s) => s.name).join(", ")} are shipped; this project's copies were changed, so they are left as they are. procode: Add Skills for Claude Code compares them.`,
-        );
+    for (const a of AGENTS) {
+        const dir = projectSkillsDir(a);
+        if (!dir) continue;
+        const { updatable, edited } = behind(shipped(ctx), dir, ctx.workspaceState.get<Record<string, string>>(installedKey(a)) ?? {});
+        if (updatable.length > 0) {
+            void vscode.window
+                .showInformationMessage(`procode: newer procode skills are available for ${a.label}: ${updatable.map((s) => s.name).join(", ")}.`, "Update")
+                .then((choice) => {
+                    if (choice === "Update") for (const s of updatable) installAndRecord(ctx, a, s, dir);
+                });
+        }
+        if (edited.length > 0) {
+            void vscode.window.showInformationMessage(
+                `procode: newer versions of ${edited.map((s) => s.name).join(", ")} are shipped; this project's copies in ${a.skillsDir.join("/")} were changed, so they are left as they are. procode: Add Skills compares them.`,
+            );
+        }
     }
 }
 
@@ -507,15 +550,15 @@ export function activate(ctx: vscode.ExtensionContext): void {
     }
     registerWithVsCode(ctx);
     ctx.subscriptions.push(
-        vscode.commands.registerCommand("procode.setUpClaudeMcp", () => setUpClaudeMcp(ctx)),
+        vscode.commands.registerCommand("procode.setUpMcp", (id?: AgentId) => setUpMcp(ctx, id)),
         vscode.commands.registerCommand("procode.chooseMcpServers", () => chooseMcpServers()),
         vscode.workspace.onDidChangeConfiguration((e) => {
             if (e.affectsConfiguration("procode.mcp")) offerMcpUpdate(ctx);
         }),
-        vscode.commands.registerCommand("procode.addClaudeSkills", () => addClaudeSkills(ctx)),
+        vscode.commands.registerCommand("procode.addSkills", (id?: AgentId) => addSkills(ctx, id)),
     );
     // After ask's server listens, so its entry is checked too.
-    void Promise.resolve(ASK?.whenServed?.()).then(() => checkClaudeMcp(ctx));
+    void Promise.resolve(ASK?.whenServed?.()).then(() => checkAgentMcp(ctx));
     checkSkills(ctx);
     checkClis();
 }

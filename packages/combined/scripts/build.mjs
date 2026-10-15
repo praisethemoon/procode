@@ -26,7 +26,7 @@
  *   media/             the parts' view icons, and procode-views.svg for the
  *                      one activity-bar container that holds their views
  *   skills/            the repository's .claude/skills, every file, for
- *                      procode: Add Skills for Claude Code
+ *                      procode: Add Skills (Claude Code or Codex)
  *   icon.png           procode's own icon, from packages/combined/media
  */
 
@@ -110,8 +110,8 @@ for (const part of PARTS) {
     }
 }
 contributes.commands.push(
-    { command: "procode.setUpClaudeMcp", title: "Set Up MCP for Claude Code (This Project's .mcp.json)", category: "procode" },
-    { command: "procode.addClaudeSkills", title: "Add Skills for Claude Code (This Project's .claude/skills)", category: "procode" },
+    { command: "procode.setUpMcp", title: "Set Up MCP for Claude Code or Codex (This Project)", category: "procode" },
+    { command: "procode.addSkills", title: "Add Skills for Claude Code or Codex (This Project)", category: "procode" },
     { command: "procode.chooseMcpServers", title: "Choose MCP Servers…", category: "procode" },
 );
 contributes.mcpServerDefinitionProviders = [{ id: "procode.mcp", label: "procode" }];
@@ -132,7 +132,7 @@ const MCP_SWITCHES = [
                 type: "boolean",
                 default: true,
                 order: i,
-                markdownDescription: `Run the **${name}** MCP server: ${what}. Off, it is left out of VS Code's agent, and **procode: Set Up MCP for Claude Code** takes it out of \`.mcp.json\`.`,
+                markdownDescription: `Run the **${name}** MCP server: ${what}. Off, it is left out of VS Code's agent, and **procode: Set Up MCP** takes the entry it wrote out of \`.mcp.json\` or \`.codex/config.toml\`.`,
             },
         ]),
     ),

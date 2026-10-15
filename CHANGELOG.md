@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Extension
+
+- Codex is set up like Claude Code. **procode: Set Up MCP** and **procode: Add Skills** first ask which agent: Claude Code (`.mcp.json`, `.claude/skills/`) or Codex (`.codex/config.toml`, `.agents/skills/`). In `.codex/config.toml` only procode's own `[mcp_servers.…]` tables change; every other line stays as it was. Codex reads that file only in a project it trusts.
+
+### lap
+
+- Deleting a file no longer trips the message checks: a delete's behavior may repeat the previous one, so deleting many files for one reason needs no `--force-message`. `-b` is optional for a delete (lap writes "Deletes <file>."). The intent is still required.
+
 ## 0.2.0 — 2026-10-03
 
 ### Extension

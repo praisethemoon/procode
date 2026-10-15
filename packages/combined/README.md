@@ -18,9 +18,10 @@ The agent works through those servers; the views are where you follow along.
 - **Three MCP servers** (Node scripts run by VS Code's own runtime) are registered with
   VS Code; VS Code's agent starts them when it uses them, and the `coboard` and `kb`
   servers run `lap` and `kb` in turn.
-- **Files in your project, only when you run a command:** **procode: Set Up MCP for
-  Claude Code** writes `.mcp.json`, and **procode: Add Skills for Claude Code** writes
-  `.claude/skills/`. When a newer version ships, procode offers to update them.
+- **Files in your project, only when you run a command:** **procode: Set Up MCP**
+  writes `.mcp.json` (Claude Code) or `.codex/config.toml` (Codex), and **procode: Add
+  Skills** writes `.claude/skills/` or `.agents/skills/`. When a newer version ships,
+  procode offers to update them.
 
 ## Privacy
 
@@ -30,8 +31,8 @@ the URL you have requested into your local knowledge base.
 
 Everything, in more detail, is on the website:
 [praisethemoon.github.io/procode](https://praisethemoon.github.io/procode/).
-procode is developed and tested mostly with Claude Code (see
-[Set up Claude Code](#set-up-claude-code-in-a-project)); the tools can generally be used
+procode is developed and tested mostly with Claude Code, and can set up Codex too (see
+[Set up Claude Code or Codex](#set-up-claude-code-or-codex-in-a-project)); the tools can generally be used
 with any agent (humans included too!).
 
 ## Before You Install
@@ -127,31 +128,35 @@ Cli Path** name when you set them, else its own, else the ones on PATH.
 is the path procode's skills tell agents to use, so an agent finds the same
 `lap` and `kb` the views use.
 
-## Set up Claude Code in a project
+## Set up Claude Code or Codex in a project
 
 VS Code's agent mode gets procode's MCP servers without any setup. Claude Code
-reads a project's own files instead, so it needs these steps once per project:
+and Codex read a project's own files instead, so they need these steps once
+per project. Each command first asks which of the two to set up.
 
 1. Open the project's folder in VS Code.
 2. Open the Command Palette (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>, or
    <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on macOS) and run
-   **procode: Set Up MCP for Claude Code**. It adds the `coboard`, `kb` and
-   `techdocs` servers to the project's `.mcp.json` and keeps any others there.
+   **procode: Set Up MCP**. It adds the `coboard`, `kb` and `techdocs` servers
+   to the project's `.mcp.json` (Claude Code) or `.codex/config.toml` (Codex)
+   and keeps any others there, and, in the TOML, every other line as it was.
    To run only some of them, use **procode: Choose MCP Servers…** (or the
    procode › MCP settings) first: a server that is off is left out.
-3. Run **procode: Add Skills for Claude Code**. It adds the skills that teach
-   Claude to use the tools to the project's `.claude/skills/`: pick the ones
+3. Run **procode: Add Skills**. It adds the skills that teach the agent to use
+   the tools to the project's `.claude/skills/` (Claude Code) or
+   `.agents/skills/` (Codex): pick the ones
    you want (`lap`, `kb` and `techdocs` are ticked; `tickets` is procode's own
    workflow for board, lap and git together).
-4. Start Claude Code in the project, or restart it if it is running, and
-   approve the project's MCP servers when it asks.
+4. Start the agent in the project, or restart it if it is running. Claude Code
+   asks you to approve the project's MCP servers; Codex reads
+   `.codex/config.toml` only once you trust the project.
 5. Create the stores that need it: `lap init` and `kb init` in the project's
    root. The board and `.techdocs/` are created on first write.
 
 After you install a new version of procode, it notices when the project's
-`.mcp.json` still runs the servers of the old one, and when newer skills
-ship; each time it offers to update them. Restart Claude Code afterwards so
-it starts the new servers.
+`.mcp.json` or `.codex/config.toml` still runs the servers of the old one,
+and when newer skills ship; each time it offers to update them. Restart the
+agent afterwards so it starts the new servers.
 
 ## Settings
 

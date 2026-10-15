@@ -23,8 +23,9 @@ one never lands as a single unexplained blob.
 
 `lap` is available as a CLI and as an agent skill that teaches the agent
 how to use it. To install the skills (`lap`, `kb`, `tickets` and `techdocs`) in a
-project, run **procode: Add Skills for Claude Code** in VS Code: it adds the
-ones you pick to the project's `.claude/skills/`, never touching other
+project, run **procode: Add Skills** in VS Code: it adds the ones you pick
+to the project's `.claude/skills/` (Claude Code) or `.agents/skills/`
+(Codex), never touching other
 skills and asking before it replaces a copy of its own that differs. Or copy
 the folders in [.claude/skills/](.claude/skills/) by hand (into
 `~/.claude/skills/` for every project). They follow the
@@ -221,24 +222,27 @@ from `PATH` or wherever the settings point.
    or the workspace folders reaches the servers it starts next, without a
    reload (one already running keeps what it started with).
 
-   For Claude Code, once per project:
+   For Claude Code or Codex, once per project (each command first asks
+   which one):
 
    1. Open the project's folder in VS Code.
    2. Open the Command Palette (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>
       on macOS, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> elsewhere) and
-      run **procode: Set Up MCP for Claude Code**. It adds `coboard`, `kb`
-      and `techdocs` to the project's `.mcp.json` and keeps any other
-      servers. **procode: Choose MCP Servers…** turns any of them off.
-   3. Run **procode: Add Skills for Claude Code** the same way. It adds the
-      skills that teach Claude to use the tools to the project's
-      `.claude/skills/`: lap, kb and techdocs are ticked; tickets is this
+      run **procode: Set Up MCP**. It adds `coboard`, `kb` and `techdocs`
+      to the project's `.mcp.json` (Claude Code) or `.codex/config.toml`
+      (Codex) and keeps any other servers. **procode: Choose MCP Servers…** turns any of them off.
+   3. Run **procode: Add Skills** the same way. It adds the skills that
+      teach the agent to use the tools to the project's `.claude/skills/`
+      or `.agents/skills/`: lap, kb and techdocs are ticked; tickets is this
       repository's workflow, so it is left for you to pick.
-   4. Start Claude Code in the project, or restart it (or run `/mcp`), and
-      approve the project's servers when it asks.
+   4. Start the agent in the project, or restart it (or run `/mcp`).
+      Claude Code asks you to approve the project's servers; Codex reads
+      `.codex/config.toml` only in a project you trust.
 
-   When a new build is installed, procode notices a `.mcp.json` that still
+   When a new build is installed, procode notices a `.mcp.json` or
+   `.codex/config.toml` that still
    runs the old servers, and skills older than the ones it ships, and
-   offers to update them; restart Claude Code afterwards.
+   offers to update them; restart the agent afterwards.
 
 4. **Stores.** `lap init`, `kb init` in the project root. The board and
    `.techdocs/` are created on first write.
