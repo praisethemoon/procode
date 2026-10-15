@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-10-15
 
 ### Extension
 
 - Codex is set up like Claude Code. **procode: Set Up MCP** and **procode: Add Skills** first ask which agent: Claude Code (`.mcp.json`, `.claude/skills/`) or Codex (`.codex/config.toml`, `.agents/skills/`). In `.codex/config.toml` only procode's own `[mcp_servers.…]` tables change; every other line stays as it was. Codex reads that file only in a project it trusts.
+- The commands are renamed to match: `procode.setUpClaudeMcp` is now `procode.setUpMcp`, and `procode.addClaudeSkills` is now `procode.addSkills`. A keybinding on an old id needs updating.
+- Skills update notices name the agent and folder they are about.
 
 ### lap
 
